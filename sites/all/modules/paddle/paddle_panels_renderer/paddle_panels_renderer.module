@@ -1,0 +1,580 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Panels Renderer module.
+ */
+
+include_once 'paddle_panels_renderer.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_panels_renderer_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'panels:display_renderers',
+    'ctools:contexts',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_panels_ipe_pane_links_alter().
+ */
+function paddle_panels_renderer_panels_ipe_pane_links_alter(&$links, $context) {
+  // Give icon class to each element.
+  foreach ($links as $key => $value) {
+    $key === 'edit' ? $links['edit']['attributes']['icon-class'] = 'settings' : $links[$key]['attributes']['icon-class'] = $key;
+  }
+
+  // Add the Paddle Style button if any modules add Paddle Style plugins.
+  if (module_exists('paddle_style') && module_invoke_all('paddle_panels_renderer_pane_styles', $context['pane'])) {
+    $links['paddle_style'] = array(
+      'title' => '<span>' . t('Style') . '</span>',
+      'href' => $context['renderer']->get_url('paddle-style', 'pane', $context['pane']->pid),
+      'html' => TRUE,
+      'attributes' => array(
+        'icon-class' => 'style',
+        'class' => array(
+          'ctools-use-modal',
+          'panels-ipe-hide-bar',
+          'ui-icon-color-palette',
+        ),
+        'title' => t('Style'),
+      ),
+    );
+  }
+}
+
+/**
+ * Implements template_preprocess_panels_pane().
+ */
+function paddle_panels_renderer_preprocess_panels_pane(&$vars) {
+  $pane = $vars['pane'];
+
+  // Apply Paddle Style classes to the panes.
+  if (module_exists('paddle_style')) {
+    $plugin_instances = module_invoke_all('paddle_panels_renderer_pane_styles', $pane);
+    foreach ($plugin_instances as $machine_name => $plugin_instance) {
+      $plugin = paddle_style_get_plugin($plugin_instance['plugin']);
+      if ($plugin instanceof PaddleStyleClassPluginInterface) {
+        $values = !empty($vars['pane']->extras[$machine_name]) ? $vars['pane']->extras[$machine_name] : array();
+
+        // Set the subpalette to the main palette if there is no subpalette
+        // mapping for the pane.
+        if ($machine_name == 'color_subpalettes') {
+          try {
+            $min_palettes_count = paddle_color_palettes_get_subpalettes_count();
+          }
+          catch (\Exception $exception) {
+            // Don't require themes to have a 'color palette' style plugin.
+            watchdog_exception('paddle_panels_renderer', $exception, NULL, array(), WATCHDOG_INFO);
+            continue;
+          }
+
+          if (!empty($vars['pane']->extras[$machine_name]) &&
+            $vars['pane']->extras[$machine_name]['paddle_color_subpalette'] >= $min_palettes_count) {
+            $values['paddle_color_subpalette'] = 0;
+          }
+        }
+
+        $context = ctools_context_create('paddle_panels_renderer', array(
+          'instance' => $plugin_instance,
+          'machine_name' => 'pid_' . $pane->pid . '_' . $machine_name,
+          'pane' => $pane,
+        ));
+        $vars['classes_array'] = array_merge($vars['classes_array'], $plugin->getClasses($values, $context));
+      }
+    }
+  }
+
+  // When for one pane with multiple types the type is based on a radio button selection
+  // the selected item will be appended to the class array for styling purposes.
+  $conf = $pane->configuration;
+
+  if (!empty($conf['selection_type'])) {
+    $vars['classes_array'][] = $conf['selection_type'];
+  }
+
+  // Check if it is a node that we are viewing in the pane.
+  if (is_array($vars['content']) && isset($vars['content']['node'])) {
+    // Get the node ID from the array keys.
+    $nid = array_keys($vars['content']['node']);
+    $nid = $nid[0];
+
+    // Get the vid for the correct revision.
+    $vid = $vars['content']['node'][$nid]['#node']->vid;
+
+    // Load the node.
+    $node = node_load($nid, $vid);
+
+    // Get the node_view to check if it has extra fields to show. If not, we do
+    // not render any content.
+    $node_view = node_view($node, $vars['content']['node'][$nid]['#view_mode']);
+
+    if (isset($node_view['body']) && empty($node_view['body'][0]['#markup'])) {
+      unset($node_view['body']);
+    }
+
+    // @todo Extract this code to the paddle_product module, but make sure it
+    // still works. Maybe we should add an hook before the assignment of
+    // $vars['content'] to let us alter $node_view. Or search for another
+    // sensible solution.
+    if (module_exists('paddle_product') && $node->type == 'paddle_product') {
+      $product_fields = paddle_product_get_all_product_fields();
+      $product_fields[] = 'field_paddle_introduction';
+      $field_instances = field_info_instances("node", "paddle_product");
+
+      foreach ($product_fields as $field) {
+        if (isset($node_view[$field][0]['#markup']) && empty($node_view[$field][0]['#markup'])) {
+          unset($node_view[$field]);
+        }
+      }
+    }
+
+    $vars['content'] = $node_view;
+
+    // The pane content div should not be rendered if there is no content...
+    $default = array('links', 'language');
+
+    if (isset($vars['content']['comments']) && empty($vars['content']['comments'])) {
+      $default[] = 'comments';
+    }
+
+    // @todo Extract this code to the paddle_rate module, but make sure it
+    // still works. Maybe we should add an hook to add extra values to the
+    // $default array. Or search for another sensible solution.
+    if (module_exists('paddle_rate') &&
+      isset($vars['content']['field_paddle_rating']) &&
+      !paddle_rate_should_field_be_shown($vars['content']['#node'])) {
+      $default[] = 'field_paddle_rating';
+    }
+
+    $children = element_children($vars['content']);
+    if ($default === array_intersect($default, $children) && $children === array_intersect($children, $default)) {
+      unset($vars['content']);
+    }
+  }
+  elseif (!empty($vars['content']['#field_name']) && $vars['content']['#field_name'] == 'body' && empty($vars['content'][0]['#markup'])) {
+    $vars['content'] = NULL;
+  }
+
+  // Add the UUID as a variable to be used as anchor in the template.
+  $vars['uuid'] = $pane->uuid;
+}
+
+/**
+ * Choose Paddle Style Plugins form.
+ */
+function paddle_panels_renderer_paddle_style_plugins_form($form, &$form_state) {
+  ctools_include('context');
+  $pid = $form_state['pid'];
+  $pane = &$form_state['display']->content[$pid];
+
+  $plugin_instances = module_invoke_all('paddle_panels_renderer_pane_styles', $pane);
+  $machine_names = array();
+  foreach ($plugin_instances as $machine_name => $plugin_instance) {
+    // A plugin instance is uniquely identified by its machine name and should
+    // not appear more than once. Throw an exception if a duplicate is found.
+    if (isset($machine_names[$machine_name])) {
+      throw new Exception(format_string('The "@machine_name" style plugin is used more than once in the style sets.', array('@machine_name' => $machine_name)));
+    }
+    $machine_names[$machine_name] = TRUE;
+
+    if (!$plugin = paddle_style_get_plugin($plugin_instance['plugin'])) {
+      throw new Exception(format_string('The "@plugin" style plugin is not found.', array('@plugin' => $plugin_instance['plugin'])));
+    }
+
+    if (!preg_match("/^[_a-z0-9]+$/", $machine_name)) {
+      throw new Exception(format_string('The "@machine_name" plugin instance machine name should only contain lowercase characters, numbers and underscores.', array('@machine_name' => $machine_name)));
+    }
+
+    // Use the allowed values from the plugin instance.
+    $allowed_values = !empty($plugin_instance['allowed_values']) ? $plugin_instance['allowed_values'] : array();
+    // Use the default values from the plugin instance definition if there are
+    // no previously saved values.
+    $default_values = !empty($pane->extras[$machine_name]) ? $pane->extras[$machine_name] : array();
+    $default_values = !$default_values && !empty($plugin_instance['default_values']) ? $plugin_instance['default_values'] : $default_values;
+    // Provide data as CTools context to the plugins. Make sure that the machine
+    // name in the context is unique by namespacing it on the pane id.
+    $context = ctools_context_create('paddle_panels_renderer', array(
+      'instance' => $plugin_instance,
+      'machine_name' => 'pid_' . $pid . '_' . $machine_name,
+      'pane' => $pane,
+    ));
+    $theme_options = array(
+      'form' => $plugin->form($allowed_values, $default_values, $context),
+      'title' => !empty($plugin_instance['title']) ? $plugin_instance['title'] : '',
+      'name' => $plugin_instance['plugin'],
+      'id' => 'paddle-style-plugin-instance-' . $machine_name,
+    );
+    $form[$machine_name] = theme('paddle_style_plugin_form', $theme_options);
+  }
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+  $form['#tree'] = TRUE;
+
+  return $form;
+}
+
+/**
+ * Get display edit cache for a panel being edited.
+ *
+ * The key is the second half of the key in this form: panelizer:TYPE:KEY;
+ */
+function paddle_panels_renderer_panels_cache_get($argument) {
+  ctools_include('object-cache');
+  list($entity_type, $key) = explode(':', $argument, 2);
+  $cache = ctools_object_cache_get('panelizer_display_cache', $entity_type . ':' . $key);
+
+  // Keep $type because $entity_type can be 'default' which is not actually an
+  // entity type in that case.
+  $type = $entity_type;
+  if ($entity_type == 'default') {
+    list($entity_type, $bundle, $name) = @explode(':', $key, 3);
+    $get_default = TRUE;
+  }
+
+  $handler = panelizer_entity_plugin_get_handler($entity_type);
+  if (!$handler) {
+    return;
+  }
+
+  // If it's already cached, we still need to restore our contexts.
+  if (!empty($cache)) {
+    $cache->cached = TRUE;
+    if (!empty($get_default)) {
+      $panelizer = $handler->get_default_panelizer_object($bundle, $name);
+      $cache->display->context = $handler->get_contexts($panelizer);
+    }
+    else {
+      list($entity_id, $view_mode) = explode(':', $key);
+      $entities = entity_load($entity_type, array($entity_id));
+      if ($entity_type == 'node' && !empty($entities[$entity_id])) {
+        // Load the current workbench moderation version.
+        $entities[$entity_id] = workbench_moderation_node_current_load($entities[$entity_id]);
+      }
+      if (!empty($entities[$entity_id]) && !empty($entities[$entity_id]->panelizer[$view_mode])) {
+        $panelizer = $entities[$entity_id]->panelizer[$view_mode];
+        $cache->display->context = $handler->get_contexts($panelizer, $entities[$entity_id]);
+      }
+    }
+
+    return $cache;
+  }
+
+  $cache = new stdClass();
+
+  // If it wasn't cached, create a new cache.
+  if (!empty($get_default)) {
+    $panelizer = $handler->get_default_panelizer_object($bundle, $name);
+    $cache->display = $panelizer->display;
+    $cache->display->context = $handler->get_contexts($panelizer);
+  }
+  else {
+    list($entity_id, $view_mode) = explode(':', $key);
+    $entities = entity_load($entity_type, array($entity_id));
+    if ($entity_type == 'node' && !empty($entities[$entity_id])) {
+      // Load the current workbench moderation version.
+      $entities[$entity_id] = workbench_moderation_node_current_load($entities[$entity_id]);
+    }
+    if (empty($entities[$entity_id]) || empty($entities[$entity_id]->panelizer[$view_mode])) {
+      return $cache;
+    }
+
+    list($entity_id, $revision_id, $bundle) = entity_extract_ids($entity_type, $entities[$entity_id]);
+    $panelizer = $entities[$entity_id]->panelizer[$view_mode];
+    $cache->display = $panelizer->display;
+    $cache->display->context = $handler->get_contexts($panelizer, $entities[$entity_id]);
+  }
+
+  ctools_include('common', 'panels');
+  ctools_include('plugins', 'panels');
+  $cache->display->cache_key = "panelizer:$type:$key";
+
+  // Set the allowed content types.
+  if (variable_get('panelizer_' . $type . ':' . $bundle . '_allowed_types_default', FALSE)) {
+    $cache->content_types = panels_common_get_allowed_types('panels_page', $cache->display->context);
+  }
+  else {
+    $cache->content_types = panels_common_get_allowed_types('panelizer_' . $type . ':' . $bundle, $cache->display->context);
+  }
+
+  // Set the allowed layout options.
+  if (variable_get('panelizer_' . $type . ':' . $bundle . '_allowed_layouts_default', FALSE)) {
+    $cache->display->allowed_layouts = panels_common_get_allowed_layouts('panels_page');
+  }
+  else {
+    $cache->display->allowed_layouts = panels_common_get_allowed_layouts('panelizer_' . $type . ':' . $bundle, $cache->display->context);
+  }
+
+  return $cache;
+}
+
+/**
+ * Store a display edit in progress in the page cache.
+ */
+function paddle_panels_renderer_panels_cache_set($argument, $cache) {
+  list($type, $key) = explode(':', $argument, 2);
+  ctools_include('object-cache');
+  ctools_object_cache_set('panelizer_display_cache', $type . ':' . $key, $cache);
+}
+
+/**
+ * Clear a specific display edit cache.
+ */
+function paddle_panels_renderer_panels_cache_clear($argument, $cache) {
+  list($type, $key) = explode(':', $argument, 2);
+  ctools_include('object-cache');
+  ctools_object_cache_clear('panelizer_display_cache', $type . ':' . $key);
+}
+
+/**
+ * Save all changes made to a display using the Page Manager page cache.
+ */
+function paddle_panels_renderer_panels_cache_save($argument, $cache) {
+  // If this is set, they clicked a button that saves a different panelizer
+  // than was being edited, such as saving to default rather than customizing
+  // an entity.
+  $original = $argument;
+  if (isset($cache->display->swap_cache_key)) {
+    $argument = $cache->display->swap_cache_key;
+  }
+
+  list($entity_type, $key) = explode(':', $argument, 2);
+  $type = $entity_type;
+  if ($entity_type == 'default') {
+    list($entity_type, $bundle, $name) = @explode(':', $key, 3);
+    $get_default = TRUE;
+  }
+
+  $handler = panelizer_entity_plugin_get_handler($entity_type);
+  if (!$handler) {
+    return;
+  }
+
+  if (!empty($get_default)) {
+    $panelizer = $handler->get_default_panelizer_object($bundle, $name);
+    $panelizer->display = $cache->display;
+    ctools_include('export');
+    ctools_export_crud_save('panelizer_defaults', $panelizer);
+  }
+  else {
+    list($entity_id, $view_mode) = explode(':', $key);
+    $entities = entity_load($entity_type, array($entity_id));
+    if ($entity_type == 'node' && !empty($entities[$entity_id])) {
+      $entities[$entity_id]->revision = TRUE;
+      if (isset($entities[$entity_id]->workbench_moderation['published']->vid) && $entities[$entity_id]->workbench_moderation['current']->vid == $entities[$entity_id]->workbench_moderation['published']->vid) {
+        // Current revision is the published one. Setting status to 0 together
+        // with revision = TRUE will eventually create a new draft revision and
+        // leave the published revision untouched.
+        $entities[$entity_id]->status = 0;
+      }
+      else {
+        // Current revision is not the published one.
+        // Load the current workbench moderation version, ensure a new revision
+        // is created and the current workbench moderation state is left
+        // untouched.
+        $entities[$entity_id] = workbench_moderation_node_current_load($entities[$entity_id]);
+        $entities[$entity_id]->revision = TRUE;
+        $entities[$entity_id]->workbench_moderation_state_current = $entities[$entity_id]->workbench_moderation['current']->state;
+        $entities[$entity_id]->workbench_moderation_state_new = $entities[$entity_id]->workbench_moderation_state_current;
+      }
+    }
+    if ($entities[$entity_id] && $entities[$entity_id]->panelizer[$view_mode]) {
+      $entities[$entity_id]->panelizer[$view_mode]->display = $cache->display;
+      $entities[$entity_id]->panelizer[$view_mode]->display_is_modified = TRUE;
+      $handler->entity_save($entities[$entity_id]);
+      // The display may have been cloned in the save process, so we need
+      // to be sure to put the old display back, and its contexts.
+      $cache->display = $entities[$entity_id]->panelizer[$view_mode]->display;
+      $cache->display->context = $handler->get_contexts($entities[$entity_id]->panelizer[$view_mode], $entities[$entity_id]);
+    }
+  }
+  panelizer_panels_cache_clear($original, $cache);
+}
+
+/**
+ * Implements hook_panels_pane_content_alter().
+ */
+function paddle_panels_renderer_panels_pane_content_alter(&$content, $pane, $args, $context, $renderer, $display) {
+  // If the pane supports the 'editor render callback', use this to render the
+  // pane. This allows to display a different version of the pane if it is shown
+  // in the panels editor. For example if a pane displays a form or a slideshow
+  // we do not want this to be active inside the editor, but instead show a
+  // simplified version.
+  $content_type = ctools_get_content_type($pane->type);
+  if (($renderer instanceof panels_renderer_paddle || $renderer instanceof panels_renderer_paddle_admin_node_view) && !empty($content_type['editor render callback'])) {
+    $output = $content_type['editor render callback']($pane->subtype, $pane->configuration, $args, $context);
+    $content->content = render($output);
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_panels_renderer_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_panels_renderer_content_types_list' => array(
+      'variables' => array(
+        'content_types' => array(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Returns HTML for content types list.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - content_types: array containing the content type objects keyed by the
+ *     content type machine name.
+ *
+ * @return string
+ *   The HTML to be rendered.
+ * @ingroup themeable
+ */
+function theme_paddle_panels_renderer_content_types_list($variables) {
+  global $language;
+  $output = '';
+  $content_types = isset($variables['content_types']) ? $variables['content_types'] : array();
+  if (count($content_types)) {
+    $item_list = array();
+    foreach ($content_types as $type_name => $content_type) {
+      $options = array('html' => TRUE, 'attributes' => array('class' => array('use-ajax')));
+      $options = isset($content_type['url_options']) ? array_merge($options, $content_type['url_options']) : $options;
+      $title_css = drupal_clean_css_identifier($type_name);
+      $variables = array(
+        'element' => array(
+          '#tag' => 'div',
+          '#value' => check_plain($content_type['title']),
+          '#attributes' => array('class' => 'paddle-pane-type-title'),
+        ),
+      );
+      $title = theme('html_tag', $variables);
+
+      $icon = '';
+      if (!empty($content_type['icon'])) {
+        $icon = theme('paddle_core_icon', array('type' => 'fa', 'name' => $content_type['icon']));
+      }
+
+      if (!empty($content_type['description'])) {
+        $variables = array(
+          'element' => array(
+            '#tag' => 'div',
+            '#value' => check_plain($content_type['description']),
+          ),
+        );
+        $description = theme('html_tag', $variables);
+      }
+      else {
+        $description = '';
+      }
+
+      $link = l($icon . $title . $description, $content_type['url'], $options);
+      $item_list[$type_name] = array(
+        'data' => $link,
+        'class' => array(
+          'paddle-content-type-list-item',
+          $title_css,
+          isset($content_type['class']) ? $content_type['class'] : '',
+        ),
+      );
+    }
+    $output = theme('item_list', array(
+      'items' => $item_list,
+      'title' => '',
+      'type' => 'ul',
+      'attributes' => array(
+        'class' => array(
+          'paddle-add-pane-list',
+          'form-body',
+        ),
+        'lang' => $language->language,
+      ),
+    ));
+  }
+
+  return $output;
+}
+
+/**
+ * We override this function to add the form-body class on the wrapper.
+ *
+ * @return string
+ *   The rendered output.
+ *
+ * @see panels_common_print_layout_links()
+ */
+function paddle_panels_renderer_print_layout_links($layouts, $base_path, $link_options = array(), $current_layout = NULL) {
+  $output = '';
+
+  $categories = array();
+  ctools_include('cleanstring');
+  $default_category = '';
+  foreach ($layouts as $id => $layout) {
+    $category = ctools_cleanstring($layout['category']);
+
+    $categories[$category] = $layout['category'];
+    if ($id == $current_layout) {
+      $default_category = $category;
+    }
+
+    // Add the layout name to the link so it's easier to identify it.
+    $link_options['attributes']['data-layout-name'] = $layout['name'];
+
+    $options[$category][$id] = panels_print_layout_link($id, $layout, $base_path . '/' . $id, $link_options, $current_layout);
+  }
+
+  $form = array();
+  $form['categories'] = array(
+    '#title' => t('Category'),
+    '#type' => 'select',
+    '#options' => $categories,
+    '#name' => 'categories',
+    '#id' => 'edit-categories',
+    '#value' => $default_category,
+    '#parents' => array('categories'),
+    '#access' => (count($categories) > 1) ? TRUE : FALSE,
+  );
+
+  $output .= drupal_render($form);
+
+  $output .= '<div class="panels-choose-layout panels-layouts-checkboxes clearfix">';
+
+  // We're doing these dependencies completely manualy, which is unusual, but
+  // the process code only supports doing them in a form.
+  // @todo modify dependent.inc to make this easier.
+  $dependencies = array();
+  foreach ($options as $category => $links) {
+    $dependencies['panels-layout-category-' . $category] = array(
+      'values' => array('edit-categories' => array($category)),
+      'num' => 1,
+      'type' => 'hide',
+    );
+
+    // This is were we add the form-body class.
+    $output .= '<div id="panels-layout-category-' . $category . '-wrapper" class="form-body">';
+    $output .= '<div id="panels-layout-category-' . $category . '" class="form-checkboxes clearfix">';
+    $output .= (count($categories) > 1) ? '<div class="panels-layouts-category">' . $categories[$category] . '</div>' : '';
+
+    foreach ($links as $key => $link) {
+      $output .= $link;
+    }
+    $output .= '</div></div>';
+  }
+
+  $output .= '</div>';
+
+  ctools_add_js('dependent');
+  $js['CTools']['dependent'] = $dependencies;
+  drupal_add_js($js, 'setting');
+
+  return $output;
+}

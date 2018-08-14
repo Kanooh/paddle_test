@@ -1,0 +1,66 @@
+<?php
+/**
+ * @file
+ * Code for the paddle_simple_contact_field install.
+ */
+
+/**
+ * Implements hook_field_schema().
+ */
+function paddle_simple_contact_field_field_schema($field) {
+  return array(
+    'columns' => array(
+      'recipients' => array(
+        'type' => 'text',
+        'size' => 'big',
+      ),
+      'thank_you' => array(
+        'type' => 'text',
+        'size' => 'big',
+        'serialize' => TRUE,
+      ),
+      'show_name' => array(
+        'description' => 'Boolean indicating whether the name is shown.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'show_subject' => array(
+        'description' => 'Boolean indicating whether the subject is shown.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'show_body' => array(
+        'description' => 'Boolean indicating whether the body is shown.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'label_submit' => array(
+        'type' => 'text',
+        'size' => 'small',
+      ),
+      'label_name' => array(
+        'description' => 'Alternative label for the name field.',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+      'label_email' => array(
+        'description' => 'Alternative label for the e-mail field.',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+      'label_subject' => array(
+        'description' => 'Alternative label for the subject field.',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+      'label_body' => array(
+        'description' => 'Alternative label for the body field.',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+    ),
+  );
+}

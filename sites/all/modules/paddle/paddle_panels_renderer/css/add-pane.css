@@ -1,0 +1,13 @@
+#content-type-list,
+#add-pane-form {
+  float: left;
+  padding: 1%;
+}
+
+#content-type-list {
+  width: 25%;
+}
+
+#add-pane-form {
+  width: 70.9%;
+}

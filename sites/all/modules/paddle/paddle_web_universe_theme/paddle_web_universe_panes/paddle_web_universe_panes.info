@@ -1,0 +1,6 @@
+name = Paddle Web Universe components
+description = Enables the Web Universe components.
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = paddle_web_universe_theme

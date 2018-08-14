@@ -1,0 +1,13 @@
+name = WebClient proxy
+description = Manage proxy settings for all enabled proxy modules.
+package = WebClient
+core = 7.x
+; Configuration page
+configure = admin/config/webclient/proxy
+; Module dependencies
+dependencies[] = webclient
+
+; Information added by drush on 2014-04-12
+version = "7.x-1.6"
+project = "webclient"
+datestamp = "1397309472"

@@ -1,0 +1,282 @@
+/**
+* @file
+* Paddle admin theme
+*
+* Contains all styles related to the contextual toolbar
+*/
+#contextual-actions-list .paddle-contextual-toolbar-separator {
+  width: 15px;
+  height: 1px;
+  background: transparent;
+  border: 0;
+}
+#contextual-actions-list li:first-child {
+  border-left: none;
+  padding: 0;
+}
+
+/**
+ * Contextual actions buttons.
+ */
+#contextual-actions-list {
+  float: left;
+  list-style: none;
+
+  > li {
+    z-index: 100;
+    display: block;
+    float: left;
+    margin-right: 3px;
+    padding: 0;
+    color: $c-white;
+    background-color: $main-blue;
+
+    &:hover,
+    &:focus {
+      background-color: darken($main-blue, 10%);
+    }
+
+    > a {
+      display: inline-block;
+      padding: 3px 12px 3px 0px;
+      font-size: 0.9em;
+      color: $c-white;
+    }
+  }
+
+  // Better centering of the icon.
+  .ui-icon:before,
+  .delete a:before {
+    vertical-align: baseline;
+    position: relative;
+    top: 1px;
+  }
+
+  .no-ui-icon {
+    padding-left: 12px;
+  }
+
+  .add-menu {
+    background-color: $light-blue;
+
+    &:hover {
+      background-color: $main-blue;
+    }
+  }
+
+  .save {
+    background-color: $orange-detail;
+
+    &:hover {
+      background-color: darken($orange-detail, 10%);
+    }
+  }
+
+  .delete {
+    background-color: $red;
+
+    &:hover {
+      background-color: darken($red, 15%);
+    }
+
+    a {
+      @extend %ui-icon;
+      padding: 3px 0;
+
+      &:before {
+        content: "\f1f8";
+      }
+    }
+
+    span {
+      @extend .hidden-text;
+    }
+  }
+
+  // Color handling for dropdown thingies.
+  .assignee_state,
+  .moderate-to-on-hold {
+    position: relative;
+    border: 2px solid $light-blue;
+
+    &,
+    &:hover,
+    &:focus {
+      background-color: $background-white;
+    }
+
+    > a {
+      padding: 0 12px 2px 0;
+      color: $main-blue;
+    }
+  }
+
+  .assignee_state {
+    .item-list {
+      position: absolute;
+      top: 100%;
+      left: -9999px;
+      overflow: hidden;
+      height: 0;
+    }
+
+    ul {
+      margin-top: 5px;
+      padding: 5px;
+      border: 2px solid $light-blue;
+      background-color: $background-white;
+    }
+
+    li {
+      white-space: nowrap;
+
+      > a {
+        display: block;
+        padding: 3px;
+        font-size: .85em;
+        overflow: hidden;
+
+        > span {
+          text-transform: lowercase;
+        }
+      }
+
+      &:hover,
+      &:focus {
+        background-color: $main-blue;
+
+        > a {
+          color: $c-white;
+        }
+      }
+    }
+
+
+    &:hover,
+    &:focus {
+      .item-list {
+        left: -2px;
+        min-width: 100%;
+        max-width: 250px;
+        height: auto;
+        max-height: 340px;
+        overflow-y: auto;
+      }
+    }
+  }
+
+  .deactivate,
+  .unpublish,
+  .moderate-to-offline,
+  .activate,
+  .scheduled,
+  .moderate-to-scheduled,
+  .publish,
+  .moderate-to-published {
+    background-color: $orange-detail;
+
+    &:hover {
+      background-color: darken($orange-detail, 10%);
+    }
+  }
+
+  .preview,
+  .online-version,
+  .save_preview {
+    background-color: $light-blue;
+
+    &:hover {
+      background-color: darken($light-blue, 10%);
+    }
+  }
+
+  .cancel {
+    background-color: #a1a1a1;
+
+    &:hover {
+      background-color: darken(#a1a1a1, 15%);
+    }
+  }
+
+  .dropdown-group {
+    position: relative;
+
+    // Apply the hover effect on the links, not the li.
+    > a {
+      &:hover,
+      &:focus {
+        background-color: darken($main-blue, 10%);
+      }
+    }
+
+    // Avoid breaking the text in multiple lines.
+    a {
+      white-space: nowrap;
+    }
+
+    .item-list {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 1;
+      min-width: 100%;
+      max-width: 250px;
+      background-color: $main-blue;
+
+      li {
+        padding: 3px 5px 3px 0;
+
+        &:hover,
+        &:focus {
+          background-color: darken($main-blue, 10%);
+        }
+      }
+
+      a {
+        display: block;
+        // The em inception is messing the font sizes...
+        font-size: 14px;
+        font-weight: 400;
+        color: $c-white;
+      }
+    }
+
+    &:hover,
+    &:focus {
+      // Remove the default background color applied to > li.
+      background-color: $main-blue;
+
+      .item-list {
+        display: block;
+      }
+    }
+  }
+
+  .add-user {
+    background-color: $orange-detail;
+  }
+  .add-user:hover {
+    background-color: $orange-hover;
+  }
+}
+
+.administer {
+  background-position: 10px 0;
+}
+
+.site-nav {
+  font-family: sans-serif;
+  font-size: .75em;
+}
+.site-nav a {
+  background-color: #09f;
+  color: $c-white;
+  line-height: 1;
+  padding: 1em;
+  white-space: nowrap;
+}
+.contextual-dropdown {
+  cursor: pointer;
+  padding: 3px 12px 3px 32px;
+}

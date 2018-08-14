@@ -1,0 +1,94 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Glossary.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_glossary_schema() {
+  $schema = array();
+
+  $schema['paddle_glossary_definition'] = array(
+    'description' => 'Stores Paddle Glossary definitions.',
+    'fields' => array(
+      'gdid' => array(
+        'description' => 'The primary identifier for a glossary definition.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'definition' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'The word the glossary definition is meant for.',
+      ),
+    ),
+    'indexes' => array(
+      'definition' => array('definition'),
+    ),
+    'primary key' => array('gdid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_glossary_enable() {
+  drupal_load('module', 'paddle_glossary');
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_glossary');
+  features_revert_module('paddle_text_formats');
+
+  // Make sure the site managers and chief editors can manage glossary
+  // definitions on Paddle websites.
+  foreach (array('Chief Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array('administer paddle glossary definitions', 'use text format glossary_full_html'));
+  }
+}
+
+/**
+ * Implements hook_install().
+ */
+function paddle_glossary_install() {
+  paddle_glossary_create_overview_page();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_glossary_uninstall() {
+  variable_del('paddle_glossary_overview_page_nid');
+}
+
+/**
+ * Create a Paddle overview page node for the glossary definitions.
+ */
+function paddle_glossary_create_overview_page() {
+  if (variable_get('paddle_glossary_overview_page_nid', 0) === 0) {
+    global $language;
+
+    $node = new stdClass();
+    $node->title = t('Glossary');
+    $node->type = 'paddle_overview_page';
+    node_object_prepare($node);
+
+    $node->language = $language->language;
+    $node->uid = 1;
+    $node->status = 0;
+    $node->promote = 0;
+    $node->comment = 0;
+
+    $node = node_submit($node);
+    node_save($node);
+
+    // Save the node id into the variable indicating which is the node.
+    variable_set('paddle_glossary_overview_page_nid', $node->nid);
+  }
+}

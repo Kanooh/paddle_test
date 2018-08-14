@@ -1,0 +1,178 @@
+/**
+* @file
+* Layout.
+*/
+.content .region:first-child {
+  padding-top: 0;
+}
+
+header.u-spacer--large + .page #main > .region:first-child {
+  padding-top: 0;
+}
+
+.content-header__context.content-header__context--has-link {
+  margin-right: -3.2rem;
+}
+
+h1.content-header__title {
+  padding-top: 0.5rem;
+}
+
+/**
+* @file
+* Custom pane styling.
+*/
+/**
+* ==========================================================================================
+* //                        Menu Structure Pane                                           //
+* ==========================================================================================
+*/
+.pane-add-menu-structure .pane-section-body.view-mode-spotlight_extended ul.menu, .pane-add-menu-structure .pane-section-body.view-mode-spotlight_short ul.menu, .pane-add-menu-structure .pane-section-body.view-mode-doormat ul.menu {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -moz-flex;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  -moz-flex-wrap: wrap;
+  -ms-flex-wrap: wrap;
+  flex-wrap: wrap;
+  margin-top: -3rem;
+  margin-left: -3rem;
+}
+.pane-add-menu-structure .pane-section-body.view-mode-spotlight_extended ul.menu li, .pane-add-menu-structure .pane-section-body.view-mode-spotlight_short ul.menu li, .pane-add-menu-structure .pane-section-body.view-mode-doormat ul.menu li {
+  margin-top: 3rem;
+  padding-left: 3rem;
+}
+
+.pane-section-top h2 {
+  font-size: 3.4rem;
+  font-family: flanders-serif,serif;
+  font-weight: 400;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+/**
+* @file
+* Form elements.
+*/
+.messages.error {
+  color: #db3434;
+  margin-bottom: 2rem;
+  font-size: 1.3em;
+}
+
+.form-required {
+  color: #db3434;
+}
+
+.element-invisible {
+  position: absolute !important;
+  clip: rect(1px 1px 1px 1px);
+  /* IE6, IE7 */
+  clip: rect(1px, 1px, 1px, 1px);
+  overflow: hidden;
+  height: 1px;
+}
+
+.webform-component {
+  margin: 2rem 0;
+}
+
+.webform-progressbar {
+  padding-bottom: 1.5rem;
+}
+
+select {
+  background-color: #fff;
+  color: #333;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  display: inline-block;
+  position: relative;
+  max-width: 100%;
+  border-radius: 0;
+}
+
+select:after {
+  content: " ";
+  height: 0;
+  width: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid #f15922;
+  position: absolute;
+  right: 6px;
+  top: 8px;
+  transition: all 0.3s linear;
+}
+
+.node-paddle-formbuilder-page .webform-client-form .webform-component-textfield input, .node-paddle-formbuilder-page .webform-client-form select, .node-paddle-formbuilder-page .webform-client-form .webform-component-email input, .node-paddle-formbuilder-page .webform-client-form .webform-component-number input, .node-paddle-formbuilder-page .webform-client-form textarea.form-textarea {
+  width: 98%;
+  border: 1px solid #cbd2da;
+  height: 3.5rem;
+  line-height: 3.5rem;
+  font-size: 0.8em;
+  padding: 0 6rem 0 1.5rem;
+}
+.node-paddle-formbuilder-page .webform-client-form .description {
+  padding-top: 0.5rem;
+}
+.node-paddle-formbuilder-page .webform-client-form select.day, .node-paddle-formbuilder-page .webform-client-form select.month, .node-paddle-formbuilder-page .webform-client-form select.year {
+  width: auto;
+  margin-right: 0.5rem;
+}
+.node-paddle-formbuilder-page .webform-client-form input.button-primary {
+  font-size: 1.5rem;
+  background-color: #06c;
+  color: #fff;
+  line-height: 3.2rem;
+  display: inline-block;
+  height: 3.5rem;
+  padding: 0 4rem;
+  text-align: center;
+  outline: 0;
+  cursor: pointer;
+}
+.node-paddle-formbuilder-page .webform-client-form input.button-primary:hover {
+  background-color: #3184d6;
+  border-color: #3184d6;
+  text-decoration: none;
+}
+
+input.webform-previous, .form-managed-file input[type="submit"] {
+  font-size: 1.5rem;
+  background-color: transparent;
+  color: #06c;
+  line-height: 3.2rem;
+  display: inline-block;
+  height: 3.5rem;
+  padding: 0 4rem;
+  text-align: center;
+  outline: 0;
+  cursor: pointer;
+  margin-right: 1rem;
+}
+input.webform-previous:hover, .form-managed-file input[type="submit"]:hover {
+  background-color: transparent;
+  color: #3184d6;
+  text-decoration: none;
+}
+
+.webform-component > label {
+  font-weight: bolder;
+}
+
+/**
+* ==========================================================================================
+* //                        Download List Pane                                           //
+* ==========================================================================================
+*/
+.pane-download-list a, .field-name-body .document-miniature a {
+  text-decoration: none;
+}
+.pane-download-list a .document-miniature__title:hover, .field-name-body .document-miniature a .document-miniature__title:hover {
+  text-decoration: underline;
+}

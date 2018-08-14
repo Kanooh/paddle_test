@@ -1,0 +1,14 @@
+name = Paddle Web Universe
+description = Enables functionality for the Web Universe theme.
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = i18n_field
+dependencies[] = list
+dependencies[] = options
+dependencies[] = paddle_themer
+features[ctools][] = paddle_themer:default_paddle_themer:1
+features[features_api][] = api:2
+features[field_base][] = field_display_title_in_header
+features[paddle_themer_theme][] = web_universe_theme

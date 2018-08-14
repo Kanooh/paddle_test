@@ -1,0 +1,203 @@
+/**
+* @file
+* User login page.
+*
+* Contains all styles related user login form.
+*/
+@import "variables/*";
+
+@import 'abstractions/mixins';
+@import 'globals';
+@import 'forms';
+@import 'fonts';
+
+html,
+body,
+#page,
+.region-content,
+#block-system-main,
+#user-login,
+#user-pass,
+#user-login > div,
+#user-pass > div {
+  height: 100%;
+}
+body {
+  background-attachment: fixed;
+  background-image: url(../images/backend_login.jpg);
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center bottom;
+  background-color: #363636;
+  color: #43474a;
+  overflow: auto;
+}
+
+#skip-link {
+  display: none;
+}
+
+p {
+  margin: 0;
+  font-size: 1.1em;
+}
+a {
+  color: #005384;
+}
+
+/**
+ * Set font-size to 0 to hide whitespace between the :before element and
+ * .user-login-form.
+ */
+form#user-login > div,
+form#user-pass > div {
+  width: 100%;
+  text-align: right;
+  font-size: 0;
+}
+
+/**
+ * Add an invisible element that's 100% high on the same "line" as the login
+ * form so the "line" becomes as big as the window. Then, we can use
+ * vertical-align: middle; on the login form. See also
+ * http://css-tricks.com/centering-in-the-unknown/
+ */
+form#user-login > div:before,
+form#user-pass > div:before {
+  content: "";
+  height: 100%;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.user-login-form {
+  text-align: left;
+  overflow: hidden;
+  // First background color is IE8 fallback.
+  background-color: #eee;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 20px 20px 12px;
+  width: 500px;
+  margin-right: 10%;
+  display: inline-block;
+  vertical-align: middle;
+  // Set a fallback for IE8 because it has no support for rems.
+  font-size: 14px;
+  // rem is for new browsers.
+  font-size: 1rem;
+}
+@media (max-width: 650px) {
+  .user-login-form {
+    margin-right: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+h2 {
+  display: inline-block;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 26px;
+  font-size: 1.6em;
+  vertical-align: middle;
+  margin: 0 25px 25px 0;
+}
+
+.kanooh-logo {
+  display: inline-block;
+  width: 72px;
+  height: 26px;
+  background: url(../images/kanooh-logo.png) no-repeat;
+  line-height: 26px;
+  vertical-align: middle;
+  margin: 0 0 25px 0;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #d7d7d7;
+  display: block;
+  height: 0;
+  margin: 1em 0;
+  padding: 0;
+  width: 100%;
+}
+
+.bttn-wrapper {
+  font-size: .85em;
+}
+
+.form-text {
+  width: 100%;
+  text-indent: 8px;
+  line-height: 26px;
+  min-height: 26px;
+  color: #43474a;
+  border: 1px solid #b5b6b7;
+}
+.form-item {
+  margin: 1em 0 0 0;
+  padding: 0;
+}
+.form-item-name {
+  margin: 0;
+}
+
+#edit-actions {
+  margin: 1em 0 0 0;
+}
+
+.bttn-wrapper {
+  margin: 8px 0;
+  width: auto;
+}
+
+.messages {
+  margin: 0 0 1em;
+  padding: 10px;
+
+  &.status {
+    background-color: #63af40;
+    color: #fff;
+  }
+
+  &.error {
+    background-color: #e24e2f;
+    color: #fff;
+  }
+
+  ul {
+    li {
+      margin-left: 15px;
+    }
+  }
+}
+
+.messages-inline {
+  margin: 0.5em 0 0 8px;
+  padding: 0;
+  font-size: 0.85em;
+  color: red;
+
+  &.status,
+  &.error {
+    background-color: transparent;
+  }
+
+  &.error {
+    color: red;
+    line-height: 1.2em;
+  }
+}
+
+.messages-inline {
+
+}
+
+#user-pass #edit-submit {
+  padding-left: 1.5em;
+  padding-right: 1.5em;
+  white-space: normal;
+}

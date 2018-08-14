@@ -1,0 +1,370 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Opening Hours module.
+ */
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_opening_hours_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_opening_hours_configuration_form',
+  );
+}
+
+/**
+ * Paddlet configuration form.
+ */
+function paddle_opening_hours_configuration_form($form, &$form_state) {
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_opening_hours_configuration_form_add_contextual_actions';
+  }
+
+  $form['contains'] = array(
+    '#markup' => views_embed_view('opening_hours_sets', 'opening_hours_sets_overview_block'),
+  );
+
+  return $form;
+}
+
+/**
+ * After build function to set the contextual actions for the paddlet config.
+ */
+function paddle_opening_hours_configuration_form_add_contextual_actions($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add an "add opening hour" button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Add opening hours set'), 'admin/content/opening_hours_set/add', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-plus'),
+      ),
+    )),
+    'class' => array('add-opening-hour'),
+    'weight' => 20,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_opening_hours_form_opening_hours_set_form_alter(&$form, &$form_state, $form_id) {
+  $form['#submit'][] = 'paddle_opening_hours_form_opening_hours_set_form_submit';
+  $form['#after_build'][] = 'paddle_opening_hours_form_opening_hours_set_form_after_build';
+
+  $form['actions']['save']['#attributes'] = array(
+    'class' => array('hidden'),
+  );
+}
+
+/**
+ * Extra submit handler to redirect the user correctly.
+ */
+function paddle_opening_hours_form_opening_hours_set_form_submit($form, &$form_state) {
+  $form_state['redirect'] = 'admin/paddlet_store/app/paddle_opening_hours/configure';
+}
+
+/**
+ * After-build function of the add opening hours set form.
+ *
+ * @param array $form
+ *   Form render array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_opening_hours_form_opening_hours_set_form_after_build($form) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-save',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_opening_hours_form_opening_hours_sets_delete_form_alter(&$form, &$form_state, $form_id) {
+  $form['#submit'][] = 'paddle_opening_hours_form_opening_hours_sets_delete_form_submit';
+}
+
+/**
+ * Extra submit handler to redirect the user correctly.
+ */
+function paddle_opening_hours_form_opening_hours_sets_delete_form_submit($form, &$form_state) {
+  $form_state['redirect'] = 'admin/paddlet_store/app/paddle_opening_hours/configure';
+}
+
+/**
+ * Implements hook_panelizer_pre_render_alter().
+ */
+function paddle_opening_hours_panelizer_pre_render_alter(&$panelizer, &$display, &$entity) {
+  if (isset($entity->type) && $entity->type == 'organizational_unit') {
+    $pane = new stdClass();
+    $pane->pid = 'new-6fa09b7b-63c4-4092-be8a-18a7049069f0';
+    $pane->panel = 'nested_7_b';
+    $pane->type = 'opening_hours';
+    $pane->subtype = 'opening_hours';
+    $pane->shown = TRUE;
+    $pane->access = array();
+    $pane->configuration = array(
+      'context' => 'panelizer',
+    );
+    $pane->style = array(
+      'settings' => NULL,
+    );
+    $pane->css = array();
+    $pane->extras = array();
+    $pane->position = 1;
+    $pane->locks = array(
+      'type' => 'immovable',
+      'regions' => array(
+        'nested_7_b' => 'nested_7_b',
+      ),
+    );
+    $pane->uuid = '6fa09b7b-63c4-4092-be8a-18a7049069f0';
+    $display->content['new-6fa09b7b-63c4-4092-be8a-18a7049069f0'] = $pane;
+    $display->panels['nested_7_b'][1] = 'new-6fa09b7b-63c4-4092-be8a-18a7049069f0';
+
+    $pane = new stdClass();
+    $pane->pid = 'new-7bfccffb-fdf0-4962-bb9e-2878794e76e0';
+    $pane->panel = 'full_a';
+    $pane->type = 'opening_hours_status';
+    $pane->subtype = 'opening_hours_status';
+    $pane->shown = TRUE;
+    $pane->access = array();
+    $pane->configuration = array(
+      'context' => 'panelizer',
+    );
+    $pane->cache = array(
+      'method' => '0',
+      'settings' => array(),
+    );
+    $pane->style = array(
+      'settings' => NULL,
+    );
+    $pane->css = array();
+    $pane->extras = array();
+    $pane->position = 2;
+    $pane->locks = array(
+      'type' => 'immovable',
+      'regions' => array(
+        'full_a' => 'full_a',
+      ),
+    );
+    $pane->uuid = '7bfccffb-fdf0-4962-bb9e-2878794e76e0';
+    $display->content['new-7bfccffb-fdf0-4962-bb9e-2878794e76e0'] = $pane;
+    $display->panels['full_a'][2] = 'new-7bfccffb-fdf0-4962-bb9e-2878794e76e0';
+    $pane = new stdClass();
+    $pane->pid = 'new-7c6df9e0-c194-11e3-b4b6-b6ee55aeb395';
+    $pane->panel = 'right';
+    $pane->type = 'content_region';
+    $pane->subtype = 'inherit';
+    $pane->shown = TRUE;
+    $pane->access = array();
+    $pane->configuration = array(
+      'region' => 'right',
+      'type' => 'organizational_unit',
+    );
+    $pane->cache = array();
+    $pane->style = array(
+      'settings' => NULL,
+    );
+    $pane->css = array();
+    $pane->extras = array();
+    $pane->position = 0;
+    $pane->locks = array(
+      'type' => 'immovable',
+      'regions' => array(
+        'right' => 'right',
+      ),
+    );
+    $pane->uuid = '7c6df9e0-c194-11e3-b4b6-b6ee55aeb395';
+    $display->content['new-7c6df9e0-c194-11e3-b4b6-b6ee55aeb395'] = $pane;
+
+    if (empty($display->panels['right'])) {
+      $display->panels['right'] = array();
+    }
+
+    array_unshift($display->panels['right'], 'new-7c6df9e0-c194-11e3-b4b6-b6ee55aeb395');
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_opening_hours_theme($existing, $type, $theme, $path) {
+  return array(
+    'opening_hours_status_list' => array(
+      'path' => $path . '/templates',
+      'template' => 'opening-hours-sets-status-list',
+    ),
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_opening_hours_ctools_plugin_directory($module, $plugin_type) {
+  if ($module == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Creates the Opening Hours Set field instance for a content type.
+ *
+ * @param string $type
+ *   The bundle.
+ */
+function paddle_opening_hours_create_ohs_instance($type) {
+  if (!field_read_instance('node', 'field_paddle_opening_hours', $type)) {
+    $field_instance_ohs = array(
+      'bundle' => $type,
+      'default_value' => NULL,
+      'deleted' => 0,
+      'description' => '',
+      'display' => array(
+        'default' => array(
+          'label' => 'above',
+          'module' => 'entityreference',
+          'settings' => array(
+            'link' => FALSE,
+          ),
+          'type' => 'entityreference_label',
+          'weight' => 17,
+        ),
+        'diff_standard' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_summary' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => 'node',
+      'field_name' => 'field_paddle_opening_hours',
+      'label' => 'Opening hours',
+      'required' => 0,
+      'settings' => array(
+        'field_instance_sync' => 0,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'entityreference',
+        'settings' => array(
+          'match_operator' => 'CONTAINS',
+          'path' => '',
+          'size' => 60,
+        ),
+        'type' => 'entityreference_autocomplete',
+        'weight' => 12,
+      ),
+    );
+
+    t('Opening hours');
+
+    field_create_instance($field_instance_ohs);
+  }
+}
+
+/**
+ * Implements hook_panels_pane_content_alter().
+ */
+function paddle_opening_hours_panels_pane_content_alter($content, $pane, $args, $contexts) {
+  $array = array(
+    'opening_hours',
+    'opening_hours_calendar',
+    'opening_hours_status',
+  );
+
+  // Provide AuthCache settings for opening hour panes on the fly.
+  if (in_array($pane->type, $array)) {
+    $pane->cache = array(
+      'method' => 'authcache_panels',
+      'settings' => array(
+        'machine_name' => ($pane->type == 'opening_hours') ? 'opening_hours_info' : $pane->type,
+        'authcache' => array(
+          'status' => '1',
+          'lifespan' => '0',
+          'clients' => array(
+            'authcache_ajax' => array(
+              'status' => '1',
+              'weight' => '0',
+            ),
+          ),
+          'fallback' => 'cancel',
+          'peruser' => 0,
+          'perpage' => 0,
+        ),
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_opening_hours_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'panels_pane_content_alter') {
+    // Move the authcache_panels implementation to the end of the list so the
+    // opening_hours implementation gets called earlier.
+    $implementation = $implementations['authcache_panels'];
+    unset($implementations['authcache_panels']);
+    $implementations['authcache_panels'] = $implementation;
+  }
+}

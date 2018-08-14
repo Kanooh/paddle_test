@@ -1,0 +1,242 @@
+/**
+* @file
+* Common elements shared across pages.
+*
+*/
+
+html {
+  font-family: $font-family;
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+.paddingizer {
+  padding: 0 4.20248%;
+}
+
+img {
+  border: none;
+  display: block;
+}
+
+img.file-icon {
+  display: inline;
+}
+
+hr {
+  border: 0;
+}
+
+.inline-block {
+  display: inline-block;
+  vertical-align: top;
+}
+
+.visuallyhidden {
+  @include sr-only;
+}
+
+.focusable {
+  @include sr-only-focusable;
+}
+
+#page {
+  width: 100%;
+  margin: 0;
+}
+
+/* @header */
+header {
+  position: relative;
+}
+
+.header-background-canvas {
+  padding-bottom: 10px;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+#logo {
+  display: block;
+  margin: 0 8px 0 0;
+  color: $c-white;
+}
+
+#logo:focus {
+  outline: thin dotted;
+}
+
+#logo img {
+  width: auto;
+  max-height: 127px;
+  margin-top: 30px;
+}
+
+.header-subtitle {
+  font-weight: normal;
+}
+
+.header-title {
+  margin-top: 30px;
+  font-weight: normal;
+}
+
+/* @second-level menu */
+#menu-display-current-level-plus-one {
+  border: 1px solid $c-gallery;
+  box-shadow: 0 5px 5px -4px $c-nobel;
+}
+
+/*@page title */
+#page-title {
+  margin: 15px 0;
+}
+
+/*@region content */
+.region-content {
+  margin-top: 20px;
+}
+
+/* @footer */
+footer {
+  position: relative;
+
+  .paddingizer {
+    padding-top: 30px;
+
+    .row {
+      .pane-content {
+        background: none;
+        border: none;
+        box-shadow: none;
+        .pane-section-body {
+          background: none;
+        }
+      }
+    }
+  }
+}
+
+.footer-tagline {
+  float: right;
+}
+
+.footer-title,
+.footer-subtitle {
+  display: inline-block;
+}
+
+[class^="icon-"].valigntop,
+[class*=" icon-"].valigntop,
+.fa.valigntop {
+  display: inline-block;
+  vertical-align: top;
+  min-width: 14px;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.content-wrapper {
+  position: relative;
+  clear: both;
+}
+
+.full-height {
+  min-height: 100%;
+  position: relative;
+}
+
+/* @media queries */
+@media (min-width: $screen-medium) {
+  .max-width {
+    max-width: $page-width;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: $screen-xs-max) {
+  .header-background-canvas {
+    height: 60px;
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  .header-background-canvas > .paddingizer {
+    /* Don't overlap with floating elements */
+    overflow-x: hidden;
+  }
+
+  #logo {
+    height: 56px;
+    margin: 0;
+    padding: 2px 0;
+    white-space: nowrap;
+    color: transparent;
+  }
+
+  /* Helper to vertical align the image */
+  #logo:before {
+    content: "";
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+  }
+
+  #logo img {
+    display: inline-block;
+    max-width: 100%;
+    max-height: 56px;
+    height: auto;
+    margin: 0 !important;
+    vertical-align: middle;
+  }
+
+  .header-title {
+    margin-top: 12px;
+  }
+
+  /* Hide the header title if we have a logo */
+  #logo + .header-title {
+    display: none;
+  }
+
+  .header-subtitle {
+    display: none;
+  }
+}
+
+@media (min-width: $screen-md-min) {
+  .header-background-canvas,
+  .logo-wrapper {
+    height: 127px;
+  }
+
+  .header-background-canvas {
+    padding-bottom: 0;
+  }
+
+  .logo-wrapper {
+    overflow: hidden;
+  }
+
+  .region-service-links {
+    position: absolute;
+    width: 100%;
+  }
+}
+
+.node-type-paddle-overview-page .pane-views-panes > .pane-content,
+.node-type-paddle-overview-page .pane-additional-panes > .pane-content {
+  border-style: none;
+  box-shadow: none;
+  background: none transparent;
+}
+
+#first-time {
+  padding-left: 25px;
+}

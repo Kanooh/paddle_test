@@ -1,0 +1,9 @@
+name = Override node options
+description = "Allow non-admins to override the default publishing options for nodes they can edit."
+core = 7.x
+files[] = override_node_options.test
+
+; Information added by drush on 2011-05-06
+version = "7.x-1.12"
+project = "override_node_options"
+datestamp = "1304694926"

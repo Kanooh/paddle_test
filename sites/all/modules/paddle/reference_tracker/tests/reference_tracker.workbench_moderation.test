@@ -1,0 +1,252 @@
+<?php
+
+/**
+ * @file
+ * Contains ReferenceTrackerWorkbenchModerationTestCase.
+ */
+
+/**
+ * Tests for integration with Workbench moderation.
+ */
+class ReferenceTrackerWorkbenchModerationTestCase extends DrupalWebTestCase {
+
+  /**
+   * The content type created for tests purposes.
+   *
+   * @var string
+   */
+  protected $contentType;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'standard';
+
+  /**
+   * The user created for the test.
+   *
+   * @var object
+   */
+  protected $user;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Workbench moderation',
+      'description' => 'Tests the integration with the Workbench moderation module.',
+      'group' => 'Reference Tracker',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($modules = array()) {
+    $modules[] = 'reference_tracker';
+    $modules[] = 'workbench_moderation';
+
+    parent::setUp($modules);
+
+    $type = $this->drupalCreateContentType();
+    $this->contentType = $type->name;
+    // Enable revisions and moderation.
+    variable_set('node_options_' . $this->contentType, array('revision', 'moderation'));
+
+    $this->user = $this->drupalCreateUser(array(
+      'access content',
+      'view revisions',
+      'view all unpublished content',
+      'view moderation history',
+      'bypass workbench moderation',
+      "create {$this->contentType} content",
+      "edit any {$this->contentType} content",
+      'use text format filtered_html',
+    ));
+
+    $this->drupalLogin($this->user);
+  }
+
+  /**
+   * Tests tracking in the latest draft revision of a node.
+   *
+   * Tracking of the latest draft is the default option, so we don't set the
+   * variable on purpose to verify the default behaviour.
+   */
+  public function testLatestDraftTracking() {
+    // Create the nodes that are going to be referenced.
+    $node1 = $this->createUiNode();
+    $node2 = $this->createUiNode();
+    $referencing_node = $this->createUiNode($this->createBodyReferencingNode($node1));
+
+    $expected = array(
+      'node' => array($referencing_node->nid),
+    );
+    // Verify that the first node is being tracked.
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node is tracking the first node.');
+
+    // Publish the node via the moderation form.
+    $moderate = array('state' => workbench_moderation_state_published());
+    $this->drupalPost("node/{$referencing_node->nid}/moderation", $moderate, t('Apply'));
+
+    // The first node should still be tracked as this is the only revision
+    // available, so it's both latest and published draft.
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node is still tracking the first node.');
+
+    // Create a new draft tracking the second node.
+    $edit = $this->createBodyReferencingNode($node2);
+    $this->drupalPost("node/{$referencing_node->nid}/edit", $edit, t('Save'));
+
+    // The first node is not tracked anymore, while the second is.
+    $this->assertEqual(array(), reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node has correctly stopped tracking the first node.');
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node2->nid), 'The referencing node is tracking the second node.');
+  }
+
+  /**
+   * Tests tracking for the published revision of a node.
+   */
+  public function testPublishedRevisionTracking() {
+    variable_set('reference_tracker_workbench_moderation_track_revision', REFERENCE_TRACKER_WORKBENCH_MODERATION_TRACK_PUBLISHED);
+
+    // Create the nodes that are going to be referenced.
+    $node1 = $this->createUiNode();
+    $node2 = $this->createUiNode();
+    $referencing_node = $this->createUiNode($this->createBodyReferencingNode($node1));
+
+    $expected = array(
+      'node' => array($referencing_node->nid),
+    );
+    // Verify that the first node is being tracked.
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node is tracking the first node.');
+
+    // Publish the node via the moderation form.
+    $moderate = array('state' => workbench_moderation_state_published());
+    $this->drupalPost("node/{$referencing_node->nid}/moderation", $moderate, t('Apply'));
+
+    // The first node should still be tracked as this is the only revision
+    // available, so it's both latest and published draft.
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node is still tracking the first node.');
+
+    // Create a new draft tracking the second node.
+    $edit = $this->createBodyReferencingNode($node2);
+    $this->drupalPost("node/{$referencing_node->nid}/edit", $edit, t('Save'));
+
+    // The first node is still tracked, while the second is not.
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node is still tracking the first node.');
+    $this->assertEqual(array(), reference_tracker_get_inbound_references('node', $node2->nid), 'The referencing node is not tracking the second node.');
+
+    // Publish the latest draft that is referencing the second node.
+    $moderate = array('state' => workbench_moderation_state_published());
+    $this->drupalPost("node/{$referencing_node->nid}/moderation", $moderate, t('Apply'));
+
+    // The first node is not tracked anymore, while the second is.
+    $this->assertEqual(array(), reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node has correctly stopped tracking the first node.');
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node2->nid), 'The referencing node is tracking the second node.');
+  }
+
+  /**
+   * Tests tracking for latest draft and published revisions of a node.
+   */
+  public function testDraftAndPublishedRevisionsTracking() {
+    variable_set('reference_tracker_workbench_moderation_track_revision', REFERENCE_TRACKER_WORKBENCH_MODERATION_TRACK_BOTH);
+
+    // Create the nodes that are going to be referenced.
+    $node1 = $this->createUiNode();
+    $node2 = $this->createUiNode();
+    $referencing_node = $this->createUiNode($this->createBodyReferencingNode($node1));
+
+    $expected = array(
+      'node' => array($referencing_node->nid),
+    );
+    // Verify that the first node is being tracked.
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node is tracking the first node.');
+
+    // Publish the node via the moderation form.
+    $moderate = array('state' => workbench_moderation_state_published());
+    $this->drupalPost("node/{$referencing_node->nid}/moderation", $moderate, t('Apply'));
+
+    // The first node should still be tracked as this is the only revision
+    // available, so it's both latest and published draft.
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node is still tracking the first node.');
+
+    // Create a new draft tracking the second node.
+    $edit = $this->createBodyReferencingNode($node2);
+    $this->drupalPost("node/{$referencing_node->nid}/edit", $edit, t('Save'));
+
+    // The first and the second nodes are being tracked now.
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node is still tracking the first node.');
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node2->nid), 'The referencing node is tracking the second node.');
+
+    // Reload the node to have updated workbench moderation data.
+    $referencing_node = node_load($referencing_node->nid, NULL, TRUE);
+    // Unpublish the published revision via the unpublish confirmation form.
+    $this->drupalPost("node/{$referencing_node->nid}/moderation/{$referencing_node->vid}/unpublish", array(), t('Unpublish'));
+
+    // There is no published revision anymore. The current draft is referencing
+    // the second node.
+    $this->assertEqual(array(), reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node has correctly stopped tracking the first node.');
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $node2->nid), 'The referencing node is tracking the second node.');
+
+    // Add a new draft with no references.
+    $edit = $this->createBodyContent('');
+    $this->drupalPost("node/{$referencing_node->nid}/edit", $edit, t('Save'));
+
+    // No nodes are tracked as there is no published revision and the latest
+    // draft contains no references.
+    $this->assertEqual(array(), reference_tracker_get_inbound_references('node', $node1->nid), 'The referencing node has correctly stopped tracking the first node.');
+    $this->assertEqual(array(), reference_tracker_get_inbound_references('node', $node2->nid), 'The referencing node has correctly stopped tracking the second node.');
+  }
+
+  /**
+   * Creates a new node through the UI to respect workbench states.
+   *
+   * @param array $edit
+   *   Field data in an associative array, as in drupalPost(). If omitted a
+   *   random title will be used.
+   *
+   * @return mixed
+   *   Created node object.
+   */
+  protected function createUiNode($edit = array()) {
+    if (!isset($edit['title'])) {
+      $edit['title'] = $this->randomName();
+    }
+
+    $this->drupalPost("node/add/{$this->contentType}", $edit, t('Save'));
+
+    return $this->drupalGetNodeByTitle($edit['title']);
+  }
+
+  /**
+   * Returns body content that contains a reference to a node.
+   *
+   * @param object $referenced_node
+   *   The node that needs to be referenced.
+   *
+   * @return array
+   *   An edit array with the post values to populate body form fields.
+   */
+  protected function createBodyReferencingNode($referenced_node) {
+    return $this->createBodyContent(l($this->randomName(), 'node/' . $referenced_node->nid));
+  }
+
+  /**
+   * Returns an array to fill a node body field with content.
+   *
+   * @param string $content
+   *   The content to put inside the body.
+   *
+   * @return array
+   *   An edit array with the post values to populate body form fields.
+   */
+  protected function createBodyContent($content) {
+    $language_none = LANGUAGE_NONE;
+
+    return array(
+      "body[$language_none][0][value]" => $content,
+      "body[$language_none][0][format]" => 'filtered_html',
+    );
+  }
+
+}

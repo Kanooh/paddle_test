@@ -1,0 +1,173 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleSolrSearchTestCase.
+ */
+
+/**
+ * Tests the functioning of the Solr search.
+ */
+class PaddleSolrSearchTestCase extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Solr search',
+      'description' => 'Tests the functioning of the Solr search.',
+      'group' => 'Paddle Solr',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function run(array $methods = array()) {
+    $paddle_search_solr_url = getenv('paddle_search_solr_url');
+
+    if ($paddle_search_solr_url) {
+      return parent::run($methods);
+    }
+    else {
+      $this->fail('Skipped Solr tests because the environment variable paddle_search_solr_url was not set.');
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function preloadRegistry() {
+    parent::preloadRegistry();
+
+    $paddle_search_solr_url = getenv('paddle_search_solr_url');
+    variable_set('paddle_search_solr_url', $paddle_search_solr_url);
+
+    // Set an index prefix, unique for this test run, so concurrent test runs
+    // don't overwrite each others data.
+    $prefix_from_env = getenv('search_api_solr_index_prefix');
+    if ($prefix_from_env) {
+      variable_set('search_api_solr_index_prefix', $prefix_from_env);
+    }
+  }
+
+  /**
+   * Tests if after adding some nodes they are found in the Solr index.
+   */
+  public function testSolrSeach() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $index = search_api_index_load('node_index');
+    $index_enabled_assertion_message = 'The search API index node_index is enabled.';
+    $search_api_solr_index_prefix = variable_get('search_api_solr_index_prefix', '');
+    if ($search_api_solr_index_prefix != '') {
+      $index_enabled_assertion_message .= ' And uses index prefix: ' . $search_api_solr_index_prefix . '.';
+    }
+    $this->assertEqual(1, $index->enabled, $index_enabled_assertion_message);
+    $this->assertEqual('solr_server', $index->server, 'The search API index uses the server named solr_server');
+    if ($index->server()->enabled != '1') {
+      $this->fail('The server used by the index is enabled.');
+      return;
+    }
+
+    // Clean up the node_index before adding test data.
+    $index->server()->deleteItems('all', $index);
+    $index_status = $index->datasource()->getIndexStatus($index);
+    $this->assertEqual('0', $index_status['indexed'], '0 items have been indexed.');
+
+    // Create a few terms. We add a number in the name to ensure that the term
+    // name doesn't randomly appear in the title or body.
+    $term1_name = array('name' => 'PaddleGeneralTerm1');
+    $term1 = $this->drupalCreateTerm('paddle_general', $term1_name);
+    $term2_name = array('name' => 'PaddleTagsTerm2');
+    $term2 = $this->drupalCreateTerm('paddle_tags', $term2_name);
+
+    $nodes = $node_objects = array();
+    // Create a few nodes and publish them so they are indexed.
+    for ($i = 0; $i < 7; $i++) {
+      $title = $this->getRandomWords(5);
+      $body = $this->getRandomWords(50);
+      $summary = $this->getRandomWords(15);
+      $edit = array(
+        'title' => implode(' ', $title),
+        'body[und][0][value]' => implode(' ', $body),
+      );
+      if ($i == 1) {
+        // No need to test every 7 nodes with the same extra info. We do this
+        // only once.
+        $edit += array(
+          'body[und][0][summary]' => implode(' ', $summary),
+          'field_paddle_general_tags[und][0][' . $term1->tid . '][' . $term1->tid . ']' => $term1->tid,
+          'field_paddle_tags[und][terms]' => $term2->name,
+        );
+      }
+      $node = $this->drupalCreateUiNode('basic_page', $edit);
+      $this->moderateNode($node, 'Publish');
+      $node_info = array(
+        'title' => $title[0] . ' ' . $title[1],
+        'body' => $body[0] . ' ' . $body[1],
+      );
+      if ($i == 1) {
+        $node_info += array(
+          'summary' => $summary[0] . ' ' . $summary[1],
+          'general tags' => $term1->name,
+          'paddle tags' => $term2->name,
+        );
+      }
+      $nodes[] = $node_info;
+      $node_objects[] = $node;
+    }
+
+    // Refresh index status since we've created terms and nodes.
+    $index_status = $index->datasource()->getIndexStatus($index);
+    $this->assertEqual('7', $index_status['total'], 'The index targets 7 items in total.');
+
+    // Run the cron so the nodes are sent for indexing.
+    $this->cronRun();
+
+    $index = search_api_index_load('node_index', TRUE);
+    $index_status = $index->datasource()->getIndexStatus($index);
+    $this->assertEqual('7', $index_status['indexed'], '7 items have been indexed.');
+    $this->assertEqual('7', $index_status['total'], 'The index targets 7 items in total.');
+
+    // Sleep 2 minutes to allow the Solr server to index the nodes.
+    sleep(60 * 2);
+
+    foreach ($nodes as $key => $keywords) {
+      foreach ($keywords as $found_in => $keyword) {
+        $this->drupalGet('search/' . $keyword);
+        $results = $this->xpath('//ol[contains(@class, "search-results")]/li');
+        $this->assertEqual(1, count($results), "One result found when searching for '{$keyword}' which is present in the {$found_in} of node: " . var_export($node_objects[$key], TRUE));
+
+        // Other search fields don't always appear in the search result snippet,
+        // so we look only for the body and title.
+        if ($found_in == 'title' || $found_in == 'body') {
+          $this->assertEqual(substr_count(strip_tags($this->drupalGetContent()), $keyword), 1, "The keyword $keyword found once in the search results.");
+        }
+      }
+    }
+
+    // Clean up the node_index at the end of the test.
+    $index->server()->deleteItems('all', $index);
+  }
+
+  /**
+   * Generates and returns random words in an array.
+   *
+   * @param int $num_words
+   *   The number of words the string should contain.
+   *
+   * @return array
+   *   The generated words.
+   */
+  protected function getRandomWords($num_words = 10) {
+    $alphabet = 'abcdefghijklmnopqrstuvwxyz';
+    $result = array();
+    for ($i = 0; $i < $num_words; $i++) {
+      $result[] = substr(str_shuffle($alphabet), 0, rand(3, 10));
+    }
+
+    return $result;
+  }
+}

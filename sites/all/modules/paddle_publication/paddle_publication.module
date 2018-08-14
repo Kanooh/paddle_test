@@ -1,0 +1,744 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Publications feature.
+ */
+
+include_once 'paddle_publication.features.inc';
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_publication_paddle_content_region_content_type_info() {
+  return 'paddle_publication';
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_publication_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'paddle_publication') {
+      return array(
+        'field_paddle_kce_authors',
+        'field_paddle_kce_keywords',
+        'field_paddle_kce_mesh_terms',
+        'field_paddle_kce_publication_y',
+        'field_paddle_kce_publ_type',
+        'field_paddle_kce_collections',
+        'field_paddle_kce_number',
+        'field_paddle_kce_type',
+        'field_paddle_kce_publisher',
+        'field_paddle_kce_place_published',
+        'field_paddle_kce_publication_lan',
+        'field_paddle_kce_url',
+        'field_paddle_kce_depot_number',
+        'field_paddle_kce_study',
+        'field_paddle_kce_doc_lang',
+        'field_paddle_kce_related_docs',
+        'field_paddle_kce_related_links',
+        'field_paddle_kce_date_published',
+      );
+    }
+
+    if ($menu_object->type == 'paddle_advanced_search_page') {
+      return array(
+        'field_paddle_kce_adv_authors',
+        'field_paddle_kce_adv_pub_year',
+        'field_paddle_kce_adv_keywords',
+      );
+    }
+  }
+
+  return array();
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields_groups().
+ */
+function paddle_publication_paddle_content_manager_additional_fields_groups() {
+  $menu_object = menu_get_object();
+
+  if ($menu_object->type == 'paddle_publication') {
+    $additional_fields_groups = array();
+    $additional_fields_groups['publication'] = array(
+      'label' => t('Publication'),
+      'weight' => 1,
+      'fields' => array(
+        'field_paddle_kce_authors',
+        'field_paddle_kce_keywords',
+        'field_paddle_kce_mesh_terms',
+        'field_paddle_kce_publication_y',
+        'field_paddle_kce_related_docs',
+        'field_paddle_kce_publ_type',
+        'field_paddle_kce_collections',
+        'field_paddle_kce_number',
+        'field_paddle_kce_type',
+        'field_paddle_kce_publisher',
+        'field_paddle_kce_place_published',
+        'field_paddle_kce_publication_lan',
+        'field_paddle_kce_url',
+        'field_paddle_kce_depot_number',
+        'field_paddle_kce_study',
+        'field_paddle_kce_doc_lang',
+        'field_paddle_kce_related_links',
+        'field_paddle_kce_date_published',
+      ),
+    );
+
+    return $additional_fields_groups;
+  }
+}
+
+/**
+ * Implements hook_default_page_manager_handlers_alter().
+ */
+function paddle_publication_default_page_manager_handlers_alter(&$export) {
+  $object = menu_get_object('node');
+
+  if (!empty($object) && $object->type == 'paddle_publication' && !empty($export['node_edit_panel_context'])) {
+    $panes_to_insert = array();
+
+    // Shortcut to the left column.
+    $left_column = &$export['node_edit_panel_context']->conf['display']->panels['left'];
+
+    // Find the additional fields panes. We want to show it together with
+    // the other node specific panes.
+    if ($key = array_search('new-f14a7a22-a05e-ae44-c122-e71a20f44d45', $left_column)) {
+      unset($left_column[$key]);
+      // Reset the keys to have a proper count again.
+      $left_column = array_values($left_column);
+      // Show it before the others.
+      array_unshift($panes_to_insert,
+        'new-f14a7a22-a05e-ae44-c122-e71a20f44d45');
+    }
+
+    // Find the creation date pane key in the left column.
+    if ($key = array_search('new-f4a1d4d8-beb6-493f-a029-fed1e9bb82b7', $left_column)) {
+      // Reset the keys to have a proper count again.
+      $left_column = array_values($left_column);
+      // Show it before the others.
+      array_unshift($panes_to_insert,
+        'new-f4a1d4d8-beb6-493f-a029-fed1e9bb82b7');
+      // Insert the new panes after the body.
+      array_splice($left_column, $key, 1, $panes_to_insert);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_publication_form_paddle_publication_node_form_alter(&$form, &$form_state) {
+  $form['field_paddle_kce_url'][LANGUAGE_NONE][0]['#title'] = '';
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_publication_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_panels_ipe_pane_links_alter().
+ */
+function paddle_publication_panels_ipe_pane_links_alter(&$links, $context) {
+  if ($pane = $context['pane']) {
+    $types = array(
+      'related_documents',
+      'related_links',
+      'related_info',
+      'publication_lead_image',
+      'reference_number',
+      'authors_filter',
+      'keywords_filter',
+      'publication_year_filter',
+    );
+
+    if (in_array($pane->type, $types)) {
+      unset($links['delete']);
+      unset($links['edit']);
+      unset($links['paddle_style']);
+    }
+  }
+}
+
+/**
+ * Implements hook_node_submit().
+ */
+function paddle_publication_node_submit($node, $form, &$form_state) {
+  if (empty($node->panelizer)) {
+    return;
+  }
+
+  if (in_array($node->type, array('paddle_publication', 'paddle_advanced_search_page'))) {
+    // Retrieve the display.
+    $display = paddle_apps_retrieve_node_display_for_pane_altering($node);
+    // Only continue if there is a display.
+    if (!$display) {
+      return;
+    }
+  }
+
+  if ($node->type == 'paddle_publication') {
+    $default_region = 'left';
+
+    // Add, remove or update the lead image pane if needed.
+    $featured_image = !empty($form_state['values']['field_paddle_featured_image']) ? $form_state['values']['field_paddle_featured_image'][LANGUAGE_NONE][0] : array();
+    $lead_image_pane = _paddle_publication_get_lead_image_pane($node);
+
+    if (!empty($featured_image['sid'])) {
+      if (!$lead_image_pane) {
+        $lead_image_pane = panels_new_pane('publication_lead_image', 'publication_lead_image');
+        $display->add_pane($lead_image_pane, $default_region);
+      }
+
+      $lead_image_pane->configuration['paddle_scald_image'] = $featured_image;
+      // We don't need the enabled status, as the presence of the pane is the
+      // status itself.
+      unset($lead_image_pane->configuration['enabled']);
+    }
+    else {
+      if ($lead_image_pane) {
+        _paddle_publication_remove_pane_from_display($display, $lead_image_pane);
+      }
+    }
+
+    _paddle_publication_add_pane_to_node_display('related_documents', $node, $display);
+    _paddle_publication_add_pane_to_node_display('related_links', $node, $display);
+    _paddle_publication_add_pane_to_node_display('related_info', $node, $display);
+    _paddle_publication_add_pane_to_node_display('publication_lead_image', $node, $display);
+    _paddle_publication_add_pane_to_node_display('reference_number', $node, $display);
+  }
+
+  if ($node->type == 'paddle_advanced_search_page') {
+    $layout = panels_get_layout($display->layout);
+
+    // For the Alfa layout, we put panes by default in the left region. For all
+    // the remaining layouts, use the same approach as in the change layout modal.
+    if ($layout['name'] == 'paddle_2_col_3_9') {
+      $default_region = 'left';
+    }
+    else {
+      $regions = array_keys(panels_get_regions($layout, $display));
+      $default_region = reset($regions);
+    }
+
+    // The LANGUAGE_NONE is ugly, switch to Drupal 8 please...
+    $authors_filter_value['authors_filter'] = $form_state['values']['field_paddle_kce_adv_authors'][LANGUAGE_NONE][0]['value'];
+    $publication_year_filter_value['publication_year_filter'] = $form_state['values']['field_paddle_kce_adv_pub_year'][LANGUAGE_NONE][0]['value'];
+    $keywords_filter_value['keywords_filter'] = $form_state['values']['field_paddle_kce_adv_keywords'][LANGUAGE_NONE][0]['value'];
+
+    paddle_advanced_search_update_advanced_search_page_pane($node, $authors_filter_value, 'authors_filter', $display, $default_region);
+    paddle_advanced_search_update_advanced_search_page_pane($node, $publication_year_filter_value, 'publication_year_filter', $display, $default_region);
+    paddle_advanced_search_update_advanced_search_page_pane($node, $keywords_filter_value, 'keywords_filter', $display, $default_region);
+  }
+}
+
+/**
+ * Helper function to extract the lead image pane from a node.
+ *
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return object
+ *   The lead image pane.
+ */
+function _paddle_publication_get_lead_image_pane($node) {
+  $lead_image_pane = array();
+  foreach ($node->panelizer['page_manager']->display->content as $pid => $pane) {
+    if ($pane->type == 'publication_lead_image') {
+      $lead_image_pane = $pane;
+    }
+  }
+
+  return $lead_image_pane;
+}
+
+/**
+ * Removes a pane from a display.
+ *
+ * @param panels_display $display
+ *   The display instance where we want to remove the pane from.
+ * @param object $pane
+ *   The pane object.
+ *
+ * @see panels_display::add_pane()
+ */
+function _paddle_publication_remove_pane_from_display(panels_display $display, $pane) {
+  if (isset($display->content[$pane->pid])) {
+    unset($display->content[$pane->pid]);
+
+    // Find the position of this pane in its region.
+    $position = array_search($pane->pid, $display->panels[$pane->panel]);
+    if ($position !== FALSE) {
+      unset($display->panels[$pane->panel][$position]);
+      // Reset position array to avoid missing position numbers.
+      $display->panels[$pane->panel] = array_values($display->panels[$pane->panel]);
+    }
+  }
+}
+
+/**
+ * Adds the pane of the given pane type to the node display.
+ *
+ * @param string $pane_type
+ *   The type of the pane we try to add.
+ * @param object $node
+ *   The node to parse.
+ * @param object $display
+ *   The node display we add the pane to.
+ */
+function _paddle_publication_add_pane_to_node_display($pane_type, $node, $display) {
+
+  if ($pane_type == 'publication_lead_image' || $pane_type == 'reference_number' || $pane_type == 'related_info') {
+    $default_region = 'left';
+    $pane = _paddle_publication_get_publication_pane($pane_type, $node);
+
+    // Add, update or remove the pane if needed.
+    if (!$pane) {
+      $pane = panels_new_pane($pane_type, $pane_type);
+      $pane->locks = array(
+        'type' => 'immovable',
+        'regions' => array(
+          'left' => 'left',
+        ),
+      );
+
+      $display->add_pane($pane, $default_region);
+
+      // We don't need the enabled status, as the presence of the pane is the
+      // status itself.
+      unset($pane->configuration['enabled']);
+    }
+  }
+  else {
+    $default_region = 'right';
+    $pane = _paddle_publication_get_publication_pane($pane_type, $node);
+
+    // Add, update or remove the pane if needed.
+    if (!$pane) {
+      $pane = panels_new_pane($pane_type, $pane_type);
+      $pane->locks = array(
+        'type' => 'immovable',
+        'regions' => array(
+          'right' => 'right',
+        ),
+      );
+
+      $display->add_pane($pane, $default_region);
+
+      // We don't need the enabled status, as the presence of the pane is the
+      // status itself.
+      unset($pane->configuration['enabled']);
+    }
+  }
+}
+
+/**
+ * Helper function to extract a pane from a node.
+ *
+ * @param string $pane_type
+ *   The pane type to get the pane for.
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return object
+ *   The requested pane.
+ */
+function _paddle_publication_get_publication_pane($pane_type, $node) {
+  $publication_pane = array();
+  foreach ($node->panelizer['page_manager']->display->content as $pid => $pane) {
+    if ($pane->type == $pane_type) {
+      $publication_pane = $pane;
+    }
+  }
+
+  return $publication_pane;
+}
+
+/**
+ * Implements hook_panelizer_pre_render_alter().
+ */
+function paddle_publication_panelizer_pre_render_alter(&$panelizer, &$display, &$entity) {
+  if (isset($entity->type) && $entity->type == 'paddle_publication') {
+    // Move the panes to the top, from the lowest to the highest.
+    _paddle_publication_move_pane_to_top('publication_lead_image', $display);
+  }
+}
+
+/**
+ * Moves the pane to the top of the region.
+ *
+ * @param string $pane_type
+ *    The type of the pane you want to move.
+ * @param object $display
+ *   The display where the pane is moved on.
+ */
+function _paddle_publication_move_pane_to_top($pane_type, $display) {
+  // Get the pane key.
+  if ($pane_type == 'publication_lead_image') {
+    $pane_key = FALSE;
+    foreach ($display->content as $key => $pane) {
+      if ($pane->type == $pane_type) {
+        $pane_key = $key;
+      }
+    }
+
+    if ($pane_key !== FALSE) {
+      // Move the pane to the top.
+      $pane_position = array_search($pane_key, $display->panels['left']);
+      unset($display->panels['left'][$pane_position]);
+      array_unshift($display->panels['left'], $pane_key);
+    }
+
+  }
+  else {
+    $pane_key = FALSE;
+    foreach ($display->content as $key => $pane) {
+      if ($pane->type == $pane_type) {
+        $pane_key = $key;
+      }
+    }
+
+    if ($pane_key !== FALSE) {
+      // Move the pane to the top.
+      $pane_position = array_search($pane_key, $display->panels['right']);
+      unset($display->panels['right'][$pane_position]);
+      array_unshift($display->panels['right'], $pane_key);
+    }
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_publication_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_publication_related_info' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-publication-related-info',
+    ),
+    'paddle_publication_reference_number' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-publication-reference-number',
+    ),
+    'paddle_publication_terms' => array(
+      'render element' => 'terms',
+    ),
+  );
+}
+
+/**
+ * Implements hook_facetapi_enabled_facets_alter().
+ */
+function paddle_publication_facetapi_enabled_facets_alter(array &$enabled_facets, $searcher, $realm_name) {
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher) {
+    return;
+  }
+
+  // Gets facet definitions for all enabled facets.
+  $facet_info = facetapi_get_facet_info($searcher);
+
+  // Add our facets to the enabled list.
+  foreach (paddle_publication_get_facets() as $name => $info) {
+    // First, check if the facet is available in the facet definitions, to
+    // avoid any possible error.
+    if (isset($facet_info[$name])) {
+      $enabled_facets[$name] = $facet_info[$name];
+    }
+  }
+}
+
+/**
+ * Implements hook_facetapi_force_delta_mapping().
+ */
+function paddle_publication_facetapi_force_delta_mapping() {
+  return array(
+    'search_api@node_index' => array(
+      'block' => array_keys(paddle_publication_get_facets()),
+    ),
+  );
+}
+
+/**
+ * Retrieve the enabled facets and their info.
+ *
+ * @return array
+ *   The facet info, keyed by machine name.
+ */
+function paddle_publication_get_facets() {
+  $facets = &drupal_static(__FUNCTION__);
+
+  if (!isset($facets)) {
+    $facets = array();
+
+    $authors_tids = paddle_taxonomy_manager_get_terms_from_vocabulary('paddle_authors');
+    $publication_year_tids = paddle_taxonomy_manager_get_terms_from_vocabulary('paddle_publication_year');
+    $keyword_tids = paddle_taxonomy_manager_get_terms_from_vocabulary('paddle_keywords');
+
+    // Process only if we have some tids.
+    if ($authors_tids) {
+      $name = "paddle_publication_authors_filter";
+      $facets[$name] = array(
+        'default widget' => 'facetapi_extended_checkbox_links',
+        'label' => t('Authors'),
+      );
+    }
+
+    if ($publication_year_tids) {
+      $name = "paddle_publication_publication_year_filter";
+      $facets[$name] = array(
+        'default widget' => 'facetapi_extended_checkbox_links',
+        'label' => t('Publication year'),
+      );
+    }
+
+    if ($keyword_tids) {
+      $name = "paddle_publication_keywords_filter";
+      $facets[$name] = array(
+        'default widget' => 'facetapi_extended_checkbox_links',
+        'label' => t('Keywords'),
+      );
+    }
+  }
+
+  return $facets;
+}
+
+/**
+ * Implements hook_facetapi_facet_info_alter().
+ */
+function paddle_publication_facetapi_facet_info_alter(array &$facet_info, array $searcher_info) {
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher_info['name']) {
+    return;
+  }
+
+  // Create publication specific facets.
+  foreach (paddle_publication_get_facets() as $name => $info) {
+    if ($name == 'paddle_publication_authors_filter') {
+      $facet_info[$name] = array(
+        'name' => 'paddle_publication_authors_filter',
+        'label' => $info['label'],
+        'field alias' => "pas_publication_authors",
+        'default widget' => $info['default widget'],
+        'alter callbacks' => array('paddle_publication_facet_build_alter'),
+        'taxonomy vocabulary' => 'paddle_authors',
+        'default sorts' => array(
+          array('active', SORT_DESC),
+          array('display', SORT_ASC),
+          array('count', SORT_DESC),
+        ),
+      );
+
+      if (!empty($facet_info['field_paddle_kce_authors'])) {
+        $facet_info[$name] = array_merge($facet_info['field_paddle_kce_authors'], $facet_info[$name]);
+      }
+    }
+
+    if ($name == 'paddle_publication_publication_year_filter') {
+      $facet_info[$name] = array(
+        'name' => 'paddle_publication_publication_year_filter',
+        'label' => $info['label'],
+        'field alias' => "pas_publication_year",
+        'default widget' => $info['default widget'],
+        'alter callbacks' => array('paddle_publication_facet_build_alter'),
+        'taxonomy vocabulary' => 'paddle_publication_year',
+        'default sorts' => array(
+          array('active', SORT_DESC),
+          array('display', SORT_ASC),
+          array('count', SORT_DESC),
+        ),
+      );
+
+      if (!empty($facet_info['field_paddle_kce_publication_y'])) {
+        $facet_info[$name] = array_merge($facet_info['field_paddle_kce_publication_y'], $facet_info[$name]);
+      }
+    }
+
+    if ($name == 'paddle_publication_keywords_filter') {
+      $facet_info[$name] = array(
+        'name' => 'paddle_publication_keywords_filter',
+        'label' => $info['label'],
+        'field alias' => "pas_publication_keywords",
+        'default widget' => $info['default widget'],
+        'alter callbacks' => array('paddle_publication_facet_build_alter'),
+        'taxonomy vocabulary' => 'paddle_keywords',
+        'default sorts' => array(
+          array('active', SORT_DESC),
+          array('display', SORT_ASC),
+          array('count', SORT_DESC),
+        ),
+      );
+
+      if (!empty($facet_info['field_paddle_kce_keywords'])) {
+        $facet_info[$name] = array_merge($facet_info['field_paddle_kce_keywords'], $facet_info[$name]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_facetapi_default_facet_settings_alter().
+ *
+ * Provide global settings for the facets declared by this module.
+ */
+function paddle_publication_facetapi_default_facet_settings_alter(&$export) {
+  ctools_include('export');
+
+  foreach (paddle_publication_get_facets() as $name => $facet) {
+    $settings = ctools_export_crud_new('facetapi');
+    $settings->name = 'search_api@node_index::' . $name;
+    $settings->searcher = 'search_api@node_index';
+    $settings->realm = '';
+    $settings->facet = $name;
+    $settings->enabled = 0;
+    $settings->settings = array(
+      'hard_limit' => -1,
+      'facet_search_ids' => array(
+        'search_api_views:paddle_advanced_search:default' => 'search_api_views:paddle_advanced_search:default',
+      ),
+      'default_true' => 0,
+    );
+
+    $export[$settings->name] = $settings;
+  }
+}
+
+/**
+ * Implements hook_views_default_views_alter().
+ */
+function paddle_publication_views_default_views_alter(&$views) {
+  if (isset($views['paddle_advanced_search'])) {
+    $handler =& $views['paddle_advanced_search']->display['default']->handler;
+
+    /* Contextual filter: Indexed Node: Authors */
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['id'] = 'field_paddle_kce_authors';
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['table'] = 'search_api_index_node_index';
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['field'] = 'field_paddle_kce_authors';
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['default_argument_type'] = 'fixed';
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['summary']['format'] = 'default_summary';
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['specify_validation'] = TRUE;
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['validate']['type'] = 'taxonomy_term';
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['validate_options']['vocabularies'] = array(
+      'paddle_authors' => 'paddle_authors',
+    );
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['validate_options']['type'] = 'tids';
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['validate']['fail'] = 'empty';
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['break_phrase'] = 0;
+    $handler->display->display_options['arguments']['field_paddle_kce_authors']['not'] = 0;
+    /* Contextual filter: Indexed Node: Year of publication */
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['id'] = 'field_paddle_kce_publication_y';
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['table'] = 'search_api_index_node_index';
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['field'] = 'field_paddle_kce_publication_y';
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['default_argument_type'] = 'fixed';
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['summary']['format'] = 'default_summary';
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['specify_validation'] = TRUE;
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['validate']['type'] = 'taxonomy_term';
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['validate_options']['vocabularies'] = array(
+      'paddle_publication_year' => 'paddle_publication_year',
+    );
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['validate_options']['type'] = 'tids';
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['validate']['fail'] = 'empty';
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['break_phrase'] = 0;
+    $handler->display->display_options['arguments']['field_paddle_kce_publication_y']['not'] = 0;
+    /* Contextual filter: Indexed Node: Keywords */
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['id'] = 'field_paddle_kce_keywords';
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['table'] = 'search_api_index_node_index';
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['field'] = 'field_paddle_kce_keywords';
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['default_argument_type'] = 'fixed';
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['summary']['format'] = 'default_summary';
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['specify_validation'] = TRUE;
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['validate']['type'] = 'taxonomy_term';
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['validate_options']['vocabularies'] = array(
+      'paddle_keywords' => 'paddle_keywords',
+    );
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['validate_options']['type'] = 'tids';
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['validate']['fail'] = 'empty';
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['break_phrase'] = 0;
+    $handler->display->display_options['arguments']['field_paddle_kce_keywords']['not'] = 0;
+  }
+}
+
+/**
+ * Theme function for the terms. Link to the search page, if any.
+ *
+ * @param array $variables
+ *   An array containing all terms to render.
+ *
+ * @return string
+ *   The rendered HTML.
+ */
+function theme_paddle_publication_terms($variables) {
+  if (empty($variables['terms'])) {
+    return '';
+  }
+
+  $node = node_load(variable_get('publications_advanced_search_page', 3));
+  if ($node) {
+    $path = 'node/' . $node->nid;
+    if (module_exists('translation')) {
+      global $language_content;
+      $node_translations = translation_node_get_translations($node->tnid);
+      if (!is_null($node_translations) && !empty($node_translations[$language_content->language])) {
+        // Use the correct translation if there is one.
+        $path = 'node/' . $node_translations[$language_content->language]->nid;
+      }
+    }
+  }
+
+  foreach ($variables['terms'] as $key => $term) {
+    if (isset($path)) {
+      $variables['terms'][$key] = l(
+        $term->name,
+        $path,
+        array(
+          'query' => array(
+            'f[0]' => 'pas_publication_' . $variables['category'] . ':' . $term->tid
+          )
+        )
+      );
+    }
+    else {
+      $variables['terms'][$key] = $term->name;
+    }
+  }
+
+  return implode(", ", $variables['terms']);
+};
+
+/**
+ * Alter callback of facet build array.
+ *
+ * Shows only the terms for the set language.
+ *
+ * @param array $build
+ *   The prepared build.
+ * @param SearchApiFacetapiAdapter $adapter
+ *   The FacetapiAdapter.
+ * @param array $facet
+ *   The facet configuration.
+ */
+function paddle_publication_facet_build_alter(&$build, SearchApiFacetapiAdapter $adapter, $facet) {
+  global $language_content;
+
+  // Load the terms for the given vocabulary.
+  $vocabulary = taxonomy_vocabulary_machine_name_load($facet['taxonomy vocabulary']);
+  $tree = i18n_taxonomy_get_tree($vocabulary->vid, $language_content->language);
+
+  // Prepare a flat list of allowed terms.
+  $allowed = array();
+  foreach ($tree as $term) {
+    $allowed[$term->tid] = $term->tid;
+  }
+
+  // Remove all non-allowed terms.
+  $build = array_intersect_key($build, $allowed);
+}

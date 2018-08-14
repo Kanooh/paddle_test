@@ -1,0 +1,14 @@
+name = Authcache P13n Test Stub
+description = Authcache P13n Test Stub
+core = 7.x
+hidden = TRUE
+dependencies[] = authcache_test_hookstub
+dependencies[] = authcache_backend_test
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-2.0-beta7+29-dev"
+core = "7.x"
+project = "authcache"
+datestamp = "1473170445"
+

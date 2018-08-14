@@ -1,0 +1,843 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Outgoing RSS module.
+ */
+
+include_once 'paddle_outgoing_rss.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_outgoing_rss_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && $plugin_type == 'content_types') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_outgoing_rss_permission() {
+  return array(
+    'manage paddle outgoing rss feeds' => array(
+      'title' => t('Manage Outgoing RSS feeds'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_outgoing_rss_entity_info() {
+  return array(
+    'paddle_outgoing_rss_feed' => array(
+      'label' => t('Outgoing RSS feed'),
+      'base table' => 'paddle_outgoing_rss_feed',
+      'module' => 'paddle_outgoing_rss',
+      'entity class' => 'Entity',
+      'controller class' => 'EntityAPIController',
+      'entity keys' => array(
+        'id' => 'fid',
+      ),
+      'bundles' => array(
+        'paddle_outgoing_rss_feed' => array(
+          'label' => t('Outgoing RSS feed'),
+        ),
+      ),
+      'access callback' => 'paddle_outgoing_rss_feed_access',
+    ),
+  );
+}
+
+/**
+ * Provides an access callback for the Outgoing RSS feed entity type.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ * @param object $rss_feed
+ *   The RSS feed entity.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ * @param string $entity_type
+ *   The entity type of the entity to check for.
+ *
+ * @return bool
+ *   Whether access is allowed or not.
+ */
+function paddle_outgoing_rss_feed_access($op, $rss_feed, $account = NULL, $entity_type = NULL) {
+  if (empty($account)) {
+    global $user;
+    $account = $user;
+  }
+
+  $access = FALSE;
+  switch ($op) {
+    case 'view':
+      $access = TRUE;
+      break;
+
+    case 'create':
+    case 'edit':
+    case 'delete':
+      $access = user_access('manage paddle outgoing rss feeds', $account);
+      break;
+  }
+
+  return $access;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_outgoing_rss_menu() {
+  $items = array(
+    'admin/content/paddle_outgoing_rss/%ctools_js/add' => array(
+      'title' => 'Create Outgoing RSS feed',
+      'page callback' => 'paddle_outgoing_rss_feed_settings',
+      'page arguments' => array(3),
+      'access arguments' => array('manage paddle outgoing rss feeds'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/content/paddle_outgoing_rss/%ctools_js/edit/%paddle_outgoing_rss_feed' => array(
+      'title' => 'Edit Outgoing RSS feed',
+      'page callback' => 'paddle_outgoing_rss_feed_settings',
+      'page arguments' => array(3, 5),
+      'load arguments' => array(5),
+      'access arguments' => array('manage paddle outgoing rss feeds'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/content/paddle_outgoing_rss/%ctools_js/delete/%paddle_outgoing_rss_feed' => array(
+      'title' => 'Delete Outgoing RSS Outgoing RSS feed',
+      'page callback' => 'paddle_outgoing_rss_feed_delete',
+      'page arguments' => array(3, 5),
+      'access arguments' => array('manage paddle outgoing rss feeds'),
+      'type' => MENU_CALLBACK,
+    ),
+    'paddle_outgoing_rss/taxonomy/autocomplete' => array(
+      'title' => 'Autocomplete taxonomy',
+      'page callback' => 'paddle_outgoing_rss_taxonomy_autocomplete',
+      'access arguments' => array('access content'),
+      'type' => MENU_CALLBACK,
+    ),
+  );
+
+  $feeds = entity_load('paddle_outgoing_rss_feed');
+  foreach ($feeds as $feed) {
+    $items[$feed->path] = array(
+      'title' => $feed->title,
+      'page callback' => 'paddle_outgoing_rss_page',
+      'page arguments' => array($feed->fid),
+      'access arguments' => array('access content'),
+      'type' => MENU_SUGGESTED_ITEM,
+    );
+  }
+
+  return $items;
+}
+
+/**
+ * Outgoing RSS feed wildcard loader.
+ *
+ * @param int $fid
+ *   RSS feed ID.
+ *
+ * @return object
+ *   Outgoing RSS feed entity.
+ */
+function paddle_outgoing_rss_feed_load($fid) {
+  return entity_load_single('paddle_outgoing_rss_feed', $fid);
+}
+
+/**
+ * Page callback for the "Create RSS feed" form.
+ */
+function paddle_outgoing_rss_feed_settings($js, $feed = NULL) {
+  $fid = empty($feed) ? 0 : $feed->fid;
+  $form_state = array('ajax' => $js, 'fid' => $fid);
+
+  if ($js) {
+    ctools_include('ajax');
+    ctools_include('modal');
+
+    // Open the settings form in a modal.
+    $commands = ctools_modal_form_wrapper('paddle_outgoing_rss_feed_settings_form', $form_state);
+
+    // If the settings form has been saved, refresh the list of feeds.
+    if (!empty($form_state['feed_saved'])) {
+      // Flush the status messages so they don't appear when we open a new page
+      // or modal.
+      drupal_get_messages(NULL, TRUE);
+
+      $commands = array();
+      $commands[] = ctools_modal_command_dismiss();
+      $commands[] = paddle_outgoing_rss_refresh_feeds_list_command();
+    }
+
+    // Render all the commands and exit.
+    print ajax_render($commands);
+    ajax_footer();
+    drupal_exit();
+  }
+  else {
+    return drupal_build_form('paddle_outgoing_rss_feed_settings_form', $form_state);
+  }
+}
+
+/**
+ * Form callback to add/edit a outgoing RSS feed.
+ */
+function paddle_outgoing_rss_feed_settings_form($form, &$form_state) {
+  // Prepare some variables for the default values.
+  $fid = isset($form_state['fid']) ? $form_state['fid'] : 0;
+  $title = '';
+  $image_style = '';
+  $content_types = array();
+  $tags = array();
+  $terms = array();
+  if (!empty($fid) && $feed = entity_load_single('paddle_outgoing_rss_feed', $fid)) {
+    $title = $feed->title;
+    $content_types = $feed->content_types;
+    $tags = $feed->tags;
+    $terms = $feed->terms;
+    $image_style = $feed->image_style;
+  }
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+
+  $form['body']['title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('RSS feed title'),
+    '#default_value' => $title,
+    '#required' => TRUE,
+  );
+
+  $form['body']['content_types'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Content types'),
+    '#options' => node_type_get_names(),
+    '#required' => TRUE,
+    '#default_value' => $content_types,
+  );
+
+  $form['body']['image_style'] = array(
+    '#type' => 'select',
+    '#title' => t('Image ratio'),
+    '#options' => paddle_scald_image_retrieve_default_image_ratios(),
+    '#empty_option' => t('- Any ratio -'),
+    '#description' => t('Pick the ratio which the images within your feed items will have.'),
+    '#default_value' => $image_style,
+  );
+
+  $vocabularies = array(
+    'paddle_tags' => array(
+      'vocabulary' => taxonomy_vocabulary_machine_name_load('paddle_tags'),
+      'terms' => taxonomy_term_load_multiple($tags),
+    ),
+    'paddle_general' => array(
+      'vocabulary' => taxonomy_vocabulary_machine_name_load('paddle_general'),
+      'terms' => taxonomy_term_load_multiple($terms),
+    ),
+  );
+
+  foreach ($vocabularies as $data) {
+    $form['body'][$data['vocabulary']->machine_name] = array(
+      '#type' => 'textfield',
+      '#title' => t('Filter by %vocabulary tags', array('%vocabulary' => $data['vocabulary']->name)),
+      '#description' => t('Use commas to separate multiple tags.'),
+      '#default_value' => taxonomy_implode_tags($data['terms']),
+      '#autocomplete_path' => 'paddle_outgoing_rss/taxonomy/autocomplete/' . $data['vocabulary']->vid,
+      '#size' => 60,
+      '#maxlength' => 1024,
+      '#element_validate' => array('paddle_outgoing_rss_taxonomy_autocomplete_validate'),
+    );
+  }
+
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['buttons']['save'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit callback for the Outgoing RSS feed form.
+ */
+function paddle_outgoing_rss_feed_settings_form_submit($form, &$form_state) {
+  $fid = isset($form_state['fid']) ? $form_state['fid'] : 0;
+
+  $title = $form_state['values']['title'];
+  $image_style = $form_state['values']['image_style'];
+  $content_types = array_filter($form_state['values']['content_types']);
+  $tags = array();
+  foreach ($form_state['values']['paddle_tags'] as $tag) {
+    $tags[] = $tag['tid'];
+  }
+  $terms = array();
+  foreach ($form_state['values']['paddle_general'] as $term) {
+    $terms[] = $term['tid'];
+  }
+
+  if (!empty($fid)) {
+    $feed = entity_load_single('paddle_outgoing_rss_feed', $fid);
+    $feed->title = $title;
+    $feed->content_types = $content_types;
+    $feed->tags = $tags;
+    $feed->terms = $terms;
+    $feed->image_style = $image_style;
+  }
+  else {
+    $feed = entity_create('paddle_outgoing_rss_feed', array(
+      'title' => $title,
+      'content_types' => $content_types,
+      'tags' => $tags,
+      'terms' => $terms,
+      'image_style' => $image_style,
+    ));
+  }
+
+  // Generate the path based on the title.
+  module_load_include('inc', 'pathauto');
+  $alias = pathauto_create_alias('paddle_outgoing_rss', 'insert', '', array('paddle_outgoing_rss_feed' => $feed), 'paddle_outgoing_rss_feed');
+
+  $rebuild_menu = FALSE;
+  if (!empty($alias['alias'])) {
+    // Rebuild the menu only if the path was changed or the feed is new.
+    $rebuild_menu = empty($feed->fid) || $feed->path != $alias['alias'];
+
+    // Now set the path.
+    $feed->path = $alias['alias'];
+  }
+
+  entity_save('paddle_outgoing_rss_feed', $feed);
+
+  if ($rebuild_menu) {
+    list($menu, $masks) = menu_router_build();
+    _menu_router_save($menu, $masks);
+  }
+
+  $form_state['fid'] = $feed->fid;
+  $form_state['feed_saved'] = TRUE;
+  $form_state['redirect'] = 'admin/paddlet_store/app/paddle_outgoing_rss/configure';
+
+  drupal_set_message(t('Outgoing RSS feed saved.'));
+}
+
+/**
+ * Page callback for the "Delete Outgoing RSS feed" form.
+ */
+function paddle_outgoing_rss_feed_delete($js, $feed) {
+  $form_state = array('ajax' => $js, 'fid' => $feed->fid);
+
+  if (!$js) {
+    return drupal_build_form('paddle_outgoing_rss_feed_delete_form', $form_state);
+  }
+
+  ctools_include('ajax');
+  ctools_include('modal');
+
+  // Open the delete form in a modal.
+  $commands = ctools_modal_form_wrapper('paddle_outgoing_rss_feed_delete_form', $form_state);
+
+  if (!empty($form_state['completed'])) {
+    // Flush the status messages so they don't appear when we open a new page
+    // or modal.
+    drupal_get_messages(NULL, TRUE);
+
+    $commands = array();
+    $commands[] = ctools_modal_command_dismiss();
+    $commands[] = paddle_outgoing_rss_refresh_feeds_list_command();
+  }
+
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * Form callback for the "Delete Outgoing RSS feed" form.
+ */
+function paddle_outgoing_rss_feed_delete_form($form, &$form_state) {
+  $feed = entity_load_single('paddle_outgoing_rss_feed', $form_state['fid']);
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+
+  $form['body']['message'] = array(
+    '#type' => 'item',
+    '#markup' => t('Are you sure you want to delete the RSS feed %title?', array('%title' => $feed->title)),
+  );
+
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['buttons']['confirm'] = array(
+    '#type' => 'submit',
+    '#value' => t('Delete'),
+  );
+
+  // Can't use "cancel" as a key here, as that would cause the button to be
+  // hidden by CSS...
+  $form['buttons']['cancelling'] = array(
+    '#type' => 'submit',
+    '#value' => t('Cancel'),
+  );
+
+  return $form;
+}
+
+/**
+ * Form submit for the "delete RSS feed" form.
+ */
+function paddle_outgoing_rss_feed_delete_form_submit($form, &$form_state) {
+  $form_state['completed'] = TRUE;
+  $form_state['refresh'] = FALSE;
+
+  if ($form_state['clicked_button']['#value'] == t('Delete')) {
+    entity_delete('paddle_outgoing_rss_feed', $form_state['fid']);
+    $form_state['refresh'] = TRUE;
+    drupal_set_message(t('Outgoing RSS deleted.'));
+  }
+  $form_state['redirect'] = 'admin/paddlet_store/app/paddle_outgoing_rss/configure';
+}
+
+/**
+ * Page callback for the Outgoing RSS feed render.
+ */
+function paddle_outgoing_rss_page($fid) {
+  $output = '';
+
+  $feed = entity_load_single('paddle_outgoing_rss_feed', $fid);
+  if ($view = views_get_view('outgoing_rss_feed')) {
+    $view->set_display('outgoing_rss_feed');
+
+    // Get the "Content types" filter and then remove it with our own.
+    $filter = $view->get_item($view->current_display, 'filter', 'type');
+    $view->set_item($view->current_display, 'filter', 'type', NULL);
+
+    // Set the content types filter.
+    if (!empty($feed->content_types)) {
+      $filter['value'] = $feed->content_types;
+      $view->set_item($view->current_display, 'filter', 'type', $filter);
+    }
+
+    // Set the terms filter.
+    if (count($feed->tags)) {
+      // Use the 'tid' filter as a prototype for all vocabulary filters.
+      $filter = $view->get_item($view->current_display, 'filter', 'tid');
+      $filter['value'] = drupal_map_assoc($feed->tags);
+      $view->set_item($view->current_display, 'filter', taxonomy_vocabulary_machine_name_load('paddle_tags')->machine_name, $filter);
+    }
+    if (count($feed->terms)) {
+      // Use the 'tid' filter as a prototype for all vocabulary filters.
+      $filter = $view->get_item($view->current_display, 'filter', 'tid');
+      $filter['value'] = drupal_map_assoc($feed->terms);
+      $view->set_item($view->current_display, 'filter', taxonomy_vocabulary_machine_name_load('paddle_general')->machine_name, $filter);
+    }
+
+    // Remove the prototype "Terms" filter.
+    $view->set_item($view->current_display, 'filter', 'tid', NULL);
+
+    // Set the path and the title according to the feed.
+    $view->display_handler->set_option('path', $feed->path);
+    $plain_title = check_plain($feed->title);
+    $view->display_handler->set_option('title', $plain_title);
+
+    // Load current style options array as the set_option() write options by
+    // key, thus it doesn't allow us to write directly to the description
+    // value. We want to preserve other style options that may have been
+    // changed.
+    $style_options = $view->display_handler->get_option('style_options');
+    $style_options['description'] = $plain_title . ' - ' . variable_get('site_name', '');
+    $view->display_handler->set_option('style_options', $style_options);
+
+    // Run the query.
+    $view->pre_execute();
+    $view->execute();
+
+    // Render the view.
+    $output = $view->render();
+  }
+
+  print $output;
+  drupal_exit();
+}
+
+/**
+ * Provides an ajax command to refresh the list of RSS feeds.
+ */
+function paddle_outgoing_rss_refresh_feeds_list_command() {
+  // Reload the list of feeds from the database.
+  $feeds = entity_load('paddle_outgoing_rss_feed', FALSE, array(), TRUE);
+  return ajax_command_html('#outgoing-rss-feeds-list', theme('paddle_outgoing_rss_feeds_list', array('feeds' => $feeds)));
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_outgoing_rss_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_outgoing_rss_configuration_form',
+  );
+}
+
+/**
+ * Form callback displaying Paddle Outgoing RSS configuration.
+ */
+function paddle_outgoing_rss_configuration_form() {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $form = array();
+
+  drupal_set_title(t('Outgoing RSS feeds for @site_name', array('@site_name' => variable_get('site_name', 'Paddle'))));
+
+  // Add a small help test.
+  $help_text = theme('html_tag', array('element' => array('#tag' => 'h4', '#value' => t('News or RSS feeds allow visitors to subscribe to the feed to see when new content is added to a website'))));
+
+  // Then add table containing the RSS feeds.
+  $form['output'] = array(
+    '#markup' => $help_text . theme('paddle_outgoing_rss_feeds_list', array('feeds' => entity_load('paddle_outgoing_rss_feed'))),
+  );
+
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_outgoing_rss_add_contextual_actions_configuration_form';
+  }
+
+  return system_settings_form($form);
+}
+
+/**
+ * After-build function of the Outgoing RSS settings form.
+ */
+function paddle_outgoing_rss_add_contextual_actions_configuration_form($form, &$form_state) {
+  // The save button is not needed on the configuration form.
+  unset($form['actions']['submit']);
+
+  // Add a contextual toolbar button to create a new feed.
+  $actions = paddle_contextual_toolbar_actions();
+  $actions[] = array(
+    'action' => l(t('Create RSS feed'), 'admin/content/paddle_outgoing_rss/nojs/add', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-plus', 'ctools-use-modal'),
+      ),
+    )),
+    'class' => array('add-outgoing-rss'),
+    'weight' => 20,
+  );
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_outgoing_rss_theme() {
+  return array(
+    'paddle_outgoing_rss_feeds_list' => array(
+      'variables' => array(
+        'feeds' => array(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Theme function for the Outgoing RSS feeds table.
+ */
+function theme_paddle_outgoing_rss_feeds_list($variables) {
+  $table = array(
+    'attributes' => array('id' => 'outgoing-rss-feeds-list'),
+    'empty' => t('No Outgoing RSS feeds have been created yet.'),
+  );
+
+  $table['header'] = array(
+    array(
+      'data' => t('Title'),
+    ),
+    array(
+      'data' => t('Content types'),
+    ),
+    array(
+      'data' => t('URL address'),
+    ),
+    array(
+      'data' => t('Actions'),
+      'colspan' => 3,
+    ),
+  );
+
+  $action_class = 'ui-icon ui-icon-hiddentext';
+
+  foreach ($variables['feeds'] as $feed) {
+    // Get the human-friendly content type names.
+    $types = node_type_get_names();
+    foreach ($types as $type => $name) {
+      if (!isset($feed->content_types[$type])) {
+        unset($types[$type]);
+      }
+    }
+    $table['rows'][] = array(
+      'data' => array(
+        array(
+          'data' => $feed->title,
+          'class' => 'feed-title',
+        ),
+        array(
+          'data' => implode(', ', $types),
+          'class' => 'feed-content-types',
+        ),
+        array(
+          'data' => $feed->path,
+          'class' => 'feed-path',
+        ),
+        array(
+          'data' => l(t('Preview the feed'), $feed->path, array('attributes' => array('class' => array($action_class, 'ui-icon-visit')))),
+          'class' => 'feed-preview',
+        ),
+        array(
+          'data' => ctools_modal_text_button(t('Edit'), 'admin/content/paddle_outgoing_rss/nojs/edit/' . $feed->fid, t('Edit the feed'), $action_class . ' ui-icon-edit'),
+          'class' => 'feed-edit',
+        ),
+        array(
+          'data' => ctools_modal_text_button(t('Delete'), 'admin/content/paddle_outgoing_rss/nojs/delete/' . $feed->fid, t('Delete the feed'), $action_class . ' ui-icon-delete'),
+          'class' => 'feed-delete',
+        ),
+      ),
+      'data-feed-id' => $feed->fid,
+    );
+  }
+
+  return theme('table', $table);
+}
+
+/**
+ * Implements hook_path_alias_types().
+ */
+function paddle_outgoing_rss_path_alias_types() {
+  return array('paddle_outgoing_rss' => t('Outgoing RSS feeds'));
+}
+
+/**
+ * Implements hook_pathauto().
+ */
+function paddle_outgoing_rss_pathauto($op) {
+  switch ($op) {
+    case 'settings':
+      $settings = array();
+      $settings['module'] = 'paddle_outgoing_rss';
+      $settings['token_type'] = 'paddle_outgoing_rss_feed';
+      $settings['groupheader'] = t('Outgoing RSS path');
+      $settings['patterndescr'] = t('Default path pattern (applies to all content types with blank patterns below)');
+      $settings['patterndefault'] = '[paddle_outgoing_rss_feed:title]/rss.xml';
+      return (object) $settings;
+
+    default:
+      break;
+  }
+}
+
+/**
+ * Page callback: Outputs JSON for taxonomy autocomplete suggestions.
+ *
+ * Based on taxonomy_autocomplete(), but not tied to the Field API, and allows
+ * to filter by vocabulary ids.
+ *
+ * @see taxonomy_autocomplete()
+ *
+ * @param string $nid
+ *   The parent node calling this function.
+ * @param string $vids
+ *   A comma-separated list of vocabulary ids. Only terms in these vocabularies
+ *   will be returned. Set to 0 to return terms from all vocabularies.
+ * @param string $tags_typed
+ *   (optional) A comma-separated list of term names entered in the
+ *   autocomplete form element. Only the last term is used for autocompletion.
+ *   Defaults to '' (an empty string).
+ */
+function paddle_outgoing_rss_taxonomy_autocomplete($vids = '0', $tags_typed = '') {
+  // If the request has a '/' in the search text, then the menu system will have
+  // split it into multiple arguments, recover the intended $tags_typed.
+  $args = func_get_args();
+  // Shift off the $vids argument.
+  array_shift($args);
+  $tags_typed = implode('/', $args);
+
+  // The user enters a comma-separated list of tags. We only autocomplete the
+  // last tag.
+  $tags_typed = drupal_explode_tags($tags_typed);
+  $tag_last = drupal_strtolower(array_pop($tags_typed));
+
+  $term_matches = array();
+  if ($tag_last != '') {
+    $query = db_select('taxonomy_term_data', 't');
+    $query->addTag('translatable');
+    $query->addTag('term_access');
+
+    // Do not select already entered terms.
+    if (!empty($tags_typed)) {
+      $query->condition('t.name', $tags_typed, 'NOT IN');
+    }
+    // Select rows that match by term name.
+    $query
+      ->fields('t', array('tid', 'name'))
+      ->condition('t.name', '%' . db_like($tag_last) . '%', 'LIKE')
+      ->range(0, 10);
+
+    // Optionally filter by vocabulary ids.
+    $vids = $vids == '0' ? array() : explode(',', $vids);
+    if (!empty($vids)) {
+      $query->condition('t.vid', $vids);
+    }
+
+    $tags_return = $query
+      ->execute()
+      ->fetchAllKeyed();
+
+    $prefix = count($tags_typed) ? drupal_implode_tags($tags_typed) . ', ' : '';
+
+    foreach ($tags_return as $tid => $name) {
+      $n = $name;
+      // Term names containing commas or quotes must be wrapped in quotes.
+      if (strpos($name, ',') !== FALSE || strpos($name, '"') !== FALSE) {
+        $n = '"' . str_replace('"', '""', $name) . '"';
+      }
+      $term_matches[$prefix . $n] = check_plain($name);
+    }
+  }
+
+  drupal_json_output($term_matches);
+}
+
+/**
+ * Validates the taxonomy terms autocomplete field entries.
+ *
+ * Based on taxonomy_autocomplete_validate(), but:
+ * - does not need a field, only a form element
+ * - allows all vocabularies unless one is specified in the autocomplete path
+ * - does not allow to define and save new terms.
+ *
+ * @see taxonomy_autocomplete_validate()
+ */
+function paddle_outgoing_rss_taxonomy_autocomplete_validate($element, &$form_state) {
+  // Autocomplete widgets do not send their tids in the form, so we must detect
+  // them here and process them independently.
+  $value = array();
+  if ($tags = $element['#value']) {
+    // Collect candidate vocabularies.
+    $vocabularies = array();
+    if (is_string($element['#autocomplete_path'])) {
+      $url_parts = explode('/', $element['#autocomplete_path']);
+      if (count($url_parts) == 4) {
+        $vocabulary_id = $url_parts[3];
+        if ($vocabulary = taxonomy_vocabulary_load($vocabulary_id)) {
+          $vocabularies[$vocabulary->vid] = $vocabulary;
+        }
+      }
+    }
+
+    // Translate term names into actual terms.
+    $typed_terms = drupal_explode_tags($tags);
+    foreach ($typed_terms as $typed_term) {
+      // See if the term exists and return the tid.
+      if ($possibilities = taxonomy_term_load_multiple(array(), array('name' => trim($typed_term), 'vid' => array_keys($vocabularies)))) {
+        $term = array_pop($possibilities);
+        $value[] = (array) $term;
+      }
+    }
+  }
+
+  form_set_value($element, $value, $form_state);
+}
+
+/**
+ * Implements hook_preprocess_views_view_row_rss().
+ */
+function paddle_outgoing_rss_preprocess_views_view_row_rss(&$variables) {
+  if ('outgoing_rss_feed' != $variables['view']->name) {
+    return;
+  }
+
+  if (!empty($variables['view']->display_handler->options['path'])) {
+    // Search the feed by path
+    // (the only variable which we can track in this view).
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'paddle_outgoing_rss_feed')
+      ->propertyCondition('path', $variables['view']->display_handler->options['path'], '=');
+    $result = $query->execute();
+
+    $feed_entity = reset($result['paddle_outgoing_rss_feed']);
+    $feed = entity_load_single('paddle_outgoing_rss_feed', $feed_entity->fid);
+
+    if (isset($feed) && $feed !== FALSE) {
+      $image_style = $feed->image_style;
+    }
+  }
+
+  // Neither the row from the results nor the row index are passed as
+  // parameters.
+  // @see views_plugin_row_rss_fields::render()
+  static $row_index;
+  if (!isset($row_index)) {
+    $row_index = 0;
+  }
+
+  $row = $variables['view']->result[$row_index];
+
+  $row_index++;
+
+  // Get the node. It has already been loaded by views, so it will be cached.
+  $node = node_load($row->nid);
+  $node_wrapper = entity_metadata_wrapper('node', $node);
+
+  if (!empty($node_wrapper->field_paddle_featured_image->value()['sid'])) {
+    $field_value = $node_wrapper->field_paddle_featured_image->value();
+    $atom = scald_atom_load($field_value['sid']);
+    $file_source = $atom->file_source;
+
+    if ($atom) {
+      // If an image style is set, use it.
+      if (!empty($image_style)) {
+        $url = image_style_url($image_style, $file_source);
+      }
+      else {
+        $url = file_create_url($file_source);
+      }
+
+      $atom_wrapper = entity_metadata_wrapper('scald_atom', $atom);
+      $scald_thumbnail = $atom_wrapper->scald_thumbnail->value();
+
+      // View calls the feed item 'row' in the theme function variables.
+      $item = $variables['row'];
+      $item->elements[] = array(
+        'key' => 'media:content',
+        'attributes' => array(
+          'type' => $scald_thumbnail['filemime'],
+          'url' => $url,
+        ),
+      );
+
+      // The initial rendering of the elements is done in the default preprocess
+      // instead of doing it in a process function, so we have to re-render
+      // the item elements. Not moving this to a process function as it would
+      // run for all the row items even if not changed at all by this function.
+      $variables['item_elements'] = empty($item->elements) ? '' : format_xml_elements($item->elements);
+    }
+  }
+}

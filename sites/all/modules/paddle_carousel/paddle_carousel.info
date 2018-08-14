@@ -1,0 +1,28 @@
+name = Carrousel
+description = Using this functionality, you can create a slideshow. You can start and stop the slideshow using the cursor.
+core = 7.x
+package = Paddle
+
+dependencies[] = image
+
+features[features_api][] = api:2
+features[image][] = paddle_carousel_slide
+
+apps[logo] = apps/logo.png
+
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+
+stylesheets[all][] = css/paddle_carousel.css
+
+; Information added by drush on 2016-01-29
+version = "7.x-1.x-dev"
+project = "paddle_carousel"
+datestamp = "1454074888"
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_carousel"
+datestamp = "1473170402"
+

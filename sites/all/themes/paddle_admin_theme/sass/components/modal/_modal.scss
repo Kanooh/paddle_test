@@ -1,0 +1,19 @@
+/**
+ * Base modal component.
+ */
+.modalBackdrop {
+  body.ckeditor-fullscreen & {
+    z-index: 9997;
+  }
+}
+.modal-content .opening-hours-calendar a {
+  background-image: url('../images/add_opening_hours.png');
+}
+
+.modal-content .add--pane-collection a {
+  background-image: url('../images/add_pane_collection.png');
+}
+
+.ctools-modal-content .modal-content {
+  padding: 15px;
+}

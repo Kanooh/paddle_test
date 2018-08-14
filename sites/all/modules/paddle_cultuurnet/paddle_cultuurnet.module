@@ -1,0 +1,631 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Cultuurnet feature.
+ */
+
+include_once 'paddle_cultuurnet.features.inc';
+
+/**
+ * @file
+ * Module file for paddle_cultuurnet paddlet.
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_cultuurnet_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && $plugin_type == 'content_types') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_cultuurnet_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_cultuurnet_settings_form',
+  );
+}
+
+/**
+ * Settings form for the Cultuurnet paddlet.
+ */
+function paddle_cultuurnet_settings_form() {
+  drupal_set_title(t('Configure Cultuurnet'));
+
+  $form = array();
+
+  $form['culturefeed_search_api_application_key'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Application key'),
+    '#description' => t('Your CultureFeed application key'),
+    '#default_value' => variable_get('culturefeed_search_api_application_key', ''),
+    '#required' => TRUE,
+  );
+
+  $form['culturefeed_search_api_shared_secret'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Shared secret'),
+    '#description' => t('Your CultureFeed shared secret'),
+    '#default_value' => variable_get('culturefeed_search_api_shared_secret', ''),
+    '#required' => TRUE,
+  );
+
+  $form['culturefeed_search_page_logo'] = array(
+    '#type' => 'managed_file',
+    '#title' => t('Search page logo'),
+    '#description' => t('This logo will be displayed on the Cultuurnet agenda search page.'),
+    '#upload_location' => 'public://cultuurnet-logos',
+    '#default_value' => variable_get('culturefeed_search_page_logo', ''),
+  );
+
+  $form['gmap_api_key'] = array(
+    '#title' => t('Google Maps Api Key'),
+    '#type' => 'textfield',
+    '#description' => t('This ID is unique to each site(app) you want to show maps. To get a Google maps api key, <a href="@googlemaps">register your site(app) with Google Maps</a>.', array(
+      '@googlemaps' => 'https://developers.google.com/maps/documentation/javascript/get-api-key',
+    )),
+    '#default_value' => variable_get('gmap_api_key', FALSE),
+  );
+
+  $form['panes'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Agenda search page panes'),
+    '#description' => t('Settings for the panes on the agenda search page.'),
+  );
+
+  $form['panes']['top_pane']['top_pane_title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Top pane title'),
+    '#description' => t('The title of the most top pane.'),
+    '#default_value' => variable_get('top_pane_title', ''),
+  );
+
+  $form['panes']['top_pane']['top_pane_tag'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Top pane tag'),
+    '#description' => t('One of cultuurnet tags to filter the pane content on it.'),
+    '#default_value' => variable_get('top_pane_tag', ''),
+  );
+
+  $form['panes']['bottom_pane']['bottom_pane_title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Bottom pane title'),
+    '#description' => t('The title of the bottom pane'),
+    '#default_value' => variable_get('bottom_pane_title', ''),
+  );
+
+  $form['panes']['bottom_pane']['bottom_pane_tag'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Bottom pane tag'),
+    '#description' => t('One of cultuurnet tags to filter the pane content on it.'),
+    '#default_value' => variable_get('bottom_pane_tag', ''),
+  );
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_cultuurnet_settings_configuration_form';
+  }
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#attributes' => array(
+      'class' => array('hidden', 'marker-config-button'),
+    ),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for the Cultuurnet paddlet settings form.
+ */
+function paddle_cultuurnet_settings_form_submit($form, &$form_state) {
+  if (!empty($form_state['values']['culturefeed_search_api_application_key'])) {
+    variable_set('culturefeed_search_api_application_key', $form_state['values']['culturefeed_search_api_application_key']);
+  }
+  if (!empty($form_state['values']['culturefeed_search_api_shared_secret'])) {
+    variable_set('culturefeed_search_api_shared_secret', $form_state['values']['culturefeed_search_api_shared_secret']);
+  }
+  if (!empty($form_state['values']['top_pane_title'])) {
+    variable_set('top_pane_title', $form_state['values']['top_pane_title']);
+  }
+  if (!empty($form_state['values']['top_pane_tag'])) {
+    variable_set('top_pane_tag', $form_state['values']['top_pane_tag']);
+  }
+  if (!empty($form_state['values']['bottom_pane_title'])) {
+    variable_set('bottom_pane_title', $form_state['values']['bottom_pane_title']);
+  }
+  if (!empty($form_state['values']['bottom_pane_tag'])) {
+    variable_set('bottom_pane_tag', $form_state['values']['bottom_pane_tag']);
+  }
+
+
+  if (!empty($form_state['values']['culturefeed_search_page_logo'])) {
+    variable_set('culturefeed_search_page_logo', $form_state['values']['culturefeed_search_page_logo']);
+    $file = file_load($form_state['values']['culturefeed_search_page_logo']);
+    $file->status = FILE_STATUS_PERMANENT;
+    $file_saved = file_save($file);
+    // Record that the module is using the file.
+    file_usage_add($file_saved, 'paddle_cultuurnet_settings_form', 'culturefeed_search_page_logo', $file_saved->fid);
+  }
+}
+
+/**
+ * After-build function of app configuration form.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_cultuurnet_settings_configuration_form($form, &$form_state) {
+
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-submit',
+        'class' => array('ui-icon', 'fa-check', 'contextual-submit'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_block_info_alter().
+ */
+function paddle_cultuurnet_block_info_alter(&$blocks, $theme, $code_blocks) {
+  $search_page = 'agenda/search';
+  $region = 'sidebar_first';
+
+  $culturefeed_blocks = array(
+    'agenda-search-block' => array(
+      'module' => 'culturefeed_agenda',
+      'region' => 'content',
+      'weight' => -1,
+    ),
+    'culturefeed-search-activefilters' => array(
+      'module' => 'culturefeed_search_ui',
+    ),
+    'filter-form-2' => array(
+      'module' => 'culturefeed_search_ui',
+      'region' => 'content',
+      'weight' => 0,
+    ),
+    'facet-datetype' => array(
+      'module' => 'culturefeed_search_ui',
+    ),
+    'facet-targetaudience' => array(
+      'module' => 'culturefeed_search_ui',
+    ),
+    'facet-eventtype' => array(
+      'module' => 'culturefeed_search_ui',
+    ),
+    'cultuurnet_blocks-spotlight' => array(
+      'module' => 'views',
+      'region' => 'footer',
+      'weight' => 0,
+    ),
+    'cultuurnet_blocks-in_the_region' => array(
+      'module' => 'views',
+      'region' => 'footer',
+      'weight' => 1,
+    ),
+  );
+
+  // Place some culturefeed search facets on the search page in the desired region.
+  $weight = 1;
+  foreach ($culturefeed_blocks as $culturefeed_block => $info) {
+    if (!empty($blocks[$info['module']][$culturefeed_block])) {
+      $blocks[$info['module']][$culturefeed_block]['status'] = 1;
+      $blocks[$info['module']][$culturefeed_block]['visibility'] = 1;
+      $blocks[$info['module']][$culturefeed_block]['region'] = !empty($info['region']) ? $info['region'] : $region;
+      $blocks[$info['module']][$culturefeed_block]['pages'] = $search_page;
+      $blocks[$info['module']][$culturefeed_block]['weight'] = isset($info['weight']) ? $info['weight'] : $weight;
+      $weight++;
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_cultuurnet_form_culturefeed_agenda_search_block_form_alter(&$form, &$form_state) {
+  // Remove the label for the culturefeed search events textfield and set a placeholder.
+  if (!empty($form['search']['#title'])) {
+    unset($form['search']['#title']);
+    $form['search']['#attributes'] = array(
+      'placeholder' => t('Search the UiT database'),
+    );
+    $form['search']['#theme_wrappers'] = array();
+
+    if (current_path() != 'agenda/search') {
+      $form['search']['#size'] = 30;
+      $form['search']['#title'] = t('Which activity would you like to find?');
+
+      $form['start_date_wrapper'] = array(
+        '#tree' => TRUE,
+        '#prefix' => '<div class="date-wrapper"> <div class="start-date-wrapper">',
+        '#suffix' => '</div>',
+      );
+
+      $form['start_date_wrapper']['start_date'] = array(
+        '#type' => 'date_popup',
+        '#title' => t('From'),
+        '#title_display' => 'before',
+        '#date_label_position' => 'within',
+        '#date_format' => 'd/m/Y',
+        '#size' => 11,
+      );
+
+      $form['end_date_wrapper'] = array(
+        '#tree' => TRUE,
+        '#prefix' => '<div class="end-date-wrapper">',
+        '#suffix' => '</div> </div>',
+      );
+
+      $form['end_date_wrapper']['end_date'] = array(
+        '#type' => 'date_popup',
+        '#title' => t('To'),
+        '#title_display' => 'before',
+        '#date_label_position' => 'within',
+        '#date_format' => 'd/m/Y',
+        '#size' => 11,
+      );
+
+      $form['#submit'] = array('paddle_cultuurnet_agenda_search_block_form_submit');
+      $form['submit']['#prefix'] = '<div class="submit-wrapper">';
+      $form['submit']['#suffix'] = '</div>';
+    }
+    else {
+      unset($form['search']['#title']);
+      $form['search']['#attributes'] = array(
+        'placeholder' => t('Search through the UitDatabank'),
+      );
+    }
+  }
+}
+
+/**
+ * Submit handler for the agenda search block form.
+ */
+function paddle_cultuurnet_agenda_search_block_form_submit($form, &$form_state) {
+  $query = drupal_get_query_parameters(NULL, array('q', 'page', 'search'));
+
+  // UIV-1406 reset $query if http headers return 404.
+  $status = drupal_get_http_header();
+
+  if (isset($status['status']) && $status['status'] == '404 Not Found') {
+    $_GET['q'] = 'agenda/search';
+    unset($_GET['destination']);
+    $query = array();
+  }
+
+  if (!empty($form_state['values']['search'])) {
+    $query['search'] = $form_state['values']['search'];
+  }
+
+  // Allow custom filtering on date.
+  paddle_cultuurnet_handle_custom_date_filter($form_state, $query);
+
+  $active_filters = variable_get('culturefeed_agenda_search_block_active_fields', array());
+
+  if (isset($active_filters['when'])) {
+    unset($query['facet']['datetype']);
+    if (!empty($form_state['values']['when'])) {
+      $query['facet']['datetype'][0] = $form_state['values']['when'];
+    }
+  }
+
+  if (isset($active_filters['where'])) {
+    unset($query['where']);
+
+    // Remove the region filter.
+    if (isset($query['facet']['category_flandersregion_id'])) {
+      unset($query['facet']['category_flandersregion_id']);
+    }
+
+    // Remove the distance filter.
+    if (isset($query['distance'])) {
+      unset($query['distance']);
+    }
+
+    if (!empty($form_state['values']['where'])) {
+      $query['location'] = $form_state['values']['where'];
+    }
+
+    if (!empty($form_state['values']['radius'])) {
+      $query['distance'] = $form_state['values']['radius'];
+    }
+  }
+
+  if (!empty($form_state['#domain_id'])) {
+    unset($query['facet']['category_' . $form_state['#domain_id'] . '_id']);
+    // Activate the category facet.
+    if (!empty($form_state['values']['category'])) {
+      $query['facet']['category_' . $form_state['#domain_id'] . '_id'][0] = $form_state['values']['category'];
+    }
+  }
+
+  if (!empty($form_state['values']['nearby']) && !empty($form_state['values']['coordinates'])) {
+    $query['coordinates'] = $form_state['values']['coordinates'];
+    $query['nearby'] = $form_state['values']['city'];
+  }
+
+  $form_state['redirect'] = array(
+    'agenda/search',
+    array('query' => $query),
+  );
+}
+
+/**
+ * Handle the submission of our custom date filters on the agenda search form.
+ */
+function paddle_cultuurnet_handle_custom_date_filter($form_state, &$query) {
+  $when = '';
+  if (!empty($form_state['values']['start_date_wrapper']['start_date']) && !empty($form_state['values']['end_date_wrapper']['end_date'])) {
+    $when = date('d/m/Y', strtotime($form_state['values']['start_date_wrapper']['start_date'])) . ' - ' . date('d/m/Y', strtotime($form_state['values']['end_date_wrapper']['end_date']));
+  }
+  elseif (empty($form_state['values']['start_date_wrapper']['start_date']) && !empty($form_state['values']['end_date_wrapper']['end_date'])) {
+    $when = date('d/m/Y', time()) . ' - ' . date('d/m/Y', strtotime($form_state['values']['end_date_wrapper']['end_date']));
+  }
+  elseif (!empty($form_state['values']['start_date_wrapper']['start_date'])) {
+    $when = date('d/m/Y', strtotime($form_state['values']['start_date_wrapper']['start_date']));
+  }
+
+  if (!empty($when)) {
+    $query['date_range'] = $when;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_cultuurnet_form_culturefeed_search_ui_block_filter_form_2_alter(&$form, &$form_state) {
+  $form['#attached']['js'][] = drupal_get_path('module', 'paddle_cultuurnet') . '/js/filter.js';
+
+  // Hide the submit button.
+  $form['submit']['#attributes'] = array(
+    'class' => array('element-invisible'),
+  );
+}
+
+/**
+ * Implements hook_block_view_alter().
+ */
+function paddle_cultuurnet_block_view_alter(&$data, $block) {
+  // The culturefeed active filters block displays the subject even if there are no active filters.
+  // Remove the block subject if there are no active filters.
+  if ($block->delta == 'culturefeed-search-activefilters') {
+    if (empty($data['content'])) {
+      unset($data['subject']);
+    }
+  }
+}
+
+/**
+ * Implements template_preprocess_page().
+ */
+function paddle_cultuurnet_preprocess_page(&$variables) {
+  if (current_path() == 'agenda/search') {
+    $search_logo_fid = variable_get('culturefeed_search_page_logo', FALSE);
+    if ($search_logo_fid && $file = file_load($search_logo_fid)) {
+      $variables['search_page_logo'] = array(
+        '#theme' => 'image_style',
+        '#style_name' => 'search_page_logo',
+        '#path' => $file->uri,
+      );
+    }
+    drupal_add_css(drupal_get_path('module', 'paddle_cultuurnet') . '/css/paddle_cultuurnet.spotlight.css');
+    $panes = array(
+      'panesTitles' => array(
+        'top_pane_title' => variable_get('top_pane_title', ''),
+        'bottom_pane_title' => variable_get('bottom_pane_title', ''),
+      ),
+      'panesTags' => array(
+        'top_pane_tag_results' => variable_get('top_pane_tag', ''),
+        'bottom_pane_tag_results' => variable_get('bottom_pane_tag', ''),
+      ),
+    );
+    foreach ($panes['panesTags'] as $key => $value) {
+      if (!empty($value)) {
+        $limit = 4;
+        $view_mode = 'summaries';
+        $uitdatabank = new \Drupal\paddle_cultuurnet\UitDataBank();
+        $events = $uitdatabank->paddle_cultuurnet_get_events_by_tag($value, $limit);
+        $events = $uitdatabank->paddle_cultuurnet_prepare_events_for_list($events, $view_mode);
+        $variables[$key] = $events;
+      }
+    }
+    foreach ($panes['panesTitles'] as $key => $value) {
+      if (!empty($value)) {
+        $variables[$key] = $value;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_cultuurnet_menu() {
+  $items = array();
+
+  $items['admin/paddle_cultuurnet/event_autocomplete_callback'] = array(
+    'page callback' => 'paddle_cultuurnet_event_autocomplete_callback',
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+
+  return $items;
+}
+
+/**
+ * Autocomplete callback for events by title.
+ *
+ * The returned $matches array has
+ * - key: The cdbid of the event
+ * - value: the title which will be displayed in the autocompleted dropdown.
+ *
+ * @param string $parent_lang
+ *   The language of the parent node where the autocomplete is being called.
+ * @param string $string
+ *   The string that will be searched.
+ */
+function paddle_cultuurnet_event_autocomplete_callback($parent_lang = '', $string = "") {
+  $matches = array();
+  if ($string) {
+    $uitdatabank = new \Drupal\paddle_cultuurnet\UitDataBank();
+    // Execute search.
+    $matches = $uitdatabank->paddle_cultuurnet_get_autocomplete_suggestions($string);
+  }
+
+  drupal_json_output($matches);
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_cultuurnet_theme($existing, $type, $theme, $path) {
+  $template_path = $path . '/templates';
+
+  return array(
+    'paddle_cultuurnet_spotlight' => array(
+      'path' => $template_path,
+      'template' => 'paddle-cultuurnet-spotlight',
+    ),
+    'paddle_cultuurnet_list_titles' => array(
+      'path' => $template_path,
+      'template' => 'paddle-cultuurnet-list-titles',
+    ),
+    'paddle_cultuurnet_list_summaries' => array(
+      'path' => $template_path,
+      'template' => 'paddle-cultuurnet-list-summaries',
+    ),
+    'paddle_cultuurnet_list_spotlight' => array(
+      'path' => $template_path,
+      'template' => 'paddle-cultuurnet-list-spotlight',
+    ),
+  );
+}
+
+/**
+ * Implements hook_views_pre_view().
+ */
+function paddle_cultuurnet_views_pre_view(&$view, &$display_id, &$args) {
+  if ($view->name == 'cultuurnet_blocks') {
+    $filters = $view->display_handler->get_option('filters');
+
+    if (!empty($filters['tags']['keyword'])) {
+      switch ($display_id) {
+        case 'spotlight':
+          $tags = variable_get('culturefeed_spotlight_tags', array());
+          break;
+
+        case 'in_the_region':
+          $tags = variable_get('culturefeed_region_tags', array());
+          break;
+      }
+
+      if (!empty($tags)) {
+        $tags = explode(',', $tags);
+        foreach ($filters['tags']['keyword'] as $index => $keyword) {
+          $filters['tags']['keyword'][$index]['value'] = !empty($tags[$index]) ? $tags[$index] : '';
+        }
+        $view->display_handler->override_option('filters', $filters);
+      }
+      else {
+        // Stop the view from executing if no tags are configured.
+        $view->executed = TRUE;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_cultuurnet_form_search_api_page_search_form_alter(&$form, &$form_state) {
+  $tokens = explode('/', $form['#action']);
+  $search_str = trim(end($tokens));
+  if (paddle_cultuurnet_is_configured() && !empty($search_str)) {
+    $form['culturefeed_search'] = array(
+      '#type' => 'item',
+      '#markup' => l(t('Search for "!term" in events', array('!term' => $search_str)), 'agenda/search', array('query' => array('search' => $search_str))),
+      '#weight' => 99,
+    );
+  }
+}
+
+/**
+ * Implements hook_is_configured().
+ */
+function paddle_cultuurnet_is_configured() {
+  $api_key = variable_get('culturefeed_search_api_application_key', '');
+  $shared_secret = variable_get('culturefeed_search_api_shared_secret', '');
+
+  return (!empty($api_key) && !empty($shared_secret));
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors_alter().
+ */
+function paddle_cultuurnet_paddle_color_palettes_color_selectors_alter(&$data, $theme) {
+  $data[0]['color'][] = '.event-teaser h3.title a';
+  $data[1]['color'][] = '.event-teaser h3.title a:hover';
+  $data[0]['color'][] = '.event-teaser .types';
+  $data[7]['background-color'][] = '.event-teaser a.button';
+  $data[3]['background-color'][] = '.event-teaser a.button:hover';
+  $data[0]['background-color'][] = '.buy-online a.reservation-link';
+  $data[1]['background-color'][] = '.buy-online a.reservation-link:hover';
+  $data[0]['background-color'][] = '.item-list .active';
+  $data[0]['color'][] = 'div.facet-label a';
+  $data[0]['background-color'][] = '#block-culturefeed-search-ui-culturefeed-search-activefilters span.filter';
+  $data[3]['color'][] = 'a .spotlight-period';
+}
+
+/**
+ * Implements hook_element_info_alter().
+ */
+function paddle_cultuurnet_element_info_alter(&$type) {
+  if (isset($type['date_popup'])) {
+    $type['date_popup']['#process'][] = 'paddle_cultuurnet_date_popup_process';
+  }
+}
+
+/**
+ * Implements hook_date_popup_process().
+ */
+function paddle_cultuurnet_date_popup_process($element, $form_state, $complete_form) {
+  unset($element['date']['#description']);
+
+  return $element;
+}
+
+/**
+ * Implements hook_block_list_alter()
+ *
+ * Hides login block on cultuurnet agenda page.
+ */
+function paddle_cultuurnet_block_list_alter(&$blocks) {
+
+  if (current_path() !== 'agenda/search') {
+    return;
+  }
+  // Go through the blocks list and unset the login block.
+  foreach ($blocks as $i => $block) {
+    if ('sidebar_first' === $block->region && 'login' === $block->delta) {
+      // Hide this block.
+      unset($blocks[$i]);
+    }
+  }
+}

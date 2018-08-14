@@ -1,0 +1,198 @@
+/**
+* @file
+* Paddle admin theme
+*
+* Contains all styles related to icons
+*/
+
+%ui-icon {
+  &:before {
+    font-family: FontAwesome;
+    font-style: normal;
+    font-weight: normal;
+    line-height: 1;
+    text-rendering: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: inline-block;
+    vertical-align: middle;
+    padding: 0 3px;
+    text-align: center;
+    width: 24px;
+  }
+
+  span {
+    text-transform: uppercase;
+    font-size: 0.9em;
+  }
+}
+
+.ui-icon {
+  @extend %ui-icon;
+}
+
+.ui-icon-hiddentext {
+  float: left;
+}
+
+.ui-icon-edit:before {
+  content: "\f044";
+}
+.ui-icon-style:before {
+  content: "\f1fc";
+}
+.ui-icon-edit-page-properties:before {
+  content: "\f044";
+}
+.ui-icon-edit-page-layout:before {
+  content: "\f00a";
+}
+.panels-ipe-linkbar .ui-icon-edit {
+  background-position: 0 0;
+}
+.panels-ipe-linkbar .ui-icon-edit:hover {
+  background-position: 0 -29px;
+}
+.ui-icon-add:before {
+  content: "\f067";
+}
+.ui-icon-landing.ui-icon-add:before {
+  content: "\f0fe";
+}
+.ui-icon-delete:before {
+  content: "\f014";
+}
+.panels-ipe-placeholder .ui-icon-style:before {
+  content: "\f013";
+}
+.panels-ipe-linkbar .ui-icon-delete {
+  background-position: 0 -204px;
+}
+.ui-icon-delete:hover {
+  background-position: 0 -789px;
+}
+.panels-ipe-linkbar .ui-icon-delete:hover {
+  background-position: 0 -244px;
+}
+.ui-icon-visit:before {
+  content: "\f06e";
+}
+.ui-icon-visit-fe:before {
+  content: "\f06e";
+}
+.ui-icon-settings:before,
+.ui-icon-visit-be:before {
+  content: "\f013";
+}
+.ui-icon-clone:before {
+  content: "\f0c5";
+}
+.ui-icon-archive:before {
+  content: "\f187";
+}
+.ui-icon-restore:before {
+  content: "\f0e2";
+}
+.panels-ipe-dragbar .ui-icon-style {
+  background-position: 0 -97px;
+}
+.panels-ipe-dragbar .ui-icon-style:hover {
+  background-position: 0 -61px;
+}
+#views-form-content-manager-page {
+  .ui-icon {
+    float: left;
+  }
+
+  .content-manager-more-actions .ui-icon {
+    float: none;
+  }
+}
+/* icons for main menu */
+#block-paddle-menu-display-management-level-2 .menu-item a:before {
+  font-family: FontAwesome;
+  font-size: 1.1em;
+  font-style: normal;
+  display: inline-block;
+  margin-right: 7px;
+  vertical-align: bottom;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.ml-path-admin-structure > a:before {
+  content: "\f03a";
+}
+.ml-path-admin-content-manager > a:before {
+  content: "\f07c";
+}
+.ml-path-admin-themes > a:before {
+  content: "\f043";
+}
+#block-paddle-menu-display-management-level-2 .ml-path-admin-dashboard > a:before {
+  font-family: icomoon;
+  content: "\e600";
+}
+#block-paddle-menu-display-management-level-2 .ml-path-admin-paddlet-store > a:before {
+  font-family: icomoon;
+  content: "\e601";
+}
+#block-paddle-menu-display-management-level-2 .ml-path-admin-users > a:before {
+  font-family: FontAwesome;;
+  content:  "\f0c0";
+}
+/* content manager more actions */
+.content-manager-more-actions {
+  display: none;
+  position: absolute;
+  background: #fff;
+  top: 17px;
+  left: -155px;
+  border: 1px solid $main-blue;
+  z-index: 100;
+  padding: 10px;
+  border-radius: 2px;
+  min-width: 155px;
+}
+.hover-expand:hover .content-manager-more-actions {
+  display: block;
+}
+.hover-expand {
+  position: relative;
+  float: left;
+}
+.content-manager-more-actions a {
+  padding: 5px 0;
+  display: block;
+}
+
+@media (min-width: 1000px) {
+  .ui-icon-hiddentext {
+    width: 23px;
+    height: 18px;
+    float: left;
+
+    span {
+      // We cannot extend .visuallyhidden from inside a media query :(
+      border: 0;
+      clip: rect(0 0 0 0);
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      padding: 0;
+      position: absolute;
+      width: 1px;
+    }
+  }
+
+  .ui-icon-landing-hiddentext {
+    width: 22px;
+    height: 21px;
+  }
+}
+
+// Icomoon custom icons.
+.im-unpublish:before {
+  font-family: 'icomoon';
+  content: "\e602";
+}

@@ -1,0 +1,282 @@
+<?php
+
+/**
+ * @file
+ * Tests the displaying of nodes in the administration interface.
+ */
+
+/**
+ * Tests if nodes are displayed in a two column layout in the administration UI.
+ */
+class PaddleContentManagerViewNodeTest extends PaddleWebTestCase {
+  /**
+   * A content type definition.
+   *
+   * @var array
+   */
+  protected $contentType;
+
+  protected $adminUser;
+  protected $editor;
+
+  protected $node;
+
+  /**
+   * Provides the necessary test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'View node tests',
+      'description' => 'Test the administrative node view.',
+      'group' => 'Paddle Content Manager',
+    );
+  }
+
+  /**
+   * Sets up a Drupal site for running functional and integration tests.
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp($enable_modules);
+
+    $this->drupalLogin($this->chiefEditor);
+
+    $this->node = $this->drupalCreateUiNode('basic_page', array(
+      'body[' . LANGUAGE_NONE . '][0][value]' => $this->randomString() . '&><',
+    ));
+  }
+
+  /**
+   * Tests that a node can be viewed in the backend in the admin theme.
+   */
+  public function testNodeView() {
+    $this->drupalLogin($this->chiefEditor);
+    $path = 'admin/content_manager/node/' . $this->node->nid . '/view';
+    $this->drupalGet($path);
+    $this->assertRaw('page-admin', 'The node is shown in the administration interface.');
+  }
+
+  /**
+   * Constructs an XPath query to find a contextual toolbar moderation link.
+   *
+   * Only valid for the administrative node view.
+   *
+   * @param string $state
+   *   The state to transition to.
+   */
+  protected function contextualToolbarModerationLinkXPath($state) {
+    $class = 'moderate-to-' . drupal_html_class($state);
+    return $this->contextualToolbarLinkXPath($class);
+  }
+
+  /**
+   * Constructs a XPath query to find a contextual toolbar link.
+   *
+   * Only valid for the administrative node view.
+   *
+   * @param string $class
+   *   The class for the li surrounding the link.
+   * @param string $path
+   *   The path the link should point to.
+   */
+  protected function contextualToolbarLinkXPath($class, $path = NULL) {
+    $parts = array(
+      '//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]',
+      '//ul[@id="contextual-actions-list"]',
+      '//li[contains(normalize-space(@class), "' . $class . '")]',
+    );
+
+    if ($path) {
+      $parts[] = '//a[contains(@href, "' . $path . '")]';
+    }
+
+    $query = implode('', $parts);
+
+    return $this->xpath($query);
+  }
+
+  /**
+   * Tests if the contextual toolbar is set correctly.
+   */
+  public function testContextualToolbar() {
+    // Run the tests for the chief editor.
+    $this->drupalLogin($this->chiefEditor);
+    $this->drupalGet('admin/content_manager/node/' . $this->node->nid . '/view');
+    $this->assertRaw('block-paddle-contextual-toolbar-contextual-toolbar', 'The contextual toolbar is shown on the node edit page.');
+    $this->assertTrue($this->contextualToolbarLinkXPath('edit', url('node/' . $this->node->nid . '/edit')), 'The edit button is shown in the contextual toolbar for a chief editor.');
+    $this->assertTrue($this->contextualToolbarLinkXPath('preview', url('node/' . $this->node->nid . '/current-revision')), 'The preview button is shown in the contextual toolbar for a chief editor.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('needs_review'), 'The moderate to needs_review button is shown in the contextual toolbar for a chief editor.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('published'), 'The moderate to published button is shown in the contextual toolbar for a chief editor.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('to_check'), 'The moderate to to_check button is shown in the contextual toolbar for a chief editor.');
+    $this->assertFalse($this->contextualToolbarLinkXPath('online-version', url('node/' . $this->node->nid)), 'The "Online version" button is not shown in the contextual toolbar for a chief editor.');
+
+    // Run the tests for the editor user.
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin/content_manager/node/' . $this->node->nid . '/view');
+    $this->assertRaw('block-paddle-contextual-toolbar-contextual-toolbar', 'The contextual toolbar is shown on the node edit page.');
+    $this->assertTrue($this->contextualToolbarLinkXPath('edit', url('node/' . $this->node->nid . '/edit')), 'The edit button is shown in the contextual toolbar for an editor.');
+    $this->assertTrue($this->contextualToolbarLinkXPath('preview', url('node/' . $this->node->nid . '/current-revision')), 'The preview button is shown in the contextual toolbar for an editor.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('needs_review'), 'The moderate to needs_review button is shown in the contextual toolbar for an editor.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('published'), 'The moderate to published button is not shown in the contextual toolbar for an editor.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('to_check'), 'The moderate to to_check button is shown in the contextual toolbar for an editor.');
+    $this->assertFalse($this->contextualToolbarLinkXPath('online-version', url('node/' . $this->node->nid)), 'The "Online version" button is not shown in the contextual toolbar for an editor.');
+  }
+
+  /**
+   * Test the contextual toolbar button.
+   */
+  public function testButtons() {
+    // Run tests for the chief editor.
+    $this->drupalLogin($this->chiefEditor);
+
+    $node = $this->drupalCreateUiNode('basic_page');
+    $this->moderateNode($node, 'To chief editor');
+    $node = node_load($node->nid, NULL, TRUE);
+    $this->assertEqual($node->workbench_moderation['current']->state, 'needs_review', 'The state of the node has been set to "needs_review".');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('needs_review'), 'The final check button is shown in the contextual toolbar.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('published'), 'The publish button is shown in the contextual toolbar for a chief editor.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('to_check'), 'The to_check button is shown in the contextual toolbar for a chief editor.');
+
+    // Publish the node and refresh it.
+    $this->moderateNode($node, 'Publish');
+    $node = node_load($node->nid, NULL, TRUE);
+    $node = workbench_moderation_node_current_load($node);
+    $this->assertEqual($node->workbench_moderation['published']->state, 'published', 'The state of the node has been set to "published".');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('needs_review'), 'The final check button is not shown in the contextual toolbar.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('published'), 'The publish button is not shown in the contextual toolbar.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('offline'), 'The depublish button is shown in the contextual toolbar for a chief editor.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('to_check'), 'The to_check button is shown in the contextual toolbar for a chief editor.');
+
+    $node = $this->drupalCreateUiNode('basic_page');
+    $this->moderateNode($node, 'Publish');
+    $node = node_load($node->nid, NULL, TRUE);
+    $this->assertEqual($node->workbench_moderation['current']->state, 'published', 'The state of the node has been set to "published".');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('needs_review'), 'The final check button is not shown in the contextual toolbar.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('published'), 'The publish button is not shown in the contextual toolbar.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('offline'), 'The depublish button is shown in the contextual toolbar for a chief editor.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('to_check'), 'The to_check button is shown in the contextual toolbar for a chief editor.');
+
+    $this->moderateNode($node, 'Offline');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('needs_review'), 'The final check button is shown in the contextual toolbar.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('published'), 'The publish button is shown in the contextual toolbar.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('offline'), 'The depublish button is not shown in the contextual toolbar.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('to_check'), 'The to_check button is shown in the contextual toolbar.');
+
+    // Run tests for the editor user.
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+    $this->assertFalse($this->contextualToolbarLinkXPath('moderate-to-offline'), 'The depublish button is not shown in the contextual toolbar for an editor.');
+
+    $node = $this->drupalCreateUiNode('basic_page');
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('needs_review'), 'The final check button is shown in the contextual toolbar.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('to_check'), 'The to_check button is shown in the contextual toolbar for an editor.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('published'), 'The publish button is not shown in the contextual toolbar.');
+
+    $this->moderateNode($node, 'To editor');
+    $node = node_load($node->nid, NULL, TRUE);
+    $this->assertEqual($node->workbench_moderation['current']->state, 'to_check', 'The state of the node has been set to "to_check".');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('needs_review'), 'The final check button is shown in the contextual toolbar.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('published'), 'The publish button is not shown in the contextual toolbar.');
+    $this->assertTrue($this->contextualToolbarModerationLinkXPath('to_check'), 'The to_check button is shown in the contextual toolbar.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('offline'), 'The depublish button is not shown in the contextual toolbar.');
+
+    $this->moderateNode($node, 'To chief editor');
+    $node = node_load($node->nid, NULL, TRUE);
+    $this->assertEqual($node->workbench_moderation['current']->state, 'needs_review', 'The state of the node has been set to "needs_review".');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('needs_review'), 'The final check button is not shown in the contextual toolbar.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('published'), 'The publish button is not shown in the contextual toolbar.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('to_check'), 'The to_check button is not shown in the contextual toolbar.');
+    $this->assertFalse($this->contextualToolbarModerationLinkXPath('offline'), 'The depublish button is not shown in the contextual toolbar.');
+  }
+
+  /**
+   * Tests if the node metadata summary is shown on the node view page.
+   */
+  public function testNodeMetadataSummary() {
+    $this->drupalGet('admin/content_manager/node/' . $this->node->nid . '/view');
+    $this->assertRaw('node-metadata', 'The node summary metadata content type is shown on the view page of the node.');
+  }
+
+  /**
+   * Tests the buttons that allow previewing of content in the front end.
+   *
+   * There are two buttons in the back end node view that allow to preview the
+   * node in the front end:
+   * - The "Preview" button: this always shows the latest revision of the node.
+   * - The "Online version" button: this button is only visible when the node is
+   *   published, and there is a newer draft available. Clicking this button
+   *   allows to see the current published revision of the node.
+   */
+  public function testPreviewing() {
+    $this->moderateNode($this->node, 'Publish');
+
+    $backend_node_view_url = 'admin/content_manager/node/' . $this->node->nid . '/view';
+    $preview_url = url('node/' . $this->node->nid . '/current-revision');
+    $online_version_url = url('node/' . $this->node->nid);
+
+    $published_version_expected_title = check_plain($this->node->title);
+    $published_version_expected_body_text = check_markup($this->node->body[LANGUAGE_NONE][0]['value'], $this->node->body[LANGUAGE_NONE][0]['format']);
+
+    // Check that for a published node only the 'Preview' button is visible. The
+    // 'Online version' button should not be visible.
+    $this->drupalGet($backend_node_view_url);
+    $this->assertTrue($this->contextualToolbarLinkXPath('preview', $preview_url), 'The preview button is shown in the contextual toolbar for a chief editor.');
+    $this->assertFalse($this->contextualToolbarLinkXPath('online-version', $online_version_url), 'The "Online version" button is not shown in the contextual toolbar for a chief editor.');
+
+    // Check that the body text of the published node is visible after clicking
+    // on 'Preview'.
+    $this->clickContextualToolbarLink(t('Preview revision'));
+    $this->assertRaw(check_plain($this->node->title), 'The title of the published node is visible when previewing in the front end.');
+    $this->assertRaw($published_version_expected_body_text, 'The body of the published node is visible when previewing in the front end.');
+
+    $new_title = $this->randomString() . '&><';
+    $new_body = $this->randomString() . '&><';
+
+    // Create a new draft revision of the node.
+    $edit = array(
+      'title' => $new_title,
+      'body[' . LANGUAGE_NONE . '][0][value]' => $new_body,
+    );
+    $this->drupalPost('node/' . $this->node->nid . '/edit', $edit, t('Save'));
+
+    $updated_node = node_load($this->node->nid, NULL, TRUE);
+    $updated_node = workbench_moderation_node_current_load($updated_node);
+    $new_title = check_plain($updated_node->title);
+    $new_body = check_markup($updated_node->body[LANGUAGE_NONE][0]['value'], $updated_node->body[LANGUAGE_NONE][0]['format']);
+
+    $this->assertUrl($backend_node_view_url);
+
+    // Check that now both the 'Preview' and 'Online version' buttons are
+    // visible.
+    $this->assertTrue($this->contextualToolbarLinkXPath('preview', $preview_url), 'The preview button is shown in the contextual toolbar for a chief editor.');
+    $this->assertTrue($this->contextualToolbarLinkXPath('online-version', $online_version_url), 'The "Online version" button is shown in the contextual toolbar for a chief editor.');
+
+    // Check that the title and body text of the draft are shown after clicking
+    // on the 'Preview' button.
+    $this->clickContextualToolbarLink(t('Preview revision'));
+    $this->assertRaw($new_title, 'The title of the draft is visible when previewing in the front end.');
+    $this->assertRaw($new_body, 'The body of the draft is visible when previewing in the front end.');
+
+    // Check that the title and body text of the published revision are shown
+    // after clicking on the 'Online version' button.
+    $this->drupalGet($backend_node_view_url);
+
+    $this->clickContextualToolbarLink(t('Online version'));
+    $this->assertRaw($published_version_expected_title, 'The title of the published node is visible when viewing the online version in the front end.');
+    $this->assertRaw($published_version_expected_body_text, 'The body of the published node is visible when viewing the online version in the front end.');
+
+    // Publish the draft.
+    $this->moderateNode($this->node, 'Publish');
+
+    $this->assertUrl($backend_node_view_url);
+    $this->assertTrue($this->contextualToolbarLinkXPath('preview', $preview_url), 'The preview button is shown in the contextual toolbar for a chief editor.');
+    $this->assertFalse($this->contextualToolbarLinkXPath('online-version', $online_version_url), 'The "Online version" button is not shown in the contextual toolbar for a chief editor.');
+
+    // Check that the title and body text of the draft are shown after clicking
+    // on the 'Preview' button.
+    $this->clickContextualToolbarLink(t('Preview revision'));
+    $this->assertRaw($new_title, 'The title of the published node is visible when previewing in the front end.');
+    $this->assertRaw($new_body, 'The body of the published node is visible when previewing in the front end.');
+  }
+
+}

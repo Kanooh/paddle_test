@@ -1,0 +1,508 @@
+/**
+ * @file
+ * Paddlet Cultuurnet styling.
+ */
+@import "../variables/*";
+
+.event-teaser {
+  padding: 15px 0;
+  border-bottom: solid 1px #ddd;
+
+  .col-sm-8 {
+    float: left;
+    padding-right: 5px;
+  }
+  .col-sm-4 {
+    float: right;
+
+    .image {
+      float: right;
+    }
+  }
+
+  .reservation-link, a.button {
+    display: inline-block;
+    text-decoration: none;
+    color: #fff;
+    padding: 5px 10px;
+    margin-top: 10px;
+
+    &:hover {
+      text-decoration: none;
+      color: #fff;
+    }
+  }
+  a.button {
+    float: left;
+    @media (max-width: 579px) {
+      margin-bottom: 10px;
+    }
+  }
+  .reservation-link {
+    margin-left: 10px;
+  }
+
+  .types:before {
+    content: "\f02b";
+    font-family: "FontAwesome";
+    padding-right: 10px;
+    color: $c-black;
+  }
+
+  .title.forkids:after {
+    margin-left: 10px;
+    background-size: 27px 20px;
+    display: inline-block;
+    width: 27px;
+    height: 20px;
+    content: "";
+    background-image: url('/sites/all/modules/paddle_cultuurnet/assets/images/vlieg_web.jpg');
+  }
+}
+
+ul.facet-search {
+  list-style: none;
+
+  li {
+    margin: 0;
+  }
+}
+
+.text-right {
+  text-align: right;
+}
+
+div.facet-label {
+  border-bottom: solid 1px #ddd;
+  padding: 5px 0;
+
+  a {
+    color: #1c7074;
+  }
+
+  &.active {
+    color: #fff;
+    border-bottom: none;
+    background-color: #2b979d;
+    padding: 5px 10px;
+
+    a {
+      text-decoration: none;
+      color: #fff;
+    }
+  }
+}
+
+#block-search-api-page-search {
+  .form-item.form-type-item {
+    a {
+      display: none;
+    }
+  }
+}
+
+#block-culturefeed-search-ui-culturefeed-search-activefilters span.filter {
+  color: #fff;
+  border-bottom: none;
+  background-color: #2b979d;
+  padding: 5px 10px;
+
+  a {
+    text-decoration: none;
+    color: #fff;
+  }
+}
+
+.culturefeed-facets h2 {
+  border-bottom: solid 1px #000;
+  text-transform: uppercase;
+  padding-bottom: 0.9em;
+  margin-bottom: 1em;
+  font-size: 17px;
+}
+
+.page-agenda-search {
+  .region-sidebar-first .block {
+    margin-bottom: 40px;
+  }
+
+  .region-content-top {
+    width: 100%;
+  }
+}
+
+#block-culturefeed-search-ui-culturefeed-search-activefilters {
+  margin-bottom: 15px;
+
+  h2 {
+    font-size: 1.17em;
+    margin-bottom: 5px;
+  }
+}
+
+#block-culturefeed-search-ui-filter-form-2 {
+  background-color: #ddd;
+  padding: 5px 10px;
+
+  div.form-type-checkbox {
+    display: inline;
+    margin-right: 10px;
+  }
+}
+
+#block-culturefeed-agenda-agenda-search-block {
+  margin-bottom: 15px;
+
+  .content {
+    form {
+      div {
+        display: flex;
+        justify-content: space-between;
+        input {
+          &.form-submit {
+            margin: 0 0 0 20px;
+            height: auto;
+            padding: 0 15px;
+            word-wrap: normal;
+          }
+        }
+      }
+    }
+  }
+}
+
+#block-culturefeed-search-ui-culturefeed-search-activefilters {
+  h2 {
+    padding-bottom: 5px;
+  }
+  span.filter {
+    margin: 0 5px;
+    padding: 6px 10px;
+
+    &:first-of-type {
+      margin-left: 0;
+    }
+  }
+
+  a.remove-all {
+    display: block;
+    margin-top: 10px;
+  }
+}
+
+body.page-agenda-e {
+  .collapsible ul {
+    list-style: none
+  }
+}
+
+@media screen and (max-width: $screen-md-min) {
+  #block-culturefeed-search-ui-culturefeed-search-activefilters {
+    overflow: hidden;
+
+    span.filter {
+      float: left;
+      margin: 0 0 5px 5px;
+
+      &:first-of-type {
+        margin-left: 5px;
+      }
+    }
+
+    a.remove-all {
+      float: left;
+      margin-left: 5px;
+    }
+  }
+
+  #block-culturefeed-search-ui-filter-form-2 {
+    margin-bottom: 10px;
+
+    #culturefeed-search-ui-block-filter-form-2 {
+      div.form-type-checkbox {
+        display: block;
+      }
+    }
+  }
+}
+
+section.event {
+  > div {
+    margin-bottom: 15px;
+  }
+
+  .reservation-link {
+    display: inline-block;
+    background-color: #2b979d;
+    text-decoration: none;
+    color: #fff;
+    padding: 5px 10px;
+
+    &:hover {
+      text-decoration: none;
+      color: #fff;
+    }
+  }
+
+  .tags a {
+    margin-right: 10px;
+
+    &:before {
+      content: "\f02b";
+      font-family: "FontAwesome";
+      display: inline-block;
+      padding-right: 3px;
+    }
+  }
+}
+
+aside.event {
+  float: right;
+  margin-left: 0px;
+  padding-left: 20px;
+  img {
+    width: 100%;
+  }
+}
+
+.search-page-logo {
+  margin-bottom: 1em;
+}
+
+.pane-uitdatabank-pane {
+  &.spotlight {
+    .pane-section-body {
+      padding: 0 0 14px 0;
+    }
+
+    a:hover, a:visited {
+      text-decoration: none;
+    }
+
+    .spotlight-bottom h3 {
+      padding-top: 80%;
+      margin-top: 20px;
+    }
+
+    .spotlight-period {
+      padding-top: 10px;
+    }
+
+    .spotlight-image {
+      float: left;
+      position: relative;
+      width: 100%;
+      padding-bottom: 80%;
+      background-position: center center;
+      background-repeat: no-repeat;
+      background-size: cover;
+    }
+  }
+
+  &.list {
+    a:hover, a:visited {
+      text-decoration: none;
+    }
+  }
+
+  &.search {
+
+    form > div {
+      display: flex;
+      flex-flow: row wrap;
+      justify-content: space-between;
+    }
+
+    h3 {
+      padding-bottom: 10px;
+    }
+
+    .form-text {
+      padding: 0;
+    }
+
+    .form-item-search {
+      margin-right: 15px;
+      @media(max-width: 630px) {
+        flex-basis: 100%;
+      }
+    }
+
+    #edit-search {
+      width: auto;
+    }
+
+    .start-date-wrapper, .end-date-wrapper {
+      margin-right: 5px;
+    }
+
+    .date-wrapper {
+      display: inline-flex;
+    }
+  }
+}
+
+.col-md-6 {
+  &.panel-region-left, &.panel-region-right, .panel-col {
+    .pane-uitdatabank-pane.search {
+      form > div {
+        justify-content: flex-start;
+      }
+    }
+
+    .form-item-search, .submit-wrapper {
+      flex-basis: 100%;
+    }
+  }
+}
+
+.col-md-9 .col-lg-7, .col-md-12.col-lg-6 {
+  .pane-uitdatabank-pane.search {
+    form > div {
+      justify-content: flex-start;
+    }
+  }
+
+  .form-item-search, .submit-wrapper {
+    flex-basis: 100%;
+  }
+}
+
+#search-api-page-search-form #edit-culturefeed-search {
+  margin-top: 10px;
+}
+
+.page-agenda-search {
+  h1 {
+    display: none;
+  }
+}
+
+@media (max-width: $page-width) {
+  .page-agenda-search {
+    .content-wrapper {
+      padding: 10px;
+    }
+  }
+}
+
+.event {
+  .collapsible {
+    border: none;
+    padding-bottom: 0;
+    .fieldset-legend {
+      margin-left: -15px;
+    }
+    .fieldset-wrapper {
+      .item-list {
+        ul {
+          item-list: none;
+          padding: 0px;
+          margin: 0px;
+          li {
+            padding: 0px;
+            margin: 0px;
+          }
+        }
+      }
+    }
+  }
+  .when {
+    .list-unstyled {
+      list-style: none;
+      margin: 0px;
+    }
+  }
+}
+
+.pane-uitdatabank-pane.list .spotlight-image {
+  float: left;
+  position: relative;
+  width: 100%;
+  padding-bottom: 80%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.pane-uitdatabank-pane.spotlight.pane-content .pane-section-body.paddle-cultuurnet-spotlight-events {
+  padding: 21px 15px 14px 15px;
+}
+
+.region-content-top {
+  #block-culturefeed-agenda-agenda-search-block {
+    @media screen and (max-width: $screen-md-min) {
+      margin-right: 15px
+    }
+    .form-item-search {
+      float: left;
+      width: 100%;
+    }
+  }
+}
+
+@media (max-width: $screen-sm-min) {
+  .event-teaser {
+    .col-sm-4 {
+      float: left;
+      width: 100%;
+      padding-bottom: 5px;
+
+      .image {
+        float: left
+      }
+    }
+  }
+}
+
+.item-list {
+  ul.pager {
+    padding-bottom: 15px;
+  }
+}
+
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max) {
+  .paddle-cultuurnet-spotlight-event.col-sm-6 {
+    padding-right: 10px;
+  }
+}
+
+@media (max-width: $screen-sm-max) {
+  .paddle-cultuurnet-spotlight-events.row {
+    width: auto;
+  }
+  .paddle-cultuurnet-spotlight-event.col-sm-6:nth-child(3) {
+    margin-left: 0px;
+  }
+}
+
+// Fix the Date Picker layout.
+
+.ui-daterangepicker {
+  font-size: 1em;
+  font-family: inherit;
+
+  ul {
+    li {
+      &.preset_0 {
+        // The source CSS has !important as well, so cannot overwrite it unless I use !important.
+        margin-top: 0.3em !important;
+      }
+
+      &.preset_1 {
+        margin-bottom: 0.6em;
+      }
+      a {
+        margin: 0.1em .5em;
+      }
+    }
+  }
+
+  .ranges {
+    margin: 0;
+  }
+
+  .range-end {
+    margin-top: 0.75em;
+  }
+}

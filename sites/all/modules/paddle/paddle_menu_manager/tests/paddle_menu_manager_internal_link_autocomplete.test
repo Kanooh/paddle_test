@@ -1,0 +1,253 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuManagerInternalLinkAutocomplete.
+ */
+
+/**
+ * UI tests for the menu item create/edit/delete forms.
+ */
+class PaddleMenuManagerInternalLinkAutocomplete extends PaddleMenuManagerTestCase {
+  protected $contentType;
+
+  /**
+   * Stores langcodes of enabled languages.
+   *
+   * @var array
+   */
+  protected $langcodes;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Menu item internal link autocomplete test'),
+      'description' => t('Test the autocomplete of the internal link field of the menu item form.'),
+      'group' => t('Paddle Menu Manager'),
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array(
+      'i18n_menu',
+      'paddle_dashboard',
+      'paddle_multilingual',
+      'paddle_menu_manager',
+    ));
+
+    $this->contentType = $this->drupalCreateContentType(array());
+
+    // Enable 3 random languages in addition to English.
+    include_once DRUPAL_ROOT . '/includes/iso.inc';
+    $language_list = _locale_get_predefined_list();
+    unset($language_list['en']);
+
+    $this->langcodes = array('en');
+    foreach (array_rand($language_list, 3) as $langcode) {
+      locale_add_language($langcode);
+      $this->langcodes[] = $langcode;
+    }
+
+    $permissions = array(
+      'access administration pages',
+      'access paddle dashboard',
+      'access user profiles',
+      'administer content types',
+      'manage paddle_menu_manager',
+    );
+    $admin_user = $this->drupalCreateUser($permissions);
+    $this->drupalLogin($admin_user);
+
+    // Configure the content type to use moderation.
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType->type);
+    $edit = array(
+      'node_options[moderation]' => TRUE,
+    );
+    $this->drupalPost(NULL, $edit, t('Save content type'));
+  }
+
+  /**
+   * Tests the autocomplete of the Internal link textfield.
+   */
+  public function testInternalLinkAutocomplete() {
+    // We create some node to test with.
+    $default_node_title = 'Test node <num>';
+    $node_num = 1;
+    $lang_index = 0;
+    foreach ($this->langcodes as $node_lang) {
+      // Set the language on the other side.
+      $this->drupalGet('admin', array('query' => array('language' => $node_lang)));
+      for ($i = 0; $i < 8; $i++) {
+        $node_title = str_replace('<num>', $node_num + $i, $default_node_title);
+        $node = array(
+          'type' => $this->contentType->type,
+          'title' => $node_title,
+          'language' => $node_lang,
+          'body' => array(
+            $node_lang => array(array()),
+          ),
+        );
+        $node = $this->drupalCreateNode($node);
+
+        // Check that on the autocomplete path for the title we get one result.
+        $url = 'paddle_menu_manager/internal_link_autocomplete_callback/' . $node_title;
+        $this->assertValidityOfAutocompleteURL($url, 1, 'For each node with different title only one result is returned.');
+
+        // Check that on the autocomplete path for the node path we get only
+        // one result.
+        $url = 'paddle_menu_manager/internal_link_autocomplete_callback/node/' . $node->nid;
+        $this->assertValidityOfAutocompleteURL($url, 1, 'For each node with different path only one result is returned.');
+      }
+
+      // Check that on the autocomplete path for the title we get correct number
+      // of nodes.
+      $url = 'paddle_menu_manager/internal_link_autocomplete_callback/Test node';
+      $this->assertValidityOfAutocompleteURL($url, 8, 'For each language we should get only the nodes with this language.');
+
+      // Now try searching for nodes by path like "node/" which should get all
+      // the nodes for the current language.
+      $url = 'paddle_menu_manager/internal_link_autocomplete_callback/node/';
+      $this->assertValidityOfAutocompleteURL($url, 8, 'For each language we should get only the nodes with this language.');
+
+      // Now try searching for nodes by path like "node/" but entering
+      // only "node".
+      $url = 'paddle_menu_manager/internal_link_autocomplete_callback/node';
+      $this->assertValidityOfAutocompleteURL($url, 8, 'For each language we should get only the nodes with this language.');
+
+      // Add some more nodes so we have 50 total.
+      for ($i = 8; $i < 50; $i++) {
+        $node_title = str_replace('<num>', $node_num + $i, $default_node_title);
+        $node = array(
+          'type' => $this->contentType->type,
+          'title' => $node_title,
+          'language' => $node_lang,
+          'body' => array(
+            $node_lang => array(array()),
+          ),
+        );
+        $this->drupalCreateNode($node);
+      }
+
+      // Check that on the autocomplete path for the "node/1" we get 10
+      // results - node/1, node/10, node/11 - nid search work with like not
+      // with equals.
+      for ($i = 1; $i < 5; $i++) {
+        $url = 'paddle_menu_manager/internal_link_autocomplete_callback/node/' . ($i + ($lang_index * 5));
+        $this->assertValidityOfAutocompleteURL($url, 10, 'The nid search works with like not with equals.');
+      }
+      $lang_index++;
+    }
+
+    // Test if by passing random title we get 0 results.
+    $url = 'paddle_menu_manager/internal_link_autocomplete_callback/Pieter plet plete prez pet pleta preplita';
+    $this->assertValidityOfAutocompleteURL($url, 0, 'For non-existing node title we get no results.');
+
+    // Test if by passing non-existing node path we get 0 results.
+    $url = 'paddle_menu_manager/internal_link_autocomplete_callback/node/5698';
+    $this->assertValidityOfAutocompleteURL($url, 0, 'For non-existing node path we get no results.');
+
+    // Create a menu and clone it so we have a fully functional
+    // menu translation set.
+    $menu = $this->createMenu($this->langcodes[3]);
+    paddle_menu_manager_create_menu_translations($menu);
+
+    // Test if the menu item save allows non-node paths.
+    $edit = array(
+      'link_title' => $this->randomString(32),
+      'description' => $this->randomString(20),
+      'navigation' => $menu['menu_name'] . ':0',
+      'content_button' => 'internal',
+      'internal_link' => 'user/1',
+    );
+
+    $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu['menu_name'] . '/add', $edit, t('Save'));
+
+    // Test if confirmation message appeared.
+    $this->assertText(t('The menu item has been saved successfully.'), 'Confirmation message displayed.');
+
+    // Test if the save was successful.
+    $result = db_select('menu_links', 'ml')
+      ->fields('ml')
+      ->condition('ml.link_title', $edit['link_title'])
+      ->condition('ml.menu_name', $menu['menu_name'])
+      ->condition('ml.language', $menu['language'])
+      ->condition('ml.link_path', $edit['internal_link'])
+      ->execute();
+
+    $this->assertEqual(1, $result->rowCount(), 'The menu item was added in the database.');
+
+    $node = array(
+      'type' => $this->contentType->type,
+      'title' => $this->randomName(),
+    );
+    $node = $this->drupalCreateNode($node);
+
+    // Test the save of the menu item when adding a path like
+    // "node->title (node/[nid])".
+    $edit = array(
+      'link_title' => $this->randomString(32),
+      'description' => $this->randomString(20),
+      'navigation' => $menu['menu_name'] . ':0',
+      'content_button' => 'internal',
+      'internal_link' => $node->title . ' (node/' . $node->nid . ')',
+    );
+
+    $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu['menu_name'] . '/add', $edit, t('Save'));
+
+    // Test if confirmation message appeared.
+    $this->assertText(t('The menu item has been saved successfully.'), 'Confirmation message displayed.');
+
+    // Test if the save was successful.
+    $result = db_select('menu_links', 'ml')
+      ->fields('ml')
+      ->condition('ml.link_title', $edit['link_title'])
+      ->condition('ml.menu_name', $menu['menu_name'])
+      ->condition('ml.language', $menu['language'])
+      ->condition('ml.link_path', 'node/' . $node->nid)
+      ->execute();
+
+    $this->assertEqual(1, $result->rowCount(), 'The menu item was added in the database.');
+
+    // Test for node with "/" in the title.
+    $this->drupalGet('admin', array('query' => array('language' => 'en')));
+    $node = array(
+      'type' => $this->contentType->type,
+      'title' => 'Test /my node/ gone',
+      'language' => 'en',
+      'body' => array(
+        'en' => array(array()),
+      ),
+    );
+    $node = $this->drupalCreateNode($node);
+    // Check that on the autocomplete path for the title we get correct result.
+    $url = 'paddle_menu_manager/internal_link_autocomplete_callback/' . $node->title;
+    $this->assertValidityOfAutocompleteURL($url, 1, 'For node with "/" in the title the result is correct.');
+  }
+
+  /**
+   * Asserts that on autocomplete URL the returned data is correct.
+   *
+   * The method will first test if the returned json is valid and then if the
+   * returned number of results is correct.
+   *
+   * @param string $url
+   *   The URL of the autocomplete path.
+   * @param int $number_results
+   *   The number of results we expect to be returned on this path.
+   * @param string $message
+   *   The message to be displayed for the number assertion.
+   */
+  protected function assertValidityOfAutocompleteUrl($url, $number_results, $message) {
+    $results = (array) json_decode($this->drupalGet($url));
+    /* Check for !== NULL because json_decode will return NULL if the passed
+     * value is invalid json. */
+    $this->assertTrue($results !== NULL, 'The returned data on the autocomplete path is a valid json.');
+    $this->assertEqual(count($results), $number_results, $message);
+  }
+
+}

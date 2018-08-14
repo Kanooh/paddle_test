@@ -1,0 +1,197 @@
+<?php
+
+/**
+ * @file
+ * CRUD tests for the Paddle Mega Dropdown module.
+ */
+
+class PaddleMegaDropdownCRUDTestCase extends DrupalWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'CRUD test',
+      'description' => 'Tests the creating, reading, updating and deleting of mega dropdowns.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp();
+
+    // Create the manager role.
+    $manager_role = new stdClass();
+    $manager_role->name = 'Site Manager';
+    user_role_save($manager_role);
+
+    // Create the editor role.
+    $editor_role = new stdClass();
+    $editor_role->name = 'Editor';
+    user_role_save($editor_role);
+
+    // Create the chief editor role.
+    $chief_editor_role = new stdClass();
+    $chief_editor_role->name = 'Chief Editor';
+    user_role_save($chief_editor_role);
+
+    module_enable(array('paddle_mega_dropdown'));
+  }
+
+  /**
+   * Tests creating, reading, updating and deleting of Paddle Mega Dropdowns.
+   */
+  public function testPaddleMegaDropdownCRUD() {
+    // Check that the database table exists and is empty.
+    $this->assertTrue(db_table_exists('paddle_mega_dropdown'), 'The Paddle Mega Dropdown database table exists.');
+    $this->assertPaddleMegaDropdownTableEmpty('The Paddle Mega Dropdown database is initially empty.');
+
+    // Check if a new Paddle Mega Dropdown can be saved to the database.
+    $values = $this->randomPaddleMegaDropdownValues();
+    $mega_dropdown = $this->createPaddleMegaDropdown($values);
+    $mega_dropdown->save();
+    $this->assertPaddleMegaDropdownTableNotEmpty('The Paddle Mega Dropdown database table is no longer empty after creating a Paddle Mega Dropdown.');
+
+    // Check that the Paddle Mega Dropdown data can be read from the database.
+    $retrieved_mega_dropdown = paddle_mega_dropdown_load($mega_dropdown->pmdid);
+    $this->assertPaddleMegaDropdownProperties($retrieved_mega_dropdown, $values, 'The Paddle Mega Dropdown that was saved to the database can be read correctly.');
+
+    // Update the Paddle Mega Dropdown and check that the new values were
+    // written to the database.
+    $new_values = $this->randomPaddleMegaDropdownValues();
+    $this->updatePaddleMegaDropdown($mega_dropdown, $new_values);
+    $mega_dropdown->save();
+    $this->assertPaddleMegaDropdownProperties($mega_dropdown, $new_values, 'The Paddle Mega Dropdown has been updated correctly.');
+
+    // Delete the Paddle Mega Dropdown. The database should be empty again.
+    $mega_dropdown->delete();
+    $this->assertPaddleMegaDropdownTableEmpty('The Paddle Mega Dropdown can be deleted from the database.');
+  }
+
+  /**
+   * Check if the Paddle Mega Dropdown database table is empty.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertPaddleMegaDropdownTableEmpty($message = '') {
+    $result = (bool) db_select('paddle_mega_dropdown', 'pmd')->fields('pmd')->execute()->fetchAll();
+    return $this->assertFalse($result, $message ?: 'The Paddle Mega Dropdown database table is empty.');
+  }
+
+  /**
+   * Check if the Paddle Mega Dropdown database table is not empty.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertPaddleMegaDropdownTableNotEmpty($message = '') {
+    $result = (bool) db_select('paddle_mega_dropdown', 'pmd')->fields('pmd')->execute()->fetchAll();
+    return $this->assertTrue($result, $message ?: 'The Paddle Mega Dropdown database table is not empty.');
+  }
+
+  /**
+   * Random values for all properties of the Paddle Mega Dropdown entity.
+   *
+   * @returns array
+   *   An associative array of random values, keyed by property name.
+   */
+  public function randomPaddleMegaDropdownValues() {
+    return array(
+      // Random fake menu link id.
+      'mlid' => mt_rand(1, 9999),
+      'language' => array_rand(language_list()),
+    );
+  }
+
+  /**
+   * Creates a new Paddle Mega Dropdown entity.
+   *
+   * @param array $values
+   *   An optional associative array of values, keyed by property name. Random
+   *   values will be applied to all omitted properties.
+   *
+   * @return object
+   *   A new Paddle Mega Dropdown entity.
+   */
+  public function createPaddleMegaDropdown(array $values = array()) {
+    // Provide some default values.
+    $values += $this->randomPaddleMegaDropdownValues();
+    $mega_dropdown = entity_create('paddle_mega_dropdown', $values);
+    return $mega_dropdown;
+  }
+
+  /**
+   * Updates the given Paddle Mega Dropdown with the given properties.
+   *
+   * @param Entity $mega_dropdown
+   *   The Paddle Mega Dropdown entity to update.
+   * @param array $values
+   *   An associative array of values to apply to the entity, keyed by property
+   *   name.
+   */
+  public function updatePaddleMegaDropdown(Entity $mega_dropdown, array $values) {
+    foreach ($values as $property => $value) {
+      $mega_dropdown->$property = $value;
+    }
+  }
+
+  /**
+   * The properties of the Paddle Mega Dropdown should match the given values.
+   *
+   * @param Entity $mega_dropdown
+   *   The Paddle Mega Dropdown entity to check.
+   * @param array $values
+   *   An associative array of values to check, keyed by property name.
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertPaddleMegaDropdownProperties(Entity $mega_dropdown, array $values, $message = '') {
+    return $this->assertEntityProperties('paddle_mega_dropdown', $mega_dropdown, $values, $message);
+  }
+
+  /**
+   * Check if the properties of the given entity match the given values.
+   *
+   * @param string $entity_type
+   *   The type of the entity.
+   * @param Entity $entity
+   *   The entity to check.
+   * @param array $values
+   *   An associative array of values to check, keyed by property name.
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertEntityProperties($entity_type, Entity $entity, array $values, $message = '') {
+    $wrapper = entity_metadata_wrapper($entity_type, $entity);
+
+    $result = TRUE;
+    foreach ($values as $property => $value) {
+      if (is_array($value)) {
+        $result &= $this->assertFalse(array_diff($value, $wrapper->$property->value()), format_string('The %property property has the correct value.', array('%property' => $property)));
+      }
+      else {
+        $result &= $this->assertEqual($wrapper->$property->value(), $value, format_string('The %property property has the correct value.', array('%property' => $property)));
+      }
+    }
+
+    return $this->assertTrue($result, $message ?: format_string('The @entity contains the given values.', array('@entity' => $entity_type)));
+  }
+
+}

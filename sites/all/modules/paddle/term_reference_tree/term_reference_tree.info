@@ -1,0 +1,11 @@
+name = Term Reference Tree
+description = An expanding/collapsing tree widget for selecting terms in a taxonomy term reference field
+package = Other
+core = 7.x
+
+dependencies[] = taxonomy
+
+; Information added by drush on 2013-04-11
+version = "7.x-1.x-dev"
+project = "term_reference_tree"
+datestamp = "1365686820"

@@ -1,0 +1,157 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle CKEditor profiles feature.
+ */
+
+include_once 'paddle_ckeditor_profiles.features.inc';
+
+/**
+ * Implements hook_element_info_alter().
+ *
+ * Provide settings for CKEditor on the pages where it is active.
+ * @see ckeditor_element_info_alter()
+ */
+function paddle_ckeditor_profiles_element_info_alter(&$types) {
+  $types['text_format']['#pre_render'][] = 'paddle_ckeditor_profiles_pre_render_text_format';
+}
+
+/**
+ * Pre-render callback for text format fields.
+ *
+ * Provide settings for CKEditor on the pages where it is active.
+ * @see ckeditor_pre_render_text_format()
+ */
+function paddle_ckeditor_profiles_pre_render_text_format($element) {
+  $init = &drupal_static(__FUNCTION__, FALSE);
+
+  if (!isset($element['#format']) || !isset($element['format']) || !isset($element['value']) || $init) {
+    return $element;
+  }
+
+  // Only run this once, there might be multiple WYSIWYGS on the page.
+  $init = TRUE;
+
+  // Tell CKEditor which CSS files are needed to apply the frontend styling to
+  // the WYSIWYG editor.
+  // @see http://docs.cksource.com/ckeditor_api/symbols/CKEDITOR.config.html
+  $settings = array(
+    'contentsCss' => paddle_ckeditor_profiles_get_active_theme_css(),
+  );
+  drupal_add_js(array('paddle_ckeditor_profiles' => $settings), 'setting');
+
+  return $element;
+}
+
+/**
+ * AJAX callback for the media format form submit.
+ */
+function paddle_ckeditor_profiles_submit_callback($form, &$form_state) {
+  return $form;
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * @todo Document this code.
+ */
+function paddle_ckeditor_profiles_form_alter(&$form, &$form_state, $form_id) {
+
+  // Add after build to body field, applies to all forms.
+  if (isset($form['body']) && $form['body']) {
+    $form['body'][LANGUAGE_NONE]['#after_build'][] = 'paddle_ckeditor_profiles_body_field_after_build';
+  }
+
+  if ($form_id == 'views_exposed_form' && !empty($form['#info']['filter-filename'])) {
+    $settings = array('throbber_image_path' => base_path() . drupal_get_path('theme', 'paddle_admin_theme') . '/images/throbber.gif');
+    $form['#attached']['js'][] = array(
+      'data' => array(
+        'paddle_ckeditor_profiles' => $settings,
+      ),
+      'type' => 'setting',
+    );
+    $form['#attached']['js'][] = array(
+      'data' => drupal_get_path('module', 'paddle_ckeditor_profiles') . '/js/paddle_ckeditor_profiles.js',
+      'type' => 'file',
+    );
+    $form['#action'] = '#';
+  }
+}
+
+/**
+ * Removes the text formatting options for the body field.
+ */
+function paddle_ckeditor_profiles_body_field_after_build($field) {
+  if (isset($field[0]['format'])) {
+    $field[0]['format']['#access'] = FALSE;
+  }
+  return $field;
+}
+
+/**
+ * Provides paths to CSS files which relate to the active front-end theme.
+ *
+ * @return array
+ *   Array containing paths to CSS files.
+ */
+function paddle_ckeditor_profiles_get_active_theme_css() {
+  global $base_path, $base_url;
+
+  // Get the active paddle theme.
+  $themes = paddle_themer_available_themes();
+
+  // Apply default paddle_theme css.
+  $paddle_theme_path = drupal_get_path('theme', 'paddle_theme');
+  $theme_css = array(
+    $base_path . drupal_get_path('module', 'ckeditor') . '/css/ckeditor.css',
+    $base_path . $paddle_theme_path . '/css/resets.css',
+    $base_path . $paddle_theme_path . '/css/vo_branding.css',
+    $base_path . $paddle_theme_path . '/css/typography.css',
+    $base_path . $paddle_theme_path . '/css/paddle_wysiwyg.css',
+  );
+
+  // Apply paddle_theme_branded fonts.css if its an active theme.
+  if (!empty($themes[variable_get('paddle_theme')])) {
+    $active_theme = $themes[variable_get('paddle_theme')];
+
+    if ($active_theme->theme == 'paddle_theme_branded') {
+      $theme_css[] = $base_path . drupal_get_path('theme', 'paddle_theme_branded') . '/css/branded-fonts.css';
+    }
+
+    // Get the filename of the css for the active theme.
+    ctools_include('css');
+    $filename = file_create_url(ctools_css_retrieve($active_theme->name));
+
+    // Apply any custom style changes from the generated css file.
+    if (!empty($filename) && $filename <> $base_url . '/') {
+      $theme_css[] = $filename;
+    }
+  }
+
+  return $theme_css;
+}
+
+/**
+ * Implements hook_ckeditor_plugin().
+ */
+function paddle_ckeditor_profiles_ckeditor_plugin() {
+  $plugins = array();
+
+  // Changes the default values of tables.
+  $plugins['paddle_table_default_values'] = array(
+    'name' => 'paddle_table_default_values',
+    'desc' => t('Paddle default table values.'),
+    'path' => drupal_get_path('module', 'paddle_ckeditor_profiles') . '/js/paddle_table_default_values/',
+    'buttons' => array(),
+  );
+
+  // Adds zebra striping, hover effect and table borders to tables.
+  $plugins['paddle_table_additional_properties'] = array(
+    'name' => 'paddle_table_additional_properties',
+    'desc' => t('Paddle paddle_table_additional_properties zebra striping.'),
+    'path' => drupal_get_path('module', 'paddle_ckeditor_profiles') . '/js/paddle_table_additional_properties/',
+    'buttons' => array(),
+  );
+
+  return $plugins;
+}

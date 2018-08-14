@@ -1,0 +1,8 @@
+name = Paddle Scald file
+description = Allows the creation and edition of Files.
+package = Scald Providers
+core = 7.x
+dependencies[] = scald
+
+files[] = includes/scald_file_views_handler_field_filesize.inc
+files[] = tests/paddle_scald_file.test

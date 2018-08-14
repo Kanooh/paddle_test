@@ -1,0 +1,314 @@
+/* @admin home icon link */
+.kanooh-logo-wrapper, .paddle-logo-wrapper {
+  float: left;
+  white-space: nowrap;
+}
+
+.admin-home {
+  background: url(../images/websites_icon.png) no-repeat;
+  color: $c-white;
+  font-size: 85%;
+  width: 143px;
+  height: 40px;
+  display: inline-block;
+  vertical-align: middle;
+}
+.admin-home span {
+  display: block;
+  overflow: hidden;
+  text-indent: 100%;
+  white-space: nowrap;
+}
+.kanooh-logo {
+  width: 72px;
+  height: 26px;
+  display: inline-block;
+  background: url(../images/kanooh-logo.png) no-repeat;
+  vertical-align: middle;
+  margin-left: 15px;
+}
+#header {
+  background-color: $background-white;
+  left: 0;
+  top: 0;
+  width: 100%;
+  z-index: 100;
+}
+#header_dots {
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+.menu-bg {
+  background-color: $menu-green-color;
+  box-shadow: 0px 2px 6px 0px rgba(50, 50, 50, 0.36);
+}
+#block-paddle-core-content-search {
+  @media screen and (min-width: $responsive-large) {
+    text-align: right;
+  }
+}
+#paddle-core-header-top-search-form .form-type-textfield {
+  margin: 0;
+}
+#paddle-core-header-top-search-form input[type="text"] {
+  padding: 2px;
+  max-width: 375px;
+}
+#paddle-core-header-top-search-form input[type="submit"] {
+  display: none;
+}
+#paddle-core-header-top-search-form button {
+  height: 32px;
+  background-color: #bdc3c7;
+  font-size: 1.2em;
+  color: $c-white;
+  border: 0;
+}
+#paddle-core-header-top-search-form button:hover {
+  cursor: pointer;
+}
+.menu_wrapper .menu_wrapper {
+  background: $menu-darkergreen-color;
+  width: 100%;
+  @media screen and (min-width: $responsive-large) {
+    z-index: 1000;
+    position: absolute;
+    top: auto;
+    clear: both;
+    left: 0;
+  }
+}
+ul li {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.menu a:link,
+.menu a:visited {
+  color: #ffffff;
+  display: block;
+  padding: 8px 20px 6px;
+  text-decoration: none;
+}
+.level-3 .active-trail a,
+.level-3 a:hover {
+  text-decoration: underline;
+}
+ul.menu ul.menu .leaf a {
+  color: #43474a;
+  padding: 4px 10px 0;
+}
+.menu a.active-trail,
+.menu a:hover {
+  color: $c-white;
+}
+.menu > .active-trail a {
+  color: $c-white;
+  background-color: $menu-darkergreen-color;
+}
+.level-2 > .menu-item > a:hover {
+  background-color: $menu-darkergreen-color;
+}
+.menu .menu span {
+  display: block;
+  padding-bottom: 2px;
+}
+#header_top .with-secondary-menu {
+  line-height: 26px;
+  position: relative;
+}
+#header_bottom {
+  height: 37px;
+  margin-top: 35px;
+  background: $c-white;
+}
+#header_bottom.scroll-to-fixed-fixed {
+  margin-top: 75px;
+}
+.header-bar {
+  margin: 0 auto;
+  max-width: 1388px;
+  padding: 0 1.8302765611834%;
+}
+#toolbar {
+  position: relative;
+  text-align: center;
+}
+#header_top {
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: #f6f6f6;
+    -webkit-transition: height 0.3s;
+    -moz-transition: height 0.3s;
+    transition: height 0.3s;
+    padding: 5px 0;
+}
+
+#header_top .cbp-af-inner {
+    width: 90%;
+    max-width: 69em;
+    margin: 0 auto;
+    padding: 0 1.875em;
+}
+
+#header_top h1,
+#header_top nav {
+    display: inline-block;
+    position: relative;
+}
+
+ /* We just have one-lined elements, so we'll center the elements with the line-height set to the height of the header */
+#header_top h1,
+#header_top nav a {
+    line-height: 230px;
+}
+
+#header_top h1 {
+    text-transform: uppercase;
+    color: #333;
+    letter-spacing: 4px;
+    font-size: 4em;
+    margin: 0;
+    float: left;
+}
+
+#header_top nav {
+    float: right;
+}
+
+#header_top nav a {
+    color: #aaa;
+    font-weight: 700;
+    margin: 0 0 0 20px;
+    font-size: 1.4em;
+}
+
+#header_top nav a:hover {
+    color: #333;
+}
+
+/* Transitions and class for reduced height */
+#header_top h1,
+#header_top nav a {
+    -webkit-transition: all 0.3s;
+    -moz-transition: all 0.3s;
+    transition: all 0.3s;
+}
+
+.cbp-af-header.cbp-af-header-shrink {
+    height: 90px;
+}
+
+.cbp-af-header.cbp-af-header-shrink h1,
+.cbp-af-header.cbp-af-header-shrink nav a {
+    line-height: 90px;
+}
+
+.cbp-af-header.cbp-af-header-shrink h1 {
+    font-size: 2em;
+}
+
+.personal-info {
+  position: relative;
+  width: 200px;
+  height: 50px;
+  text-align: left;
+
+  .user-picture {
+    float: right;
+    margin-left: 10px;
+    background-color: #d7d7d7;
+
+    img {
+      max-width: 40px;
+      max-height: 40px;
+      height: auto;
+    }
+  }
+
+  .username {
+    margin: 0;
+    padding: 5px 0 0;
+    font-style: italic;
+    color: #2c8fc6;
+
+    p {
+      text-align: right;
+    }
+  }
+
+  .user-links {
+    display: none;
+    position: absolute;
+    top: 50px;
+    right: 0;
+    z-index: 2000;
+    width: 200px;
+    border: 1px solid;
+    padding: 0 10px 10px 10px;
+    background-color: #FFFFFF;
+
+    li {
+      border-bottom: 1px solid #A3A3A3;
+      padding-bottom: 10px;
+      padding-top: 10px;
+
+      a {
+        display: block;
+        color: #A3A3A3;
+
+        i {
+          margin-left: 10px;
+        }
+      }
+
+      &.last {
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+    }
+  }
+}
+
+// Site Settings Menu
+.site-settings-menu {
+  position: relative;
+  display: inline-block;
+  width: auto;
+  margin: 0 auto;
+  font-size: .85em;
+
+  li {
+    float: left;
+    margin: 0 4px;
+    box-shadow: 0 2px 6px 0 rgba(50, 50, 50, 0.36);
+
+    a {
+      display: block;
+      height: 30px;
+    }
+  }
+
+  .site-settings-wrench {
+    width: 30px;
+    background-image: url("../images/wrench.png");
+  }
+
+  .site-settings-help {
+    width: 30px;
+    background-image: url("../images/question_mark.png");
+  }
+
+  .site-settings-name {
+    overflow: hidden;
+    max-width: 200px;
+    margin: 0 10px;
+    line-height: 30px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}

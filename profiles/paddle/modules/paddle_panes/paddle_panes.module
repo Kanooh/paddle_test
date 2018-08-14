@@ -1,0 +1,589 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Panes feature.
+ */
+
+include_once 'paddle_panes.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_panes_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_panes_permission() {
+  ctools_include('plugins');
+
+  $permissions = array();
+  $modules = system_list('module_enabled');
+
+  // Create a permission for each available CTools content type plugin.
+  foreach (ctools_get_plugins('ctools', 'content_types') as $name => $plugin) {
+    $permissions["edit $name content in landing pages"] = array(
+      'title' => t('Edit %title content in landing pages', array('%title' => $plugin['title'])),
+      'description' => t('Allows to edit %title content from the %module module in landing pages.', array('%title' => $plugin['title'], '%module' => $modules[$plugin['module']]->info['name'])),
+    );
+  }
+  return $permissions;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_panes_menu() {
+  $items = array();
+
+  $items['admin/paddle_panes/node_autocomplete_callback'] = array(
+    'page callback' => 'paddle_panes_node_autocomplete_callback',
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+
+  $items['paddle_panes/taxonomy/autocomplete'] = array(
+    'title' => 'Autocomplete taxonomy',
+    'page callback' => 'paddle_panes_taxonomy_autocomplete',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Autocomplete callback for nodes by title or real path.
+ *
+ * @param string $parent_lang
+ *   The language of the parent node where the autocomplete is being called.
+ * @param string $content_types
+ *   The content types in which should be searched. If more than 1 is needed use
+ *   comma-separated list. If this is omitted, or set to the string 'all',
+ *   results from all content types will be returned.
+ * @param string $string
+ *   The string that will be searched.
+ * @param int $nid
+ *   When the user searches for "node/<nid>" this will hold the nid.
+ *
+ * Searches for a node by title or real path, but then identifies it by nid,
+ * so the actual returned value can be used later by the form.
+ *
+ * The returned $matches array has
+ * - key: The title, with the identifying node path in brackets, like
+ *     "Some node title (node/444)"
+ * - value: the title which will be displayed in the autocompleted dropdown.
+ */
+function paddle_panes_node_autocomplete_callback($parent_lang = '', $content_types = '', $string = "", $nid = 0) {
+  global $language_content;
+
+  $results = array();
+  if ($string) {
+    $language = !empty($parent_lang) ? $parent_lang : $language_content->language;
+    $query = db_select('node', 'n');
+    $query->join('workbench_moderation_node_history', 'wmh', 'wmh.nid = n.nid');
+    $query->fields('n', array('nid', 'title'))
+      ->condition('wmh.state', 'archived', '<>')
+      ->condition('wmh.is_current', 1, '=')
+      ->condition('language', $language, '=')
+      ->addTag('node_access');
+
+    // Allow filtering on a comma-separated list of content types.
+    if ($content_types != 'all' && $content_types != '') {
+      $content_types = explode(',', str_replace(' ', '', $content_types));
+      $query->condition('type', $content_types, 'IN');
+    }
+
+    if ($string == 'node' && is_numeric($nid) && $nid !== 0) {
+      // The search string is a node path.
+      $query->condition('n.nid', $nid, '=');
+    }
+    elseif ($string != 'node') {
+      // The search string is a title or something else.
+      $query->condition('title', '%' . db_like($string) . '%', 'LIKE');
+    }
+    // If neither is true we basically show the first 10 nodes we can find.
+    $query->range(0, 10);
+    $result = $query->execute();
+    foreach ($result as $node) {
+      $results[$node->title . " (node/$node->nid)"] = check_plain($node->title) . " (node/$node->nid)";
+    }
+  }
+
+  drupal_json_output($results);
+}
+
+/**
+ * Page callback: Outputs JSON for taxonomy autocomplete suggestions.
+ *
+ * Based on taxonomy_autocomplete(), but not tied to the Field API, and allows
+ * to filter by vocabulary ids.
+ *
+ * @see taxonomy_autocomplete()
+ *
+ * @param string $nid
+ *   The parent node calling this function.
+ * @param string $vids
+ *   A comma-separated list of vocabulary ids. Only terms in these vocabularies
+ *   will be returned. Set to 0 to return terms from all vocabularies.
+ * @param string $tags_typed
+ *   (optional) A comma-separated list of term names entered in the
+ *   autocomplete form element. Only the last term is used for autocompletion.
+ *   Defaults to '' (an empty string).
+ */
+function paddle_panes_taxonomy_autocomplete($nid, $vids = '0', $tags_typed = '') {
+  global $language_content;
+
+  // If the request has a '/' in the search text, then the menu system will have
+  // split it into multiple arguments, recover the intended $tags_typed.
+  $args = func_get_args();
+  // Shift off the $vids and $nid argument.
+  array_shift($args);
+  array_shift($args);
+  $tags_typed = implode('/', $args);
+
+  // The user enters a comma-separated list of tags. We only autocomplete the
+  // last tag.
+  $tags_typed = drupal_explode_tags($tags_typed);
+  $tag_last = drupal_strtolower(array_pop($tags_typed));
+
+  if ($nid > 0) {
+    $node = node_load($nid);
+  }
+
+  $language = $node ? $node->language : $language_content->language;
+
+  $term_matches = array();
+  if ($tag_last != '') {
+    $query = db_select('taxonomy_term_data', 't');
+    $query->addTag('translatable');
+    $query->addTag('term_access');
+
+    // Do not select already entered terms.
+    if (!empty($tags_typed)) {
+      $query->condition('t.name', $tags_typed, 'NOT IN');
+    }
+    // Select rows that match by term name.
+    $query
+      ->fields('t', array('tid', 'name'))
+      ->condition('t.name', '%' . db_like($tag_last) . '%', 'LIKE')
+      ->condition('t.language', $language, '=')
+      ->range(0, 10);
+
+    // Optionally filter by vocabulary ids.
+    $vids = $vids == '0' ? array() : explode(',', $vids);
+    if (!empty($vids)) {
+      $query->condition('t.vid', $vids);
+    }
+
+    $tags_return = $query
+      ->execute()
+      ->fetchAllKeyed();
+
+    $prefix = count($tags_typed) ? drupal_implode_tags($tags_typed) . ', ' : '';
+
+    foreach ($tags_return as $tid => $name) {
+      $n = $name;
+      // Term names containing commas or quotes must be wrapped in quotes.
+      if (strpos($name, ',') !== FALSE || strpos($name, '"') !== FALSE) {
+        $n = '"' . str_replace('"', '""', $name) . '"';
+      }
+      $term_matches[$prefix . $n] = check_plain($name);
+    }
+  }
+
+  drupal_json_output($term_matches);
+}
+
+/**
+ * IMAGE PANE.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_panes_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_panes_image_caption' => array(
+      'variables' => array(
+        'caption_text' => NULL,
+      ),
+    ),
+    'paddle_panes_image_pane' => array(
+      'variables' => array(
+        'pane_content' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * Returns HTML for the caption of an image pane.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - caption_text: the caption text that is printed on the frontend.
+ *
+ * @ingroup themeable
+ */
+function theme_paddle_panes_image_caption($variables) {
+  $output = '';
+
+  if (!empty($variables['caption_text'])) {
+    $output = '<figcaption class="image-pane-caption"><div class=caption-text>' . $variables['caption_text'] . '</div></figcaption>';
+  }
+
+  return $output;
+}
+
+/**
+ * Returns HTML to place the image pane inside a figure element.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - pane_content: the image pane content.
+ *
+ * @ingroup themeable
+ */
+function theme_paddle_panes_image_pane($variables) {
+  $output = '';
+
+  if (!empty($variables['pane_content'])) {
+    $output = '<figure>' . $variables['pane_content'] . '</figure>';
+  }
+
+  return $output;
+}
+
+/**
+ * Validates the taxonomy terms autocomplete field entries.
+ *
+ * Based on taxonomy_autocomplete_validate(), but:
+ * - does not need a field, only a form element
+ * - allows all vocabularies unless one is specified in the autocomplete path
+ * - does not allow to define and save new terms.
+ *
+ * @see taxonomy_autocomplete_validate()
+ */
+function paddle_panes_taxonomy_autocomplete_validate($element, &$form_state) {
+  // Autocomplete widgets do not send their tids in the form, so we must detect
+  // them here and process them independently.
+  $value = array();
+  if ($tags = $element['#value']) {
+    // Collect candidate vocabularies.
+    $vocabularies = array();
+    if (is_string($element['#autocomplete_path'])) {
+      $url_parts = explode('/', $element['#autocomplete_path']);
+      if (count($url_parts) == 5) {
+        $vocabulary_id = $url_parts[4];
+        if ($vocabulary = taxonomy_vocabulary_load($vocabulary_id)) {
+          $vocabularies[$vocabulary->vid] = $vocabulary;
+        }
+      }
+    }
+
+    // Translate term names into actual terms.
+    $typed_terms = drupal_explode_tags($tags);
+    foreach ($typed_terms as $typed_term) {
+      // See if the term exists and return the tid.
+      $taxonomy_term_filter = array(
+        'name' => trim($typed_term),
+        'vid' => array_keys($vocabularies),
+      );
+
+      // Set the language of the term by the language of the parent element
+      // if it exists, otherwise use the language of the page.
+      if (!empty($element['#langcode'])) {
+        $taxonomy_term_filter['language'] = $element['#langcode'];
+      }
+      else {
+        $taxonomy_term_filter['language'] = $form_state['contexts']['panelizer']->data->language;
+      }
+
+      if ($possibilities = taxonomy_term_load_multiple(array(), $taxonomy_term_filter)) {
+        $term = array_pop($possibilities);
+        $value[] = (array) $term;
+      }
+    }
+  }
+
+  form_set_value($element, $value, $form_state);
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ */
+function paddle_panes_entity_info_alter(&$entity_info) {
+  // Define two custom view modes for the Listing content type plugin.
+  $entity_info['node']['view modes']['listing_title'] = array(
+    'label' => t('Title listing'),
+    'custom settings' => TRUE,
+  );
+  $entity_info['node']['view modes']['listing_teaser'] = array(
+    'label' => t('Teaser listing'),
+    'custom settings' => TRUE,
+  );
+  $entity_info['node']['view modes']['spotlight'] = array(
+    'label' => t('Spotlight'),
+    'custom settings' => FALSE,
+  );
+
+  // Define two custom view modes for node_content panes. By default these are
+  // disabled. Only if a content type specifies its own custom settings (by
+  // toggling the 'custom display settings' switch in the Field UI interface)
+  // will these content types become available in the node_content pane.
+  $entity_info['node']['view modes']['node_content_pane_summary'] = array(
+    'label' => t('Node content pane summary'),
+    'custom settings' => FALSE,
+  );
+  $entity_info['node']['view modes']['node_content_pane_full'] = array(
+    'label' => t('Node content pane full'),
+    'custom settings' => FALSE,
+  );
+}
+
+/**
+ * Implements template_preprocess_node().
+ */
+function paddle_panes_preprocess_node(&$vars) {
+  // Add a theme hook suggestion for nodes that are displayed in the custom
+  // view modes for the Listing and Node Content content type plugins so they
+  // can be targeted with template files such as
+  // node--landing-page--listing-title.tpl.php and node--listing-teaser.tpl.php.
+  if (in_array($vars['view_mode'], array(
+    'listing_title',
+    'spotlight',
+    'node_content_pane_full',
+    'node_content_pane_summary',
+  ))) {
+    $vars['theme_hook_suggestions'][] = 'node__' . $vars['view_mode'];
+    $vars['theme_hook_suggestions'][] = 'node__' . $vars['type'] . '__' . $vars['view_mode'];
+  }
+
+  if ($vars['view_mode'] == 'listing_teaser') {
+    $vars['theme_hook_suggestions'][] = 'node__listing_teaser';
+
+    $image = '';
+    $vars['extra_class'] = '';
+    $field_paddle_featured_image = field_get_items('node', $vars['node'], 'field_paddle_featured_image');
+    if (!empty($field_paddle_featured_image)) {
+      $sid = $field_paddle_featured_image[0]['sid'];
+      $atom = scald_atom_load($sid);
+
+      $vars['extra_class'] = '';
+      if ($atom) {
+        $alt = field_get_items('scald_atom', $atom, 'field_scald_alt_tag');
+        $alt = !empty($alt) ? $alt[0]['value'] : '';
+
+        $image = theme('image_style', array(
+          'style_name' => 'paddle_listing_thumbnail',
+          'path' => $atom->file_source,
+          'alt' => $alt,
+        ));
+
+        $vars['extra_class'] = 'has-image';
+      }
+    }
+
+    $vars['image'] = $image;
+  }
+  elseif ($vars['view_mode'] == 'spotlight') {
+    $image = '';
+    $vars['extra_class'] = '';
+
+    $field_paddle_featured_image = field_get_items('node', $vars['node'], 'field_paddle_featured_image');
+    if (!empty($field_paddle_featured_image)) {
+      $sid = $field_paddle_featured_image[0]['sid'];
+      $atom = scald_atom_load($sid);
+
+      if ($atom) {
+        $alt = field_get_items('scald_atom', $atom, 'field_scald_alt_tag');
+        $alt = !empty($alt) ? $alt[0]['value'] : '';
+
+        $image = theme('image_style', array(
+          'style_name' => 'square',
+          'path' => $atom->file_source,
+          'alt' => $alt,
+        ));
+
+        $vars['extra_class'] = 'has-image';
+      }
+    }
+
+    $text = '';
+    $field_body = field_get_items('node', $vars['node'], 'body');
+    if (!empty($field_body)) {
+      $field = field_view_field('node', $vars['node'], 'body', array(
+        'type' => 'smart_trim_format',
+        'module' => 'smart_trim',
+        'label' => 'hidden',
+        'settings' => array(
+          'more_link' => 0,
+          'summary_handler' => 'full',
+          'trim_length' => 200,
+          'trim_link' => 0,
+          'trim_options' => array(
+            'text' => 'text',
+          ),
+          'trim_suffix' => '...',
+          'trim_type' => 'chars',
+        ),
+      ));
+      $text = strip_tags(render($field));
+    }
+
+    $vars['output'] = array(
+      'image' => $image,
+      'title' => check_plain($vars['node']->title),
+      'created' => format_date($vars['node']->created, 'custom', 'l j F'),
+      'text' => $text,
+      'link' => url('node/' . $vars['node']->nid),
+    );
+  }
+
+  // Add default theme suggestions that cover both view modes for the node
+  // content panes, since in most cases they can be covered by a single template
+  // file.
+  if (in_array($vars['view_mode'], array(
+    'node_content_pane_full',
+    'node_content_pane_summary',
+  ))) {
+    $vars['theme_hook_suggestions'][] = 'node__' . $vars['type'] . '__node_content_pane';
+    $vars['theme_hook_suggestions'][] = 'node__node_content_pane';
+  }
+}
+
+/**
+ * Returns content types that have custom settings for the given view modes.
+ *
+ * @param array $view_modes
+ *   A list of view modes that should be set to 'Use custom display settings'.
+ *
+ * @return array
+ *   An array of content type machine names.
+ */
+function paddle_panes_get_node_types_by_custom_view_modes(array $view_modes) {
+  $node_types = array();
+
+  foreach (array_keys(node_type_get_names()) as $bundle) {
+    $view_mode_settings = field_view_mode_settings('node', $bundle);
+    // @codingStandardsIgnoreStart
+    if (array_reduce($view_modes, function ($result, $mode) use ($view_mode_settings) {
+      return $result && !empty($view_mode_settings[$mode]['custom_settings']);
+    }, TRUE)) {
+      $node_types[] = $bundle;
+    }
+    // @codingStandardsIgnoreEnd
+  }
+
+  return $node_types;
+}
+
+/**
+ * Implements hook_entity_diff().
+ */
+function paddle_panes_entity_diff($old_entity, $new_entity, $context) {
+  if ($context['entity_type'] != 'node' || (empty($old_entity->panelizer) && empty($new_entity->panelizer))) {
+    return array();
+  }
+
+  $old_display = $old_entity->panelizer['page_manager']->display;
+  $new_display = $new_entity->panelizer['page_manager']->display;
+
+  ctools_include('content');
+
+  $panes = array();
+  $old_panes = array();
+  $new_panes = array();
+  foreach ($old_display->content as $pid => $pane) {
+    $panes[$pane->uuid] = $pane;
+    $old_panes[$pane->uuid] = $pane;
+  }
+
+  foreach ($new_display->content as $pid => $pane) {
+    $panes[$pane->uuid] = $pane;
+    $new_panes[$pane->uuid] = $pane;
+  }
+
+  $lines = array();
+  foreach ($panes as $uuid => $pane) {
+    $type = ctools_get_content_type($pane->type);
+
+    // @see diff_entity_fields_diff()
+    $old = array();
+    if (isset($old_panes[$uuid])) {
+      $old = paddle_panes_pane_configuration_info($type, $old_panes[$uuid]->configuration);
+    }
+
+    $new = array();
+    if (isset($new_panes[$uuid])) {
+      $new = paddle_panes_pane_configuration_info($type, $new_panes[$uuid]->configuration);
+    }
+
+    $lines[$uuid] = array(
+      '#name' => t('Changes to pane @uuid', array('@uuid' => $uuid)),
+      '#old' => $old,
+      '#new' => $new,
+    );
+  }
+
+  return $lines;
+}
+
+/**
+ * Gets configuration info about a pane.
+ *
+ * @param array $type
+ *   The pane content type.
+ * @param array $conf
+ *   The pane configuration.
+ *
+ * @return array
+ *   Configuration information about the pane.
+ */
+function paddle_panes_pane_configuration_info($type, $conf) {
+  $info = array();
+
+  if ($function = ctools_plugin_get_function($type, 'configuration info')) {
+    $info = $function($conf);
+  }
+
+  drupal_alter('paddle_panes_pane_configuration_info', $info, $type, $conf);
+
+  return $info;
+}
+
+/**
+ * Implements hook_paddle_panes_pane_configuration_info_alter().
+ */
+function paddle_panes_paddle_panes_pane_configuration_info_alter(&$info, $type, $conf) {
+  if (!empty($type['paddle_panes sections'])) {
+    module_load_include('inc', 'paddle_panes', 'paddle_panes_pane_sections');
+
+    $sections = paddle_panes_pane_sections_configuration_info($conf);
+    $info = array_merge($info, $sections);
+  }
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors_alter().
+ */
+function paddle_panes_paddle_color_palettes_color_selectors_alter(&$data, $theme) {
+  $data[1]['border-bottom-color'][] = '.news-item-spotlight .news-item-spotlight-image img:hover';
+  $data[1]['border-bottom-color'][] = '.node-spotlight .node-spotlight-image img:hover';
+  $data[0]['color'][] = '.region-content .panel-pane .pane-section-body .news-item-spotlight .news-item-header h5';
+  $data[0]['color'][] = '.region-content .panel-pane .pane-section-body .node-spotlight .node-header h5';
+  $data[3]['color'][] = '.region-content .panel-pane .pane-section-body .news-item-spotlight .news-item-header h4';
+  $data[3]['color'][] = '.region-content .panel-pane .pane-section-body .news-item-spotlight .news-item-header h4 a';
+  $data[3]['color'][] = '.region-content .panel-pane .pane-section-body .node-spotlight .node-header h4';
+  $data[3]['color'][] = '.region-content .panel-pane .pane-section-body .node-spotlight .node-header h4 a';
+  $data[0]['background-color'][] = '.news-item-spotlight .news-item-header:after';
+  $data[0]['background-color'][] = '.node-spotlight .node-header:after';
+}

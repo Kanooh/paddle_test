@@ -1,0 +1,127 @@
+<?php
+
+/**
+ * @file
+ * Install and update hook for Poll paddlet.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_poll_enable() {
+  // Rebuild the content type list to make Drupal aware of the poll. Otherwise
+  // the granting of permissions will fail.
+  _node_types_build(TRUE);
+
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_poll'));
+
+  // Give permissions to work with the poll content type.
+  $permissions = array(
+    'create poll content',
+    'edit any poll content',
+    'delete any poll content',
+    'vote on polls',
+    'edit poll content in landing pages',
+    'administer panelizer node poll layout',
+    'administer panelizer node poll content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  $permissions = array(
+    'vote on polls',
+  );
+
+  $role = user_role_load_by_name('anonymous user');
+  user_role_grant_permissions($role->rid, $permissions);
+
+  if (module_exists('authcache')) {
+    module_enable(array('authcache_poll'));
+    authcache_flush_caches();
+  }
+}
+
+/**
+ * Implements hook_schema_alter().
+ */
+function paddle_poll_schema_alter(&$schema) {
+  // Add a new column for referencing an id. This is not a serial now because
+  // this will give errors because a serial needs to be a unique key.
+  if (isset($schema['poll_vote'])) {
+    $schema['poll_vote']['fields']['pvid'] = array(
+      'type' => 'int',
+      'not null' => TRUE,
+      'description' => 'The unique identifier of the cast vote.',
+    );
+  }
+}
+
+/**
+ * Implements hook_install().
+ */
+function paddle_poll_install() {
+  $schema['poll_vote'] = array();
+  paddle_poll_schema_alter($schema);
+  foreach ($schema['poll_vote']['fields'] as $name => $spec) {
+    db_add_field('poll_vote', $name, $spec);
+  }
+
+  db_drop_primary_key('poll_vote');
+
+  // Here we change the pvid column to be a serial and set the primary key for
+  // it directly..
+  db_change_field('poll_vote', 'pvid', 'pvid', array(
+    'type' => 'serial',
+    'not null' => TRUE,
+    'description' => 'The unique identifier of the cast vote.',
+  ), array('primary key' => array('pvid')));
+
+  // Add an index for the session_id.
+  db_add_index('poll_vote', 'pvid', array('pvid'));
+}
+
+/**
+ * Force create the featured image instance for polls.
+ */
+function paddle_poll_update_7000() {
+  field_instance_sync_field_attach_create_bundle('node', 'poll');
+}
+
+/**
+ * Grant permissions to edit the panels for the poll content type.
+ */
+function paddle_poll_update_7001() {
+  $permissions = array(
+    'administer panelizer node poll layout',
+    'administer panelizer node poll content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Enables authcache_poll module if authcache has been enabled.
+ */
+function paddle_poll_update_7002() {
+  if (module_exists('authcache')) {
+    module_enable(array('authcache_poll'));
+    authcache_flush_caches();
+  }
+}
+
+/**
+ * Enables authcache_panels module so that anonymous users can vote on panes.
+ */
+function paddle_poll_update_7003() {
+  // If authcache_poll was not enabled yet, we do enable it here.
+  module_enable(array('authcache_builtin', 'authcache_panels', 'authcache_poll'));
+  authcache_flush_caches();
+}

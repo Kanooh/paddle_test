@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuDisplayEmptyMenuTest.
+ */
+
+/**
+ * Class PaddleMenuDisplayEmptyMenuTest.
+ */
+class PaddleMenuDisplayEmptyMenuTest extends DrupalWebTestCase {
+  protected $profile = 'testing';
+
+  /**
+   * Provide test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Empty Menu display',
+      'description' => 'Tests on a empty menu displays.',
+      'group' => 'Paddle Menu Display',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array('paddle_menu_display'));
+  }
+
+  /**
+   * Test generating a menu display with an empty menu.
+   */
+  public function testGenerateEmptyDisplayDoesNotThrowWarnings() {
+    $menu_display = new stdClass();
+    $menu_display->title = 'Test menu display';
+    $menu_display->name = 'test_menu_display';
+    $menu_display->description = '';
+    $menu_display->menu_name = 'test';
+    $menu_display->from_level = '1';
+    $menu_display->to_level = '9';
+    $menu_display->div_class = 'menu_wrapper';
+    $menu_display->ul_class = 'menu';
+    $menu_display->li_class = 'menu-item';
+    $menu_display->a_class = '';
+    $menu_display->cont_types_roots = array();
+    $menu_display->no_links = array();
+    $menu_display->root_path = '';
+
+    $menu = array();
+
+    module_load_include('inc', 'paddle_menu_display', 'paddle_menu_display_main');
+    $output = paddle_menu_display_generate_menu($menu_display, $menu);
+
+    $this->assertEqual('', $output, 'Generating a menu display from an empty menu results in zero output.');
+  }
+}

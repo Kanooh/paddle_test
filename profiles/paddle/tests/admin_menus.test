@@ -1,0 +1,59 @@
+<?php
+/**
+ * @file
+ * Tests the menus in the admin theme.
+ */
+
+/**
+ * Admin menus test.
+ */
+class AdminMenusTestCase extends PaddleWebTestCase {
+
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Admin menus',
+      'description' => 'Tests the menus in the admin theme.',
+      'group' => 'Paddle - Menu',
+    );
+  }
+
+  /**
+   * Tests the management level 2 menu on admin/themes/%/edit.
+   */
+  public function testManagementLevel2() {
+    $this->drupalLogin($this->siteManager);
+    // Create a theme.
+    $theme_name = $this->createPaddleTheme();
+    // Check that the management level 2 menu is shown on the theme edit, theme
+    // delete and theme edit screenshot pages.
+    $pages = array(
+      'Theme edit' => 'admin/themes/' . $theme_name . '/edit',
+      'Theme delete' => 'admin/themes/' . $theme_name . '/delete',
+      'Theme edit screenshot' => 'admin/themes/' . $theme_name . '/edit_screenshot',
+    );
+    foreach ($pages as $page => $path) {
+      $this->drupalGet($path);
+      $this->assertTrue($this->xpath('//div[@id="header"]//div[@id="block-paddle-menu-display-management-level-2"]'), 'The management level 2 menu block is shown on the "' . $page . '" page.');
+    }
+  }
+
+  /**
+   * Regression test: double escaping of the site name in the secondary menu.
+   *
+   * @see https://one-agency.atlassian.net/browse/KANWEBS-1525
+   */
+  public function testSiteNameDoubleEscaping() {
+    // Set the site name to a bunch of characters that get escaped.
+    $site_name = '<>&"\'';
+    variable_set('site_name', $site_name);
+
+    // Log in, go to the admin section and check that the site name is displayed
+    // correctly.
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin');
+    $this->assertRaw(check_plain($site_name), 'The site name is displayed correctly.');
+  }
+}

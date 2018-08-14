@@ -1,0 +1,22 @@
+/**
+ * @file
+ * Styles for the metadata areas of content manager.
+ */
+
+.node-metadata-item-revisions {
+  .btn-revisions {
+    display: inline-block;
+    padding: 3px 12px 3px 0;
+    color: #fff;
+    background: $light-blue;
+
+    &:hover,
+    &:focus {
+      background-color: darken($light-blue, 10%);
+    }
+
+    > span {
+      font-size: 13px;
+    }
+  }
+}

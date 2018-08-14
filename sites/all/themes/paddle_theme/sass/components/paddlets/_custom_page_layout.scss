@@ -1,0 +1,355 @@
+/**
+ * @file
+ * Custom Page Layout paddlet styling.
+ */
+// --------------------
+// General Panes.
+// --------------------
+.panel-responsive {
+  .rld-col:empty {
+    min-height: 1px;
+  }
+}
+
+
+@media (min-width: $screen-lg-min) {
+  .panel-responsive {
+    .rld-span-desktop_4, .rld-span-desktop_3, .rld-span-desktop_2, .rld-span-desktop_1 {
+      li a {
+        word-wrap: break-word;
+      }
+    }
+  }
+}
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max) {
+  .panel-responsive {
+    .rld-span-tablet_landscape_modus_4, .rld-span-tablet_landscape_modus_3, .rld-span-tablet_landscape_modus_2, .rld-span-tablet_landscape_modus_1 {
+      li a {
+        word-wrap: break-word;
+      }
+    }
+  }
+}
+// --------------------
+// Photo Album pane.
+// --------------------
+
+@media (min-width: $screen-lg-min) {
+  .panel-responsive  {
+    .rld-col {
+      padding: 0;
+    }
+    .rld-span-desktop_12, .rld-span-desktop_11, .rld-span-desktop_10, .rld-span-desktop_9, .rld-span-desktop_8 {
+      .photo-album-image {
+        flex-basis: 14%;
+      }
+    }
+
+    .rld-span-desktop_7, .rld-span-desktop_6, .rld-span-desktop_5 {
+      .photo-album-image {
+        flex-basis: 22%;
+      }
+    }
+
+    .rld-span-desktop_4, .rld-span-desktop_3, .rld-span-desktop_2, .rld-span-desktop_1 {
+      .pane-photo-album .pane-section-body {
+        @include justify-content(left);
+
+        .photo-album-image {
+          flex-basis: 46%;
+        }
+      }
+  }
+
+  }
+}
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max) {
+  .panel-responsive {
+    .rld-col {
+      padding: 0;
+    }
+
+    .rld-span-tablet_landscape_modus_12, .rld-span-tablet_landscape_modus_11, .rld-span-tablet_landscape_modus_10, .rld-span-tablet_landscape_modus_9, .rld-span-tablet_landscape_modus_8 {
+      .photo-album-image {
+        flex-basis: 14%;
+      }
+    }
+
+    .rld-span-tablet_landscape_modus_7, .rld-span-tablet_landscape_modus_6, .rld-span-tablet_landscape_modus_5 {
+      .photo-album-image {
+        flex-basis: 22%;
+      }
+    }
+
+    .rld-span-tablet_landscape_modus_4, .rld-span-tablet_landscape_modus_3, .rld-span-tablet_landscape_modus_2, .rld-span-tablet_landscape_modus_1 {
+      .pane-photo-album .pane-section-body {
+        @include justify-content(left);
+
+        .photo-album-image {
+          flex-basis: 46%;
+        }
+      }
+  }
+
+
+  }
+}
+@media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) {
+  .panel-responsive {
+    .rld-col {
+      padding: 0;
+      margin-left: 0;
+    }
+    .layout-responsive-region {
+      width: 100%;
+      .pane-photo-album .pane-section-body{
+        @include justify-content(left);
+      }
+
+    }
+    .rld-span-tablet_portrait_modus_6, .rld-span-tablet_portrait_modus_5 {
+      .photo-album-image {
+        flex-basis: 22%;
+      }
+    }
+
+    .rld-span-tablet_portrait_modus_4, .rld-span-tablet_portrait_modus_3 {
+      .photo-album-image {
+        flex-basis: 45%;
+      }
+    }
+
+    .rld-span-tablet_portrait_modus_2, .rld-span-tablet_portrait_modus_1 {
+
+      .pane-photo-album .pane-section-body {
+        @include justify-content(left);
+
+        .photo-album-image {
+          flex-basis: 22%;
+        }
+      }
+    }
+  }
+}
+@media (max-width: $screen-xs-max) {
+  .panel-responsive {
+    .rld-col {
+      padding: 0;
+      margin-left: 0%;
+    }
+    .layout-responsive-region {
+      width: 100%;
+    }
+    .pane-photo-album .pane-content .pane-section-body {
+      @include justify-content(left);
+
+      .photo-album-image {
+        flex-basis: 21%;
+      }
+    }
+  }
+}
+// --------------------
+// Who is Who pane.
+// --------------------
+// We just use the same SCSS as for the normal Paddle layouts.
+@media (min-width: $screen-lg-min) {
+  .rld-span-desktop_12, .rld-span-desktop_11, .rld-span-desktop_10, .rld-span-desktop_9 {
+    .all-members .member-info .team-member .team-member-info {
+      padding-top: 8%;
+    }
+  }
+
+  .rld-span-desktop_12, .rld-span-desktop_11, .rld-span-desktop_10, .rld-span-desktop_9, .rld-span-desktop_8, .rld-span-desktop_7, .rld-span-desktop_6, .rld-span-desktop_5 {
+    .member-info {
+      width: 98%;
+    }
+  }
+
+  .rld-span-desktop_4, .rld-span-desktop_3, .rld-span-desktop_2, .rld-span-desktop_1 {
+    .all-members {
+      .member-info {
+        display: block;
+        height: auto;
+        width: 98%;
+
+        .team-member {
+          display: block;
+
+          .team-member-featured-image {
+            padding: 5% 0 0;
+
+            img {
+              margin: 0 auto;
+              display: block;
+            }
+          }
+          .team-member-info {
+            text-align: center;
+            display: block;
+            width: 100%;
+            padding: 5% 0;
+          }
+          .team-member-top-info {
+            margin-bottom: 10px;
+          }
+        }
+      }
+    }
+    .who-is-who-pane-organization-view-mode {
+      .ou-children, .ou-team-members {
+        float: none;
+        width: auto;
+      }
+
+      .ou-children {
+        padding-bottom: 30px;
+      }
+    }
+  }
+}
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max) {
+  .panel-responsive .rld-col {
+    padding: 0;
+  }
+  .rld-span-tablet_landscape_modus_12, .rld-span-tablet_landscape_modus_11, .rld-span-tablet_landscape_modus_10, .rld-span-tablet_landscape_modus_9 {
+    .all-members .member-info .team-member .team-member-info {
+      padding-top: 8%;
+    }
+  }
+
+  .rld-span-tablet_landscape_modus_12, .rld-span-tablet_landscape_modus_11, .rld-span-tablet_landscape_modus_10, .rld-span-tablet_landscape_modus_9, .rld-span-tablet_landscape_modus_8, .rld-span-tablet_landscape_modus_7, .rld-span-tablet_landscape_modus_6, .rld-span-tablet_landscape_modus_5 {
+    .member-info {
+      width: 98%;
+    }
+  }
+
+  .rld-span-tablet_landscape_modus_4, .rld-span-tablet_landscape_modus_3, .rld-span-tablet_landscape_modus_2, .rld-span-tablet_landscape_modus_1 {
+    .all-members {
+      .member-info {
+        display: block;
+        height: auto;
+        width: 98%;
+
+        .team-member {
+          display: block;
+
+          .team-member-featured-image {
+            padding: 5% 0 0;
+
+            img {
+              margin: 0 auto;
+              display: block;
+            }
+          }
+          .team-member-info {
+            text-align: center;
+            display: block;
+            width: 100%;
+            padding: 5% 0;
+          }
+          .team-member-top-info {
+            margin-bottom: 10px;
+          }
+        }
+      }
+    }
+    .who-is-who-pane-organization-view-mode {
+      .ou-children, .ou-team-members {
+        float: none;
+        width: auto;
+      }
+
+      .ou-children {
+        padding-bottom: 30px;
+      }
+    }
+  }
+}
+// --------------------
+// Calendar pane.
+// --------------------
+// On medium screens, use small size if the pane is used inside a smaller than 6/12 column.
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max) {
+  .rld-span-tablet_landscape_modus_5, .rld-span-tablet_landscape_modus_4, .rld-span-tablet_landscape_modus_3, .rld-span-tablet_landscape_modus_2, .rld-span-tablet_landscape_modus_1 {
+    @include paddlet-calendar-responsive;
+  }
+}
+// On large screens, use small size if the pane is used inside a smaller than 4/12 column.
+@media (min-width: $screen-lg-min) {
+  .rld-span-desktop_3, .rld-span-desktop_2, .rld-span-desktop_1 {
+    @include paddlet-calendar-responsive;
+  }
+}
+// --------------------
+// Organizational Unit pane.
+// --------------------
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max) {
+  .rld-span-tablet_landscape_modus_5, .rld-span-tablet_landscape_modus_4, .rld-span-tablet_landscape_modus_3, .rld-span-tablet_landscape_modus_2, .rld-span-tablet_landscape_modus_1 {
+    .pane-organizational-unit {
+      .col-md-6 {
+        width: 100%;
+        float: none;
+        display: inline-block;
+        margin: 0;
+      }
+      .inline-block {
+        a {
+          display: inline-block;
+          width: 89%;
+        }
+      }
+    }
+  }
+}
+@media (min-width: $screen-lg-min) {
+  .rld-span-desktop_5, .rld-span-desktop_4, .rld-span-desktop_3, .rld-span-desktop_2, .rld-span-desktop_1 {
+    .pane-organizational-unit {
+      .col-md-6 {
+        width: 100%;
+        float: none;
+        display: inline-block;
+        margin: 0;
+      }
+      .inline-block {
+        a {
+          display: inline-block;
+          width: 89%;
+        }
+      }
+    }
+  }
+}
+// --------------------
+// Cultuurfeed pane.
+// --------------------
+@media (min-width: $screen-lg-min) {
+  .rld-span-desktop_6 {
+    &.panel-region-left, &.panel-region-right, .panel-col {
+      .pane-uitdatabank-pane.search {
+        form > div {
+          justify-content: flex-start;
+        }
+      }
+
+      .form-item-search, .submit-wrapper {
+        flex-basis: 100%;
+      }
+    }
+  }
+}
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max) {
+  .rld-span-tablet_landscape_modus_6 {
+    &.panel-region-left, &.panel-region-right, .panel-col {
+      .pane-uitdatabank-pane.search {
+        form > div {
+          justify-content: flex-start;
+        }
+      }
+
+      .form-item-search, .submit-wrapper {
+        flex-basis: 100%;
+      }
+    }
+  }
+}

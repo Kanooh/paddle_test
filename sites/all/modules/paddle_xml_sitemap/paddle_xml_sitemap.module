@@ -1,0 +1,377 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle XML Sitemap module.
+ */
+
+define('PADDLE_XML_SITEMAP_INCLUDED_NODE_TYPE', 1);
+define('PADDLE_XML_SITEMAP_TOP_PRIORITY', 1);
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_xml_sitemap_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_xml_sitemap_configuration_form',
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_xml_sitemap_menu() {
+  return array(
+    'admin/paddlet_store/app/paddle_xml_sitemap/%ctools_js/edit_base_url' => array(
+      'title' => 'Edit Base url',
+      'page callback' => 'paddle_xml_sitemap_edit_base_url',
+      'page arguments' => array(4),
+      'access arguments' => array('manage paddle_apps'),
+      'type' => MENU_CALLBACK,
+    ),
+  );
+}
+
+/**
+ * App configuration form callback.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_xml_sitemap_configuration_form() {
+  $form = array();
+
+  drupal_set_title(t('XML site map paddlet'));
+
+  $base_url = variable_get('xmlsitemap_base_url', FALSE);
+  // Display error message warning the users that the base URL is not set.
+  if (!$base_url) {
+    drupal_set_message(t('Before we can start, you need to enter the base URL in the settings. Click the "base URL" button above.'), 'error');
+  }
+
+  // Add the form elements only if the base URL is set.
+  if ($base_url) {
+    // Add the site map links table.
+    $xml_site_map_links = paddle_xml_sitemap_retrieve_file_links();
+    if (!empty($xml_site_map_links)) {
+      $header = array(t('Language'), t('Link'));
+      $rows = array();
+
+      foreach ($xml_site_map_links as $smid => $values) {
+        $row = array(
+          $values['language'],
+          $values['url'],
+        );
+
+          $rows[] = array('data' => $row, 'class' => array('xml-site-map-' . drupal_strtolower($values['language'])));
+      }
+
+      $table = theme('table', array('header' => $header, 'rows' => $rows));
+
+      $form['links_table'] = array(
+        '#markup' => $table,
+      );
+    }
+  }
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_xml_sitemap_contextual_actions_configuration_form';
+  }
+
+  return $form;
+}
+
+/**
+ * After-build function of the Paddle XML site map configuration form.
+ *
+ * @param array $form
+ *   Form render array.
+ * @param array $form_state
+ *   Form state array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_xml_sitemap_contextual_actions_configuration_form($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  $ajax_class = 'ctools-use-modal';
+  // Add a contextual toolbar button to edit the API key.
+  $actions[] = array(
+    'action' => l(t('base URL'), 'admin/paddlet_store/app/paddle_xml_sitemap/nojs/edit_base_url', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-gear', $ajax_class),
+      ),
+    )),
+    'class' => array('edit-base-url'),
+    'weight' => 15,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Edit base URL callback.
+ *
+ * @param bool $js
+ *   Whether or not the form is loaded with js.
+ *
+ * @return string
+ *     The rendered ajax string.
+ */
+function paddle_xml_sitemap_edit_base_url($js) {
+  // Handle non JS requests as well.
+  if (!$js) {
+    return drupal_get_form('paddle_xml_sitemap_edit_base_url_form');
+  }
+
+  // Add the necessary JS to make the CTools modal work.
+  ctools_include('ajax');
+  ctools_add_js('ajax-responder');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $form_state = array('ajax' => TRUE);
+  $commands = ctools_modal_form_wrapper('paddle_xml_sitemap_edit_base_url_form', $form_state);
+
+  if ($form_state['executed']) {
+    $commands[] = ctools_modal_command_dismiss();
+
+    // Reload the page to display the form and the contextual toolbar buttons.
+    $commands[] = ctools_ajax_command_reload();
+  }
+
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * The base URL edit form used in a Ctools dialog.
+ */
+function paddle_xml_sitemap_edit_base_url_form($form, &$form_state) {
+  $form['base_url'] = array(
+    '#type' => 'textfield',
+    '#title' => t('base URL'),
+    '#required' => TRUE,
+    '#default_value' => variable_get('xmlsitemap_base_url', ''),
+  );
+
+  // Add a wrapper when this form is handled through ajax requests.
+  if (!empty($form_state['ajax'])) {
+    $form['api_key']['#prefix'] = '<div class="form-body">';
+    $form['api_key']['#suffix'] = '</div>';
+  }
+
+  $form['actions'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['actions']['save'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+
+  return $form;
+}
+
+/**
+ * Validates the XML site map base URL.
+ */
+function paddle_xml_sitemap_edit_base_url_form_validate($form, &$form_state) {
+  $base_url = filter_var($form_state['values']['base_url'], FILTER_SANITIZE_URL);
+  if (filter_var($base_url, FILTER_VALIDATE_URL) === FALSE) {
+    form_set_error('base_url', t('Please enter a valid URL.'));
+  }
+}
+
+/**
+ * Submit handler for the XML site map base URL.
+ */
+function paddle_xml_sitemap_edit_base_url_form_submit($form, &$form_state) {
+  if (!empty($form_state['values']['base_url'])) {
+    variable_set('xmlsitemap_base_url', $form_state['values']['base_url']);
+    _paddle_xml_sitemap_mark_to_be_rebuild();
+    drupal_set_message(t('Your base URL has been successfully updated. Please wait a few minutes for the XML site map to be updated.'), 'status');
+  }
+  // Redirect to the paddlet config page.
+  $form_state['redirect'] = 'admin/paddlet_store/app/paddle_xml_sitemap/configure';
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function paddle_xml_sitemap_modules_enabled($modules) {
+  foreach ($modules as $module_name) {
+    if ($module_name == 'paddle_i18n') {
+      paddle_xml_sitemap_enable_multilingual();
+      _paddle_xml_sitemap_mark_to_be_rebuild();
+    }
+  }
+}
+
+/**
+ * Implements hook_modules_disabled().
+ */
+function paddle_xml_sitemap_modules_disabled($modules) {
+  foreach ($modules as $module_name) {
+    if ($module_name == 'paddle_i18n') {
+      paddle_xml_sitemap_disable_multilingual();
+      _paddle_xml_sitemap_mark_to_be_rebuild();
+    }
+  }
+}
+
+/**
+ * Assures that there will be an XML site map per language.
+ */
+function paddle_xml_sitemap_enable_multilingual() {
+  module_enable(array('xmlsitemap_i18n'));
+  // Pages with language LANGUAGE_NONE should be shown on all site maps.
+  variable_set('i18n_selection_mode', 'simple');
+  $enabled_languages = language_list();
+
+  // Remove the default context site map.
+  db_delete('xmlsitemap_sitemap')->execute();
+  xmlsitemap_clear_directory(NULL, TRUE);
+
+  // Create a site map per language.
+  foreach ($enabled_languages as $lang_code => $language) {
+    _paddle_xml_sitemap_create_site_map($lang_code);
+  }
+}
+
+/**
+ * Assures that the default site map will be shown again.
+ */
+function paddle_xml_sitemap_disable_multilingual() {
+  // Remove all language context related site maps.
+  $site_maps = xmlsitemap_sitemap_load_multiple(FALSE);
+
+  foreach ($site_maps as $smid => $site_map) {
+    xmlsitemap_sitemap_delete($smid);
+  }
+
+  module_disable(array('xmlsitemap_i18n'), FALSE);
+
+  // Insert the default context site map.
+  $context = array();
+  db_insert('xmlsitemap_sitemap')
+    ->fields(array(
+      'smid' => xmlsitemap_sitemap_get_context_hash($context),
+      'context' => serialize($context),
+    ))
+    ->execute();
+}
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function paddle_xml_sitemap_node_type_insert($info) {
+  $settings = array(
+    // Included.
+    'status' => PADDLE_XML_SITEMAP_INCLUDED_NODE_TYPE,
+    // Priority should be equal for all.
+    'priority' => PADDLE_XML_SITEMAP_TOP_PRIORITY,
+  );
+
+  // Add newly added content types to the site map.
+  xmlsitemap_link_bundle_settings_save('node', $info->type, $settings);
+  _paddle_xml_sitemap_mark_to_be_rebuild();
+}
+
+/**
+ * Implements hook_multilingual_settings_changed().
+ */
+function paddle_xml_sitemap_multilingual_settings_changed() {
+  $site_map_languages = array();
+
+  $xml_site_maps = xmlsitemap_sitemap_load_multiple(FALSE);
+
+  // Retrieves a list of languages divided between
+  // enabled and disabled languages.
+  $enabled_languages = i18n_language_list('name');
+
+  // Retrieves the Site map languages.
+  foreach ($xml_site_maps as $smid => $xml_site_map) {
+    // Stores the smid since we will need it in case of deletion.
+    if (!empty($xml_site_map->context['language'])) {
+      $site_map_languages[$xml_site_map->context['language']] = $smid;
+    }
+  }
+
+  // Retrieves the languages which are enabled,
+  // but do not contain an XML site map.
+  $site_map_languages_to_be_created = array_diff_key($enabled_languages, $site_map_languages);
+  // Retrieves the languages which have a site map, but are not enabled anymore.
+  $site_map_languages_to_be_deleted = array_diff_key($site_map_languages, $enabled_languages);
+
+  foreach ($site_map_languages_to_be_created as $lang_code => $value) {
+    _paddle_xml_sitemap_create_site_map($lang_code);
+  }
+
+  foreach ($site_map_languages_to_be_deleted as $lang_code => $smid) {
+    xmlsitemap_sitemap_delete($smid);
+  }
+
+  _paddle_xml_sitemap_mark_to_be_rebuild();
+}
+
+/**
+ * Creates an XML site map for a given language.
+ *
+ * @param string $lang_code
+ *   The language code of the language.
+ */
+function _paddle_xml_sitemap_create_site_map($lang_code) {
+  $site_map = new stdClass();
+  $site_map->context = array('language' => $lang_code);
+  xmlsitemap_sitemap_save($site_map);
+}
+
+/**
+ * Marks the site maps to be rebuild.
+ */
+function _paddle_xml_sitemap_mark_to_be_rebuild() {
+  // Ensure the file cache directory is available and ready.
+  xmlsitemap_check_directory();
+
+  variable_set('xmlsitemap_generated_last', 0);
+  variable_set('xmlsitemap_regenerate_needed', TRUE);
+}
+
+/**
+ * Retrieves the XML file links of the site maps.
+ *
+ * @return array
+ *   The site map URLs keyed by language.
+ */
+function paddle_xml_sitemap_retrieve_file_links() {
+  $site_maps = array();
+  $languages = array();
+  $xml_site_maps = xmlsitemap_sitemap_load_multiple(FALSE);
+  $i18n_on = FALSE;
+
+  if (module_exists('paddle_i18n')) {
+    $i18n_on = TRUE;
+    $languages = language_list();
+  }
+
+  foreach ($xml_site_maps as $smid => $xml_site_map) {
+    if ($i18n_on && !empty($xml_site_map->context['language'])) {
+      $langcode = $xml_site_map->context['language'];
+      $site_maps[$smid]['language'] = $languages[$langcode]->name;
+    }
+    else {
+      $site_maps[$smid]['language'] = t('Default');
+    }
+
+    $site_maps[$smid]['url'] = url($xml_site_map->uri['path'], $xml_site_map->uri['options']);
+  }
+
+  return $site_maps;
+}

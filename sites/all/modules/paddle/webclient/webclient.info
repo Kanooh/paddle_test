@@ -1,0 +1,13 @@
+name = Webclient
+description = Provides a cURL webclient API for Drupal.
+package = WebClient
+core = 7.x
+; Module configuration page:
+configure = admin/config/webclient
+; Autoload classes.
+files[] = includes/webclient.base.inc
+
+; Information added by drush on 2014-04-12
+version = "7.x-1.6"
+project = "webclient"
+datestamp = "1397309472"

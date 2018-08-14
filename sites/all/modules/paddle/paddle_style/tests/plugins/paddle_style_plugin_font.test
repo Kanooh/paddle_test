@@ -1,0 +1,137 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleStylePluginFontTest.
+ */
+
+/**
+ * Tests the font plugin.
+ */
+class PaddleStylePluginFontTest extends DrupalWebTestCase {
+
+  /**
+   * Stores an instance of the Font plugin.
+   *
+   * @var object PaddleStyleFontPlugin
+   */
+  protected $instance;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Font',
+      'description' => 'Tests the font style plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    // Additionally enable ctools module.
+    parent::setUp(array('ctools', 'paddle_style'));
+
+    // Create an instance of the font plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'font');
+    $this->instance = new $plugin['handler']['class']();
+  }
+
+  /**
+   * Tests the form() function of the font plugin without extra parameters.
+   */
+  public function testFontFormWithoutSettings() {
+    $form_elements = $this->instance->form();
+
+    // Check that all supported properties are present if form() is called
+    // without options.
+    $properties = array(
+      'font_capitalization',
+      'font_color',
+      'font_family',
+      'font_size',
+      'font_style',
+    );
+    $form_elements = $this->instance->form();
+    foreach ($properties as $property) {
+      $this->assertTrue(array_key_exists($property, $form_elements), format_string('The property %property is shown when the form is called without options.', array('%property' => $property)));
+    }
+  }
+
+  /**
+   * Tests the form() function of the font plugin with allowed values.
+   */
+  public function testFontFormWithAllowedValues() {
+    // Settings array to give to the form function.
+    $allowed_values = array(
+      'font_family' => array(
+        'arial',
+        'times new roman',
+      ),
+      'font_size' => array(
+        12 => 'normal',
+        15 => 'large',
+      ),
+      'font_capitalization' => array(
+        'none' => 'normal',
+        'uppercase' => 'uppercase',
+        'someother' => 'someother',
+      ),
+    );
+
+    $form_elements = $this->instance->form($allowed_values);
+
+    // Tests if the options in the select are being set.
+    $this->assertEqual(count($form_elements['font_family']['#options']), 2, 'Only 2 font families are given back in the font family select box.');
+    $this->assertEqual(count($form_elements['font_size']['#options']), 2, 'Only 2 font sizes are given back in the font size select box.');
+    $this->assertEqual(count($form_elements['font_capitalization']['#options']), 3, 'Only 3 font capitalization options are given back in the font capitalization radio group.');
+  }
+
+  /**
+   * Tests the form() function of the font plugin with a $values array.
+   */
+  public function testFontFormWithDefaults() {
+    // Values array to give to the form function.
+    $values = array(
+      'font_family' => $this->randomString(),
+      'font_size' => rand(8, 35),
+      'font_style' => array('italic', 'bold'),
+      'font_capitalization' => 'uppercase',
+    );
+
+    $form_elements = $this->instance->form(array(), $values);
+
+    // Check if the default values are set correctly.
+    $this->assertTrue($form_elements['font_family']['#default_value'] == $values['font_family'], 'Default value is set properly for the font family.');
+    $this->assertTrue($form_elements['font_size']['#default_value'] == $values['font_size'], 'Default value is set properly for the font size.');
+    $this->assertTrue($form_elements['font_style']['#default_value'] == $values['font_style'], 'Default value is set properly for the font style.');
+    $this->assertTrue($form_elements['font_capitalization']['#default_value'] == $values['font_capitalization'], 'Default value is set properly for the font capitalization.');
+  }
+
+  /**
+   * Tests the getProperties() function of the font plugin.
+   */
+  public function testFontGetProperties() {
+    // Values array to give to the getProperties() function.
+    $values = array(
+      'font_family' => $this->randomString(),
+      'font_size' => rand(8, 35),
+      'font_style' => array('bold' => TRUE, 'italic' => TRUE),
+      'font_capitalization' => 'uppercase',
+    );
+
+    $properties = $this->instance->getProperties($values);
+    // Test if the array being returned by getProperties() has the right
+    // mappings.
+    $this->assertTrue($properties['font-family'] == $values['font_family'], 'The font-family property is set correctly.');
+    $this->assertTrue($properties['font-size'] == $values['font_size'], 'The font-size property is set correctly.');
+    $this->assertTrue($properties['font-weight'] == 'bold', 'The font-weight property is set correctly.');
+    $this->assertTrue($properties['font-style'] == 'italic', 'The font-style property is set correctly.');
+    $this->assertTrue(empty($properties['text-decoration']), 'The text-decoration property is not set.');
+    $this->assertTrue($properties['text-transform'] == 'uppercase', 'The text-transform property is set correctly.');
+  }
+}

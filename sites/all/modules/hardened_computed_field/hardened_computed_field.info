@@ -1,0 +1,13 @@
+name = Hardened Computed Field
+description = Defines a field type that allows values to be "computed" via PHP code.
+core = 7.x
+dependencies[] = field
+package = Fields
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "hardened_computed_field"
+datestamp = "1473170407"
+

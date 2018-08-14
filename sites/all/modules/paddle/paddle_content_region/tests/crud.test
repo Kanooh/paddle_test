@@ -1,0 +1,190 @@
+<?php
+
+/**
+ * @file
+ * CRUD tests for the Paddle Content Region module.
+ */
+
+class PaddleContentRegionCRUDTestCase extends DrupalWebTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'testing';
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp() {
+    // Enabling taxonomy works around issue #KANWEBS-1486. Not worth
+    // spending much more time on it.
+    parent::setup('taxonomy', 'paddle_content_region');
+  }
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'CRUD test',
+      'description' => 'Tests the creating, reading, updating and deleting of content regions.',
+      'group' => 'Paddle Content Region',
+    );
+  }
+
+  /**
+   * Tests creating, reading, updating and deleting of Paddle Content Regions.
+   */
+  public function testPaddleContentRegionCRUD() {
+    // Check that the database table exists and is empty.
+    $this->assertTrue(db_table_exists('paddle_content_region'), 'The Paddle Content Region database table exists.');
+    $this->assertPaddleContentRegionTableEmpty('The Paddle Content Region database is initially empty.');
+
+    // Check if a new Paddle Content Region can be saved to the database.
+    $values = $this->randomPaddleContentRegionValues();
+    $content_region = $this->createPaddleContentRegion($values);
+    $content_region->save();
+    $this->assertPaddleContentRegionTableNotEmpty('The Paddle Content Region database table is no longer empty after creating a Paddle Content Region.');
+
+    // Check that the Paddle Content Region data can be read from the database.
+    $retrieved_content_region = paddle_content_region_load($content_region->pcrid);
+    $this->assertPaddleContentRegionProperties($retrieved_content_region, $values, 'The Paddle Content Region that was saved to the database can be read correctly.');
+
+    // Update the Paddle Content Region and check that the new values were
+    // written to the database.
+    $new_values = $this->randomPaddleContentRegionValues();
+    $this->updatePaddleContentRegion($content_region, $new_values);
+    $content_region->save();
+    $this->assertPaddleContentRegionProperties($content_region, $new_values, 'The Paddle Content Region has been updated correctly.');
+
+    // Delete the Paddle Content Region. The database should be empty again.
+    $content_region->delete();
+    $this->assertPaddleContentRegionTableEmpty('The Paddle Content Region can be deleted from the database.');
+  }
+
+  /**
+   * Check if the Paddle Content Region database table is empty.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertPaddleContentRegionTableEmpty($message = '') {
+    $result = (bool) db_select('paddle_content_region', 'pcr')->fields('pcr')->execute()->fetchAll();
+    return $this->assertFalse($result, $message ?: 'The Paddle Content Region database table is empty.');
+  }
+
+  /**
+   * Check if the Paddle Content Region database table is not empty.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertPaddleContentRegionTableNotEmpty($message = '') {
+    $result = (bool) db_select('paddle_content_region', 'pcr')->fields('pcr')->execute()->fetchAll();
+    return $this->assertTrue($result, $message ?: 'The Paddle Content Region database table is not empty.');
+  }
+
+  /**
+   * Random values for all properties of the Paddle Content Region entity.
+   *
+   * @returns array
+   *   An associative array of random values, keyed by property name.
+   */
+  public function randomPaddleContentRegionValues() {
+    return array(
+      // Random fake node type.
+      'node_type' => $this->randomString(),
+      'language' => array_rand(array_keys(language_list())),
+      // Random inherit option.
+      'inherit' => mt_rand(0, 1),
+    );
+  }
+
+  /**
+   * Creates a new Paddle Content Region entity.
+   *
+   * @param array $values
+   *   An optional associative array of values, keyed by property name. Random
+   *   values will be applied to all omitted properties.
+   *
+   * @return object
+   *   A new Paddle Content Region entity.
+   */
+  public function createPaddleContentRegion(array $values = array()) {
+    // Provide some default values.
+    $values += $this->randomPaddleContentRegionValues();
+    $content_region = entity_create('paddle_content_region', $values);
+
+    return $content_region;
+  }
+
+  /**
+   * Updates the given Paddle Content Region with the given properties.
+   *
+   * @param Entity $content_region
+   *   The Paddle Content Region entity to update.
+   * @param array $values
+   *   An associative array of values to apply to the entity, keyed by property
+   *   name.
+   */
+  public function updatePaddleContentRegion(Entity $content_region, array $values) {
+    foreach ($values as $property => $value) {
+      $content_region->$property = $value;
+    }
+  }
+
+  /**
+   * Check if the Paddle Content Region properties match the given values.
+   *
+   * @param Entity $content_region
+   *   The Paddle Content Region entity to check.
+   * @param array $values
+   *   An associative array of values to check, keyed by property name.
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertPaddleContentRegionProperties(Entity $content_region, array $values, $message = '') {
+    return $this->assertEntityProperties('paddle_content_region', $content_region, $values, $message);
+  }
+
+  /**
+   * Check if the properties of the given entity match the given values.
+   *
+   * @param string $entity_type
+   *   The type of the entity.
+   * @param Entity $entity
+   *   The entity to check.
+   * @param array $values
+   *   An associative array of values to check, keyed by property name.
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertEntityProperties($entity_type, Entity $entity, array $values, $message = '') {
+    $wrapper = entity_metadata_wrapper($entity_type, $entity);
+
+    $result = TRUE;
+    foreach ($values as $property => $value) {
+      if (is_array($value)) {
+        $result &= $this->assertFalse(array_diff($value, $wrapper->$property->value()), format_string('The %property property has the correct value.', array('%property' => $property)));
+      }
+      else {
+        $result &= $this->assertEqual($wrapper->$property->value(), $value, format_string('The %property property has the correct value.', array('%property' => $property)));
+      }
+    }
+
+    return $this->assertTrue($result, $message ?: format_string('The @entity contains the given values.', array('@entity' => $entity_type)));
+  }
+
+}

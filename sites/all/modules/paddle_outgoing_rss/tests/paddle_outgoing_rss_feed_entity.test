@@ -1,0 +1,150 @@
+<?php
+
+/**
+ * @file
+ * Tests the creating, saving and loading of the Outgoing RSS feed entity.
+ */
+
+/**
+ * Perform various operations on an Outgoing RSS feed entity.
+ */
+class PaddleOutgoingRssFeedEntityTestCase extends PaddleWebTestCase {
+
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Outgoing RSS feed entity',
+      'description' => 'Tests the creating, saving and loading of Outgoing RSS feed entity.',
+      'group' => 'Paddle Paddlets',
+    );
+  }
+
+  /**
+   * Test the creating, editing and deleting of an outgoing RSS feed entity.
+   */
+  public function testOutgoingRssFeedEntityCrud() {
+    $this->drupalLogin($this->siteManager);
+    $this->installPaddlet('paddle_outgoing_rss');
+
+    // Create a new outgoing RSS feed.
+    $entity_type = 'paddle_outgoing_rss_feed';
+    $title = $this->randomString(12);
+
+    $content_types = $this->getRandomContentTypes(count(node_type_get_names()) - 1);
+
+    // Create a few terms to use - four from each vocabulary.
+    $tags = $this->createTerms(taxonomy_vocabulary_machine_name_load('paddle_tags')->vid, 4);
+    $terms = $this->createTerms(taxonomy_vocabulary_machine_name_load('paddle_general')->vid, 4);
+
+    // Use the first 2 terms of each vocabulary at first.
+    $entity = entity_create($entity_type, array(
+      'title' => $title,
+      'content_types' => $content_types,
+      'tags' => array_slice($tags, 0, 2),
+      'terms' => array_slice($terms, 0, 2),
+    ));
+
+    // Save the changes.
+    $saved = entity_save($entity_type, $entity);
+    $this->assertTrue($saved, 'Outgoing RSS feed entity saved successfully.');
+
+    // Re-load the entity from the database.
+    $entities = entity_load($entity_type, array($entity->fid), array(), TRUE);
+    $entity = reset($entities);
+
+    $this->assertEqual($entity->title, $title, 'The saved Outgoing RSS feed has the same title as was initially set.');
+    $this->assertEqual($entity->content_types, $content_types, 'The saved RSS feed has the same content types as was initially set.');
+    $this->assertEqual($entity->tags, array_slice($tags, 0, 2), 'The saved Outgoing RSS feed has the same tags as was initially set.');
+    $this->assertEqual($entity->terms, array_slice($terms, 0, 2), 'The saved Outgoing RSS feed has the same terms as was initially set.');
+
+    // Make changes to the title and code.
+    $new_title = $this->randomString(10);
+    $content_types = $this->getRandomContentTypes(1);
+    $tags = array_slice($tags, 2);
+    $terms = array_slice($terms, 2);
+    $entity->title = $new_title;
+    $entity->content_types = $content_types;
+    $entity->tags = $tags;
+    $entity->terms = $terms;
+    $saved = entity_save($entity_type, $entity);
+
+    // Reload the entity from the database.
+    $entities = entity_load($entity_type, array($entity->fid), array(), TRUE);
+    $entity = reset($entities);
+
+    // Make sure the changes were saved correctly.
+    $this->assertTrue($saved, 'Changes to the Outgoing RSS feed were saved successfully.');
+    $this->assertEqual($entity->title, $new_title, 'The updated Outgoing RSS feed has the correct title.');
+    $this->assertEqual($entity->content_types, $content_types, 'The updated Outgoing RSS feed has the correct content types.');
+
+    $this->assertEqual($entity->tags, $tags, 'The updated Outgoing RSS feed has the correct tags.');
+    $this->assertEqual($entity->terms, $terms, 'The updated Outgoing RSS feed has the correct terms.');
+
+    // Delete the Outgoing RSS feed.
+    $deleted = entity_delete($entity_type, $entity->fid);
+
+    // Try to reload the entity from the database.
+    $entities = entity_load($entity_type, array($entity->fid), array(), TRUE);
+
+    // Verify that the Outgoing RSS feed was really deleted. entity_delete
+    // returns FALSE if it wasn't able to delete the entity, but it doesn't
+    // return TRUE if it was able to delete the entity. So we can't do a simple
+    // assertion that $deleted is TRUE.
+    $this->assertTrue($deleted !== FALSE, 'The Outgoing RSS feed was deleted successfully.');
+    $this->assertTrue(empty($entities), 'The Outgoing RSS feed could not be loaded from the database.');
+  }
+
+  /**
+   * Gets the specified number of content types out of all content types.
+   *
+   * @param int $number
+   *   The number of terms to create. If $number is < 1 all content types will
+   *   be returned.
+   *
+   * @return array
+   *   Array of content types. Both the key and the value of each element are
+   *   the machine name of the content type.
+   */
+  protected function getRandomContentTypes($number) {
+    $content_types = array();
+    $types = node_type_get_names();
+    if ($number < 1) {
+      return $types;
+    }
+    $type_names = array_rand($types, $number);
+    if ($number == 1) {
+      $type_names = array($type_names);
+    }
+
+    return drupal_map_assoc($type_names);
+  }
+
+  /**
+   * Creates the specified number of terms in the specified vocabulary.
+   *
+   * @param int $vid
+   *   The ID of the vocabulary to create the terms into.
+   * @param int $number
+   *   The number of terms to create.
+   *
+   * @return array
+   *   Array of TIDs.
+   */
+  protected function createTerms($vid, $number) {
+    $terms = array();
+    for ($i = 0; $i < $number; $i++) {
+      $options = array(
+        'vid' => $vid,
+        'name' => $this->randomName(),
+      );
+
+      $term = (object) $options;
+      taxonomy_term_save($term);
+      $terms[] = $term->tid;
+    }
+
+    return $terms;
+  }
+}

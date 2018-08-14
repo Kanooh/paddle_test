@@ -1,0 +1,17 @@
+name = Paddle User
+description = User functionality for the Paddle distribution
+core = 7.x
+package = Paddle
+dependencies[] = actions_permissions
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = text
+dependencies[] = views
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2
+features[field_base][] = field_paddle_user_real_name
+features[field_base][] = field_paddle_user_telephone
+features[field_instance][] = user-user-field_paddle_user_real_name
+features[field_instance][] = user-user-field_paddle_user_telephone
+features[views_view][] = users_overview
+files[] = tests/paddle_user_redirects.test

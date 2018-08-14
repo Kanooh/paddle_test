@@ -1,0 +1,103 @@
+<?php
+/**
+ * @file
+ * Definition of PaddleUpdatePathTestCase class.
+ */
+
+/**
+ * Base class for update path tests.
+ */
+abstract class PaddleUpdatePathTestCase extends UpdatePathTestCase {
+
+  /**
+   * {@inheritdoc}
+   *
+   * Slightly different implementation to bypass the requirements check
+   * of update.php.
+   */
+  protected function performUpgrade($register_errors = TRUE) {
+    if (!$this->zlibInstalled) {
+      $this->fail(t('Missing zlib requirement for upgrade tests.'));
+      return FALSE;
+    }
+
+    // Immediately load the selection update screen.
+    // The requirements check that happens when no 'op' query string parameter
+    // is set, fails on a version requirement mismatch of Scheduler Workbench
+    // and Scheduler.
+    $update_url = $GLOBALS['base_url'] . '/update.php?op=selection';
+
+    // Load the first update screen.
+    $this->drupalGet($update_url, array('external' => TRUE));
+    if (!$this->assertResponse(200)) {
+      return FALSE;
+    }
+
+    $this->drupalPost(NULL, array(), t('Continue'));
+    if (!$this->assertResponse(200)) {
+      return FALSE;
+    }
+
+    // The test should pass if there are no pending updates.
+    $content = $this->drupalGetContent();
+    if (strpos($content, t('No pending updates.')) !== FALSE) {
+      $this->pass(t('No pending updates and therefore no upgrade process to test.'));
+      $this->pendingUpdates = FALSE;
+      return TRUE;
+    }
+
+    // Go!
+    $this->drupalPost(NULL, array(), t('Apply pending updates'));
+    if (!$this->assertResponse(200)) {
+      return FALSE;
+    }
+
+    // Check for errors during the update process.
+    foreach ($this->xpath('//li[@class=:class]', array(':class' => 'failure')) as $element) {
+      /* @var SimpleXMLElement $element */
+      $message = strip_tags($element->asXML());
+      $this->upgradeErrors[] = $message;
+      if ($register_errors) {
+        $this->fail($message);
+      }
+    }
+
+    if (!empty($this->upgradeErrors)) {
+      // Upgrade failed, the installation might be in an inconsistent state,
+      // don't process.
+      return FALSE;
+    }
+
+    // Check if there still are pending updates.
+    $this->drupalGet($update_url, array('external' => TRUE));
+    $this->drupalPost(NULL, array(), t('Continue'));
+    if (!$this->assertText(t('No pending updates.'), 'No pending updates at the end of the update process.')) {
+      return FALSE;
+    }
+
+    // Upgrade succeed, rebuild the environment so that we can call the API
+    // of the child site directly from this request.
+    $this->upgradedSite = TRUE;
+
+    // Reload module list. For modules that are enabled in the test database,
+    // but not on the test client, we need to load the code here.
+    $new_modules = array_diff(module_list(TRUE), $this->loadedModules);
+    foreach ($new_modules as $module) {
+      drupal_load('module', $module);
+    }
+
+    // Reload hook implementations.
+    module_implements('', FALSE, TRUE);
+
+    // Rebuild caches.
+    drupal_static_reset();
+    drupal_flush_all_caches();
+
+    // Reload global $conf array and permissions.
+    $this->refreshVariables();
+    $this->checkPermissions(array(), TRUE);
+
+    return TRUE;
+  }
+
+}

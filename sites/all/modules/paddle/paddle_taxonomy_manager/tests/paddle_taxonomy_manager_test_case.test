@@ -1,0 +1,135 @@
+<?php
+
+/**
+ * @file
+ * Base class for the Paddle Taxonomy Manager automated tests.
+ */
+
+class PaddleTaxonomyManagerTestCase extends DrupalWebTestCase {
+  protected $profile = 'minimal';
+
+  /**
+   * The simulated global $language_content variable.
+   *
+   * @var object $languageContent
+   */
+  protected $languageContent;
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    $modules = func_get_args();
+    if (isset($modules[0]) && is_array($modules[0])) {
+      $modules = $modules[0];
+    }
+    // We're using the minimal profile because enabling the comment module
+    // causes PDOExceptions, but for some reason we still need some modules from
+    // the standard profile (which we used in the past).
+    // @todo Figure out why we have a dependency on these modules, KANWEBS-2479.
+    $modules += array(
+      'search',
+      'shortcut',
+      'toolbar',
+      'overlay',
+      'field_ui',
+      'file',
+      'rdf',
+    );
+    parent::setUp($modules);
+
+    // Set the simulated global $language_content variable to English.
+    $languages = language_list();
+    $this->languageContent = $languages['en'];
+  }
+
+  /**
+   * Creates a custom vocabulary for testing.
+   *
+   * @param string $flat
+   *   Flag indicating if the vocabulary should be hierarchical or not.
+   *
+   * @return array
+   *   The generated vocabulary.
+   */
+  protected function createVocabulary($flat = FALSE) {
+    $vocabulary = array(
+      'machine_name' => drupal_strtolower($this->randomName()),
+      'name' => $this->randomString(),
+      'description' => $this->randomString(),
+      'i18n_mode' => I18N_MODE_TRANSLATE,
+    );
+
+    $vocabulary = (object) $vocabulary;
+    taxonomy_vocabulary_save($vocabulary);
+
+    // Set flatness.
+    variable_set('taxonomy_vocabulary_' . $vocabulary->machine_name . '_type', $flat ? 'flat' : 'hierarchical');
+    return $vocabulary;
+  }
+
+
+  /**
+   * Creates a term for testing using the UI.
+   *
+   * @param string $vocabulary_name
+   *   The machine name of the vocabulary to which the term should be added.
+   * @param int $parent
+   *   The tid of the parent term.
+   *
+   * @return array
+   *   The generated term.
+   */
+  protected function createUITerm($vocabulary_name, $parent = NULL) {
+    $edit = array(
+      'name' => $this->randomString(32),
+      'description' => $this->randomString(20),
+    );
+
+    if ($parent) {
+      $edit['parent'] = $parent;
+    }
+
+    $this->drupalPost("admin/structure/taxonomy_manager/nojs/{$vocabulary_name}/add", $edit, t('Save'));
+
+    // Get the term.
+    $query = db_select('taxonomy_term_data', 'ttd');
+    $query->join('taxonomy_term_hierarchy', 'tth', 'tth.tid = ttd.tid');
+    $result = $query->fields('ttd')
+      ->fields('tth')
+      ->condition('ttd.name', $edit['name'])
+      ->condition('ttd.description', $edit['description'])
+      ->execute();
+
+    return $result->fetchAssoc();
+  }
+
+  /**
+   * Creates a term for testing.
+   *
+   * @param string $vid
+   *   The ID of the vocabulary for which we create the term.
+   * @param array $options
+   *   Optional fields to set when saving the term. See taxonomy_term_save().
+   *
+   * @return object
+   *   The generated term.
+   *
+   * @see taxonomy_term_save()
+   */
+  protected function createTerm($vid, $options = array()) {
+    // Provide default parameters.
+    $options += array(
+      'vid' => $vid,
+      'name' => $this->randomName(),
+      'description' => $this->randomString(),
+      'parent' => 0,
+      'language' => $this->languageContent->language,
+    );
+
+    $term = (object) $options;
+    taxonomy_term_save($term);
+
+    return $term;
+  }
+}

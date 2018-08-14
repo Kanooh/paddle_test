@@ -1,0 +1,11 @@
+core = "7.x"
+description = "Provides an additional language negotiation fallback using a selection page"
+name = "Language Selection Page"
+package = Multilanguage
+dependencies[] = locale
+configure = admin/config/regional/language/configure/selection_page
+
+; Information added by drush on 2016-04-02
+version = "7.x-2.0"
+project = "language_selection_page"
+datestamp = "1459631797"

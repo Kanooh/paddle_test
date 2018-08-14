@@ -1,0 +1,17 @@
+name = Authcache Form
+description = Authcache support for forms
+package = Performance and scalability
+configure = admin/config/system/authcache/forms
+core = 7.x
+dependencies[] = authcache
+test_dependencies[] = cacheobject
+files[] = includes/AuthcacheFormTokenFragment.inc
+files[] = tests/authcache_form.test
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-2.0-beta7+29-dev"
+core = "7.x"
+project = "authcache"
+datestamp = "1473170445"
+

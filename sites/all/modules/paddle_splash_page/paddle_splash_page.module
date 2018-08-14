@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the paddle_splash_page feature.
+ */
+
+include_once 'paddle_splash_page.features.inc';

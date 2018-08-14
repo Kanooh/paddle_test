@@ -1,0 +1,342 @@
+/**
+ * @file
+ * Paddle MailChimp newsletter styles.
+ */
+
+@import "variables/colors";
+
+// ----------------
+// Mixins.
+// ----------------
+@mixin link-colors($default, $interaction: $default, $visited: $default) {
+  a {
+    & {
+      color: $default;
+    }
+
+    // Interactions are hover and active statuses.
+    &:hover,
+    &:active {
+      color: $interaction !important;
+    }
+
+    &:visited {
+      color: $visited !important;
+    }
+  }
+}
+
+// ----------------
+// Variables.
+// ----------------
+$columns: (
+  one:     30px,
+  two:     80px,
+  three:  130px,
+  four:   180px,
+  five:   230px,
+  six:    280px,
+  seven:  330px,
+  eight:  380px,
+  nine:   430px,
+  ten:    480px,
+  eleven: 530px,
+  twelve: 580px
+);
+
+// ----------------
+// Resets.
+// ----------------
+body, table.body, h1, h2, h3, h4, h5, h6, p, td {
+  font-family: "Calibri", "Helvetica", "Arial", sans-serif;
+}
+
+// ----------------
+// Sections.
+// ----------------
+body, .body {
+  background-color: $silver;
+}
+
+.header, .footer {
+  background-color: $c-mineshaft;
+
+  .columns {
+    @include link-colors($silver-alt, $c-white);
+
+    td {
+      color: $silver-alt;
+    }
+  }
+}
+
+.archive {
+  background-color: $c-alto-alt;
+
+  .columns {
+    td {
+      font-size: 11px;
+      line-height: 11px
+    }
+  }
+}
+
+.content {
+  background-color: $c-white;
+}
+
+.footer {
+  .columns.twelve {
+    td {
+      padding-bottom: 20px;
+    }
+  }
+}
+
+// ----------------
+// Helpers.
+// ----------------
+.right-text-align {
+  text-align: right;
+}
+
+.middle-text-align {
+  vertical-align: middle;
+}
+
+// ----------------
+// Panes common styling.
+// ----------------
+
+// Generate widths for panes to prevent overflowing tds.
+@each $class, $width in $columns {
+  table.#{$class} {
+    .pane {
+      width: $width;
+    }
+
+    td {
+      &.left-text-pad,
+      &.right-text-pad {
+        .pane {
+          width: $width - 10;
+        }
+      }
+
+      &.text-pad {
+        .pane {
+          width: $width - 20;
+        }
+      }
+    }
+  }
+}
+
+.pane {
+  margin-bottom: 20px;
+  clear: both;
+}
+
+.pane-section-top {
+  clear: both;
+  // We cannot use margins here as it has a background.
+  padding: 10px;
+  color: $c-white;
+  font-weight: 700;
+  background-color: $c-pelorous;
+  @include link-colors($c-white);
+
+  &.pane-section-image {
+    padding: 0;
+
+    img {
+      height: auto;
+      float: none;
+
+      .newsletter-layout-paddle_table_no_column & {
+        width: 100%;
+      }
+    }
+  }
+}
+
+.pane-section-body {
+  clear: both;
+}
+
+.pane-section-bottom {
+  clear: both;
+  margin: 10px;
+}
+
+// ----------------
+// Listing / download list panes common styling.
+// ----------------
+.pane-listing,
+.pane-download-list {
+  .item-list {
+    margin: 10px;
+  }
+
+  ul {
+    margin: 0 0 0 15px;
+    padding: 0;
+  }
+
+  li {
+    margin: 0;
+  }
+}
+
+// ----------------
+// Listing pane.
+// ----------------
+.pane-listing {
+  .thumbnail {
+    img {
+      // Never show previews here. Images always hidden will be
+      // removed from the html before sending.
+      display: none !important;
+    }
+  }
+
+  .list-news-item {
+    padding: 7px 10px;
+    border-bottom: 1px solid $c-gallery;
+  }
+
+  .date {
+    display: block;
+    font-size: 12px;
+    color: $c-scorpion-alt-second;
+  }
+
+  h4 {
+    font-size: 14px;
+  }
+
+  .node-listing-teaser {
+    margin: 10px 10px 0 10px;
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+// ----------------
+// Image pane.
+// ----------------
+.pane-add-image {
+  img {
+    height: auto;
+    float: none;
+  }
+
+  .caption-text {
+    padding: 10px;
+    font-weight: 700;
+    color: $c-white;
+    background-color: $c-curious-blue-alt;
+  }
+}
+
+// ----------------
+// Node content pane / free content pane common styles.
+// ----------------
+.pane-node-content,
+.pane-free-content {
+  .pane-section-body {
+    margin: 0 10px;
+
+    .newsletter-layout-paddle_table_2_col_3_9 table.eight & {
+      margin-left: 0;
+    }
+
+    .newsletter-layout-paddle_table_2_col_9_3 table.eight & {
+      margin-right: 0;
+    }
+  }
+}
+
+// ----------------
+// Node content pane.
+// ----------------
+.pane-node-content {
+  .news-item-featured-image {
+    width: 100%;
+    height: auto;
+    float: none;
+  }
+}
+
+// ----------------
+// Menu structure pane.
+// ----------------
+.pane-add-menu-structure {
+  .ul-menu-items {
+    margin: 10px;
+
+    // Break long words in links for everybody.
+    word-break: break-all;
+    // CSS3 support for some web-based ones.
+    word-wrap: break-word;
+    > ul {
+      // Handle webkit browsers.
+      // Must be done here as the inliner removes duplicated
+      // properties when doing his job.
+      word-break: break-word;
+    }
+  }
+
+  .bullet-list {
+    ul {
+      margin: 0 0 0 15px;
+      padding: 0;
+    }
+
+    li {
+      margin: 0;
+    }
+  }
+
+  .regular-list {
+    ul,
+    li {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+  }
+}
+
+// ----------------
+// Media Queries
+// ----------------
+// All the media styles must be together as MailChimp service seems cannot
+// handle more (than two?) media queries sections. It stops working.
+@media only screen and (max-width: 600px) {
+  table[class="body"] {
+    .header,
+    .footer {
+      .columns {
+        // Center the texts in the header and footer.
+        td {
+          text-align: center !important;
+        }
+      }
+    }
+
+    // Full width divs on responsive layouts.
+    .columns div[class*="pane"] {
+      width: auto !important;
+    }
+
+    .pane-node-content,
+    .pane-free-content {
+      div[class*="pane-section-body"] {
+        margin: 0 10px !important;
+      }
+    }
+  }
+}

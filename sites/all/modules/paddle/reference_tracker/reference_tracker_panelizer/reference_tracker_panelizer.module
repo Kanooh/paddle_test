@@ -1,0 +1,93 @@
+<?php
+
+/**
+ * @file
+ * Module file for the Reference tracker panelizer.
+ */
+
+/**
+ * Implements hook_reference_tracker_entity_references_alter().
+ */
+function reference_tracker_panelizer_reference_tracker_entity_references_alter(&$references, $context) {
+  $entity = $context['entity'];
+
+  // If the entity is not panelized, skip parsing.
+  if (empty($entity->panelizer)) {
+    return;
+  }
+
+  ctools_include('content');
+
+  $additional_references = array();
+  // Loop all the view modes to look for references.
+  foreach ($entity->panelizer as $view_mode => $panelizer) {
+    if (!empty($panelizer->display->content)) {
+      foreach ($panelizer->display->content as $pid => $pane) {
+        // Fetch the content type plugin info to verify if it has support for
+        // references.
+        $type = ctools_get_content_type($pane->type);
+
+        if (empty($type['reference tracker'])) {
+          continue;
+        }
+
+        foreach ($type['reference tracker'] as $parents => $info) {
+          // Retrieve the pane configuration value.
+          $value = drupal_array_get_nested_value($pane->configuration, explode('][', $parents), $exists);
+
+          // The configuration value has not been found.
+          if (!$exists) {
+            continue;
+          }
+
+          $value_parse_info = reference_tracker_value_type_parse_info($info['value_type']);
+          if (!empty($value_parse_info['parser_callback'])) {
+            // Loop over all parser functions to get all references.
+            foreach ($value_parse_info['parser_callback'] as $key => $callback) {
+              if (function_exists($callback)) {
+                $value_parser_context = $context;
+                $value_parser_context['value_key'] = $parents;
+                $value_parser_context += $info;
+                // Provide the pane itself in the context.
+                $value_parser_context['pane'] = $pane;
+                $parser_result = $callback($value, $value_parser_context);
+                if (!empty($parser_result)) {
+                  $additional_references = array_merge_recursive($additional_references, $parser_result);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // If any additional reference is found, merge it into the references array
+  // using a neutral field id key.
+  if (!empty($additional_references)) {
+    $entity_language = entity_language($context['entity_type'], $entity);
+    // Ensure that the array elements exists without overriding existing ones.
+    $references += array(0 => array($entity_language => array()));
+    $references[0][$entity_language] = array_merge_recursive($references[0][$entity_language], $additional_references);
+    // Avoid duplicates.
+    $references = _reference_tracker_array_unique_recursive($references);
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_post_alter().
+ */
+function reference_tracker_panelizer_ctools_plugin_post_alter(&$plugin, &$info) {
+  if ($info['type'] != 'content_types') {
+    return;
+  }
+
+  // Add tracking support for the custom content pane.
+  if ($plugin['module'] == 'ctools' && $plugin['name'] == 'custom') {
+    $plugin['reference tracker'] = array(
+      'body' => array(
+        'value_type' => 'text',
+      ),
+    );
+  }
+}

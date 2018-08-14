@@ -1,0 +1,94 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleStylePluginColorTest.
+ */
+
+/**
+ * Tests the color plugin.
+ */
+class PaddleStylePluginColorTest extends DrupalWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Color',
+      'description' => 'Tests the color style plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    // Additionally enable ctools module.
+    parent::setUp(array('ctools', 'paddle_style'));
+  }
+
+  /**
+   * Tests the form() function of the color plugin without parameters.
+   */
+  public function testColorFormWithoutSettings() {
+    // Load the color plugin type "paddle_style".
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'color');
+
+    // Create an instance of the color plugin.
+    $instance = new $plugin['handler']['class']();
+    $form_elements = $instance->form();
+
+    // Test if the default elements are being returned.
+    $this->assertTrue($form_elements, 'The form call to the color plugin gives back standard elements when no settings given.');
+  }
+
+  /**
+   * Tests the form() function of the color plugin with a $values array.
+   */
+  public function testColorFormWithDefaults() {
+    // Load the color plugin type "paddle_style".
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'color');
+
+    // Random strings for the color color.
+    $color = $this->randomString(6);
+    // Values array to give to the form function.
+    $values = array(
+      'color' => $color,
+    );
+
+    // Create an instance of the color plugin.
+    $instance = new $plugin['handler']['class']();
+    $form_elements = $instance->form(array(), $values);
+
+    // Check if the default values are set correctly.
+    $this->assertTrue($form_elements['color']['#default_value'] == $color, 'Default value is set properly for the color.');
+  }
+
+  /**
+   * Tests the getProperties() function of the color plugin.
+   */
+  public function testColorGetProperties() {
+    // Load the color plugin type "paddle_style".
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'color');
+
+    // Generate a random color.
+    $color = $this->randomString(6);
+    // Values array to give to the getProperties() function.
+    $values = array(
+      'color' => $color,
+    );
+
+    // Create an instance of the color plugin.
+    $instance = new $plugin['handler']['class']();
+    $properties = $instance->getProperties($values);
+
+    // Test if the array being returned by getProperties() has the right
+    // mappings.
+    $this->assertTrue($properties['color'] == '#' . $color, 'The color property is set correctly.');
+  }
+}

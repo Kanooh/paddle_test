@@ -1,0 +1,620 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddlePanesListingUnitTest.
+ */
+
+/**
+ * Tests the "Listing" content type plugin.
+ */
+class PaddlePanesListingUnitTest extends PaddlePanesContentTypeTestCase {
+
+  /**
+   * Contains test vocabularies.
+   *
+   * @var array $vocabularies
+   */
+  protected $vocabularies = array();
+
+  /**
+   * Contains test terms.
+   *
+   * @var array $terms
+   */
+  protected $terms = array();
+
+  /**
+   * Contains test content types.
+   *
+   * These are content types from the Node module, not to be confused with
+   * $this->content_type which contains a *CTools* content type.
+   *
+   * @var array $contentTypes
+   */
+  protected $contentTypes = array();
+
+  /**
+   * Contains test nodes.
+   *
+   * @var array $nodes
+   */
+  protected $nodes = array();
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Listing',
+      'description' => 'Tests the "Listing" content type plugin.',
+      'group' => 'Paddle Landing Page',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp($modules = array()) {
+    parent::setUp($modules);
+
+    // Store the Listing content type plugin definition and subtype.
+    $this->contentType = ctools_get_content_type('listing');
+    $this->subtype = ctools_content_get_subtype($this->contentType, 'listing');
+
+    // Create a mock pane, display and context to feed to the plugin.
+    $this->pane = panels_new_pane('listing', 'listing');
+    $this->display = panels_new_display();
+    $this->context = new ctools_context();
+
+    // @codingStandardsIgnoreStart
+    // Create 2 vocabularies with 3 terms each, and 2 content types with 3 nodes
+    // each that each reference different combinations of 2 terms, except the
+    // first node created. These will be used to test filtering on terms and
+    // content types.
+    //
+    // This results in the following combination:
+    // |     tag1 tag2 tag3 term1 term2 term3
+    // ctA1   x
+    // ctA2   x    x
+    // ctA3        x    x
+    // ctB1             x     x
+    // ctB2                   x     x
+    // ctB3                         x     x
+    // @codingStandardsIgnoreEnd
+    $this->vocabularies = array();
+    $this->terms = array();
+    $this->contentTypes = array();
+    $this->nodes = array();
+
+    $created = strtotime('-1 day');
+    $previous_term = NULL;
+    for ($i = 0; $i < 2; $i++) {
+      // Create a vocabulary.
+      $vocabulary = $this->createVocabulary();
+      $this->vocabularies[$vocabulary->machine_name] = $vocabulary;
+
+      // Create a content type that is moderated by Workbench Moderation.
+      $content_type = $this->drupalCreateContentType();
+      $this->contentTypes[$content_type->type] = $content_type;
+      variable_set('node_options_' . $content_type->type, array(
+        'moderation',
+        'revision',
+      ));
+
+      $term_reference_field = array(
+        'field_name' => 'taxonomy_' . $vocabulary->machine_name,
+        'type' => 'taxonomy_term_reference',
+        'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+        'settings' => array(
+          'allowed_values' => array(
+            array(
+              'vocabulary' => $vocabulary->machine_name,
+              'parent' => 0,
+            ),
+          ),
+        ),
+      );
+      field_create_field($term_reference_field);
+
+      $field_instance = array(
+        'field_name' => 'taxonomy_' . $vocabulary->machine_name,
+        'bundle' => $content_type->type,
+        'entity_type' => 'node',
+        'widget' => array(
+          'type' => 'options_select',
+        ),
+        'display' => array(
+          'default' => array(
+            'type' => 'taxonomy_term_reference_link',
+          ),
+        ),
+      );
+      field_create_instance($field_instance);
+
+      for ($j = 0; $j < 3; $j++) {
+        // Create a term.
+        $term = $this->createTerm($vocabulary->vid);
+        $this->terms[$vocabulary->machine_name][$term->tid] = $term;
+
+        // Link multiple terms once we have a previous term.
+        $terms_to_link = array();
+        $terms_to_link[] = array('tid' => $term->tid);
+        if (!is_null($previous_term)) {
+          $terms_to_link[] = array('tid' => $previous_term->tid);
+        }
+
+        // Create a node.
+        $node_settings = array(
+          'type' => $content_type->type,
+          // Increase the created date with an hour in between nodes, so we can
+          // test sorting by date.
+          'created' => $created = $created + 3600,
+          // Link the node with the terms we just selected.
+          'taxonomy_' . $vocabulary->machine_name => array(
+            LANGUAGE_NONE => $terms_to_link,
+          ),
+        );
+        $node = $this->drupalCreateNode($node_settings);
+        $this->nodes[$content_type->type][$node->nid] = $node;
+
+        // Set up the moderation state, and feign a publication date so we can
+        // test sorting by publication date.
+        workbench_moderation_moderate($node, 'published');
+        db_update('workbench_moderation_node_history')
+          ->fields(array('stamp' => $node->created))
+          ->condition('nid', $node->nid)
+          ->execute();
+
+        // Save the term we just created for further use.
+        $previous_term = $term;
+      }
+    }
+  }
+
+  /**
+   * Tests the add form callback of the Listing plugin.
+   */
+  public function testAddForm() {
+    // Define mock form state, form info and configuration.
+    $form_state = $this->getMockPaneFormState();
+    $form_info = array();
+    $conf = array();
+
+    // Request the add form.
+    $form = ctools_content_form('add', $form_info, $form_state, $this->contentType, 'listing', $this->subtype, $conf, NULL);
+
+    // Check that we have some filtering options.
+    $this->assertTrue($form['pane_settings']['section_body']['filters']['terms'], 'Form elements that allow to filter on terms are present.');
+    $this->assertTrue($form['pane_settings']['section_body']['filters']['content_types'], 'Form elements that allow to filter on content types are present.');
+
+    // Check that the user can select different view modes.
+    $this->assertTrue($form['pane_settings']['section_body']['display_settings']['view_mode']['listing_title'], 'The user can choose between different view modes.');
+    $this->assertTrue($form['pane_settings']['section_body']['display_settings']['view_mode']['listing_teaser'], 'The user can choose between different view modes.');
+
+    // Check that the user can choose the number of items to show.
+    $this->assertTrue($form['pane_settings']['section_body']['display_settings']['number_items']['#type'], 'The user can choose between different view modes.');
+
+    // Check that we have some sorting options.
+    $this->assertTrue($form['pane_settings']['section_body']['sorting'], 'There are some sorting options present in the form.');
+
+    // Disable the 'Top' and 'Bottom' sections, since these are not relevant to
+    // this test.
+    $form_state['values']['top']['enable_section'] = FALSE;
+    $form_state['values']['bottom']['enable_section'] = FALSE;
+
+    // Build the form so we can run validation tests on it.
+    form_builder($form['#form_id'], $form, $form_state);
+
+    // Test that no form validation errors are thrown with default settings.
+    $errors = array();
+    $this->assertNoFormValidationErrors($form, $form_state);
+
+    // Test that the 'number of items' field is validated correctly. It should
+    // be numeric and bigger than zero.
+    $form_state['values']['number_items'] = '1';
+    $this->assertNoFormValidationErrors($form, $form_state);
+
+    $form_state['values']['number_items'] = '26';
+    $this->assertNoFormValidationErrors($form, $form_state);
+
+    $form_state['values']['number_items'] = '1000';
+    $this->assertNoFormValidationErrors($form, $form_state);
+
+    $form_state['values']['number_items'] = '100000';
+    $this->assertNoFormValidationErrors($form, $form_state);
+
+    $errors = array(
+      'number_items' => 'The number of items must be a valid number bigger than zero.',
+    );
+
+    $form_state['values']['number_items'] = 'NaN';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = '-1';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = '0';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = 'FALSE';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = '10.50';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = '10,50';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = '0xf4c3b00c';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = '+0123.45e6';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = '0b10100111001';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = '0700';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+    $form_state['values']['number_items'] = '';
+    $this->assertFormValidationErrors($form, $form_state, $errors);
+
+  }
+
+  /**
+   * Tests the rendering function of the Listing plugin.
+   */
+  public function testRender() {
+    // Test that the correct number of items are returned when the content type
+    // is rendered with the default configuration.
+    $configuration = array();
+    $this->assertRowCount($this->render($configuration), 5, 'With the default configuration 5 items are returned.');
+
+    // Test that the full set of results (6 items) are returned when there are
+    // no filters set.
+    $configuration = array('number_items' => 10);
+    $this->assertRowCount($this->render($configuration), 6, 'All results are returned when no filters are set.');
+
+    // Test filtering on terms.
+    // Test between 1 and 5 randomly selected terms, out of 6 available terms.
+    for ($i = 1; $i <= 5; $i++) {
+      $this->assertTermFilter($this->getRandomTids($i));
+    }
+    // Ensure filtering on tid 1 returns nid 1 and 2.
+    $this->assertTermFilter(array(1), 'Filtering on only 1 term also returns results that have more terms linked.');
+    // Ensure filtering on tid 1 and 2 returns only nid 2.
+    $this->assertTermFilter(array(1, 2), 'Filtering on multiple terms requires results to have all terms, even if some content has one of multiple terms linked.');
+    // Ensure filtering on tid 1 and 3 returns no results.
+    $this->assertTermFilter(array(1, 3), 'Filtering on multiple terms requires results to have all terms, even if returns no results.');
+    // Ensure filtering on tid 3 and 4 returns only nid 4.
+    $this->assertTermFilter(array(3, 4), 'Filtering on multiple terms requires results to have all terms, even if they span multiple vocabularies.');
+
+    // Test that all results are shown when filtering on both content types.
+    $configuration = array(
+      'content_types' => drupal_map_assoc(array_keys($this->contentTypes)),
+      'number_items' => 10,
+    );
+    $this->assertRowCount($this->render($configuration), 6, 'All results are returned when all content types are selected in the filter.');
+
+    // Test filtering on each content type separately.
+    foreach ($this->contentTypes as $content_type) {
+      $nids = array_keys($this->nodes[$content_type->type]);
+      $configuration = array('content_types' => array($content_type->type => TRUE));
+      $this->assertResults($this->render($configuration), $nids, format_string('The correct results are shown when filtering on the %type content type.', array('%type' => $content_type->type)));
+    }
+
+    // Test sorting.
+    $test_cases = array(
+      'date ascending' => array(
+        'sorting_type' => 'created_asc',
+        'expected' => range(1, 6),
+      ),
+      'date descending' => array(
+        'sorting_type' => 'created_desc',
+        'expected' => range(6, 1),
+      ),
+      'title ascending' => array(
+        'sorting_type' => 'title_asc',
+        'expected' => $this->getNidsByTitle(),
+      ),
+      'title descending' => array(
+        'sorting_type' => 'title_desc',
+        'expected' => $this->getNidsByTitle(FALSE),
+      ),
+    );
+    foreach ($test_cases as $sort_type => $test_case) {
+      $configuration = array(
+        'number_items' => 10,
+        'sorting_type' => $test_case['sorting_type'],
+      );
+      $this->assertResultOrder($this->render($configuration), $test_case['expected'], format_string('The results are shown in the right order when sorting by @sort_type.', array('@sort_type' => $sort_type)));
+    }
+
+    // Check that if the 'listing_title' view mode is chosen it is rendered as
+    // an unordered list in the correct view mode.
+    $configuration = array('view_mode' => 'listing_title');
+    $output = $this->render($configuration);
+    $xpath = '//div[contains(@class, "node-listing-title")]';
+    $this->assertTrue($output->elements->xpath($xpath), 'There are nodes rendered with the "listing_title" view mode when the "listing_title" view mode is chosen.');
+    $xpath = '//div[contains(@class, "node-listing-teaser")]';
+    $this->assertFalse($output->elements->xpath($xpath), 'There are no nodes rendered with the "listing_teaser" view mode when the "listing_title" view mode is chosen.');
+    $xpath = '//ul';
+    $this->assertTrue($output->elements->xpath($xpath), 'The output is rendered as an unordered list when the "listing_title" view mode is chosen.');
+    $xpath = '//div[contains(@class, "paddle-landing-page-listing-title")]';
+    $this->assertTrue($output->elements->xpath($xpath), 'A class is provided indicating that the view is showing nodes with the "listing-title" view mode.');
+
+    // Check that if the 'listing_teaser' view mode is chosen it is rendered as
+    // an "unformatted list" in the correct view mode.
+    $configuration = array('view_mode' => 'listing_teaser');
+    $output = $this->render($configuration);
+    $xpath = '//div[contains(@class, "node-listing-teaser")]';
+    $this->assertTrue($output->elements->xpath($xpath), 'There are nodes rendered with the "listing_teaser" view mode when the "listing_teaser" view mode is chosen.');
+    $xpath = '//div[contains(@class, "node-listing-title")]';
+    $this->assertFalse($output->elements->xpath($xpath), 'There are no nodes rendered with the "listing_title" view mode when the "listing_teaser" view mode is chosen.');
+    $xpath = '//ul';
+    $this->assertFalse($output->elements->xpath($xpath), 'The output is not rendered as an unordered list when the "listing_teaser" view mode is chosen.');
+    $xpath = '//div[contains(@class, "paddle-landing-page-listing-teaser")]';
+    $this->assertTrue($output->elements->xpath($xpath), 'A class is provided indicating that the view is showing nodes with the "listing-teaser" view mode.');
+  }
+
+  /**
+   * Checks that the rendered output contains the given number of rows.
+   *
+   * @param array $output
+   *   The output of the content type plugin.
+   * @param int $count
+   *   The number of Views rows that are expected in the output.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertRowCount($output, $count, $message = '', $group = 'Other') {
+    $message = $message ?: format_string('The listing contains @count rows.', array('@count' => $count));
+    $elements = $this->getViewsRowsByOutput($output);
+
+    return $this->assertEqual(count($elements), $count, $message, $group);
+  }
+
+  /**
+   * Test filtering on a certain combination of term ids.
+   *
+   * @param array $tids
+   *   Term ids.
+   * @param string $message
+   *   Set a custom assertion message.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertTermFilter(array $tids, $message = "") {
+    $selected_terms = taxonomy_term_load_multiple($tids);
+
+    $configuration = array();
+    foreach ($selected_terms as $tid => $term) {
+      $configuration['terms'][$term->vocabulary_machine_name][] = array('tid' => $tid);
+    }
+
+    $listing_results = $this->render($configuration);
+    $internal_results = $this->getNidsByTids($tids);
+
+    if (empty($message)) {
+      $message = format_string(
+        'The correct @count_listing out of @count_results results are shown when filtering on @count_terms terms.',
+        array(
+          '@count_listing' => count($this->getViewsRowsByOutput($listing_results)),
+          '@count_results' => count($internal_results),
+          '@count_terms' => count($tids),
+        )
+      );
+    }
+
+    return $this->assertResults($listing_results, $internal_results, $message);
+  }
+
+  /**
+   * Get all rows from a rendered view.
+   *
+   * @param array $output
+   *   The output of the content type plugin.
+   *
+   * @return array
+   *   Output elements that match the xpath.
+   */
+  public function getViewsRowsByOutput(&$output) {
+    $xpath = '//div[contains(@class, "views-row")]';
+    return $output->elements->xpath($xpath);
+  }
+
+  /**
+   * Checks that the rendered output contains the given node ids.
+   *
+   * @param array $output
+   *   The output of the content type plugin.
+   * @param array $nids
+   *   An array of node ids which are expected to be present in the output.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertResults($output, array $nids, $message = '', $group = 'Other') {
+    $message = $message ?: 'The output contains the correct results.';
+
+    // Check that the output contains the correct number of results.
+    $success = TRUE;
+    $success &= $this->assertRowCount($output, count($nids));
+
+    // Loop over the nids and check that each is present in the results.
+    foreach ($nids as $nid) {
+      $xpath = '//div[contains(@class, "node-' . $nid . '")]';
+      $elements = $output->elements->xpath($xpath);
+      $success &= $this->assertTrue($elements, format_string('The row containing node %nid is shown.', array('%nid' => $nid)));
+    }
+
+    return $this->assertTrue($success, $message, $group);
+  }
+
+  /**
+   * Checks that the rendered output contains the given nids in the given order.
+   *
+   * @param array $output
+   *   The output of the content type plugin.
+   * @param array $nids
+   *   An array of node ids which are expected to be present in the output in
+   *   the given order.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertResultOrder($output, array $nids, $message = '', $group = 'Other') {
+    $message = $message ?: 'The output contains the correct results in the correct order.';
+
+    // Check that the output contains the correct number of results.
+    $success = TRUE;
+    $success &= $this->assertRowCount($output, count($nids));
+
+    // Retrieve the Views result rows from the output, and check each one in
+    // turn to see if it matches the correct nid.
+    $elements = $this->getViewsRowsByOutput($output);
+
+    foreach ($nids as $nid) {
+      $xpath = 'div[contains(@class, "node-' . $nid . '")]';
+      $element = array_shift($elements);
+      $success &= $this->assertTrue($element->xpath($xpath), format_string('The node %nid is the next element in the result set.', array('%nid' => $nid)));
+    }
+
+    return $this->assertTrue($success, $message, $group);
+  }
+
+  /**
+   * Returns a random test vocabulary.
+   *
+   * @return object
+   *   A taxonomy vocabulary.
+   */
+  public function getRandomVocabulary() {
+    return $this->vocabularies[array_rand($this->vocabularies)];
+  }
+
+  /**
+   * Returns a given number of random taxonomy terms, out of 6 available terms.
+   *
+   * @param int $count
+   *   The number of random taxonomy terms to return.
+   *
+   * @return array
+   *   An array of taxonomy term ids.
+   */
+  public function getRandomTids($count) {
+    // Make sure we are not asked to return more terms than we have.
+    $count = $count < 6 ? $count : 6;
+
+    $terms = array();
+    while ($count) {
+      $terms[] = rand(1, 6);
+      $count--;
+    }
+
+    return $terms;
+  }
+
+  /**
+   * Get node ids from nodes that are tagged with all of the given term ids.
+   *
+   * @param array $tids
+   *   An array of term ids to check the test nodes against.
+   *
+   * @return array
+   *   An associative array of node ids which is also keyed by node id.
+   */
+  public function getNidsByTids(array $tids) {
+    $nids = array();
+
+    foreach ($this->nodes as $content_type => $nodes) {
+      foreach ($nodes as $node) {
+        $node_tids = $this->getTidsByNode($node);
+        $found_tids = array_intersect($tids, $node_tids);
+        if (count($found_tids) == count($tids)) {
+          $nids[$node->nid] = $node->nid;
+        }
+      }
+    }
+
+    return $nids;
+  }
+
+  /**
+   * Helper function to get taxonomy terms related to a node.
+   *
+   * @param object $node
+   *   A node object.
+   *
+   * @return array
+   *   An associative array with term ids.
+   *
+   * @see https://drupal.org/node/909968
+   */
+  public function getTidsByNode($node) {
+    $return = array();
+
+    // Get a list of vocabulary names and prefix them with 'taxonomy_' to get
+    // the taxonomy term reference field names.
+    $fieldnames = array_keys($this->vocabularies);
+    array_walk($fieldnames, function (&$value, $key) {
+      $value = 'taxonomy_' . $value;
+    });
+
+    if (is_object($node)) {
+      // Get all fields for the given node type.
+      $fields = field_info_instances('node', $node->type);
+      foreach ($fields as $fieldname => $info) {
+        // Check if it's one the taxonomy term fields we created in the setup of
+        // this test.
+        if (in_array($fieldname, $fieldnames)) {
+          // If they are, load all term names and tids for given field.
+          foreach (field_get_items('node', $node, $fieldname) as $field) {
+            $return[$field['tid']] = $field['tid'];
+          }
+        }
+      }
+    }
+
+    return $return;
+  }
+
+  /**
+   * Returns the node ids of the nodes, ordered alphabetically by title.
+   *
+   * @param bool $ascending
+   *   Whether to sort ascending or descending.
+   *
+   * @return array
+   *   An associative array of node ids, keyed by node title.
+   */
+  public function getNidsByTitle($ascending = TRUE) {
+    $nids = array();
+
+    foreach ($this->nodes as $content_type => $nodes) {
+      foreach ($nodes as $node) {
+        $nids[$node->nid] = $node->title;
+      }
+    }
+    natcasesort($nids);
+
+    return $ascending ? array_flip($nids) : array_flip(array_reverse($nids, TRUE));
+  }
+
+}

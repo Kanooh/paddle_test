@@ -1,0 +1,53 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCoreGATrackingTest.
+ */
+
+/**
+ * Test the Google Analytics tracking on Paddle websites.
+ */
+class PaddleCoreGATrackingTestCase extends PaddleWebTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'GA Tracking',
+      'description' => 'Test the Google Analytics tracking in both the front-end as in the back-end.',
+      'group' => 'Paddle Core',
+    );
+  }
+
+  /**
+   * Test the presence of the GA tracking code on the back-end pages.
+   */
+  public function testGACodePresent() {
+    $back_end_code = 'testGABackEndCode';
+    $front_end_code = 'testGAFrontEndCode';
+    variable_set('paddle_backend_tracking_id', $back_end_code);
+    variable_set('paddle_frontend_tracking_id', $front_end_code);
+
+    // Check for a front-end path.
+    $this->drupalGet('<front>');
+    $this->assertNoRaw($back_end_code, 'GA back-end tracking code is not found for users visiting the front page.');
+    $this->assertRaw($front_end_code, 'GA front-end tracking code is found for users visiting the front page.');
+
+    // Log in as Chief Editor.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a page to test with.
+    $this->createLandingPage();
+    $test_paths = array('admin/content_manager', 'node/1/edit');
+
+    // Check for the back-end paths.
+    foreach ($test_paths as $path) {
+      $this->drupalGet($path);
+      $this->assertRaw($back_end_code, 'GA back-end tracking code found on path "' . $path . '".');
+      $this->assertNoRaw($front_end_code, 'GA front-end tracking code not found on path "' . $path . '".');
+    }
+  }
+
+}

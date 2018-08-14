@@ -1,0 +1,5 @@
+name = RESTful web services support for files and images
+description = Support for creating and updating files and images as base64-encoded strings.
+core = "7.x"
+
+dependencies[] = restws (>=2.3)

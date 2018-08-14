@@ -1,0 +1,81 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Pane Collection.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_pane_collection_schema() {
+  $schema = array();
+
+  $schema['paddle_pane_collection'] = array(
+    'description' => 'Stores Paddle Pane Collections.',
+    'fields' => array(
+      'ppcid' => array(
+        'description' => 'The primary identifier for a pane collection.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'The title for the pane collection.',
+      ),
+      'language' => array(
+        'description' => 'The {languages}.language of this pane collection.',
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'indexes' => array(
+      'title' => array('title'),
+      'language' => array('language'),
+    ),
+    'primary key' => array('ppcid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_pane_collection_enable() {
+  module_load_all();
+  entity_info_cache_clear();
+  drupal_static_reset();
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_pane_collection');
+  drupal_static_reset('panelizer_entity_plugin_get_handler');
+  ctools_modules_enabled(array('paddle_pane_collection'));
+
+  // Set permissions.
+  $permissions = array(
+    'administer panelizer paddle_pane_collection paddle_pane_collection content',
+    'edit paddle_pane_collection content in landing pages',
+  );
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Add the Pane Collection entity edit page to the management menu display
+  // path root items.
+  if ('paddle' == variable_get('install_profile')) {
+    $path_roots = array(
+      array(
+        'path' => 'admin/paddle-pane-collection/%',
+        'root_item' => 'admin',
+      ),
+    );
+    module_load_include('install', 'paddle');
+    _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+  }
+}

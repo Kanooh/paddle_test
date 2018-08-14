@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the faceted search module.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_faceted_search_enable() {
+  // Flush the entity caches, allowing the search index to be altered.
+  entity_flush_caches();
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_faceted_search_disable() {
+  // Flush the entity caches, allowing the search index reverted to default.
+  entity_flush_caches();
+}
+
+/**
+ * Fix fulltext search not working on general tags.
+ */
+function paddle_faceted_search_update_7100() {
+  // Flush the entity caches, allowing the search index to be altered.
+  entity_flush_caches();
+
+  // Re-index the nodes.
+  $index = search_api_index_load('node_index');
+  $index->clear();
+  search_api_index_items($index);
+}

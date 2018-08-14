@@ -1,0 +1,145 @@
+<?php
+
+/**
+ * @file
+ * Contains TUnitTestCase.
+ */
+
+/**
+ * Test cases for the test helper. How meta.
+ */
+class TUnitTestCase extends TUnit {
+  public static function getInfo() {
+    return array(
+      'name' => 'TUnit test cases',
+      'description' => 'Unit tests for TUnit.',
+      'group' => 'TUnit',
+    );
+  }
+
+  /**
+   * Make sure stuff works.
+   *
+   * Implicitly test creating without a constructor.
+   */
+  public function test() {
+    $object = $this->newInstanceWithoutConstructor('TUnitTestCaseProtected');
+    $this->assertEqual(4321, $this->getProperty($object, 'firstProtected'));
+    $this->assertEqual(1234, $this->getProperty($object, 'secondProtected'));
+
+    $this->setProperty($object, 'secondProtected', 'VALUE');
+    $this->assertEqual('VALUE', $this->getProperty($object, 'secondProtected'));
+
+    $this->assertEqual(array('BEEP'), $this->invokeMethod($object, 'protectedFunction', array('BEEP')));
+    $this->assertEqual(array('BOOP'), $this->invokeMethod($object, 'privateFunction', array('BOOP')));
+  }
+
+  /**
+   * Tests variable* methods.
+   */
+  public function testVariableMethods() {
+    $this->variableSet('test_var', 1234);
+    $this->assertEqual(variable_get('test_var'), 1234);
+    $this->assertEqual($this->variableGet('test_var'), 1234);
+
+    $this->variableDel('test_var');
+
+    $this->assertEqual(variable_get('test_var'), NULL);
+    $this->assertEqual($this->variableGet('test_var'), NULL);
+  }
+
+  /**
+   * Tests that variables get restored.
+   */
+  public function testVariableRestore() {
+    global $conf;
+
+    $conf['test_var'] = 1234;
+
+    $this->variableSet('test_var', 'HELLO');
+    $this->assertEqual(variable_get('test_var'), $this->variableGet('test_var'));
+    $this->variableRestore();
+
+    // Tests that the original variables were restored.
+    $this->assertFalse(array_key_exists('test_var', $conf));
+  }
+
+  /**
+   * Tests that exception assertion works.
+   */
+  public function testExpectException() {
+    $this->assertException('_tunit_throws_exception', array('error message'), 'RuntimeException', 'error message');
+  }
+
+  /**
+   * Tests that Drupal's class loader is inactive.
+   */
+  public function testDrupalClassLoaderIsInactive() {
+    $this->assertFalse(class_exists('IDONOTEXIST'), 'Drupal class loader is inactive.');
+  }
+
+}
+
+/**
+ * A test class for testing TUinit's introspection.
+ */
+class TUnitTestCaseProtected {
+
+  /**
+   * A protected property.
+   *
+   * @var int
+   */
+  protected $firstProtected = 4321;
+
+  /**
+   * The seconf protected property.
+   *
+   * @var int
+   */
+  private $secondProtected = 1234;
+
+  /**
+   * Constructs a TUnitTestCaseProtected object.
+   *
+   * @throws RuntimeException
+   *   A RuntimeException is always thrown for testing constructor skipping.
+   */
+  public function __construct() {
+    throw new RuntimeException('Bahhhh');
+  }
+
+  /**
+   * A protected method.
+   *
+   * @return mixed
+   *   Returns whatever is passed in.
+   */
+  protected function protectedFunction() {
+    return func_get_args();
+  }
+
+  /**
+   * A private method.
+   *
+   * @return mixed
+   *   Returns whatever is passed in.
+   */
+  private function privateFunction() {
+    return func_get_args();
+  }
+
+}
+
+/**
+ * Throws a RuntimeException.
+ *
+ * @param string $arg
+ *   Used as the exception message.
+ *
+ * @throws RuntimeException
+ *   Always thrown.
+ */
+function _tunit_throws_exception($arg) {
+  throw new RuntimeException($arg);
+}

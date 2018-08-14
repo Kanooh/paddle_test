@@ -1,0 +1,446 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Editorial Notes module.
+ */
+
+require_once 'paddle_editorial_notes.features.inc';
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_editorial_notes_permission() {
+  $return = array(
+    'use paddle_editorial_notes' => array(
+      'title' => t('Add and read editorial notes'),
+    ),
+    'delete own paddle_editorial_notes' => array(
+      'title' => t('Delete own editorial notes'),
+    ),
+    'delete paddle_editorial_notes' => array(
+      'title' => t('Delete any editorial note'),
+    ),
+  );
+
+  return $return;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_editorial_notes_menu() {
+  $items = array();
+
+  // Provide menu callbacks that allow to delete editorial notes.
+  $items['admin/paddle/note/%message/delete/nojs'] = array(
+    'page callback' => 'paddle_editorial_notes_note_delete',
+    'page arguments' => array(3, 5),
+    'access callback' => 'paddle_content_manager_delete_access',
+    'access arguments' => array(3),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/paddle/note/%message/delete/ajax'] = array(
+    'delivery callback' => 'ajax_deliver',
+  ) + $items['admin/paddle/note/%message/delete/nojs'];
+
+  return $items;
+}
+
+/**
+ * Access callback for note deletes.
+ */
+function paddle_content_manager_delete_access($message) {
+  global $user;
+  return user_access('delete paddle_editorial_notes') || (user_access('delete own paddle_editorial_notes') && $user->uid == $message->uid);
+}
+
+/**
+ * Menu callback for note delete.
+ */
+function paddle_editorial_notes_note_delete($message, $ajax) {
+
+  if (empty($_GET['delete_token']) || !drupal_valid_token($_GET['delete_token'], 'delete_editorial_note' . $message->mid)) {
+    return MENU_ACCESS_DENIED;
+  }
+
+  // Unpublish message.
+  $messages = message_load_multiple(array($message->mid));
+  $new_message = entity_metadata_wrapper('message', array_shift($messages));
+  $new_message->field_paddle_editorial_note_vis->set(0);
+  $new_message->save();
+
+  drupal_set_message(t('The editorial note has been deleted.'));
+
+  if ($ajax === 'ajax') {
+    $commands = array();
+
+    // Remove the row we just deleted?
+    $commands[] = ajax_command_remove('div.note-mid-' . $message->mid);
+    // Output messages.
+    $commands[] = ajax_command_remove('#editorial-notes-ajax-wrapper div.messages');
+    $commands[] = ajax_command_prepend('#editorial-notes-ajax-wrapper', theme('status_messages'));
+
+    return array('#type' => 'ajax', '#commands' => $commands);
+  }
+}
+
+/**
+ * Adds an editorial note to a node.
+ *
+ * @param object $node
+ *   The node to add the editorial note to.
+ * @param string $comment
+ *   The editorial note comment.
+ */
+function paddle_editorial_notes_note_add($node, $comment) {
+  $message = message_create('paddle_editorial_note');
+
+  $wrapper = entity_metadata_wrapper('message', $message);
+  $wrapper->field_paddle_editorial_note_ref->set($node);
+  $wrapper->field_paddle_editorial_note_vis->set(1);
+  $wrapper->field_paddle_editorial_note->set($comment);
+  $wrapper->save();
+
+  $wrapper->info();
+
+  return $wrapper->value();
+}
+
+/**
+ * Form builder callback for the editorial note form.
+ */
+function paddle_editorial_notes_note_form($form, &$form_state, $node = NULL) {
+
+  if (!isset($form['#node']) && isset($node)) {
+    $form['#node'] = $node;
+  }
+
+  $form['editorial_notes'] = array(
+    '#type' => 'fieldset',
+    '#access' => user_access('use paddle_editorial_notes'),
+    '#title' => t('Editorial notes'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+    '#attributes' => array(
+      'class' => array('editorial-notes-note-form'),
+    ),
+  );
+
+  $form['editorial_notes']['wrapper'] = array(
+    '#type' => 'container',
+    '#id' => drupal_html_id('editorial_notes_ajax_wrapper'),
+  );
+
+  // Note that we can not mark this field as required,
+  // otherwise it is required when submitting the actual node.
+  $form['editorial_notes']['wrapper']['editorial_note'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Editorial note'),
+    '#attributes' => array(
+      'class' => array('editorial-note-text-area'),
+    ),
+  );
+
+  $form['editorial_notes']['wrapper']['editorial_note_submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save note'),
+    '#validate' => array('paddle_editorial_notes_note_add_validate'),
+    '#submit' => array('paddle_editorial_notes_note_add_submit'),
+    '#limit_validation_errors' => array(array('editorial_note')),
+    '#ajax' => array(
+      'callback' => 'paddle_editorial_notes_note_form_ajax',
+      'wrapper' => $form['editorial_notes']['wrapper']['#id'],
+      'method' => 'replaceWith',
+    ),
+    '#attributes' => array(
+      'class' => array('submit-editorial-note'),
+    ),
+  );
+
+  paddle_editorial_notes_form_set_note_list($form, $form_state);
+
+  return $form;
+}
+
+/**
+ * Adds the list of notes to the note form.
+ */
+function paddle_editorial_notes_form_set_note_list(&$form, &$form_state) {
+  // Show list of current notes on node.
+  $mids = array();
+  $themed_notes = array();
+
+  if (isset($form['#node']->nid)) {
+    $query = new EntityFieldQuery();
+    $query
+      ->entityCondition('entity_type', 'message')
+      ->entityCondition('bundle', 'paddle_editorial_note')
+      ->fieldCondition('field_paddle_editorial_note_ref', 'target_id', $form['#node']->nid)
+      ->fieldCondition('field_paddle_editorial_note_vis', 'value', 1)
+      ->propertyOrderBy('timestamp', 'DESC');
+    $result = $query->execute();
+  }
+  elseif (isset($form_state['paddle_editorial_notes_new_note_mids'])) {
+    // Check visibility on temporary notes.
+    $note_mids = $form_state['paddle_editorial_notes_new_note_mids'];
+    $query = new EntityFieldQuery();
+    $query
+      ->entityCondition('entity_type', 'message')
+      ->entityCondition('bundle', 'paddle_editorial_note')
+      ->propertyCondition('mid', $note_mids, 'IN')
+      ->fieldCondition('field_paddle_editorial_note_vis', 'value', 1)
+      ->propertyOrderBy('timestamp', 'DESC');
+    $result = $query->execute();
+  }
+  if (isset($result['message'])) {
+    $mids = array_keys($result['message']);
+  }
+
+  foreach ($mids as $mid) {
+    $note = entity_load_single('message', $mid);
+
+    $themed_notes[] = array(
+      '#type' => 'markup',
+      '#markup' => theme('paddle_editorial_notes_note', array('note' => $note)),
+    );
+  }
+
+  $form['editorial_notes']['list'] = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'class' => array('paddle-editorial-note-list'),
+    ),
+    '#attached' => array(
+      'js' => array(
+        drupal_get_path('module', 'paddle_editorial_notes') . '/js/paddle_editorial_notes.js',
+      ),
+    ),
+  ) + $themed_notes;
+}
+
+/**
+ * Form submit callback for the submit button of the note form.
+ */
+function paddle_editorial_notes_note_add_submit($form, &$form_state) {
+  // Add note.
+  $new_note = paddle_editorial_notes_note_add($form['#node'], $form_state['values']['editorial_note']);
+
+  // Add note to form state for any other submit handlers to act upon.
+  $form_state['paddle_editorial_notes_new_note'] = $new_note;
+
+  drupal_set_message(t('Your editorial note has been added.'));
+}
+
+/**
+ * Additional form submit callback for the node edit form.
+ *
+ * Collects note mids into form state for further processing
+ * in paddle_editorial_notes_node_form_submit().
+ */
+function paddle_editorial_notes_node_form_note_add_submit($form, &$form_state) {
+  if (!isset($form_state['paddle_editorial_notes_new_note_mids'])) {
+    $form_state['paddle_editorial_notes_new_note_mids'] = array();
+  }
+
+  if ($form_state['paddle_editorial_notes_new_note']) {
+    // Instruct the form to rebuild, so new notes will appear as well
+    // on non-ajax submissions.
+    $form_state['rebuild'] = TRUE;
+
+    $mid = $form_state['paddle_editorial_notes_new_note']->mid;
+    $form_state['paddle_editorial_notes_new_note_mids'][] = $mid;
+  }
+}
+
+/**
+ * Validate callback for the submit button on the note add form.
+ */
+function paddle_editorial_notes_note_add_validate(&$form, &$form_state) {
+  $comment = $form_state['values']['editorial_note'];
+  if ($comment == '') {
+    $comment_element = $form['editorial_notes']['wrapper']['editorial_note'];
+    form_error($comment_element, t('!name field is required.', array('!name' => $comment_element['#title'])));
+  }
+}
+
+/**
+ * Validate callback for the node add form.
+ *
+ * Note that the first argument is intentionally taken by reference, because
+ * the form needs to be altered.
+ *
+ * @see drupal_validate_form()
+ */
+function paddle_editorial_notes_node_form_validate(&$form, &$form_state) {
+  // Re-insert all notes in the form structure, otherwise notes added with Ajax
+  // will not re-appear on validation errors.
+  paddle_editorial_notes_form_set_note_list($form, $form_state);
+}
+
+/**
+ * Ajax callback for the note form.
+ */
+function paddle_editorial_notes_note_form_ajax($form, &$form_state) {
+  if ($form_state['executed']) {
+    $form['editorial_notes']['wrapper']['editorial_note']['#value'] = '';
+  }
+  else {
+    unset($form_state['paddle_editorial_notes_new_note']);
+  }
+
+  // Collect commands to execute.
+  $commands = array();
+
+  if (isset($form_state['paddle_editorial_notes_new_note'])) {
+    $note = $form_state['paddle_editorial_notes_new_note'];
+    // Ensure we have a fully loaded note.
+    $note = entity_load_single('message', $note->mid);
+    unset($form_state['paddle_editorial_notes_new_note']);
+
+    $themed_note = theme('paddle_editorial_notes_note', array('note' => $note));
+    $commands[] = ajax_command_prepend('div.paddle-editorial-note-list', $themed_note);
+  }
+
+  // Re-render wrapper.
+  $commands[] = ajax_command_replace(NULL, drupal_render($form['editorial_notes']['wrapper']));
+  // Display message.
+  $commands[] = ajax_command_prepend('#' . $form['editorial_notes']['wrapper']['#id'], theme('status_messages'));
+
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function paddle_editorial_notes_node_insert($node) {
+  // Reference orphaned messages back to node.
+  if ($node->is_new && !empty($node->editorial_notes_mids)) {
+    $messages = message_load_multiple($node->editorial_notes_mids);
+    if (!empty($messages)) {
+      foreach ($messages as $data) {
+        $message = entity_metadata_wrapper('message', $data);
+        $message->field_paddle_editorial_note_ref->set($node);
+        $message->save();
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_editorial_notes_theme() {
+  return array(
+    'paddle_editorial_notes_note' => array(
+      'variables' => array(
+        'note' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * Theme function for a editorial note.
+ */
+function theme_paddle_editorial_notes_note($variables) {
+  $message = $variables['note'];
+
+  // Add delete link if user has permission.
+  $delete_link = '';
+  if (paddle_content_manager_delete_access($message)) {
+    $delete_link = l(t('Delete'), 'admin/paddle/note/' . $message->mid . '/delete/nojs', array(
+      'attributes' => array(
+        'class' => array('use-ajax', 'delete-editorial-note'),
+      ),
+      'query' => array(
+        'delete_token' => drupal_get_token('delete_editorial_note' . $message->mid),
+      ),
+    ));
+  }
+
+  $message_date = array(
+    '#type' => 'markup',
+    '#markup' => '<div class="editorial-note-date">' . format_date($message->timestamp, 'medium') . '</div>',
+  );
+  $header = drupal_render($message_date) . $delete_link . theme('username', array('account' => user_load($message->uid)));
+
+  $output = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'class' => array('paddle-editorial-note', 'note-mid-' . $message->mid),
+      'data-editorial-note-id' => $message->mid,
+    ),
+    'header' => array(
+      '#type' => 'markup',
+      '#markup' => '<div class="message-paddle-editorial-note-header">' . $header . '</div>',
+      '#attached' => array(
+        'library' => array(
+          array('system', 'drupal.ajax'),
+        ),
+      ),
+    ),
+    'message' => array(
+      '#prefix' => '<div' . drupal_attributes(array('class' => 'message-paddle-editorial-note-content')) . '>',
+      '#markup' => nl2br(check_plain($message->field_paddle_editorial_note[LANGUAGE_NONE][0]['value'])),
+      '#suffix' => '</div>',
+    ),
+  );
+
+  return drupal_render($output);
+}
+
+/**
+ * Submit callback for the node add form.
+ *
+ * Enables note taking on new nodes which can't be referenced
+ * yet because they do not have a nid yet. The collected message
+ * ids are added to the form_state values. The ids can be accessed
+ * later on in our hook_node_insert() implementation.
+ */
+function paddle_editorial_notes_node_form_submit($form, &$form_state) {
+  $form_state['values']['editorial_notes_mids'] = array();
+  if (isset($form_state['paddle_editorial_notes_new_note_mids'])) {
+    $form_state['values']['editorial_notes_mids'] = $form_state['paddle_editorial_notes_new_note_mids'];
+  }
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function paddle_editorial_notes_form_node_form_alter(&$form, &$form_state, $form_id) {
+
+  // Check permission.
+  if (!user_access('use paddle_editorial_notes')) {
+    return;
+  }
+
+  // Amend form with editorial note elements.
+  $form = paddle_editorial_notes_note_form($form, $form_state);
+
+  if (!isset($form['#node']->nid)) {
+    // Placeholder for message ids collector.
+    $form['editorial_notes_mids'] = array(
+      '#type' => 'hidden',
+    );
+
+    array_push($form['#submit'], 'paddle_editorial_notes_node_form_submit');
+    array_push($form['#validate'], 'paddle_editorial_notes_node_form_validate');
+  }
+
+  // Submit handler for filling the message ids collector
+  // and triggering a form rebuild.
+  $form['editorial_notes']['wrapper']['editorial_note_submit']['#submit'][] = 'paddle_editorial_notes_node_form_note_add_submit';
+
+  $form['editorial_notes']['#group'] = 'additional_settings';
+  $form['editorial_notes']['#weight'] = 30;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_editorial_notes_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}

@@ -1,0 +1,38 @@
+name = Paddle Theme
+description = Paddle Base theme
+package = Core
+version = 0.1
+core = 7.x
+
+stylesheets[all][] = css/resets.css
+stylesheets[all][] = css/navigation.css
+stylesheets[all][] = css/paddle.css
+stylesheets[all][] = css/paddle_theme.css
+stylesheets[all][] = css/paddle_wysiwyg.css
+stylesheets[all][] = css/paddlets.css
+stylesheets[all][] = css/panes.css
+stylesheets[all][] = css/search.css
+stylesheets[all][] = css/tables.css
+stylesheets[all][] = css/typography.css
+stylesheets[all][] = css/vo_branding.css
+
+stylesheets[print][] = css/print.css
+
+regions[service_links] = Service Links
+regions[header_bottom] = Header Bottom
+regions[sidebar_first] = Left sidebar
+regions[left_column] = left column
+regions[sidebar_second] = Right sidebar
+regions[content_top] = Content Top
+regions[content_sub_top] = Content Sub Top
+regions[content] = Content
+regions[disclaimer] = Disclaimer
+regions[footer] = Footer
+regions[highlighted] = Highlighted
+regions[help] = Help
+regions[featured] = Featured
+
+; Information added by drush on 2016-02-10
+version = "7.x-1.x-dev"
+project = "paddle_theme"
+datestamp = "1455101157"

@@ -1,0 +1,11 @@
+name = "LoginToboggan Variable Integration"
+description = "Integrates LoginToboggan with Variable module"
+core = "7.x"
+
+dependencies[] = logintoboggan
+dependencies[] = variable
+
+; Information added by drush on 2015-05-01
+version = "7.x-1.5"
+project = "logintoboggan"
+datestamp = "1430495610"

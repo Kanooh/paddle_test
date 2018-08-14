@@ -1,0 +1,13 @@
+name = WebClient formatters
+description = Provides additional response formatters for various MIME types.
+package = WebClient
+core = 7.x
+; Module dependencies
+dependencies[] = webclient
+; Autoload classes
+files[] = includes/webclient_formatters.class.inc
+
+; Information added by drush on 2014-04-12
+version = "7.x-1.6"
+project = "webclient"
+datestamp = "1397309472"

@@ -1,0 +1,4 @@
+name = Paddle Subscription
+description = Subscription functionality for the Paddle distribution
+core = 7.x
+package = Paddle

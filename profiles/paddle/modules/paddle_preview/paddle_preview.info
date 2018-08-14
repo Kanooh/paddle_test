@@ -1,0 +1,11 @@
+name = Paddle Preview
+description = Preview toolbar
+core = 7.x
+
+dependencies[] = paddle_themer
+
+files[] = tests/paddle_preview_test_case.test
+files[] = tests/paddle_preview.test
+files[] = tests/paddle_preview_themes.test
+
+stylesheets[all][] = css/paddle_preview.css

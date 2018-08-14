@@ -1,0 +1,42 @@
+<?php
+/**
+ * @file
+ * Tests for the Paddle Scald file module.
+ */
+
+/**
+ * Class PaddleScaldFileTestCase.
+ */
+class PaddleScaldFileTestCase extends DrupalWebTestCase {
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Scald atom files',
+      'description' => 'Test the file atom file size format.',
+      'group' => 'Paddle',
+    );
+  }
+
+  /**
+   * Tests stuff.
+   */
+  public function testFileSizeFormat() {
+    $cases = array(
+      array(512, '512 bytes'),
+      array(1040, '1 KB'),
+      array(1138, '1 KB'),
+      array(2000, '2 KB'),
+      array(1059062, '1.01 MB'),
+      array(1646265, '1.57 MB'),
+    );
+
+    foreach ($cases as $case) {
+      list($bytes, $expected) = $case;
+
+      $this->assertEqual($expected, paddle_scald_file_format_size($bytes));
+    }
+  }
+
+}

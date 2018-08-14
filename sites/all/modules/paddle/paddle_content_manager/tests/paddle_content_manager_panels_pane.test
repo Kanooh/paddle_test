@@ -1,0 +1,162 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleContentManagerPanelsPaneTest.
+ */
+
+/**
+ * Unit tests for the Paddle Content Manager module.
+ */
+class PaddleContentManagerPanelsPaneTest extends DrupalWebTestCase {
+
+  protected $nodePanel;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Custom content pane tests',
+      'description' => 'Test custom panes for Paddle Content Manager module.',
+      'group' => 'Paddle Content Manager',
+    );
+  }
+
+  /**
+   * Set up a test environment.
+   */
+  public function setUp() {
+    // Enable required modules.
+    parent::setUp();
+
+    module_enable(array('paddle_content_manager'));
+  }
+
+  /**
+   * Define an array of pane configuration which is expected.
+   *
+   * This function gets called when comparing values with the actual system.
+   */
+  protected function getRequiredPanes() {
+    $panes = array();
+
+    $panes['right'][] = array(
+      'type' => 'moderation_history_pane',
+      'subtype' => 'moderation_history_pane',
+      'panel' => 'right',
+      'context' => 'argument_node_edit_1',
+    );
+
+    return $panes;
+  }
+
+  /**
+   * Test custom ctools content type panes.
+   *
+   * (Implemented on panels node_panel page).
+   */
+  public function testPanelPanes() {
+    $this->nodePanel = page_manager_get_page_cache('node_edit');
+
+    $regions = $this->getRequiredPanes();
+
+    // Iterate through each region and check if it
+    // exists as defined in $regions.
+    foreach ($regions as $region_name => $region) {
+      foreach ($region as $pane) {
+        // Call paneExists() method which will validate the pane exists and
+        // the configuration of that pane.
+        $this->assertTrue($this->paneExists($pane, 'node_edit_panel_context', $region_name),
+          t('Panels node_panel required pane :type-:subtype exists', array(':type' => $pane['type'], ':subtype' => $pane['subtype']))
+        );
+      }
+    }
+  }
+
+  /**
+   * Check if pane exists with a certain pane and variant.
+   *
+   * @param array $pane
+   *   Pane array from the panel object.
+   * @param string $variant
+   *   Hardcoded variant machine name.
+   * @param string $region
+   *   Region name e.g. 'right'.
+   *
+   * @return bool
+   *   TRUE, otherwise FALSE.
+   */
+  protected function paneExists(array $pane, $variant, $region) {
+
+    // Store the array of different panes for that region, and its variant.
+    $panes = $this->nodePanel->handlers[$variant]->conf['display']->panels[$region];
+
+    // Iterate through the panes validating configuration
+    // and if it exists, returning TRUE.
+    foreach ($panes as $region_pane) {
+      $region_pane_object = $this->nodePanel->handlers[$variant]->conf['display']->content[$region_pane];
+      $correct_pane = $pane['type'] == $region_pane_object->type && $pane['subtype'] == $region_pane_object->subtype;
+
+      if ($correct_pane) {
+        // Test the pane for correct placement.
+        // Create an array $settings which just contains
+        // settings keys we care to check for when examining
+        // the pane configuration.
+        $settings = array('panel', 'context');
+
+        // This function will loop through the settings array and determine
+        // wether the defined configuration matches the actual system pane.
+        $this->checkRequiredPaneConfig($settings, $pane, $region_pane_object);
+
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
+   * Helper function which will iterate over defined $settings array.
+   *
+   * Helps determine the correct config of the pane on the current system.
+   *
+   * @param array $settings
+   *   Custom array of setting keys for the pane.
+   * @param array $pane
+   *   Pane array from the panel object.
+   * @param object $region_pane_object
+   *   Panel object.
+   *
+   * @return bool
+   *   Returns TRUE.
+   */
+  protected function checkRequiredPaneConfig($settings, $pane, $region_pane_object) {
+    foreach ($settings as $item) {
+      if (isset($pane[$item])) {
+        // Key on the correct elements in order to validate settings.
+        switch ($item) {
+          case 'panel':
+            $region_pane_object_value = $region_pane_object->panel;
+            break;
+
+          case 'context':
+            $region_pane_object_value = $region_pane_object->configuration[$item];
+            break;
+        }
+
+        $this->assertEqual($pane[$item], $region_pane_object_value,
+          t('Panels node_panel page pane :type-:subtype has correct :item.',
+            array(
+              ':type' => $pane['type'],
+              ':subtype' => $pane['subtype'],
+              ':item' => $item,
+            )
+          )
+        );
+      }
+    }
+
+    return TRUE;
+  }
+
+}

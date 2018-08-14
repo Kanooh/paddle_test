@@ -1,0 +1,34 @@
+<phpunit bootstrap="bootstrap.php">
+    <testsuites>
+        <testsuite name="Paddle">
+            <directory>tests</directory>
+        </testsuite>
+        <testsuite name="PaddleEssentials">
+            <!-- Only the tests from the most popular apps. -->
+            <directory>tests/Kanooh/Paddle/App/FlyOutMenu</directory>
+            <directory>tests/Kanooh/Paddle/App/GoogleAnalytics</directory>
+            <!-- And the apps that have to keep sensitive data private. -->
+            <directory>tests/Kanooh/Paddle/App/ProtectedContent</directory>
+
+            <!-- All core tests. -->
+            <directory>tests/Kanooh/Paddle/Core</directory>
+
+
+            <!-- Except: Content Regions, because it's not popular. -->
+            <exclude>tests/Kanooh/Paddle/Core/ContentRegion</exclude>
+
+            <!-- Except: OverviewPage, because it's partly indirectly tested by the News app tests. -->
+            <exclude>tests/Kanooh/Paddle/Core/ContentType/OverviewPage</exclude>
+
+            <!-- Except: regression folder, because these tests should be moved to other folders. -->
+            <exclude>tests/Kanooh/Paddle/Core/Regression</exclude>
+
+            <!-- Except: all common test since they are run on the BasicPage type. -->
+            <exclude>tests/Kanooh/Paddle/Core/ContentType/LandingPage/Common</exclude>
+
+
+            <!-- All test coverage for subscription type usage limits. -->
+            <directory>tests/src</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

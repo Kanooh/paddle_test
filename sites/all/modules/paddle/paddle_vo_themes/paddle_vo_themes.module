@@ -1,0 +1,150 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle VO themes feature.
+ */
+
+include_once 'paddle_vo_themes.features.inc';
+
+/**
+ * Update widget_block blocks for VO global header and footer.
+ *
+ * Depending on whether VO branding was chosen, we remove or add the blocks.
+ *
+ * Code based on code from block_admin_configure_submit().
+ * Gets called from PaddleCoreBrandingPlugin.
+ *
+ * @see block_admin_configure_submit()
+ * @see PaddleCoreBrandingPlugin::form()
+ * @see PaddleCoreBrandingPlugin::submit()
+ *
+ * @param string $header_id
+ *   The token of the global VO header.
+ * @param string $footer_id
+ *   The token of the global VO footer.
+ */
+function paddle_vo_themes_update_header_and_footer($header_id = '', $footer_id = '') {
+  $widgets = array(
+    'VO Global Header' => empty($header_id) ? '7308abf9e3634a2e90011e6629c04d36' : $header_id,
+    'VO Global Footer' => empty($footer_id) ? '92bb34889dd34f71b6088af0fba9156c' : $footer_id,
+  );
+
+  // Update blocks. Creates them if not existing yet.
+  foreach ($widgets as $name => $id) {
+    // Only act on hex numbers, non-empty id's because the widget_block id
+    // column only accepts hex numbers.
+    if (!empty($id) && ctype_xdigit($id)) {
+      // Save general block settings.
+      db_update('block')
+        ->fields(array(
+            'visibility' => BLOCK_VISIBILITY_NOTLISTED,
+            'pages' => '',
+            'custom' => 0,
+            'title' => '',
+            // Hide the block globally. paddle_theme_preprocess_page() will
+            // show it when it's appropriate.
+            'status' => 0,
+          ))
+        ->condition('module', 'widget_block')
+        ->condition('delta', $id)
+        ->execute();
+      // Save widget_block specific settings.
+      $config = array(
+        'id' => $id,
+        'name' => $name,
+        'type' => WIDGET_BLOCK_TYPE_SMART_SSI,
+        'settings' => array(
+          'domain' => 'widgets.vlaanderen.be',
+        ),
+      );
+      widget_block_set_config($config);
+    }
+  }
+}
+
+/**
+ * Get Widget Block view and use default header ID as fallback value.
+ *
+ * Gets called from PaddleCoreBrandingPlugin.
+ * Gets passed to the page.tpl.php in template.php.
+ *
+ * @see PaddleCoreBrandingPlugin::execute()
+ * @see paddle_theme_preprocess_page()
+ *
+ * @param int $id
+ *   The ID of the Widget Block to get.
+ *
+ * @return array
+ *   Renderable block array.
+ */
+function paddle_vo_themes_global_header_block_view($id) {
+  return _paddle_vo_themes_get_widget_block_render_array(empty($id) ? '7308abf9e3634a2e90011e6629c04d36' : $id);
+}
+
+/**
+ * Get Widget Block view and use default footer ID as fallback value.
+ *
+ * @param int $id
+ *   The ID of the Widget Block to get.
+ *
+ * @return array
+ *   Renderable block array.
+ */
+function paddle_vo_themes_global_footer_block_view($id) {
+  return _paddle_vo_themes_get_widget_block_render_array(empty($id) ? '92bb34889dd34f71b6088af0fba9156c' : $id);
+}
+
+/**
+ * Get Widget Block as a render array that will use block.tpl.php.
+ *
+ * @param int $id
+ *   The ID of the Widget Block to get.
+ *
+ * @return array
+ *   Renderable block array.
+ */
+function _paddle_vo_themes_get_widget_block_render_array($id) {
+  $block = block_load('widget_block', $id);
+  // Define the block properties like the Widget Block module would, if they're
+  // missing, to avoid PHP notices being thrown.
+  if (!isset($block->cache)) {
+    $block->cache = DRUPAL_NO_CACHE;
+  }
+  if (!isset($block->region)) {
+    $block->region = BLOCK_REGION_NONE;
+  }
+  if (!isset($block->title)) {
+    $block->title = '';
+  }
+
+  return _block_get_renderable_array(_block_render_blocks(array($block)));
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * We implement it here instead of enabling the Widget Block Cron module to
+ * optimize performance by having less modules enabled.
+ */
+function paddle_vo_themes_cron() {
+  // Refresh the existing VO widget block cache data.
+  widget_block_refresh();
+}
+
+/**
+ * Implements hook_widget_block_purge().
+ *
+ * We implement it here instead of enabling the Widget Block Page Cache module
+ * to optimize performance by having less modules enabled.
+ */
+function paddle_vo_themes_widget_block_purge(array $ids, array $languages) {
+  // Clear the page and block caches whenever the VO widgets are renewed.
+  cache_clear_all();
+}
+
+/**
+ * Implements hook_paddle_themer_enable_theme_alter().
+ */
+function paddle_vo_themes_paddle_themer_enable_theme_alter($theme) {
+  variable_set('paddle_base_theme', $theme->theme);
+}

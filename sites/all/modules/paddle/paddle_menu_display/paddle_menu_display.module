@@ -1,0 +1,398 @@
+<?php
+
+/**
+ * @file
+ * Allows definition and use of custom menu display for which can be defined
+ * different root item, range of levels, additional html attributes of the
+ * generated HTML, etc.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_menu_display_menu() {
+  $items['admin/structure/menu_displays'] = array(
+    'title' => 'Menu displays',
+    'access arguments' => array('administer menu displays'),
+    'description' => 'Manage menu displays.',
+    'page callback' => 'paddle_menu_display_main_interface',
+    'file' => 'paddle_menu_display.admin.inc',
+  );
+
+  $items['admin/structure/menu_displays/%/edit'] = array(
+    'title' => 'Edit menu display',
+    'access arguments' => array('administer menu displays'),
+    'description' => 'Edit menu display.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_menu_display_edit_page'),
+    'file' => 'paddle_menu_display.admin.inc',
+  );
+
+  $items['admin/structure/menu_displays/%/delete'] = array(
+    'title' => 'Delete menu display',
+    'access arguments' => array('administer menu displays'),
+    'description' => 'Delete menu display.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_menu_display_delete'),
+    'file' => 'paddle_menu_display.admin.inc',
+  );
+
+  $items['admin/structure/menu_displays/0/add'] = array(
+    'title' => 'Add menu display',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_menu_display_edit_page', 'add'),
+    'access arguments' => array('administer menu displays'),
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'paddle_menu_display.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_menu_display_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_menu_display_menu_items' => array(
+      'variables' => array(
+        'items' => array(),
+        'menu_display' => NULL,
+        'ul_class' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * Returns HTML for the menu display.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - items: Menu items to render. Array with the following elements:
+ *     * li_class - String with classes separated by space to add to the "li"
+ *                  tag of the current menu item.
+ *     * a_class - String with classes separated by space to add to the "a" tag.
+ *     * content - The HTML of the items below.
+ *     * depth - The depth of the current menu item in the menu structure.
+ *     * link - The menu item URL.
+ *     * text - The menu item title.
+ *   - menu_display: The menu display object we are rendering.
+ *   - ul_class: String with classes separated by space to add to the "ul".
+ *
+ * @ingroup themeable
+ */
+function theme_paddle_menu_display_menu_items($variables) {
+  $menu_display = $variables['menu_display'];
+
+  $output = '';
+  $item_list = array();
+  foreach ($variables['items'] as $item) {
+    $attributes = array();
+    if ($item['a_class']) {
+      $attributes = array('attributes' => array('class' => array($item['a_class'])));
+    }
+    $content = isset($item['content']) ? $item['content'] : '';
+    if ($item['depth'] >= $menu_display->fromLevel() && $item['depth'] <= $menu_display->toLevel()) {
+      $item_list[$item['menu_item']['mlid']] = array(
+        'data' => l($item['text'], $item['link'], $attributes) . $content,
+        'class' => array($item['li_class']),
+      );
+    }
+    elseif (strlen($content)) {
+      $output .= $content;
+    }
+
+    if (!empty($item['#attributes'])) {
+      foreach ($item['#attributes'] as $attribute => $value) {
+        $item_list[$item['menu_item']['mlid']][$attribute] = $value;
+      }
+    }
+  }
+  if (strlen($output)) {
+    return $output;
+  }
+
+  if (count($item_list)) {
+    $output = theme_item_list(array(
+        'items' => $item_list,
+        'title' => '',
+        'type' => 'ul',
+        'attributes' => array('class' => $variables['ul_class']),
+      )
+    );
+  }
+
+  return str_replace('<div class="item-list">', '<div class="' . $menu_display->div_class . '">', $output);
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_menu_display_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'menu_edit_item') {
+    if ($form['original_item']['#value']['mlid']) {
+      $mlid = $form['original_item']['#value']['mlid'];
+      $menu_displays = paddle_menu_display_get_displays();
+      $menu_displays_names = array();
+      foreach ($menu_displays as $menu_display) {
+        $menu_displays_names[$menu_display->menu_name] = $menu_display->menu_name;
+      }
+      $menu_name = $form['original_item']['#value']['menu_name'];
+
+      if (in_array($menu_name, $menu_displays_names)) {
+        $form['paddle_menu_display_settings'] = array(
+          '#type' => 'fieldset',
+          '#title' => t('Custom menu display'),
+          '#collapsable' => TRUE,
+          '#collapsed' => TRUE,
+          '#weight' => 20,
+          '#description' => t('Check to display this item but place no link on it in this custom menu display.'),
+        );
+
+        foreach ($menu_displays as $menu_display) {
+          $form['paddle_menu_display_settings']['paddle_menu_display_no_link_for_cmd_' . $menu_display->mdid] = array(
+            '#type' => 'checkbox',
+            '#title' => t('Remove link for') . ' <strong>' . $menu_display->title . '</strong>',
+            '#default_value' => in_array($mlid, $menu_display->no_links),
+          );
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_menu_link_alter().
+ */
+function paddle_menu_display_menu_link_alter(&$item) {
+  $no_links = array();
+  if (isset($item['original_item']['mlid'])) {
+    $mlid = $item['original_item']['mlid'];
+    foreach ($item as $name => $value) {
+      if (strpos($name, 'paddle_menu_display_no_link_for_cmd_') === 0 && $value == 1) {
+        $no_links[] = substr($name, strlen('paddle_menu_display_no_link_for_cmd_'));
+      }
+    }
+    $menu_displays = array();
+    $raw_menu_displays = paddle_menu_display_get_displays();
+    foreach ($raw_menu_displays as $menu_display) {
+      $menu_displays[$menu_display->mdid] = $menu_display;
+    }
+    foreach ($no_links as $mdid) {
+      $menu_display = $menu_displays[$mdid];
+      $menu_display->no_links[$mlid] = $mlid;
+      db_update('menu_displays')->fields(array('no_links' => serialize($menu_display->no_links)))->condition('mdid', $menu_display->mdid)->execute();
+    }
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_menu_display_permission() {
+  return array(
+    'administer menu displays' => array(
+      'title' => t('Administer menu displays'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_help().
+ */
+function paddle_menu_display_help($path, $arg) {
+  switch ($path) {
+    case 'admin/structure/menu_displays/0/add':
+      return '<p>' . t('You can enable the newly-created block for this menu display on the <a href="@blocks">Blocks administration page</a>.', array('@blocks' => url('admin/structure/block'))) . '</p>';
+  }
+  if ($path == 'admin/structure/menu_displays' && module_exists('block')) {
+    return '<p>' . t('Each menu display has a corresponding block that is managed on the <a href="@blocks">Blocks administration page</a>.', array('@blocks' => url('admin/structure/block'))) . '</p>';
+  }
+}
+
+/**
+ * Implements hook_block_info().
+ *
+ * @see menu_block_info()
+ */
+function paddle_menu_display_block_info() {
+  $menu_displays = paddle_menu_display_get_titles();
+
+  $blocks = array();
+  foreach ($menu_displays as $name => $title) {
+    $blocks[$name]['info'] = check_plain($title) . ' menu display';
+    // Menu blocks can't be cached because each menu item can have
+    // a custom access callback. menu.inc manages its own caching.
+    $blocks[$name]['cache'] = DRUPAL_NO_CACHE;
+  }
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function paddle_menu_display_block_view($delta = '') {
+  drupal_add_js(drupal_get_path('module', 'paddle_menu_display') . '/misc/paddle_menu_display.js', array('every_page' => FALSE, 'group' => JS_THEME));
+  $menu_displays = paddle_menu_display_get_displays();
+  $menu_display = $menu_displays[$delta];
+  // We allow other modules to modify our menu display.
+  drupal_alter('paddle_menu_display_block_display', $menu_display);
+
+  $data['subject'] = check_plain($menu_display->title);
+
+  // Try to get the menu.
+  $menu_display_output = '';
+  if (strlen($menu_display->menu_name) > 0) {
+    module_load_include('inc', 'paddle_menu_display', 'paddle_menu_display_main');
+    paddle_menu_display_setup_current_display($menu_display);
+    $menu_tree = array();
+    paddle_menu_display_build_menu($menu_display, $menu_tree, -1, $menu_display->fromLevel());
+    $menu_display_output = paddle_menu_display_generate_menu($menu_display, $menu_tree);
+  }
+
+  $data['content'] = $menu_display_output;
+  /*
+  // Add contextual links for this block.
+  // @todo Make this work.
+  if (!empty($data['content'])) {
+  if (! isset($data['content']['#contextual_links'])) {
+  $data['content']['#contextual_links'] = array();
+  }
+  $data['content']['#contextual_links']['paddle_menu_display'] =
+  array('admin/structure/menu_displays/1/edit', array($delta));
+  }
+  */
+
+  return $data;
+}
+
+/**
+ * Implements hook_block_view_alter().
+ */
+function paddle_menu_display_block_view_alter(&$data, $block) {
+  // Contextual links can be added as a renderable element to the content of
+  // a render array. We check if the block has content, and if so add a
+  // contextual link to it.
+  if (isset($data['content']) && is_array($data['content'])) {
+    if (!isset($data['content']['#contextual_links'])) {
+      $data['content']['#contextual_links'] = array();
+    }
+
+    $contextual_links = array(
+      'admin/structure/menu_displays',
+      array($block->module),
+    );
+
+    $data['content']['#contextual_links']['paddle_menu_display'] = $contextual_links;
+  }
+}
+
+/**
+ * Implements hook_flush_caches().
+ */
+function paddle_menu_display_flush_caches() {
+  // The cache table has been added in an update hook. If the module was updated
+  // and the cache is cleared before the necessary database updates were run
+  // this hook will throw fatal errors as it will try to flush a non-existing
+  // table. Avoid this by checking if the table exists before flushing it.
+  if (db_table_exists('cache_menu_displays')) {
+    return array('cache_menu_displays');
+  }
+  else {
+    drupal_set_message(t('Paddle Menu Display requires a database update. Please run the <a href="@update">database updates</a>.', array('@update' => base_path() . 'update.php')), 'warning');
+    return array();
+  }
+}
+
+/**
+ * Implements hook_menu_link_insert().
+ */
+function paddle_menu_display_menu_link_insert($link) {
+  // We need to clear the menu display cache wherever this item is concerned.
+  module_load_include('inc', 'paddle_menu_display', 'paddle_menu_display_main');
+  paddle_menu_display_clear_cache_for_menu_item($link, 'insert');
+}
+
+/**
+ * Implements hook_menu_link_update().
+ */
+function paddle_menu_display_menu_link_update($link) {
+  // We need to clear the menu display cache wherever this item is concerned.
+  module_load_include('inc', 'paddle_menu_display', 'paddle_menu_display_main');
+  paddle_menu_display_clear_cache_for_menu_item($link, 'update');
+}
+
+/**
+ * Implements hook_menu_link_delete().
+ */
+function paddle_menu_display_menu_link_delete($link) {
+  // We need to clear the menu display cache wherever this item is concerned.
+  module_load_include('inc', 'paddle_menu_display', 'paddle_menu_display_main');
+  paddle_menu_display_clear_cache_for_menu_item($link, 'delete');
+}
+
+/**
+ * Retrieves menu display titles, keyed by name.
+ *
+ * @return array
+ *   An associative array of menu display titles, keyed by menu display name.
+ */
+function paddle_menu_display_get_titles() {
+  return db_select('menu_displays', 'm')
+    ->fields('m', array('name', 'title'))
+    ->execute()
+    ->fetchAllKeyed();
+}
+
+/**
+ * Returns menu displays, optionally filtered by fields.
+ *
+ * @param array $mdids
+ *   An array of menu display ids to retrieve. Leave empty to retrieve all menu
+ *   displays.
+ *
+ * @return array
+ *   An associative array of menu displays, keyed by menu display name.
+ */
+function paddle_menu_display_get_displays($mdids = array()) {
+  module_load_include('inc', 'paddle_menu_display', 'paddle_menu_display');
+
+  $query = db_select('menu_displays', 'm')
+    ->orderBy('title');
+
+  // Retrieve only the requested menu displays.
+  if (!empty($mdids)) {
+    $query->condition('mdid', $mdids, 'IN');
+  }
+
+  $query->fields('m');
+
+  $menu_displays = array();
+
+  foreach ($query->execute()->fetchAll() as $record) {
+    $menu_displays[$record->name] = new PaddleMenuDisplay($record);
+  }
+
+  return $menu_displays;
+}
+
+/**
+ * Returns the active trail contained in the given menu link.
+ *
+ * @param array $menu_link
+ *   A menu link array, as returned by menu_link_load().
+ *
+ * @return array
+ *   An array of menu link ids.
+ */
+function paddle_menu_display_get_active_trail(array $menu_link) {
+  $active_trail = array();
+  // Retrieve all parent items, starting at 'p1'.
+  $i = 1;
+  do {
+    $active_trail[] = $menu_link['p' . $i++];
+  } while (!empty($menu_link['p' . $i]));
+
+  return $active_trail;
+}

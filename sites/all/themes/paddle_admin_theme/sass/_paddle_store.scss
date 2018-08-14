@@ -1,0 +1,94 @@
+/**
+ * @file
+ * Styling for paddle store.
+ */
+.form-item-third-party {
+  border-top: 1px solid #999;
+  padding-top: 15px;
+}
+
+.paddlets {
+  padding: 0.75em 0 0 0;
+}
+
+.paddle-apps-paddlet {
+  padding: 15px;
+  margin-bottom: 35px;
+  position: relative;
+  background-color: #f2f2f2;
+}
+
+h1.paddle-apps-paddlet-name {
+  font-size: 2.6em;
+}
+h3.paddle-apps-paddlet-name {
+  font-size: 1.25em;
+}
+
+.paddle-apps-paddlet-level {
+  float: right;
+  color: $menu-darkergreen-color;
+}
+
+.paddle-apps-paddlet-vendor {
+  font-weight: 400;
+}
+
+.paddle-apps-paddlet-image,
+.paddle-apps-paddlet-controls {
+  display: inline-block;
+  vertical-align: top;
+  margin: 15px 0;
+}
+
+.paddle-apps-paddlet-image {
+  margin-right: 10px;
+}
+.paddle-apps-paddlet-image img {
+  display: block;
+  max-width: 100%;
+  width: 65px;
+  height: 65px;
+}
+
+.paddle-apps-paddlet-controls .button {
+  text-transform: uppercase;
+  min-width: 0;
+  padding: 0 10px;
+  width: 100%;
+  margin-bottom: 5px;
+}
+.paddle-apps-paddlet-controls a {
+  width: 100%;
+  display: block;
+  padding: 0 10px;
+}
+.paddle-apps-paddlet-controls .fa {
+  margin-right: 5px;
+}
+
+.paddle-tooltip-warning {
+  max-width: 250px;
+  padding: 0;
+  color: #43474a;
+  font-size: 12px;
+
+  .ui-tooltip-container {
+    background-color: #ffff99;
+  }
+}
+
+.paddle-apps-paddlet-description {
+  p,
+  ul {
+    margin-bottom: 1em;
+  }
+
+  ul {
+    padding-left: 40px;
+
+    li {
+      list-style-type: disc;
+    }
+  }
+}

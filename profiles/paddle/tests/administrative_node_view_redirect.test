@@ -1,0 +1,232 @@
+<?php
+/**
+ * @file
+ * Tests for the behavior of redirects to the administrative node view.
+ */
+
+/**
+ * Test class for administrative node view redirects.
+ * @see https://one-agency.atlassian.net/browse/KANWEBS-118
+ */
+class AdministrativeNodeViewRedirectTestCase extends PaddleWebTestCase {
+
+  /**
+   * A user with the "Chief editor" role.
+   *
+   * @var object $janeDoe
+   */
+  protected $janeDoe;
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Administrative node view redirects',
+      'description' => 'Tests if users are correctly redirected to the administrative node view when editing content.',
+      'group' => 'Paddle - Content Editing',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp($enable_modules);
+
+    // Create a second chief editor.
+    $this->janeDoe = $this->drupalCreateUser();
+    $chief_editor_role = user_role_load_by_name('Chief Editor');
+    $this->janeDoe->roles[$chief_editor_role->rid] = $chief_editor_role->rid;
+    user_save($this->janeDoe);
+  }
+
+  /**
+   * Asserts that the current URL is the admin view of a node.
+   *
+   * @param object $node
+   *   The node.
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertAdministrativeNodeViewLoaded($node, $message = '') {
+    $expected_url = url("admin/content_manager/node/{$node->nid}/view", array("absolute" => TRUE));
+
+    // Strip the query arguments from the URL, they do not concern us.
+
+    $url = drupal_parse_url($this->getUrl());
+    $actual_url = $url['path'];
+
+    return $this->assertEqual($actual_url, $expected_url, $message ? $message : 'The user has been redirected to the administrative node view.');
+  }
+
+  /**
+   * Asserts if the path part of the current url matches a given path.
+   *
+   * You can use this method instead of DrupalWebTestCase::assertUrl() if you
+   * do not want to make any assumptions on which query string parameters
+   * are present.
+   *
+   * @param string $path
+   *   The expected path.
+   */
+  public function assertUrlPath($path) {
+    $expected_url = url($path, array('absolute' => TRUE));
+
+    $parts = parse_url($expected_url);
+    $actual_parts = parse_url($this->getUrl());
+
+    if (!empty($GLOBALS['conf']['clean_url'])) {
+      // With clean URLs.
+      $actual_path = $actual_parts['path'];
+      $expected_path = $parts['path'];
+    }
+    else {
+      // Without clean URLs.
+      $query = drupal_get_query_array($actual_parts['query']);
+      $actual_path = $query['q'];
+
+      $query = drupal_get_query_array($parts['query']);
+      $expected_path = $query['q'];
+    }
+
+    $this->assertEqual($actual_path, $expected_path, format_string('The path in the current url is %path', array('%path' => $path)));
+  }
+
+  /**
+   * Performs a click on the 'admin view' link of a node on the dashboard.
+   *
+   * @param object $node
+   *   The node.
+   */
+  protected function clickAdminViewOnDashboard($node) {
+    $this->drupalGet("admin");
+
+    $parts = array(
+      '//div[contains(@class, "views-row")]',
+      '/div[contains(@class, "views-field")][contains(@class, "dashboard-title-1")]',
+      '/span[@class="title"][normalize-space(text())=:node-title]',
+      '/..',
+      '/..',
+      '/span[contains(@class, "views-field")][contains(@class, "admin-view-link")]',
+      '/a',
+    );
+    $args = array(':node-title' => trim($node->title));
+    $query = $this->buildXPathQuery(implode('', $parts), $args);
+    $anchors = $this->xpath($query);
+
+    $args = array('@title' => $node->title);
+    $this->assertTrue(count($anchors), format_string('Edit link for node "@title" is present on the dashboard.', $args));
+    $this->drupalGet($this->getAbsoluteUrl($anchors[0]['href']));
+  }
+
+  /**
+   * Performs a click on the 'admin view' link of a node in the search tab.
+   *
+   * @param object $node
+   *   The node.
+   */
+  public function clickAdminViewOnSearchContentDiscovery($node) {
+    $this->drupalGet('admin/content_manager/list/search');
+
+    $args = array(
+      ':link-label' => t('admin view'),
+      ':node-title' => trim($node->title),
+      ':href' => url('admin/content_manager/node/' . $node->nid . '/view'),
+    );
+
+    $parts = array(
+      '//tr',
+      '/td[contains(@class, "views-field-title")]',
+      '/a[@href=:href]',
+      '/span[normalize-space(text())=:node-title]',
+      '/../../..',
+      '//a[contains(@class, "ui-icon-visit-be")]',
+      '/span[normalize-space(text())=:link-label]',
+      '/..',
+    );
+
+    $query = $this->buildXPathQuery(implode('', $parts), $args);
+
+    $anchors = $this->xpath($query);
+
+    if (isset($anchors[0])) {
+      $url = $this->getAbsoluteUrl($anchors[0]['href']);
+      $this->drupalGet($url);
+    }
+    else {
+      $args = array(
+        '@title' => trim($node->title),
+      );
+      $this->fail(t('Edit link for node "@title" found on the search content discovery.', $args));
+    }
+  }
+
+  /**
+   * Tests the redirect on creation and edit of a new page.
+   *
+   * This test uses the "edit" button of the contextual actions toolbar.
+   */
+  public function testRedirectOnCreateAndEdit() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $node = $this->drupalCreateUiNode('basic_page');
+
+    $this->assertAdministrativeNodeViewLoaded($node, 'A chief editor is redirected to the administrative node view after creating a page.');
+
+    $this->clickAdminLink(t('Page properties'));
+
+    $this->assertUrlPath("node/{$node->nid}/edit");
+
+    $this->drupalPost(NULL, array(), t('Save'));
+
+    $this->assertAdministrativeNodeViewLoaded($node, 'A chief editor is redirected to the administrative node view after editing a page from the contextual toolbar.');
+  }
+
+  /**
+   * Tests the redirect on direct edit of a page.
+   *
+   * This test goes straight to the edit URL, this could occur
+   * when directly manipulating the URL or when using bookmarks.
+   */
+  public function testRedirectOnEditViaDirectUrl() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $node = $this->drupalCreateUiNode('basic_page');
+
+    $this->drupalGet("node/{$node->nid}/edit");
+
+    $this->drupalPost(NULL, array(), t('Save'));
+
+    $this->assertAdministrativeNodeViewLoaded($node, 'A chief editor is redirected to the administrative node view after editing a page from a direct url.');
+  }
+
+  /**
+   * Tests the redirect when coming from the dashboard.
+   */
+  public function testRedirectOnEditViaDashboard() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $node = $this->drupalCreateUiNode('basic_page');
+
+    $this->clickAdminViewOnDashboard($node);
+
+    $this->assertAdministrativeNodeViewLoaded($node, 'A chief editor is redirected to the administrative node view after editing a page from the dashboard.');
+  }
+
+  /**
+   * Tests the redirect when coming from the 'drafts' content discovery tab.
+   */
+  public function testRedirectOnEditViaContentDiscoveryTabs() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $node = $this->drupalCreateUiNode('basic_page');
+
+    $this->clickAdminViewOnSearchContentDiscovery($node);
+
+    $this->assertAdministrativeNodeViewLoaded($node, 'A chief editor is redirected to the administrative node view after clicking the admin view link from a content discovery tab.');
+  }
+}

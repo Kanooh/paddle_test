@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Photo Album app.
+ */
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_photo_album_apps_app_info() {
+  return array();
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_photo_album_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}

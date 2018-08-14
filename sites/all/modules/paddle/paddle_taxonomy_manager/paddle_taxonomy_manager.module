@@ -1,0 +1,546 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Taxonomy Manager
+ * module.
+ */
+
+/**
+ * Denotes that no term in the vocabulary has a parent.
+ */
+const PADDLE_TAXONOMY_MANAGER_HIERARCHY_DISABLED = 0;
+
+/**
+ * Denotes that one or more terms in the vocabulary has a single parent.
+ */
+const PADDLE_TAXONOMY_MANAGER_HIERARCHY_SINGLE = 1;
+
+/**
+ * Denotes that one or more terms in the vocabulary have multiple parents. This
+ * is not used in Paddle Taxonomy Manager but is provided to match the options
+ * in the core Taxonomy module.
+ */
+const PADDLE_TAXONOMY_MANAGER_HIERARCHY_MULTIPLE = 2;
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_taxonomy_manager_menu() {
+  $items = array();
+
+  $items['admin/structure/taxonomy_manager'] = array(
+    'title' => 'Taxonomy',
+    'page callback' => 'paddle_taxonomy_manager_overview',
+    'access arguments' => array('manage paddle_taxonomy_manager'),
+    'file' => 'paddle_taxonomy_manager.admin.inc',
+  );
+
+  $vocabularies = taxonomy_get_vocabularies();
+  foreach ($vocabularies as $vocabulary) {
+    $items['admin/structure/taxonomy_manager/' . $vocabulary->vid] = array(
+      'title callback' => 'paddle_taxonomy_manager_taxonomy_page_title',
+      'title arguments' => array(3),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('paddle_taxonomy_manager_vocabulary_overview_form', 3),
+      'access arguments' => array('manage paddle_taxonomy_manager'),
+      'file' => 'paddle_taxonomy_manager.admin.inc',
+      'weight' => $vocabulary->vid,
+    );
+  }
+
+  $items['admin/structure/taxonomy_manager/%ctools_js/%taxonomy_vocabulary_machine_name/add'] = array(
+    'title callback' => 'paddle_taxonomy_manager_edit_term_page_title',
+    'title arguments' => array(4, 5),
+    'page arguments' => array(3, 4),
+    'page callback' => 'paddle_taxonomy_manager_modal_term_form',
+    'access arguments' => array('manage paddle_taxonomy_manager'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/taxonomy_manager/%ctools_js/%taxonomy_vocabulary_machine_name/%taxonomy_term/edit'] = array(
+    'title callback' => 'paddle_taxonomy_manager_edit_term_page_title',
+    'title arguments' => array(5, 6),
+    'page arguments' => array(3, 4, 5),
+    'page callback' => 'paddle_taxonomy_manager_modal_term_form',
+    'access arguments' => array('manage paddle_taxonomy_manager'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/taxonomy_manager/%ctools_js/%taxonomy_vocabulary/%taxonomy_term/delete'] = array(
+    'title callback' => 'paddle_taxonomy_manager_delete_term_page_title',
+    'title arguments' => array(5),
+    'page arguments' => array(3, 4, 5, 6),
+    'page callback' => 'paddle_taxonomy_manager_modal_term_form',
+    'access arguments' => array('manage paddle_taxonomy_manager'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/taxonomy_manager/get_subterm/%taxonomy_vocabulary/%taxonomy_term/%/%'] = array(
+    'page callback' => 'paddle_taxonomy_manager_get_subterm',
+    'page arguments' => array(4, 5, 6, 7),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('manage paddle_taxonomy_manager'),
+    'file' => 'paddle_taxonomy_manager.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_taxonomy_manager_permission() {
+  $return = array();
+
+  $return['manage paddle_taxonomy_manager'] = array(
+    'title' => t('Manage taxonomy'),
+  );
+
+  return $return;
+}
+
+/**
+ * Title callback for the taxonomy page.
+ *
+ * @param int $vid
+ *   Vid of the vocabulary.
+ */
+function paddle_taxonomy_manager_taxonomy_page_title($vid) {
+  global $language_content;
+
+  $vocabulary = taxonomy_vocabulary_load($vid);
+  $title = i18n_taxonomy_vocabulary_name($vocabulary, $language_content->language);
+
+  return $title;
+}
+
+/**
+ * Title callback for the term add form.
+ *
+ * @param array $object
+ *   The object in which the operation (edit/add) is perfomed.
+ * @param array $operation
+ *   The operation which is performed.
+ *
+ * @return string
+ *   The title for the page.
+ */
+function paddle_taxonomy_manager_edit_term_page_title($object, $operation) {
+  global $language_content;
+
+  if ($operation == 'add') {
+    $vocab_name = i18n_taxonomy_vocabulary_name($object, $language_content->language);
+    return t('Add term in "@vocab_name"', array('@vocab_name' => $vocab_name));
+  }
+  elseif ($operation == 'edit') {
+    return t('Edit term "@term_name"', array('@term_name' => $object->name));
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_taxonomy_manager_theme() {
+  return array(
+    'paddle_taxonomy_manager_vocabulary_overview_form' => array(
+      'render element' => 'form',
+    ),
+  );
+}
+
+/**
+ * Implements hook_taxonomy_term_presave().
+ *
+ * Prevents the creation of duplicate terms in "flat" vocabularies.
+ */
+function paddle_taxonomy_manager_taxonomy_term_presave($term) {
+  $vocabulary = taxonomy_vocabulary_load($term->vid);
+  if (variable_get('taxonomy_vocabulary_' . $vocabulary->machine_name . '_type') == 'flat') {
+    // The term language is not always set. For example when adding a term while
+    // creating a node.
+    $langcode = isset($term->language) ? $term->language : NULL;
+
+    // If a term with the same name already exists then set the term id to the
+    // existing term. This will cause the existing term to be updated rather
+    // than a new term to be inserted into the database.
+    if ($found_term = paddle_taxonomy_manager_get_dupe_term($term->name, $term->vid, $langcode)) {
+      $term->tid = $found_term->tid;
+    }
+  }
+}
+
+/**
+ * After-build function of the paddle_taxonomy_manager_vocabulary_overview_form.
+ */
+function paddle_taxonomy_manager_add_contextual_actions_term_overview($form, $form_state) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $actions = array();
+
+  $action_url = 'admin/structure/taxonomy_manager/nojs/' . $form['#vocabulary']->machine_name . '/add';
+  $actions[] = array(
+    'action' => variable_get('taxonomy_vocabulary_' . $form['#vocabulary']->machine_name . '_type') == 'flat' ? ctools_modal_text_button(t('Create Tag'), $action_url, t('Create a new tag.'), 'ui-icon fa-plus ctools-modal-overlay-persist') : ctools_modal_text_button(t('Create Term'), $action_url, t('Create a new term.'), 'ui-icon fa-plus ctools-modal-overlay-persist'),
+    'class' => array('add'),
+    'weight' => 3,
+  );
+
+  if (isset($form['actions']['submit'])) {
+    $actions[] = array(
+      'action' => l(t('Save'), '', array(
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-check'),
+          'data-paddle-contextual-toolbar-click' => $form['actions']['submit']['#id'],
+        ),
+        'html' => TRUE,
+        'external' => TRUE,
+      )),
+      'class' => array('save'),
+      'weight' => 0,
+    );
+  }
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Title callback for the term delete form.
+ *
+ * @param array $term
+ *   The term being deleted.
+ *
+ * @return string
+ *   The title for the page.
+ */
+function paddle_taxonomy_manager_delete_term_page_title($term) {
+  return t('Delete term !term', array('!term' => $term->name));
+}
+
+/**
+ * Displays the term form, in a modal dialog if supported.
+ *
+ * @param bool $js
+ *   If js capable or not.
+ * @param array $vocabulary
+ *   The vocabulary for which the term is being created/edited.
+ * @param array $term
+ *   The term to edit, or NULL to add a new one.
+ * @param string $action
+ *   The action that is being performed: 'edit' or 'add'.
+ *
+ * @return array
+ *   Returns a render array in case a modal dialog is not supported.
+ *   Otherwise renders the necessary ajax commands itself and exits.
+ */
+function paddle_taxonomy_manager_modal_term_form($js, $vocabulary, $term = NULL, $action = '') {
+  // Degrade to no js.
+  if (!$js) {
+    if ($action == 'delete') {
+      return drupal_get_form('paddle_taxonomy_manager_term_delete_form', $vocabulary, $term);
+    }
+    return drupal_get_form('paddle_taxonomy_manager_term_form', $vocabulary, $term);
+  }
+  else {
+    ctools_include('modal');
+    ctools_include('ajax');
+
+    $form_state = array(
+      'ajax' => TRUE,
+      'build_info' => array(
+        'args' => array(
+          $vocabulary,
+          $term,
+        ),
+      ),
+    );
+
+    // Set up title and form callback according to the action.
+    if ($action == 'delete') {
+      $callback = 'paddle_taxonomy_manager_term_delete_form';
+    }
+    else {
+      $callback = 'paddle_taxonomy_manager_term_form';
+    }
+
+    $output = ctools_modal_form_wrapper($callback, $form_state);
+
+    if ($form_state['executed']) {
+      $output = array();
+      $output[] = ctools_modal_command_dismiss();
+      $output[] = ctools_ajax_command_reload();
+    }
+
+    print ajax_render($output);
+    ajax_footer();
+    exit;
+  }
+}
+
+/**
+ * Build a confirm form for deletion of a term.
+ */
+function paddle_taxonomy_manager_term_delete_form($form, &$form_state, $vocabulary, $item) {
+  $form['#vocabulary'] = $vocabulary;
+  $form['#item'] = $item;
+  $form = confirm_form($form, t('Are you sure you want to delete the term %item?', array('%item' => $item->name)), 'admin/structure/taxonomy_manager/' . $vocabulary->vid);
+
+  // Make sure the content of the form is in the containers we expect them to be.
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+  $form['body']['description'] = $form['description'];
+  unset($form['description']);
+  $form['buttons']['submit'] = $form['actions']['submit'];
+  unset($form['actions']);
+
+  return $form;
+}
+
+/**
+ * Process term delete form submission.
+ */
+function paddle_taxonomy_manager_term_delete_form_submit($form, &$form_state) {
+  $item = $form['#item'];
+  taxonomy_term_delete($item->tid);
+  $t_args = array('%title' => $item->name);
+  drupal_set_message(t('The term %title has been deleted.', $t_args));
+  watchdog('taxonomy', 'Deleted term %title.', $t_args, WATCHDOG_NOTICE);
+  $form_state['redirect'] = 'admin/structure/taxonomy_manager/' . $form['#vocabulary']->vid;
+}
+
+/**
+ * Form builder for the term edit/create form.
+ */
+function paddle_taxonomy_manager_term_form($form, &$form_state, $vocabulary, $term = NULL) {
+  global $language_content;
+
+  // Provide a placeholder when a new term is created.
+  if (!$term) {
+    $term = (object) array(
+      'vid' => $vocabulary->vid,
+      'name' => '',
+      'description' => '',
+      'language' => $language_content->language,
+    );
+  }
+
+  $form_state['term'] = $term;
+
+  // Add containers around the form fields and submit buttons to aid in theming.
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['body']['name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Name'),
+    '#required' => TRUE,
+    '#default_value' => $term->name,
+    '#size' => 40,
+    '#description' => t('Enter the title of your term.'),
+  );
+
+  $form['body']['description'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Description'),
+    '#default_value' => $term->description,
+    '#cols' => 50,
+    '#rows' => 4,
+    '#description' => t('Enter a short description of your term.'),
+  );
+
+  // Don't display the tree if it is not hierarchical.
+  if (variable_get('taxonomy_vocabulary_' . $vocabulary->machine_name . '_type', 'hierarchical') != 'flat') {
+    $exclude = array();
+    $parent = NULL;
+    if (isset($term->tid)) {
+      $parent = array_keys(taxonomy_get_parents($term->tid));
+      $children = taxonomy_get_tree($vocabulary->vid, $term->tid);
+
+      // A term can't be the child of itself, nor of its children.
+      foreach ($children as $child) {
+        $exclude[] = $child->tid;
+      }
+      $exclude[] = $term->tid;
+    }
+
+    $tree = taxonomy_get_tree($vocabulary->vid);
+    $options = array(i18n_taxonomy_vocabulary_name($vocabulary, $language_content->language));
+    if (empty($parent)) {
+      $parent = array(0);
+    }
+    foreach ($tree as $item) {
+      if (!in_array($item->tid, $exclude) && $item->language == $language_content->language) {
+        $options[$item->tid] = str_repeat('-', $item->depth) . $item->name;
+      }
+    }
+    $form['body']['parent'] = array(
+      '#type' => 'select',
+      '#title' => t('Position in the vocabulary'),
+      '#options' => $options,
+      '#default_value' => $parent,
+    );
+  }
+  else {
+    $form['body']['parent'] = array(
+      '#type' => 'value',
+      '#value' => 0,
+    );
+  }
+
+  $form['buttons']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+
+  return $form;
+}
+
+/**
+ * Form validate callback for paddle_taxonomy_manager_term_form().
+ *
+ * Prevents duplicate terms from being created in "flat" vocabularies.
+ */
+function paddle_taxonomy_manager_term_form_validate($form, &$form_state) {
+  $name = $form_state['values']['name'];
+  $vocabulary = taxonomy_vocabulary_load($form_state['term']->vid);
+
+  $vocabulary_type = variable_get('taxonomy_vocabulary_' . $vocabulary->machine_name . '_type', 'hierarchical');
+  if ($vocabulary_type == 'flat') {
+    // Fail validation if a term with the same name already exists in the
+    // vocabulary.
+    if ($term = paddle_taxonomy_manager_get_dupe_term($name, $vocabulary->vid) && empty($form_state['term']->tid)) {
+      form_set_error('name', t('The term %term already exists in this vocabulary.', array('%term' => check_plain($name))));
+    }
+  }
+}
+
+/**
+ * Submit callback for the term edit/create form.
+ */
+function paddle_taxonomy_manager_term_form_submit($form, &$form_state) {
+  $term = $form_state['term'];
+  $term->name = $form_state['values']['name'];
+  $term->description = $form_state['values']['description'];
+  $term->parent = $form_state['values']['parent'];
+  taxonomy_term_save($term);
+  if ($term->tid) {
+    drupal_set_message(t('The term has been saved succesfully.'));
+  }
+  $form_state['redirect'] = 'admin/structure/taxonomy_manager/' . $form_state['build_info']['args'][0]->vid;
+}
+
+/**
+ * Retrieves a potential duplicate of another term in a given vocabulary.
+ *
+ * @param string $term_name
+ *   The term name to check.
+ * @param int $vid
+ *   The vid of the vocabulary to check.
+ * @param string $langcode
+ *   The ISO-639-1 language code to check. If omitted this will default to the
+ *   current content language.
+ *
+ * @return object
+ *   The duplicate term if one is found, or FALSE otherwise.
+ */
+function paddle_taxonomy_manager_get_dupe_term($term_name, $vid, $langcode = NULL) {
+  global $language_content;
+
+  // Default to the current content language.
+  if (!$langcode) {
+    $langcode = $language_content->language;
+  }
+
+  // Return a potential duplicate term.
+  return db_select('taxonomy_term_data', 'ttd')
+    ->fields('ttd')
+    ->condition('name', $term_name)
+    ->condition('vid', $vid)
+    ->condition('language', $langcode)
+    ->range(0, 1)
+    ->execute()
+    ->fetch();
+}
+
+/**
+ * Create multilingual vocabularies, in a Paddle consistent way.
+ *
+ * @param array $vocabularies
+ */
+function paddle_taxonomy_manager_create_vocabularies($vocabularies) {
+  foreach ($vocabularies as $machine_name => $vocab) {
+    $voc_test = taxonomy_vocabulary_machine_name_load($machine_name);
+    if ($voc_test == FALSE) {
+      // Create the vocabulary if non-existing.
+      $vocabulary = (object) array(
+        'name' => $vocab['properties']['name']['en'],
+        'description' => $vocab['properties']['description']['en'],
+        'machine_name' => $machine_name,
+        // Different terms will be allowed for each language.
+        'i18n_mode' => I18N_MODE_TRANSLATE,
+      );
+      taxonomy_vocabulary_save($vocabulary);
+
+      foreach ($vocab['properties'] as $property_name => $prop_values) {
+        foreach ($prop_values as $language => $value) {
+          // Save the vocabulary name translation.
+          if ($language != 'en') {
+            i18n_string_translation_update(
+              array('taxonomy', 'vocabulary', $vocabulary->vid, $property_name),
+              $value,
+              $language,
+              $vocab['properties'][$property_name]['en']
+            );
+          }
+        }
+      }
+    }
+
+    // Mark it as "flat" if it is.
+    if ($vocab['is_flat']) {
+      variable_set('taxonomy_vocabulary_' . $machine_name . '_type', 'flat');
+    }
+  }
+}
+
+/**
+ * Gets all terms in a given vocabulary.
+ *
+ * @param string $vocabulary_name
+ *   The name of the vocabulary to search the terms for.
+ *
+ * @return array
+ *   An array containing all terms.
+ */
+function paddle_taxonomy_manager_get_terms_from_vocabulary($vocabulary_name) {
+  $terms = &drupal_static(__FUNCTION__);
+
+  if (empty($terms[$vocabulary_name])) {
+    $vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary_name);
+
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'taxonomy_term')
+      ->propertyCondition('vid', $vocabulary->vid, '=');
+    $result = $query->execute();
+
+    $terms[$vocabulary_name] = $result;
+  }
+
+  return $terms[$vocabulary_name];
+}

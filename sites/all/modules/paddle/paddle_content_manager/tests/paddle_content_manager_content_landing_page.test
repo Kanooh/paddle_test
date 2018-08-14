@@ -1,0 +1,52 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleContentManagerContentLandingPageTest.
+ */
+
+/**
+ * Tests the add content page.
+ */
+class PaddleContentManagerContentLandingPageTest extends DrupalWebTestCase {
+  protected $adminUser;
+  protected $contentType;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Content landing page tests',
+      'description' => 'Test content landing page of the Paddle Content Manager module.',
+      'group' => 'Paddle Content Manager',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array('paddle_content_manager'));
+
+    // Create a custom content type.
+    $this->contentType = $this->drupalCreateContentType(array());
+
+    $this->adminUser = $this->drupalCreateUser(array(
+      'create ' . $this->contentType->type . ' content',
+      'manage paddle_content_manager',
+      'view the administration theme',
+    ));
+    $this->drupalLogin($this->adminUser);
+  }
+
+  /**
+   * Tests the paddle_menu_manager_load_language() function.
+   */
+  public function testContentTypeListing() {
+    $this->drupalGet('admin/content_manager/add');
+    $this->assertTrue($this->xpath('//div[contains(normalize-space(@class), "pane-node-add-content-type-selection")]'), 'The content type listings pane is found on the page.');
+    $this->assertTrue($this->xpath('//div[contains(normalize-space(@class), "pane-node-add-content-type-selection")]//li/a[contains(@href, "admin/content_manager/nojs/' . check_plain($this->contentType->type) . '/add")]'), 'The created content type found in the listing on the page.');
+    $this->assertText(check_plain($this->contentType->name), 'The name of the content type is shown on the page.');
+  }
+}

@@ -1,0 +1,116 @@
+<?php
+/**
+ * @file
+ * Code for the paddle_simple_contact feature.
+ */
+
+include_once 'paddle_simple_contact.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_simple_contact_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && $plugin_type == 'content_types') {
+    return "plugins/" . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_simple_contact_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_simple_contact_settings_form',
+  );
+}
+
+/**
+ * Form callback displaying Simple Contact settings.
+ */
+function paddle_simple_contact_settings_form() {
+  $form = array();
+
+  $form['paddle_simple_contact_field_default_label_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for name'),
+    '#required' => TRUE,
+    '#default_value' => paddle_simple_contact_field_variable_default_get('label_name'),
+  );
+
+  $form['paddle_simple_contact_field_default_label_email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for e-mail'),
+    '#required' => TRUE,
+    '#default_value' => paddle_simple_contact_field_variable_default_get('label_email'),
+  );
+
+  $form['paddle_simple_contact_field_default_label_subject'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for subject'),
+    '#required' => TRUE,
+    '#default_value' => paddle_simple_contact_field_variable_default_get('label_subject'),
+  );
+
+  $form['paddle_simple_contact_field_default_label_body'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for body'),
+    '#required' => TRUE,
+    '#default_value' => paddle_simple_contact_field_variable_default_get('label_body'),
+  );
+
+  $form['paddle_simple_contact_field_default_label_submit']  = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for submit button'),
+    '#required' => TRUE,
+    '#default_value' => paddle_simple_contact_field_variable_default_get('label_submit'),
+  );
+
+  $thank_you = paddle_simple_contact_field_variable_default_get('thank_you');
+
+  $form['paddle_simple_contact_field_default_thank_you'] = array(
+    '#title' => t('Thank you message'),
+    '#description' => t('Set the default thank you message for all your simple contact forms.'),
+    '#type' => 'text_format',
+    '#required' => TRUE,
+    '#default_value' => $thank_you['value'],
+    '#format' => $thank_you['format'],
+    '#after_build' => array('paddle_simple_contact_field_hide_text_format'),
+  );
+
+  $form['paddle_simple_contact_field_default_recipients'] = array(
+    '#title' => t('Recipients'),
+    '#description' => t('Set the default recipients for all the simple contact forms. Separate multiple recipients with a comma.'),
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#default_value' => paddle_simple_contact_field_variable_default_get('recipients'),
+    '#element_validate' => array('paddle_simple_contact_field_validate_email_addresses'),
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_simple_contact_paddle_content_region_content_type_info() {
+  return 'simple_contact_page';
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_simple_contact_paddle_content_manager_additional_fields() {
+  return array('field_paddle_contact_form');
+}
+
+/**
+ * Implements hook_node_presave().
+ */
+function paddle_simple_contact_node_presave($node) {
+  // We need to set the default contact form.
+  if (empty($node->nid) && $node->type == 'simple_contact_page' && !isset($node->field_paddle_contact_form)) {
+    $defaults = paddle_simple_contact_field_defaults();
+    $defaults['thank_you'] = serialize($defaults['thank_you']);
+    $node->field_paddle_contact_form[LANGUAGE_NONE][0] = $defaults;
+  }
+}

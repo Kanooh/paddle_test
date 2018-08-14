@@ -1,0 +1,245 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Formbuilder app.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_formbuilder_install() {
+  // Add the shield_submissions column to the webform table.
+  db_add_field('webform', 'shield_submissions', array(
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+  ));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_formbuilder_uninstall() {
+  // Drop the shield_submissions column from the webform table.
+  db_drop_field('webform', 'shield_submissions');
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_formbuilder_enable() {
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions. Otherwise our new content type is not yet
+  // known.
+  drupal_load('module', 'paddle_formbuilder');
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_formbuilder');
+  node_type_cache_reset();
+  drupal_static_reset();
+
+  $permissions = array(
+    'create paddle_formbuilder_page content',
+    'edit any paddle_formbuilder_page content',
+    'delete any paddle_formbuilder_page content',
+    'override paddle_formbuilder_page authored on option',
+    'edit webform components',
+    'access own webform results',
+    'administer panelizer node paddle_formbuilder_page layout',
+    'administer panelizer node paddle_formbuilder_page content',
+  );
+  $role_permissions = array(
+    'Chief Editor' => array(
+      'access all webform results',
+      'edit all webform submissions',
+      'delete all webform submissions',
+    ),
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+
+    // Give role specific permissions, if any.
+    if (!empty($role_permissions[$role_name])) {
+      user_role_grant_permissions($role->rid, $role_permissions[$role_name]);
+    }
+  }
+
+  // Set the correct permission for site managers.
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, array('manage paddle formbuilder permissions'));
+  paddle_content_region_panelize_node_type('paddle_formbuilder_page');
+  paddle_content_region_grant_node_type_permissions('paddle_formbuilder_page');
+
+  // Make sure that the management level 2 menu is shown on the build and
+  // configure form pages.
+  // @see _paddle_add_menu_display_path_roots
+  $root_paths = array(
+    array(
+      'path' => 'admin/content_manager/node/%/build_form',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/configure_form',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/emails',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/webform/emails/%',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/submissions',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/submissions/%',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/submission/%',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/download',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/webform/conditionals',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+
+  // Update the management_level_2 menu with the module root paths.
+  _paddle_form_builder_add_menu_display_path_roots('management_level_2', $root_paths);
+
+  variable_set('mimemail_sitestyle', 0);
+}
+
+/**
+ * Helper function for adding new path roots to a display menu.
+ *
+ * @see _paddle_add_menu_display_path_roots()
+ */
+function _paddle_form_builder_add_menu_display_path_roots($menu_display_name, $path_roots) {
+  $existing = db_select('menu_displays', 'm')
+    ->fields('m', array('path_roots'))
+    ->condition('name', $menu_display_name, '=')
+    ->execute()
+    ->fetchAssoc();
+  $existing = (empty($existing)) ? array() : unserialize($existing['path_roots']);
+
+  $path_roots = array_merge($existing, $path_roots);
+
+  db_update('menu_displays')
+    ->fields(array(
+      'path_roots' => serialize($path_roots),
+    ))
+    ->condition('name', $menu_display_name, '=')
+    ->execute();
+}
+
+/**
+ * Implements hook_schema_alter().
+ */
+function paddle_formbuilder_schema_alter(&$schema) {
+  $schema['webform']['fields']['shield_submissions'] = array(
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+    'description' => 'Shield the webform submissions',
+  );
+}
+
+/**
+ * Add the download link to show the management level 2 menu on.
+ */
+function paddle_formbuilder_update_7001() {
+  // Make sure that the management level 2 menu is shown on the download
+  // submissions pages.
+  // @see _paddle_add_menu_display_path_roots
+  $root_paths = array(
+    array(
+      'path' => 'admin/content_manager/node/%/download',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+
+  // Update the management_level_2 menu with the download root paths.
+  _paddle_form_builder_add_menu_display_path_roots('management_level_2', $root_paths);
+}
+
+
+/**
+ * Add the download link to show the management level 2 menu on.
+ */
+function paddle_formbuilder_update_7002() {
+  // Make sure that the management level 2 menu is shown on the conditionals
+  // pages.
+  // @see _paddle_add_menu_display_path_roots
+  $root_paths = array(
+    array(
+      'path' => 'node/%/webform/conditionals',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+
+  // Update the management_level_2 menu with the root paths.
+  _paddle_form_builder_add_menu_display_path_roots('management_level_2', $root_paths);
+}
+
+/**
+ * Grant permissions to edit the panels for the formbuilder content type.
+ */
+function paddle_formbuilder_update_7003() {
+  $permissions = array(
+    'administer panelizer node paddle_formbuilder_page layout',
+    'administer panelizer node paddle_formbuilder_page content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Enable webform2pdf module.
+ */
+function paddle_formbuilder_update_7004() {
+  module_enable(array('webform2pdf'));
+}
+
+/**
+ * Add shield_submissions field to webform schema and add permission.
+ */
+function paddle_formbuilder_update_7005() {
+  db_add_field('webform', 'shield_submissions', array(
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+  ));
+
+  // Set the correct permission for site managers.
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, array('manage paddle formbuilder permissions'));
+}
+
+/**
+ * Enable mailsystem and mimemail module.
+ * Make webform e-mail html capable.
+ */
+function paddle_formbuilder_update_7006() {
+  module_enable(array('mailsystem', 'mimemail'));
+}
+
+/**
+ * Don't allow mimemail to change the e-mail style.
+ */
+function paddle_formbuilder_update_7007() {
+  variable_set('mimemail_sitestyle', 0);
+}

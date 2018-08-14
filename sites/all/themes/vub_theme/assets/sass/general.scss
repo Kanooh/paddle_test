@@ -1,0 +1,190 @@
+@import "utils/font-face";
+@import "variables/colors";
+@import "variables/typography";
+@import "../../../paddle_theme/sass/variables/responsive";
+
+// -------------------------------------------------------------------
+// :: GENERAL CSS
+// -------------------------------------------------------------------
+
+body header, body #main-nav {
+  background-color: $light-extra;
+
+  #block-paddle-menu-display-first-level .level-1 > .menu-item a {
+    color: $black-extra;
+    font-family: "Roboto Condensed";
+    text-transform: uppercase;
+    text-decoration: none;
+    font-weight: 700;
+
+    &:hover {
+      color: $primary-color;
+    }
+  }
+
+  #block-paddle-menu-display-first-level .level-1 > .menu-item.active-trail a {
+    color: $primary-color;
+  }
+}
+.region-content a:hover,
+#block-paddle-menu-display-first-level .level-1 > .menu-item:hover > a,
+#block-paddle-menu-display-first-level .level-1 > .menu-item.active-trail:hover,
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a.megadropdown-expanded {
+  border-color: $secondary-color;
+}
+#block-paddle-menu-display-first-level .level-1 > .menu-item:hover {
+  background: $light-extra;
+  border-top-width: 3px;
+  border-top-style: solid;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.06078), -5px 4px 10px rgba(0, 0, 0, 0.16078), 5px 4px 10px rgba(0, 0, 0, 0.16078);
+  transition: all 0.2s;
+}
+body .region-content table tr,
+body #block-paddle-menu-display-first-level .level-1 > .menu-item > a,
+body #block-paddle-menu-display-first-level .level-1 > .menu-item,
+body #block-paddle-menu-display-first-level .level-1 > .menu-item.active-trail {
+  border-color: $light-extra;
+}
+#block-paddle-menu-display-first-level .level-1 > .menu-item.active-trail,
+#block-paddle-menu-display-first-level .level-1 > .menu-item {
+  background-color: $light-extra;
+}
+.search-pop-up.search-pop-up-toggle-processed {
+  color: $black-extra;
+
+  &:hover {
+    color: $black-extra;
+  }
+}
+
+.vub-button, a.vub-button {
+  color: $light-extra;
+  background-color: $primary-color;
+  font-size: 16px;
+  border: 1px solid $primary-color;
+  text-align: center;
+  text-decoration: none;
+  vertical-align: middle;
+  display: inline-block;
+  cursor: pointer;
+  margin: 0;
+  border-radius: 0;
+  transition: all 100ms ease-in-out;
+  padding: .6em 1.2em;
+}
+// -------------------------------------------------------------------
+// :: FOOTER CSS
+// -------------------------------------------------------------------
+
+footer {
+
+  &.page-wide-container {
+    background-color: $black-extra;
+  }
+
+  .panel-pane, .panel-pane.paddle-color-palettes-subpalette-0 {
+
+    .pane-content {
+      & > div:first-child {
+        padding-top: 1.8rem;
+      }
+
+      @media (min-width: $screen-lg-min) {
+        margin-bottom: 0;
+
+        .pane-section-body:first-child {
+          margin-top: 40px;
+        }
+      }
+    }
+
+    .pane-section-top {
+      background-color: $black-extra;
+
+      h2 {
+        font-size: 1rem;
+        line-height: 1.55;
+        font-family: "Roboto Condensed";
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        background-color: $black-extra;
+      }
+    }
+
+    ul.menu {
+      padding-left: 0;
+    }
+
+    .pane-section-body {
+      padding-top: 0;
+    }
+
+    .pane-section-body,
+    .pane-section-body a,
+    .pane-section-body a:hover,
+    .pane-section-body p,
+    .pane-content,
+    .pane-content hr,
+    .pane-content a,
+    .pane-content a:hover {
+      color: $light-extra;
+    }
+
+    .pane-content hr {
+      background-color: $medium;
+    }
+  }
+}
+.vub-address-block {
+  text-align: center;
+
+  .vub-logo {
+    padding: 1.8rem 1.2rem;
+  }
+
+  hr {
+    margin: 0 8rem;
+  }
+}
+
+body.node-type-landing-page {
+  .content > .row, #page-title, .landing-page-body, #breadcrumb, .content > .paddle-layout-paddle_3_col_c > .row {
+    width: 94%;
+    max-width: calc(1260px + 4%);
+    padding-left: 2% !important;
+
+    &.background_image, &.page_wide {
+      width: 100%;
+      max-width: 100%;
+      padding-left: 0 !important;
+
+      .page-wide-container.background-image {
+        margin-left: -6%;
+
+        & > .content-wrapper {
+          width: 94%;
+          max-width: calc(1260px + 4%);
+          padding-left: 4% !important;
+        }
+      }
+    }
+  }
+}
+#page-title {
+  margin: 15px auto;
+}
+// -------------------------------------------------------------------
+// :: HEADER CSS
+// -------------------------------------------------------------------
+
+#logo {
+  display: flex;
+
+  img {
+    padding: 5px 0 0 5px;
+  }
+
+  img[src$=".svg"] {
+    max-height: 127px;
+  }
+}

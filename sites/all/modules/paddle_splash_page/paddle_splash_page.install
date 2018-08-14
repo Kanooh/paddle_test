@@ -1,0 +1,95 @@
+<?php
+
+/**
+ * @file
+ * Install and update hook for splash page paddlet.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_splash_page_enable() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_splash_page'));
+
+  features_revert_module('paddle_i18n');
+  variable_set('language_selection_page_js_cookie_redirect', 0);
+  module_load_include('inc', 'language_selection_page', 'includes/language_selection_page.helpers');
+
+  // Change the language negotiation settings so they are properly configured
+  // to use the language selection / cookie modules.
+  $language_negotiation_language = array();
+
+  $language_negotiation_language['locale-url'] = array(
+    'callbacks' => array(
+      'language' => 'locale_language_from_url',
+      'switcher' => 'locale_language_switcher_url',
+      'url_rewrite' => 'locale_language_url_rewrite_url',
+    ),
+    'file' => 'includes/locale.inc',
+  );
+
+  $language_negotiation_language['language_cookie'] = array(
+    'callbacks' => array(
+      'language' => 'language_cookie_language',
+    ),
+    'file' => drupal_get_path('module', 'language_cookie') . '/language_cookie.module',
+  );
+
+  $language_negotiation_language['language-selection-page'] = array(
+    'callbacks' => array(
+      'language' => 'language_selection_page_language',
+    ),
+    'file' => drupal_get_path('module', 'language_selection_page') . '/language_selection_page.module',
+  );
+
+  // Both the language_negotiation_language as
+  // language_negotiation_language_content variables
+  // require the same settings.
+  variable_set('language_negotiation_language', $language_negotiation_language);
+  variable_set('language_negotiation_language_content', $language_negotiation_language);
+  language_types_set();
+  language_negotiation_purge();
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_splash_page_disable() {
+  paddle_i18n_set_default_detection_settings();
+}
+
+/**
+ * Update the language_negotiation language_content variable for existing sites.
+ */
+function paddle_splash_page_update_7000() {
+  $language_negotiation_language = array();
+
+  $language_negotiation_language['locale-url'] = array(
+    'callbacks' => array(
+      'language' => 'locale_language_from_url',
+      'switcher' => 'locale_language_switcher_url',
+      'url_rewrite' => 'locale_language_url_rewrite_url',
+    ),
+    'file' => 'includes/locale.inc',
+  );
+
+  $language_negotiation_language['language_cookie'] = array(
+    'callbacks' => array(
+      'language' => 'language_cookie_language',
+    ),
+    'file' => drupal_get_path('module', 'language_cookie') . '/language_cookie.module',
+  );
+
+  $language_negotiation_language['language-selection-page'] = array(
+    'callbacks' => array(
+      'language' => 'language_selection_page_language',
+    ),
+    'file' => drupal_get_path('module', 'language_selection_page') . '/language_selection_page.module',
+  );
+
+  variable_set('language_negotiation_language_content', $language_negotiation_language);
+  language_types_set();
+  language_negotiation_purge();
+}

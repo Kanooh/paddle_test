@@ -1,0 +1,54 @@
+{
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "git@bitbucket.org:kanooh/selenium-testing.git"
+    },
+    {
+      "type": "vcs",
+      "url": "git@github.com:Kanooh/comparator.git"
+    },
+    {
+      "type": "vcs",
+      "url": "git@github.com:Kanooh/phpunit.git"
+    },
+    {
+      "type": "vcs",
+      "url": "https://github.com/PieterDC/phpunit-selenium.git"
+    },
+    {
+      "type": "vcs",
+      "url": "https://github.com/MaartenElsen/paratest.git"
+    }
+  ],
+
+  "require":
+  {
+    "drupal/drupal-driver": "~1.0",
+    "kanooh/webdriver": "dev-KANWEBS-5932",
+    "jeremeamia/superclosure": "~1.0",
+    "phpunit/phpunit": "dev-only-repeat-failed as 4.8.0",
+    "phpunit/phpunit-selenium": "dev-better-exception-handling as 1.4.2",
+    "sebastian/comparator": "dev-serializable-comparison-failure as 1.2.0",
+    "brianium/paratest": "dev-only-repeat-failed as 0.13.2"
+  },
+
+  "provide":
+  {
+    "php": "*"
+  },
+
+  "autoload": {
+    "psr-0":
+    {
+      "Kanooh\\Paddle": ["pages/", "tests/"],
+      "Kanooh\\TestDataProvider": "testdataprovider/"
+    },
+    "psr-4": {
+      "Drupal\\paddle_apps\\": "../profiles/paddle/modules/paddle_apps/src/",
+      "Drupal\\paddle_subscription\\": "../profiles/paddle/modules/paddle_subscription/src/",
+      "Drupal\\paddle_user\\": "../profiles/paddle/modules/paddle_user/src/",
+      "Drupal\\Tests\\": "tests/src/"
+    }
+  }
+}

@@ -1,0 +1,884 @@
+/**
+* @file
+* Paddle style plugins.
+*/
+header,
+footer,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-top,
+.pane-facetapi .pane-title,
+.menuslider-controls button {
+  background-color: #39B9BE;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body blockquote,
+#menu-display-top-menu a:hover {
+  color: #39B9BE;
+}
+
+div.pane-listing .paddle-landing-page-listing-teaser .node,
+#block-paddle-menu-display-first-level .level-1 > .menu-item.active-trail,
+#block-paddle-menu-display-first-level .level-1 > .menu-item:hover {
+  border-color: #39B9BE;
+}
+
+.pane-google-custom-search .form-submit,
+.form-submit-container .form-submit,
+.form-submit,
+#block-paddle-menu-display-first-level .level-1 > .active-trail,
+.menuslider-controls button:hover,
+figcaption.image-pane-caption:before {
+  background-color: #2B979D;
+}
+
+.region-content a:hover,
+#block-paddle-menu-display-first-level .level-1 > .menu-item:hover > a,
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a.megadropdown-expanded {
+  color: #2B979D;
+}
+
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a.megadropdown-expanded {
+  border-top-color: #2B979D;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-bottom {
+  background-color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-0 .menu,
+.panel-pane.paddle-color-palettes-subpalette-0 .menu a {
+  color: #5E5E5E;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 table th,
+.pane-incoming-rss .entity.paddle-incoming-rss-feed-item--magazine > h2 > a,
+.panel-pane.paddle-color-palettes-subpalette-0 .listing.table-listing a {
+  color: #39B9BE;
+}
+
+.header-title,
+.header-subtitle,
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a,
+#block-paddle-menu-display-footer-menu a,
+#menu-display-disclaimer-menu .menu-item a,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-top a h2 {
+  color: #FFF;
+}
+
+#block-paddle-menu-display-current-level-plus-one .menu-item a:hover,
+#block-paddle-menu-display-first-level .level-2 > .menu-item > a:hover,
+.region-content blockquote,
+.region-content h3,
+.region-content a,
+.search-api-page-results h3 a {
+  color: #1C7074;
+}
+
+#main-nav,
+#fake-menu-bg,
+.pane-google-custom-search .form-submit:hover,
+.form-submit-container .form-submit:hover,
+.form-submit:hover,
+hr,
+a.label-link.active-facet.active,
+#menu-display-current-level-plus-one .menuslider-controls button:hover {
+  background-color: #1C7074;
+}
+
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a,
+#block-paddle-menu-display-first-level .level-1 > .menu-item {
+  border-color: #1C7074;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-top {
+  background-color: #1C6F73;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body blockquote {
+  color: #1C6F73;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-bottom {
+  background-color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-1 .menu,
+.panel-pane.paddle-color-palettes-subpalette-1 .menu a {
+  color: #5E5E5E;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 table th,
+.panel-pane.paddle-color-palettes-subpalette-1 .listing.table-listing a {
+  color: #1C6F73;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 table tr {
+  border-color: #1C6F73;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-top a h2 {
+  color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-top {
+  background-color: #735781;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body blockquote {
+  color: #735781;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-bottom {
+  background-color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-2 .menu,
+.panel-pane.paddle-color-palettes-subpalette-2 .menu a {
+  color: #5E5E5E;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 table th,
+.panel-pane.paddle-color-palettes-subpalette-2 .listing.table-listing a {
+  color: #735781;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 table tr {
+  border-color: #735781;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-top a h2 {
+  color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-top {
+  background-color: #2B92BE;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body blockquote {
+  color: #2B92BE;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-bottom {
+  background-color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-3 .menu,
+.panel-pane.paddle-color-palettes-subpalette-3 .menu a {
+  color: #5E5E5E;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 table th,
+.panel-pane.paddle-color-palettes-subpalette-3 .listing.table-listing a {
+  color: #2B92BE;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 table tr {
+  border-color: #2B92BE;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-top a h2 {
+  color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-top {
+  background-color: #4BA144;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body blockquote {
+  color: #4BA144;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-bottom {
+  background-color: #5DBE55;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-4 .menu,
+.panel-pane.paddle-color-palettes-subpalette-4 .menu a {
+  color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 table th,
+.panel-pane.paddle-color-palettes-subpalette-4 .listing.table-listing a {
+  color: #FFF;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 table tr {
+  border-color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-top a h2 {
+  color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-top {
+  background-color: #735781;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body blockquote {
+  color: #735781;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-bottom {
+  background-color: #926DA5;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-5 .menu,
+.panel-pane.paddle-color-palettes-subpalette-5 .menu a {
+  color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 table th,
+.panel-pane.paddle-color-palettes-subpalette-5 .listing.table-listing a {
+  color: #FFF;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 table tr {
+  border-color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-top a h2 {
+  color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-top {
+  background-color: #23789C;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body blockquote {
+  color: #23789C;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-bottom {
+  background-color: #2B92BE;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-6 .menu,
+.panel-pane.paddle-color-palettes-subpalette-6 .menu a {
+  color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 table th,
+.panel-pane.paddle-color-palettes-subpalette-6 .listing.table-listing a {
+  color: #FFF;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 table tr {
+  border-color: #FFF;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-top a h2 {
+  color: #FFF;
+}
+
+.header-title {
+  font-size: 35px;
+}
+
+.header-subtitle {
+  font-size: 25px;
+}
+
+h1#page-title {
+  font-size: 35px;
+}
+
+.breadcrumb-item a,
+.breadcrumb-item > span {
+  font-size: 14px;
+}
+
+.region-content .landing-page-body p {
+  font-size: 25px;
+}
+
+.pane-section-body .paddle-landing-page-listing-teaser h4 {
+  margin-top: 0px;
+}
+
+.pane-section-body .paddle-landing-page-listing-teaser h4 a {
+  font-size: 15px;
+}
+
+.region-content h2 {
+  font-size: 30px;
+}
+
+.region-content h3 {
+  font-size: 20px;
+}
+
+.region-content h4 {
+  font-size: 18px;
+}
+
+.region-content h5 {
+  font-size: 15px;
+}
+
+.region-content p {
+  font-size: 15px;
+}
+
+.node-type-basic-page .region-content a:link {
+  font-size: 15px;
+}
+
+.node-type-basic-page .region-content a:visited {
+  font-size: 15px;
+}
+
+.node-type-basic-page .region-content a:hover {
+  font-size: 15px;
+}
+
+.node-type-basic-page .region-content h2 a,
+.node-type-basic-page .region-content h3 a,
+.node-type-basic-page .region-content h4 a,
+.node-type-basic-page .region-content h5 a,
+.node-type-basic-page .region-content h6 a,
+.node-type-basic-page .region-content h2 a:link,
+.node-type-basic-page .region-content h3 a:link,
+.node-type-basic-page .region-content h4 a:link,
+.node-type-basic-page .region-content h5 a:link,
+.node-type-basic-page .region-content h6 a:link,
+.node-type-basic-page .region-content h2 a:hover,
+.node-type-basic-page .region-content h3 a:hover,
+.node-type-basic-page .region-content h4 a:hover,
+.node-type-basic-page .region-content h5 a:hover,
+.node-type-basic-page .region-content h6 a:hover,
+.node-type-basic-page .region-content h2 a:visited,
+.node-type-basic-page .region-content h3 a:visited,
+.node-type-basic-page .region-content h4 a:visited,
+.node-type-basic-page .region-content h5 a:visited,
+.node-type-basic-page .region-content h6 a:visited {
+  font-size: inherit;
+}
+
+.node-type-basic-page .region-content li {
+  font-size: 15px;
+}
+
+.panel-pane .pane-section-body p {
+  font-size: 15px;
+}
+
+.panel-pane .pane-section-body a {
+  font-size: 15px;
+}
+
+.panel-pane .pane-section-body li {
+  font-size: 15px;
+}
+
+.region-content blockquote {
+  font-size: 25px;
+}
+
+footer {
+  background-attachment: scroll;
+  background-repeat: repeat;
+  background-position: center center;
+}
+
+#block-paddle-menu-display-footer-menu a {
+  font-size: 15px;
+}
+
+#block-paddle-menu-display-footer-menu .level-2 a {
+  font-size: 14px;
+}
+
+#menu-display-disclaimer-menu .menu-item a {
+  font-size: 15px;
+}
+
+@media (min-width: 889px) {
+  #logo img[src$=".svg"] {
+    max-height: 97px;
+    max-width: 400px;
+  }
+}
+/**
+* @file
+* Styling for preview page with the theming applied.
+*
+*/
+.cke_editable {
+  height: auto;
+  background: #FFF;
+}
+
+.cke_editable.region-content {
+  margin: 5px;
+}
+
+.cke_editable p {
+  color: #000000;
+}
+
+.cke_editable img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border: none;
+}
+
+/* CKE editor indent styles */
+.region-content .rteindent1,
+.region-content .rteindent1:first-child {
+  margin-left: 15px;
+}
+
+.region-content .rteindent2,
+.region-content .rteindent2:first-child {
+  margin-left: 25px;
+}
+
+.region-content .rteindent3,
+.region-content .rteindent3:first-child {
+  margin-left: 40px;
+}
+
+.region-content .rteindent4,
+.region-content .rteindent4:first-child {
+  margin-left: 60px;
+}
+
+/**
+* @file
+* Styling for preview page with the theming applied.
+*
+*/
+.node-iframe.paddle-preview-enabled {
+  background: #FFF;
+}
+
+.node-iframe.paddle-preview-enabled .region-content {
+  margin: 0;
+}
+
+.node-iframe.paddle-preview-enabled {
+  margin-top: 0;
+  padding: 2% 2%;
+}
+
+.node-iframe.paddle-preview-enabled #page-title {
+  margin-top: 0;
+}
+
+/**
+* @file
+* Styling for content in panes of landingspages.
+*
+*/
+/* @common */
+.pane-content {
+  border: 1px solid #EBEBEB;
+  border-bottom: 0;
+  box-shadow: 0 5px 5px -4px #B5B5B5;
+  background-color: #FFF;
+  word-wrap: break-word;
+  margin-bottom: 30px;
+}
+
+.pane-facetapi .pane-content,
+.pane-pm-existing-pages .pane-content,
+.pane-entity-revision-view .pane-content,
+.pane-node-body .pane-content,
+.pane-entity-view .pane-content {
+  padding: 21px 15px 14px 15px;
+}
+
+.pane-content-region > .pane-content {
+  border: 0;
+  box-shadow: none;
+}
+
+.pane-section-top,
+.pane-section-bottom {
+  padding: 15px 15px 15px 15px;
+}
+
+.pane-section-body {
+  padding: 21px 15px 14px 15px;
+  overflow: hidden;
+}
+
+.pane-custom .pane-content {
+  padding: 21px 0 20px;
+}
+
+.pane-add-image .pane-section-body {
+  padding: 0;
+}
+
+.pane-section-body .views-row {
+  margin-bottom: 10px;
+}
+
+/* @images */
+.pane-section-image {
+  padding: 0;
+}
+
+.pane-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.pane-section-top img,
+.pane-add-image img {
+  width: 100%;
+}
+
+.pane-section-top {
+  overflow: auto;
+}
+
+.pane-section-top .top-section-icon {
+  display: block;
+  float: left;
+  margin-right: 10px;
+}
+
+.pane-section-top .top-section-icon img {
+  max-height: 45px;
+  max-width: 45px;
+  width: auto;
+}
+
+.node-type-landing-page .panel-pane.pane-add-image:first-child {
+  padding: 0;
+}
+
+/* @captions */
+.pane-add-image figure {
+  position: relative;
+  color: #FFF;
+}
+
+.pane-add-image figcaption {
+  position: absolute;
+  z-index: 90;
+  font-weight: bold;
+  font-size: 1.3em;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+.pane-add-image .caption-text {
+  padding: 20px 18px 16px 18px;
+}
+
+figcaption.image-pane-caption:before {
+  opacity: 0.75;
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  z-index: -100;
+}
+
+/* responsive videos */
+/* See more at:http://avexdesigns.com/responsive-youtube-embed/ */
+.media_embed {
+  position: relative;
+  padding-bottom: 56.25%;
+  padding-top: 30px;
+  height: 0;
+  overflow: hidden;
+}
+
+.media_embed iframe,
+.media_embed object,
+.media_embed embed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* @links */
+.pane-section-bottom a:link,
+.pane-section-top a:link,
+.pane-add-image .pane-section-body a:link {
+  text-decoration: none;
+}
+
+.pane-section-bottom a {
+  text-align: right;
+  display: block;
+  font-style: italic;
+}
+
+.pane-section-bottom a i {
+  padding-left: 10px;
+  font-size: 0.8em;
+}
+
+.pane-add-menu-structure a:link,
+.pane-add-menu-structure a:visited,
+.pane-listing a:link,
+.pane-listing a:visited {
+  text-decoration: none;
+}
+
+.pane-section-bottom a:hover,
+.pane-section-body a:hover,
+.pane-add-menu-structure a:hover {
+  text-decoration: underline;
+}
+
+.pane-listing a:hover,
+.pane-listing a:active {
+  text-decoration: underline;
+}
+
+/* @lists */
+.pane-section-body .regular-list ul {
+  margin-left: 0;
+  padding: 0;
+  list-style-type: none;
+}
+
+.pane-section-body .regular-list .menu .menu,
+.pane-section-body .bullet-list .menu .menu {
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+.region-content .ul-menu-items.bullet-list > .menu > .expanded > .menu a {
+  font-size: 0.9em;
+}
+
+.pane-section-body .item-list ul li {
+  margin: 0;
+}
+
+.region-content .col-md-3 li a,
+.region-content .col-md-4 li a {
+  word-wrap: break-word;
+}
+
+/* @paragraphs */
+.region-content .panel-pane p:first-child {
+  margin-top: 0;
+}
+
+.region-content .landing-page-body p {
+  line-height: 1.2em;
+  margin-bottom: 25px;
+}
+
+/* @common */
+.region-content .pane-section-top,
+.region-content .pane-section-top h2,
+.region-content .pane-section-top a h2,
+.region-content .pane-section-top a {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.pane-section-top,
+.pane-section-top h2,
+.region-content .pane-section-top a,
+.region-content .pane-section-top a h2 {
+  color: #FFF;
+}
+
+#block-paddle-menu-display-current-level-plus-one .menu-item a,
+.breadcrumb-item a {
+  color: #272C17;
+}
+
+/* @read more */
+.pane-section-body .read-more {
+  text-align: right;
+  padding: 0 15px 10px 0;
+}
+
+/* @mediaelement player */
+.region-content ul.mejs__captions-selector-list {
+  margin: 0;
+}
+
+.mejs__controls {
+  padding: 0;
+}
+
+.pane-add-video .pane-content, .pane-add-video .pane-section-body {
+  padding: 0;
+}
+
+.pane-free-content .playable-video {
+  margin: 0 -15px;
+}
+.pane-free-content .playable-video .mejs__controls {
+  margin: 0 15px;
+}
+.pane-free-content .playable-video .mejs__mediaelement, .pane-free-content .playable-video .mejs__overlay-play {
+  left: 15px;
+}
+
+/**
+ * Spotlight view on listing panes.
+ */
+/**
+* @file
+* Paddle News module styling for the VUB Theme.
+*/
+.pane-section-body.view-mode-spotlight .view-content {
+  display: flex;
+  flex-wrap: wrap;
+}
+.pane-section-body.view-mode-spotlight .view-content .views-row {
+  margin: 0 2% 2% 0;
+}
+@media screen and (min-width: 45em) {
+  .pane-section-body.view-mode-spotlight .view-content .views-row {
+    width: 47.75%;
+  }
+}
+
+.panel-pane .pane-content .pane-section-body.view-mode-spotlight a {
+  text-decoration: none;
+}
+
+.news-item-spotlight, .node-spotlight {
+  position: relative;
+  display: flex;
+  justify-content: flex-start;
+}
+.news-item-spotlight .news-item-spotlight-image, .news-item-spotlight .node-spotlight-image, .node-spotlight .news-item-spotlight-image, .node-spotlight .node-spotlight-image {
+  margin-right: 2em;
+  width: 30%;
+}
+.news-item-spotlight .news-item-spotlight-image img, .news-item-spotlight .node-spotlight-image img, .node-spotlight .news-item-spotlight-image img, .node-spotlight .node-spotlight-image img {
+  border-bottom: 5px solid transparent;
+}
+.news-item-spotlight .news-item-content, .news-item-spotlight .node-content, .node-spotlight .news-item-content, .node-spotlight .node-content {
+  width: 65%;
+}
+.news-item-spotlight .news-item-header, .news-item-spotlight .node-header, .node-spotlight .news-item-header, .node-spotlight .node-header {
+  padding: 0 0 1.5em;
+  margin-bottom: 1em;
+  position: relative;
+}
+.news-item-spotlight .news-item-header h5, .news-item-spotlight .node-header h5, .node-spotlight .news-item-header h5, .node-spotlight .node-header h5 {
+  margin-bottom: .5em;
+}
+.news-item-spotlight .news-item-header h4, .news-item-spotlight .news-item-header h4 a, .news-item-spotlight .node-header h4, .news-item-spotlight .node-header h4 a, .node-spotlight .news-item-header h4, .node-spotlight .news-item-header h4 a, .node-spotlight .node-header h4, .node-spotlight .node-header h4 a {
+  font-size: 20px;
+}
+.news-item-spotlight .news-item-header:after, .news-item-spotlight .node-header:after, .node-spotlight .news-item-header:after, .node-spotlight .node-header:after {
+  content: "";
+  display: block;
+  height: 1px;
+  width: 100px;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+}
+.news-item-spotlight p, .node-spotlight p {
+  color: #000000;
+}
+
+.col-md-3 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-md-4 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-lg-3 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-md-9 .col-lg-6 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-md-9 .col-lg-4 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-md-9 .col-lg-3 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-md-8 .col-md-6 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-md-6 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-md-9 .col-lg-9 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-md-9 .col-lg-7 .pane-section-body.view-mode-spotlight .view-content .views-row, .col-md-8 .col-md-12 .pane-section-body.view-mode-spotlight .view-content .views-row {
+  width: 100%;
+}
+.col-md-3 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-3 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-md-4 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-4 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-lg-3 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-lg-3 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-md-9 .col-lg-6 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-9 .col-lg-6 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-md-9 .col-lg-4 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-9 .col-lg-4 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-md-9 .col-lg-3 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-9 .col-lg-3 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-md-8 .col-md-6 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-8 .col-md-6 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-md-6 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-6 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-md-9 .col-lg-9 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-9 .col-lg-9 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-md-9 .col-lg-7 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-9 .col-lg-7 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight, .col-md-8 .col-md-12 .pane-section-body.view-mode-spotlight .view-content .views-row .news-item-spotlight, .col-md-8 .col-md-12 .pane-section-body.view-mode-spotlight .view-content .views-row .node-spotlight {
+  width: 100%;
+}
+
+@media screen and (max-width: 578px) {
+  .news-item-spotlight, .node-spotlight {
+    width: 100%;
+    flex-direction: column;
+  }
+  .news-item-spotlight .news-item-spotlight-image, .news-item-spotlight .node-spotlight-image, .news-item-spotlight .news-item-content, .news-item-spotlight .node-content, .node-spotlight .news-item-spotlight-image, .node-spotlight .node-spotlight-image, .node-spotlight .news-item-content, .node-spotlight .node-content {
+    width: 100%;
+    text-align: center;
+  }
+  .news-item-spotlight .news-item-spotlight-image .news-item-header:after, .news-item-spotlight .news-item-spotlight-image .node-header:after, .news-item-spotlight .node-spotlight-image .news-item-header:after, .news-item-spotlight .node-spotlight-image .node-header:after, .news-item-spotlight .news-item-content .news-item-header:after, .news-item-spotlight .news-item-content .node-header:after, .news-item-spotlight .node-content .news-item-header:after, .news-item-spotlight .node-content .node-header:after, .node-spotlight .news-item-spotlight-image .news-item-header:after, .node-spotlight .news-item-spotlight-image .node-header:after, .node-spotlight .node-spotlight-image .news-item-header:after, .node-spotlight .node-spotlight-image .node-header:after, .node-spotlight .news-item-content .news-item-header:after, .node-spotlight .news-item-content .node-header:after, .node-spotlight .node-content .news-item-header:after, .node-spotlight .node-content .node-header:after {
+    width: 75%;
+    margin-left: 12.5%;
+  }
+}

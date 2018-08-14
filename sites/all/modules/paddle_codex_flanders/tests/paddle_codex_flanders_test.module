@@ -1,0 +1,273 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Codex Flanders Test
+ * module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_codex_flanders_test_menu() {
+  return array(
+    'paddle_codex_flanders_test/%' => array(
+      'page arguments' => array(1),
+      'page callback' => 'paddle_codex_flanders_test_mock_article_data',
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+    ),
+    'paddle_codex_flanders_test/versie/%/VolledigeArtikelVersie' => array(
+      'page arguments' => array(2),
+      'page callback' => 'paddle_codex_flanders_test_mock_article_version_data',
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_codex_flanders_request_url_alter().
+ */
+function paddle_codex_flanders_test_paddle_codex_flanders_request_url_alter(&$url, &$aid) {
+  global $base_url;
+
+  $url = $base_url . '/paddle_codex_flanders_test/' . $aid;
+}
+
+/**
+ * Page callback for the article JSON.
+ *
+ * @param int $aid
+ *   The ID of the article.
+ *
+ * @return string
+ *   Returns the JSON output for the article.
+ */
+function paddle_codex_flanders_test_mock_article_data($aid) {
+  global $base_url;
+  $output_array = array();
+
+  switch ($aid) {
+    case 1:
+      $output_array = array(
+        'TotaalAantal' => 2,
+        'ResultatenLijst' => array(
+          0 => array(
+            'StartDatum' => '2014-09-01T00:00:00',
+            'EindDatum' => '2999-12-31T00:00:00',
+            'Id' => '1246502',
+            'Link' => array(
+              'Href' => $base_url . '/paddle_codex_flanders_test/versie/1246502',
+            ),
+          ),
+          1 => array(
+            'StartDatum' => '3000-01-01T00:00:00',
+            'EindDatum' => NULL,
+            'Id' => '1295956',
+            'Link' => array(
+              'Href' => $base_url . '/paddle_codex_flanders_test/versie/1295956',
+            ),
+          ),
+        ),
+      );
+      break;
+
+    case 2:
+      $output_array = array(
+        'TotaalAantal' => 1,
+        'ResultatenLijst' => array(
+          0 => array(
+            'StartDatum' => '2014-09-01T00:00:00',
+            'EindDatum' => NULL,
+            'Id' => '1246438',
+            'Link' => array(
+              'Href' => $base_url . '/paddle_codex_flanders_test/versie/1246438',
+            ),
+          ),
+        ),
+      );
+      break;
+
+    case 3:
+      $output_array = array(
+        'TotaalAantal' => 2,
+        'ResultatenLijst' => array(
+          0 => array(
+            'StartDatum' => '2014-09-01T00:00:00',
+            'EindDatum' => '2016-01-07T00:00:00',
+            'Id' => '1246518',
+            'Link' => array(
+              'Href' => $base_url . '/paddle_codex_flanders_test/versie/1246518',
+            ),
+          ),
+          1 => array(
+            'StartDatum' => '2016-01-08T00:00:00',
+            'EindDatum' => NULL,
+            'Id' => '1280483',
+            'Link' => array(
+              'Href' => $base_url . '/paddle_codex_flanders_test/versie/1280483',
+            ),
+          ),
+        ),
+      );
+      break;
+
+    case 4:
+      $output_array = array(
+        'TotaalAantal' => 2,
+        'ResultatenLijst' => array(
+          0 => array(
+            'StartDatum' => '3000-01-01T00:00:00',
+            'EindDatum' => NULL,
+            'Id' => '1246523',
+            'Link' => array(
+              'Href' => $base_url . '/paddle_codex_flanders_test/versie/1246523',
+            ),
+          ),
+        ),
+      );
+      break;
+  }
+
+  drupal_json_output($output_array);
+  exit();
+}
+
+/**
+ * Page callback for the version JSON.
+ *
+ * @param int $vid
+ *   The ID of the version of an article.
+ *
+ * @return string
+ *   Returns the JSON output for the version of the article.
+ */
+function paddle_codex_flanders_test_mock_article_version_data($vid) {
+  $output_array = array();
+
+  switch ($vid) {
+    case 1246502:
+      $output_array = array(
+        'Inhoud' => array(
+          'ArtikelVersies' => array(
+            0 => array(
+              'ArtikelVersie' => array(
+                'Tekst' => 'ActiveVersionArticle1',
+                'ArtikelNummer' => '1.1246502',
+              ),
+            ),
+          ),
+        ),
+        'Document' => array(
+          'Opschrift' => 'OpschriftActiveVersionArticle1',
+          'Datum' => '2014-03-28T00:00:00',
+          'WetgevingDocumentType' => 'Decreet',
+        ),
+      );
+      break;
+
+    case 1295956;
+      $output_array = array(
+        'Inhoud' => array(
+          'ArtikelVersies' => array(
+            0 => array(
+              'ArtikelVersie' => array(
+                'Tekst' => 'NonActiveVersionArticle1',
+                'ArtikelNummer' => '1.1295956',
+              ),
+            ),
+          ),
+        ),
+        'Document' => array(
+          'Opschrift' => 'OpschriftNonActiveVersionArticle1',
+          'Datum' => '2014-10-28T00:00:00',
+          'WetgevingDocumentType' => 'Decreet',
+        ),
+      );
+      break;
+
+    case 1246438:
+      $output_array = array(
+        'Inhoud' => array(
+          'ArtikelVersies' => array(
+            0 => array(
+              'ArtikelVersie' => array(
+                'Tekst' => 'ActiveVersionArticle2',
+                'ArtikelNummer' => '1.1246438',
+              ),
+            ),
+          ),
+        ),
+        'Document' => array(
+          'Opschrift' => 'OpschriftActiveVersionArticle2',
+          'Datum' => '2014-10-28T00:00:00',
+          'WetgevingDocumentType' => 'Koninklijk Besluit',
+        ),
+      );
+      break;
+
+    case 1246518:
+      $output_array = array(
+        'Inhoud' => array(
+          'ArtikelVersies' => array(
+            0 => array(
+              'ArtikelVersie' => array(
+                'Tekst' => 'NonActiveVersionArticle3',
+                'ArtikelNummer' => '1.1246518',
+              ),
+            ),
+          ),
+        ),
+        'Document' => array(
+          'Opschrift' => 'OpschriftNonActiveVersionArticle3',
+          'Datum' => '2015-06-01T00:00:00',
+          'WetgevingDocumentType' => 'Wet',
+        ),
+      );
+      break;
+
+    case 1280483;
+      $output_array = array(
+        'Inhoud' => array(
+          'ArtikelVersies' => array(
+            0 => array(
+              'ArtikelVersie' => array(
+                'Tekst' => 'ActiveVersionArticle3',
+                'ArtikelNummer' => '1.1280483',
+              ),
+            ),
+          ),
+        ),
+        'Document' => array(
+          'Opschrift' => 'OpschriftActiveVersionArticle3',
+          'Datum' => '2016-01-01T00:00:00',
+          'WetgevingDocumentType' => 'Wet',
+        ),
+      );
+      break;
+
+    case 1246523:
+      $output_array = array(
+        'Inhoud' => array(
+          'ArtikelVersies' => array(
+            0 => array(
+              'ArtikelVersie' => array(
+                'Tekst' => 'NonActiveVersionArticle4',
+                'ArtikelNummer' => '1.1246523',
+              ),
+            ),
+          ),
+        ),
+        'Document' => array(
+          'Opschrift' => 'OpschriftNonActiveVersionArticle4',
+          'Datum' => '2014-03-28T00:00:00',
+          'WetgevingDocumentType' => 'Omzendbrief',
+        ),
+      );
+      break;
+  }
+
+  drupal_json_output($output_array);
+  exit();
+}

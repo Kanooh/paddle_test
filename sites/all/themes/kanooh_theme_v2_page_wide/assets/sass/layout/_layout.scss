@@ -1,0 +1,141 @@
+/**
+* @file
+* Layout.
+*
+*/
+@import "../base/variables";
+.container {
+  padding: 0 $normal-padding;
+  max-width: $page-width;
+  margin: 0 auto;
+  box-sizing: border-box;
+
+  @media (min-width: $b-page-width-large) {
+    padding: 0 !important;
+  }
+
+  &#page-title {
+    margin: 0 auto;
+  }
+
+  // For example basic pages.
+  .page-wide-container {
+    padding: 0;
+  }
+}
+.page-wide-container {
+  padding: 0 $normal-padding;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+.col-md-12 {
+  .page-wide-container-max-width {
+    max-width: $page-width;
+  }
+}
+// Put it to zero mate.
+.page-wide {
+  .paddingizer {
+    padding: 0;
+  }
+}
+.is-transparent {
+  .pane-content {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+
+    .pane-section-body {
+      background: none !important;
+      border: none !important;
+    }
+  }
+}
+.has-padding {
+  margin: 0 auto 30px;
+
+  .pane-content {
+    margin: 0;
+  }
+}
+.row .col-md-4.col-md-offset-6:first-child {
+  margin-left: 69.52817574021%;
+}
+@media (min-width: $screen-sm-max) {
+  .col-md-12,
+  .col-md-9 {
+    .pane-google-custom-search {
+      #paddle-google-custom-search-form {
+        width: 50%;
+        margin: 0 auto;
+
+        .form-item-search-field {
+          width: 65%;
+          float: left;
+        }
+
+        .form-submit {
+          padding: 0em 1.6em;
+          margin-top: 0px;
+          margin-left: 9px;
+          height: 40px;
+        }
+      }
+
+    }
+    .pane-advanced-search-form,
+    .pane-advanced-search {
+      #paddle-advanced-search-form {
+        width: 50%;
+        margin: 0 auto;
+        .form-item-search {
+          width: 65%;
+          float: left;
+        }
+        #edit-actions {
+          float: left;
+          .form-submit {
+            padding: 0em 1.6em;
+            margin-top: 0px;
+            margin-left: 9px;
+            height: 40px;
+          }
+        }
+      }
+    }
+  }
+}
+@media (max-width: $screen-xs-max) {
+  .page-wide-container {
+    .logo-wrapper {
+      width: 70%;
+    }
+  }
+}
+@media (min-width: 889px) {
+  #search-api-page-search-form .form-submit-container {
+    float: none;
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
+
+  #search-api-page-search-form > div {
+    display: inherit;
+  }
+
+  #search-api-page-search-form .form-type-textfield {
+    max-width: 1086px;
+    width: calc(100% - 100px);
+  }
+
+  .navigation {
+    max-width: 100%;
+    overflow: hidden;
+  }
+}
+@media (max-width: 888px) {
+  #search-api-page-search-form .form-submit-container {
+    display: block;
+  }
+}

@@ -1,0 +1,1374 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle MailChimp module.
+ */
+
+include_once 'paddle_mailchimp.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_mailchimp_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && $plugin_type == 'content_types') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_mailchimp_menu() {
+  return array(
+    'admin/paddlet_store/app/paddle_mailchimp/%ctools_js/edit_api_key' => array(
+      'title' => 'Edit API key',
+      'page callback' => 'paddle_mailchimp_edit_api_key',
+      'page arguments' => array(4),
+      'access arguments' => array('manage paddle_apps'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/paddlet_store/app/paddle_mailchimp/%ctools_js/delete/%mailchimp_signup' => array(
+      'title' => 'Edit API key',
+      'page callback' => 'paddle_mailchimp_delete_mailchimp_signup',
+      'page arguments' => array(4, 6),
+      'access arguments' => array('manage paddle_apps'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/send_newsletter/%ctools_js/%node/%' => array(
+      'page callback' => 'paddle_mailchimp_send_newsletter',
+      'page arguments' => array(2, 3, 4),
+      'type' => MENU_CALLBACK,
+      'access callback' => 'paddle_mailchimp_can_send_newsletter',
+      'access arguments' => array(3, 4),
+    ),
+  );
+}
+
+/**
+ * Access callback for sending newsletters as test e-mail or campaign.
+ */
+function paddle_mailchimp_can_send_newsletter($node, $send_mode) {
+  if (!user_access('send paddle newsletters')) {
+    return FALSE;
+  }
+  if ($send_mode == 'campaign') {
+    // Check if the newsletter can be sent.
+    $campaign = paddle_mailchimp_get_campaign_from_newsletter($node, TRUE);
+    return !in_array($campaign['status'], array('sending', 'sent'));
+  }
+
+  return TRUE;
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_mailchimp_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_mailchimp_configuration_form',
+  );
+}
+
+/**
+ * App configuration form callback.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_mailchimp_configuration_form() {
+  $form = array();
+
+  drupal_set_title(t('Mailchimp newsletter paddlet'));
+
+  $api_key_set = variable_get('mailchimp_api_key', FALSE);
+  // Display error message warning the users that the API key is not set.
+  if (!$api_key_set) {
+    drupal_set_message(t('Before we can start, you need to enter your MailChimp API key in the settings. Click the "API KEY" button above.'), 'error');
+  }
+
+  // Add the form elements only if the API key is set.
+  if ($api_key_set) {
+    // Add the Signup entities table.
+    $signup_forms_view = views_get_view('signup_forms');
+    if ($signup_forms_view) {
+      $signup_forms_view->set_display('default');
+      $signup_forms_view->pre_execute();
+      $signup_forms_view->execute();
+
+      $signup_table = theme('html_tag', array('element' => array('#tag' => 'h3', '#value' => t('Signup forms'))));
+      $signup_table .= $signup_forms_view->render();
+
+      $form['signup_table'] = array(
+        '#markup' => $signup_table,
+      );
+    }
+  }
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_mailchimp_contextual_actions_configuration_form';
+  }
+
+  return $form;
+}
+
+/**
+ * After-build function of the Paddle Mailchimp configuration form.
+ *
+ * @param array $form
+ *   Form render array.
+ * @param array $form_state
+ *   Form state array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_mailchimp_contextual_actions_configuration_form($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  $ajax_class = 'ctools-use-modal';
+  // Add a contextual toolbar button to edit the API key.
+  $actions[] = array(
+    'action' => l(t('API key'), 'admin/paddlet_store/app/paddle_mailchimp/nojs/edit_api_key', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-gear', $ajax_class),
+      ),
+    )),
+    'class' => array('edit-api-key'),
+    'weight' => 15,
+  );
+
+  $api_key_set = variable_get('mailchimp_api_key', FALSE);
+
+  // Add the other buttons only if the API key is set.
+  if ($api_key_set) {
+    $actions[] = array(
+      'action' => l(t('Signup form'), 'admin/config/services/mailchimp/signup/add', array(
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-plus'),
+        ),
+      )),
+      'class' => array('add-signup-form'),
+      'weight' => 20,
+    );
+  }
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Edit API key callback.
+ *
+ * @param bool $js
+ *   Whether or not the form is loaded with js.
+ */
+function paddle_mailchimp_edit_api_key($js) {
+  // Handle non JS requests as well.
+  if (!$js) {
+    return drupal_get_form('paddle_mailchimp_edit_api_key_form');
+  }
+
+  // Add the necessary JS to make the CTools modal work.
+  ctools_include('ajax');
+  ctools_add_js('ajax-responder');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $form_state = array('ajax' => TRUE);
+  $commands = ctools_modal_form_wrapper('paddle_mailchimp_edit_api_key_form', $form_state);
+
+  if ($form_state['executed']) {
+    $commands[] = ctools_modal_command_dismiss();
+
+    // Reload the page to display the form and the contextual toolbar buttons.
+    $commands[] = ctools_ajax_command_reload();
+  }
+
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * The API key edit form used in a Ctools dialog.
+ */
+function paddle_mailchimp_edit_api_key_form($form, &$form_state) {
+  $form['api_key'] = array(
+    '#type' => 'textfield',
+    '#title' => t('API key'),
+    '#required' => TRUE,
+    '#default_value' => variable_get('mailchimp_api_key', ''),
+  );
+
+  // Add a wrapper when this form is handled through ajax requests.
+  if (!empty($form_state['ajax'])) {
+    $form['api_key']['#prefix'] = '<div class="form-body">';
+    $form['api_key']['#suffix'] = '</div>';
+  }
+
+  $form['actions'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['actions']['save'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+
+  return $form;
+}
+
+/**
+ * Validates and saves the MailChimp API key.
+ */
+function paddle_mailchimp_edit_api_key_form_validate($form, &$form_state) {
+  $api_key = $form_state['values']['api_key'];
+
+  // Try to make a connection to MailChimp to validate the key.
+  if (strlen($api_key)) {
+    try {
+      variable_set('mailchimp_api_key', $api_key);
+      $mcapi = mailchimp_get_api_object();
+      $mcapi->lists->getList();
+    }
+    catch (Exception $e) {
+      variable_set('mailchimp_api_key', '');
+      form_set_error('api_key', t('The provided API key is not valid.'));
+    }
+  }
+}
+
+/**
+ * Submit handler for the MailChimp API key dialog.
+ */
+function paddle_mailchimp_edit_api_key_form_submit($form, &$form_state) {
+  // Redirect to the paddlet config page.
+  $form_state['redirect'] = 'admin/paddlet_store/app/paddle_mailchimp/configure';
+}
+
+/**
+ * Change the MailChimp Signup Entity add/edit form.
+ */
+function paddle_mailchimp_form_mailchimp_signup_form_alter(&$form, &$form_state, $form_id) {
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_mailchimp_contextual_actions_signup_form';
+  }
+  if ($form_state['op'] == 'add') {
+    drupal_set_title(t('Create new Signup Form'));
+  }
+  else {
+    drupal_set_title(t('Edit @signup_form', array('@signup_form' => $form_state['signup']->title)));
+  }
+
+  $form['#attached']['css'][] = drupal_get_path('module', 'paddle_mailchimp') . '/paddle_mailchimp.css';
+
+  // Set some values we want and modify the form by hiding some of the fields.
+  $form['mode']['#default_value'] = array(MAILCHIMP_SIGNUP_BLOCK);
+  $form['settings']['#title'] = t('Labels');
+  $form['mc_lists_config']['#title'] = t('Lists');
+  $form['mc_lists_config']['mergefields']['#title'] = t('Subscription form fields');
+  $form['subscription_settings']['#title'] = t('Settings');
+  unset($form['settings']['destination']);
+
+  // Provide additional submit handler for the form.
+  $form['#submit'][] = 'paddle_mailchimp_form_mailchimp_signup_form_submit';
+}
+
+/**
+ * Submit handler for the MailChimp Signup Entity add/edit form.
+ */
+function paddle_mailchimp_form_mailchimp_signup_form_submit($form, &$form_state) {
+  // Setup a redirect tp return the user to the paddlet config page.
+  $form_state['redirect'] = 'admin/paddlet_store/app/paddle_mailchimp/configure';
+}
+
+/**
+ * After-build function of the Signup Form entity form.
+ *
+ * Add a some custom contextual toolbar buttons.
+ */
+function paddle_mailchimp_contextual_actions_signup_form($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  $actions[] = array(
+    'action' => l(t('Back'), 'admin/paddlet_store/app/paddle_mailchimp/configure', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-arrow-left'),
+      ),
+    )),
+    'class' => array('cancel'),
+    'weight' => 5,
+  );
+
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-check'),
+        'data-paddle-contextual-toolbar-click' => $form['save']['#id'],
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 10,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Delete Signup Form entity callback.
+ */
+function paddle_mailchimp_delete_mailchimp_signup($js, $entity) {
+  // Handle non JS requests as well.
+  if (!$js) {
+    return drupal_get_form('paddle_mailchimp_delete_mailchimp_signup_form', $entity);
+  }
+
+  // Add the necessary JS to make the CTools modal work.
+  ctools_include('ajax');
+  ctools_add_js('ajax-responder');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $form_state = array(
+    'ajax' => TRUE,
+    'build_info' => array(
+      'args' => array($entity),
+    ),
+  );
+  $commands = ctools_modal_form_wrapper('paddle_mailchimp_delete_mailchimp_signup_form', $form_state);
+
+  if ($form_state['executed']) {
+    $commands[] = ctools_modal_command_dismiss();
+    $commands[] = ctools_ajax_command_reload();
+  }
+
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+
+/**
+ * Handles the delete of an existing Signup Form entity.
+ */
+function paddle_mailchimp_delete_mailchimp_signup_form($form, &$form_state, $entity) {
+  // Always provide entity id in the same form key as in the entity edit form.
+  $form['mcs_id'] = array('#type' => 'value', '#value' => $entity->mcs_id);
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+
+  $message = t('Are you sure you want to delete %title?', array(
+    '%title' => $entity->title,
+  ));
+  $form['body']['message'] = array(
+    '#type' => 'item',
+    '#markup' => $message,
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+
+  $form['actions'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['actions']['confirm'] = array(
+    '#type' => 'submit',
+    '#value' => t('Delete'),
+    '#delete' => TRUE,
+  );
+
+  return $form;
+}
+
+/**
+ * Execute Signup Form entity deletion.
+ */
+function paddle_mailchimp_delete_mailchimp_signup_form_submit($form, &$form_state) {
+  if ($form_state['triggering_element']['#delete']) {
+    $entity = mailchimp_signup_load($form_state['values']['mcs_id']);
+    mailchimp_signup_delete_multiple(array($form_state['values']['mcs_id']));
+    watchdog('paddle_mailchimp', 'MailChimp Signup Form: deleted %title.', array('%title' => $entity->title));
+    drupal_set_message(t('MailChimp Signup Form %title has been deleted.', array('%title' => $entity->title)));
+    // Redirect to the paddlet config page.
+    $form_state['redirect'] = 'admin/paddlet_store/app/paddle_mailchimp/configure';
+  }
+}
+
+/**
+ * Implements hook_form_mailchimp_signup_subscribe_form_alter().
+ *
+ * Wrap the description text with some classes.
+ */
+function paddle_mailchimp_form_mailchimp_signup_subscribe_form_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form['description']['#markup'])) {
+    $form['description']['#prefix'] = '<div class="signup-description">';
+    $form['description']['#suffix'] = '</div>';
+  }
+
+  $form['#validate'][] = 'paddle_mailchimp_validate_subscribe_form';
+}
+
+/**
+ * Validation handler for the subscription form.
+ */
+function paddle_mailchimp_validate_subscribe_form($form, &$form_state) {
+  if (!valid_email_address($form_state['values']['mergevars']['EMAIL'])) {
+    form_set_error('mergevars][EMAIL', t('%email is an invalid e-mail address.', array('%email' => $form_state['values']['mergevars']['EMAIL'])));
+  }
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_mailchimp_paddle_content_manager_additional_fields() {
+  return array(
+    'field_paddle_mailchimp_cid',
+  );
+}
+
+/**
+ * Implements hook_form_newsletter_node_form_alter().
+ */
+function paddle_mailchimp_form_newsletter_node_form_alter(&$form, &$form_state, $form_id) {
+  _paddle_mailchimp_campaign_data_fields($form, $form_state, $form_id);
+}
+
+/**
+ * Implements hook_form_paddle_content_manager_node_add_form_alter().
+ */
+function paddle_mailchimp_form_paddle_content_manager_node_add_form_alter(&$form, &$form_state, $form_id) {
+  $node = $form_state['node'];
+
+  // Handle only our newsletter node bundle.
+  if ('newsletter' !== $node->type) {
+    return;
+  }
+
+  _paddle_mailchimp_campaign_data_fields($form, $form_state, $form_id);
+}
+
+/**
+ * Handles newsletter node form alters.
+ */
+function _paddle_mailchimp_campaign_data_fields(&$form, &$form_state, $form_id) {
+  // paddle_content_manager_node_add_form() wraps all fields in a container
+  // when it's inside a modal.
+  if ('paddle_content_manager_node_add_form' === $form_id) {
+    $container = &$form['container'];
+  }
+  else {
+    $container = &$form;
+  }
+
+  // If the campaign id field is not present, don't do anything.
+  if (!isset($container['field_paddle_mailchimp_cid'])) {
+    return;
+  }
+
+  // Prevent direct access to the campaign id field.
+  $lang_code = $container['field_paddle_mailchimp_cid']['#language'];
+  $element = &$container['field_paddle_mailchimp_cid'][$lang_code][0]['value'];
+  $element['#type'] = 'hidden';
+  $element['#required'] = FALSE;
+
+  // Display error message warning the users that the API key is not set.
+  $api_key_set = variable_get('mailchimp_api_key', FALSE);
+  if (!$api_key_set) {
+    drupal_set_message(t('Before creating newsletters, you need to enter your MailChimp API key in the <a href="@configure">configuration page</a>.', array(
+      '@configure' => url('admin/paddlet_store/app/paddle_mailchimp/configure'),
+    )), 'error');
+    // Prevent submit of the form.
+    $form['container']['#access'] = FALSE;
+    $form['actions']['#access'] = FALSE;
+    return;
+  }
+
+  // Verify that at least one list has been created. Check that is an empty
+  // array so we really know if it's a connection error or no lists created.
+  $mailchimp_lists = mailchimp_get_lists();
+  if (is_array($mailchimp_lists) && !count($mailchimp_lists)) {
+    drupal_set_message(t('Before creating newsletters, you need to create at least one list in your Mailchimp account.'), 'error');
+    // Prevent submission of the form.
+    $form['container']['#access'] = FALSE;
+    $form['actions']['#access'] = FALSE;
+    return;
+  }
+
+  // Wrap custom fields for easy access. Also, we need to put these
+  // pseudo-fields under the original field container otherwise the
+  // additional_fields pane won't render them in the edit form.
+  $container['field_paddle_mailchimp_cid']['campaign_data'] = array('#tree' => TRUE);
+  $data_wrapper = &$container['field_paddle_mailchimp_cid']['campaign_data'];
+
+  // Get the campaign info from MailChimp if this is a node update.
+  $node = $form_state['node'];
+  $campaign = paddle_mailchimp_get_campaign_from_newsletter($node);
+
+  // Add the MailChimp lists field.
+  $options = array();
+  foreach ($mailchimp_lists as $list) {
+    $members_count = !empty($list['stats']['member_count']) ? $list['stats']['member_count'] : 0;
+    $options[$list['id']] = format_plural($members_count, '@name (@count recipient)', '@name (@count recipients)', array(
+      '@name' => $list['name'],
+    ));
+  }
+  $data_wrapper['list_id'] = array(
+    '#type' => 'radios',
+    '#title' => t('Lists'),
+    '#options' => $options,
+    '#default_value' => !empty($campaign['list_id']) ? $campaign['list_id'] : NULL,
+    '#required' => TRUE,
+  );
+
+  // Provide name and email form fields.
+  $data_wrapper['from_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('From name'),
+    '#description' => t('Use something subscribers will instantly recognize, like your company name.'),
+    '#default_value' => !empty($campaign['from_name']) ? $campaign['from_name'] : '',
+    '#maxlength' => 100,
+    '#required' => TRUE,
+  );
+
+  $data_wrapper['from_email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('From email address'),
+    '#description' => t('Replies to your campaign will go to this email address.'),
+    '#default_value' => !empty($campaign['from_email']) ? $campaign['from_email'] : '',
+    '#maxlength' => 100,
+    '#required' => TRUE,
+  );
+
+  // Attach a validate handler to send campaign data to MailChimp.
+  $form['#validate'][] = 'paddle_mailchimp_validate_campaign_data';
+}
+
+/**
+ * Validate callback that sends campaign data to MailChimp.
+ *
+ * This must be done with a validate callback as if the API call fails,
+ * we must warn the user AND prevent the creation/update of the associated
+ * node.
+ */
+function paddle_mailchimp_validate_campaign_data($form, &$form_state) {
+  $options = !empty($form_state['values']['field_paddle_mailchimp_cid']['campaign_data']) ?
+    $form_state['values']['field_paddle_mailchimp_cid']['campaign_data'] : array();
+
+  // Validate the from_email field first.
+  if (!empty($options['from_email']) && !valid_email_address($options['from_email'])) {
+    form_set_error('field_paddle_mailchimp_cid][campaign_data][from_email', t('The e-mail address you entered is not valid.'));
+  }
+
+  // If the form has validation errors, don't update remote data.
+  if (form_get_errors()) {
+    return;
+  }
+
+  // paddle_content_manager_node_add_form() wraps all fields in a container
+  // when it's inside a modal.
+  if ('paddle_content_manager_node_add_form' === $form['#form_id']) {
+    $container = &$form['container'];
+  }
+  else {
+    $container = &$form;
+  }
+
+  $node = $form_state['node'];
+  $options['subject'] = $form_state['values']['title'];
+
+  /* @var DrupalMailchimp $mc */
+  $mc = mailchimp_get_api_object();
+
+  try {
+    if (empty($node->nid)) {
+      // This is a new node, create the campaign.
+      $campaign = $mc->campaigns->create('regular', $options, array('html' => ''));
+
+      // Extract the correct element and set its value.
+      $lang_code = $container['field_paddle_mailchimp_cid']['#language'];
+      $element = $container['field_paddle_mailchimp_cid'][$lang_code][0]['value'];
+      form_set_value($element, $campaign['id'], $form_state);
+    }
+    else {
+      // Update current data.
+      $wrapper = entity_metadata_wrapper('node', $node);
+      $campaign_id = $wrapper->field_paddle_mailchimp_cid->value();
+      $mc->campaigns->update($campaign_id, 'options', $options);
+
+      // Clear the campaign cache. MailChimp module has a bugged
+      // mailchimp_cache_clear_campaign() so we have to do it manually.
+      cache_clear_all('campaign_' . $campaign_id, 'cache_mailchimp');
+    }
+  }
+  catch (Exception $e) {
+    form_set_error('title', t('There is a communication problem with MailChimp. Try again later.'));
+    return;
+  }
+}
+
+/**
+ * Helper function to retrieve campaign data from a newsletter node.
+ *
+ * @param object $node
+ *   The node object.
+ * @param bool $reset
+ *   TRUE to force retrieval from MailChimp instead of cache.
+ *
+ * @return bool|array
+ *   FALSE on failure, data array otherwise.
+ */
+function paddle_mailchimp_get_campaign_from_newsletter($node, $reset = FALSE) {
+  if ('newsletter' !== $node->type || empty($node->nid)) {
+    return FALSE;
+  }
+
+  $wrapper = entity_metadata_wrapper('node', $node);
+  $campaign_id = $wrapper->field_paddle_mailchimp_cid->value();
+
+  // Node has no campaign, quit.
+  if (!$campaign_id) {
+    return FALSE;
+  }
+
+  return mailchimp_get_campaign_data($campaign_id, $reset);
+}
+
+/**
+ * Page callback to send a newsletter.
+ */
+function paddle_mailchimp_send_newsletter($js, $node, $mode) {
+  $title = $mode == 'test' ? t('Send test newsletter') : t('Send a campaign');
+  drupal_set_title($title);
+
+  // Check that the node is newsletter.
+  if (!$node || $node->type != 'newsletter') {
+    return;
+  }
+
+  // Handle non JS requests as well.
+  if (!$js) {
+    return drupal_get_form('paddle_mailchimp_send_newsletter_form', $node, $mode);
+  }
+
+  // Add the necessary JS to make the CTools modal work.
+  ctools_include('ajax');
+  ctools_add_js('ajax-responder');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $form_state = array(
+    'ajax' => TRUE,
+    'build_info' => array(
+      'args' => array($node, $mode),
+    ),
+  );
+  $commands = ctools_modal_form_wrapper('paddle_mailchimp_send_newsletter_form', $form_state);
+
+  if ($form_state['executed']) {
+    $commands[] = ctools_modal_command_dismiss();
+    $commands[] = ctools_ajax_command_reload();
+  }
+
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * Form used to send a newsletter as a test e-mail or campaign.
+ *
+ * @param object $node
+ *   The newsletter node to send.
+ */
+function paddle_mailchimp_send_newsletter_form($form, $form_state, $node, $mode) {
+  if ($mode == 'test') {
+    $form['test_emails'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Email address(es)'),
+      '#required' => TRUE,
+      '#description' => t('Enter here the e-mail address(es) which will receive this e-mail. Separate with comma each e-mail address'),
+      '#default_value' => '',
+    );
+
+    // Add a wrapper when this form is handled through ajax requests.
+    if (!empty($form_state['ajax'])) {
+      $form['test_emails']['#prefix'] = '<div class="form-body">';
+      $form['test_emails']['#suffix'] = '</div>';
+    }
+  }
+  else {
+    $campaign = paddle_mailchimp_get_campaign_from_newsletter($node, TRUE);
+
+    // Show the send as campaign form.
+    $form['send_mode'] = array(
+      '#type' => 'radios',
+      '#title' => t('Planing'),
+      '#required' => TRUE,
+      '#options' => array(
+        'send_now' => t('Send now'),
+        'send_later' => t('Send later'),
+      ),
+      '#default_value' => $campaign['status'] != 'schedule' ? 'send_now' : 'send_later',
+    );
+
+    if ($campaign['status'] == 'schedule') {
+      $send_time = paddle_mailchimp_calculate_scheduling_date($campaign['send_time'], TRUE);
+    }
+    else {
+      $send_time = format_date(time(), 'custom', paddle_mailchimp_maichimp_date_format());
+    }
+    $form['send_time'] = array(
+      '#title' => '',
+      '#type' => 'date_popup',
+      '#date_format' => variable_get('date_format_short'),
+      '#default_value' => $send_time,
+      '#states' => array(
+        'visible' => array(':input[name="send_mode"]' => array('value' => 'send_later')),
+      ),
+    );
+
+    // Add a wrapper when this form is handled through ajax requests.
+    if (!empty($form_state['ajax'])) {
+      $form['send_mode']['#prefix'] = '<div class="form-body">';
+      $form['send_time']['#suffix'] = '</div>';
+    }
+  }
+
+  $form['actions'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['actions']['send'] = array(
+    '#type' => 'submit',
+    '#value' => t('Send'),
+  );
+
+  // Pass the node along.
+  $form['node'] = array(
+    '#type' => 'value',
+    '#value' => $node,
+  );
+
+  return $form;
+}
+
+/**
+ * Validates the Send newsletter form.
+ */
+function paddle_mailchimp_send_newsletter_form_validate($form, &$form_state) {
+  if (isset($form_state['values']['test_emails'])) {
+    // Validate the e-mail addresses to which the test e-mail will be send.
+    $test_emails = array_filter(explode(',', preg_replace('/\s+/', '', str_replace(';', ',', $form_state['values']['test_emails']))));
+
+    // First check if there are any emails entered.
+    if (!count($test_emails)) {
+      form_set_error('test_emails', t('No valid e-mail addresses found.'));
+    }
+
+    // Then do a simple e-mail check.
+    $all_valid = TRUE;
+    foreach ($test_emails as $email) {
+      if (!valid_email_address($email)) {
+        $all_valid = FALSE;
+        break;
+      }
+    }
+
+    if (!$all_valid) {
+      form_set_error('test_emails', t('Some of the e-mail addresses you entered are not valid.'));
+    }
+    else {
+      $form_state['values']['test_emails'] = $test_emails;
+    }
+  }
+  // Check that the scheduled time is in the future.
+  if (isset($form_state['values']['send_time']) && isset($form_state['values']['send_mode']) && $form_state['values']['send_mode'] == 'send_later') {
+    $parsed_date = strptime($form_state['values']['send_time'], paddle_mailchimp_maichimp_date_format(TRUE));
+    if (is_array($parsed_date)) {
+      // @see http://php.net/strptime.
+      $timestamp = mktime($parsed_date['tm_hour'], $parsed_date['tm_min'], $parsed_date['tm_sec'], $parsed_date['tm_mon'] + 1, $parsed_date['tm_mday'], $parsed_date['tm_year'] + 1900);
+      if ($timestamp <= time()) {
+        form_set_error('send_time', t('A campaign must be scheduled for sending in the future.'));
+      }
+    }
+  }
+}
+
+/**
+ * Sends a campaign associated with the newsletter item to the test emails.
+ */
+function paddle_mailchimp_send_newsletter_form_submit($form, &$form_state) {
+  $send_mode = 'test';
+
+  if (isset($form_state['values']['test_emails'])) {
+    // Get the e-mail HTML and the addresses to which to send a test e-mail.
+    $test_emails = $form_state['values']['test_emails'];
+  }
+  elseif (isset($form_state['values']['send_mode'])) {
+    $send_mode = $form_state['values']['send_mode'];
+  }
+  $node = $form_state['values']['node'];
+  $html = paddle_mailchimp_generate_mail_html_for_node($node);
+
+  /* @var DrupalMailchimp $mc */
+  $mc = mailchimp_get_api_object();
+  $campaign = paddle_mailchimp_get_campaign_from_newsletter($node);
+  $mc->campaigns->update($campaign['id'], 'content', array('html' => $html));
+  if ($send_mode == 'test') {
+    $result = $mc->campaigns->sendTest($campaign['id'], $test_emails);
+    if ($result['complete']) {
+      drupal_set_message(t('Test e-mails successfully sent to the following e-mail(s): %emails.', array('%emails' => implode(', ', $test_emails))));
+    }
+    else {
+      drupal_set_message(t('An error occurred while sending the test e-mails. Please try again later'));
+    }
+  }
+  elseif ($send_mode == 'send_now') {
+    // If the campaign is scheduled, unschedule it first.
+    if ($campaign['status'] == 'schedule') {
+      $mc->campaigns->unschedule($campaign['id']);
+    }
+
+    $result = $mc->campaigns->send($campaign['id']);
+    if ($result['complete']) {
+      drupal_set_message(t('Newsletter successfully sent!'));
+    }
+    else {
+      drupal_set_message(t('An error occurred while sending the campaign. Please try again later'));
+    }
+  }
+  elseif ($send_mode == 'send_later') {
+    // If the campaign is already scheduled unschedule it first.
+    if ($campaign['status'] == 'schedule') {
+      $mc->campaigns->unschedule($campaign['id']);
+    }
+
+    $result = $mc->campaigns->schedule($campaign['id'], paddle_mailchimp_calculate_scheduling_date($form_state['values']['send_time']));
+
+    if ($result['complete']) {
+      drupal_set_message(t('Newsletter successfully scheduled for %time!', array('%time' => $form_state['values']['send_time'])));
+    }
+    else {
+      drupal_set_message(t('An error occurred while scheduling the campaign. Please try again later'));
+    }
+  }
+
+  $form_state['executed'] = TRUE;
+  // Redirect to the node view page for non JS calls.
+  $form_state['redirect'] = 'admin/content_manager/node/' . $node->nid . '/view';
+}
+
+/**
+ * Generates the email HTML for the passed node.
+ *
+ *  It will use the node's body and the panels attached to its display.
+ *
+ * @param object $node
+ *   The node for which to generate the HTML.
+ * @param bool $inline_css
+ *   Indicates whether the CSS should be inlined or not.
+ *
+ * @return string
+ *   The generated HTML.
+ */
+function paddle_mailchimp_generate_mail_html_for_node($node, $inline_css = TRUE) {
+  ctools_include('content');
+  ctools_include('cleanstring');
+  $display = $node->panelizer['page_manager']->display;
+  $allowed_tags = '<a><em><strong><blockquote><img><ul><ol><li><dl><dt><dd><i><div><p><span><h1><h2><h3><h4><h5><h6>';
+
+  // Generate the output from the display.
+  $content = array();
+  foreach ($display->panels as $region => $panels) {
+    $content[$region] = '';
+    foreach ($panels as $pid) {
+      $pane = $display->content[$pid];
+      $output = ctools_content_render($pane->type, $pane->subtype, $pane->configuration, array(), $display->args, $display->context);
+      if (!empty($output->content)) {
+        $type_class = $output->type ? 'pane-' . ctools_cleanstring($output->type, array('lower case' => TRUE)) : '';
+        $pane_output = theme('html_tag', array(
+          'element' => array(
+            '#tag' => 'div',
+            '#value' => $output->content,
+            '#attributes' => array('class' => array('pane', $type_class)),
+          ),
+        ));
+
+        $content[$region] .= strip_tags($pane_output, $allowed_tags);
+      }
+    }
+  }
+
+  // Swap the original layout with the table one.
+  $layout_name = str_replace('paddle_', 'paddle_table_', $display->layout);
+  $layout = theme($layout_name, array('content' => $content));
+
+  // Generate the node view url, called by MailChimp "archive".
+  $node_uri = entity_uri('node', $node);
+  $node_uri['options']['absolute'] = TRUE;
+
+  // Get the body safe value.
+  $body = '';
+  $wrapper = entity_metadata_wrapper('node', $node);
+  $body_wrapper = $wrapper->body->value();
+  if (!empty($body_wrapper)) {
+    $body = strip_tags($wrapper->body->value->value(), $allowed_tags);
+  }
+
+  // Generate the final HTML and finally inline the CSS.
+  $html = theme('paddle_mailchimp_html', array(
+    'content' => $layout,
+    'node_body' => $body,
+    'layout_name' => $layout_name,
+    'archive_url' => url($node_uri['path'], $node_uri['options']),
+  ));
+
+  if ($inline_css) {
+    /* @var DrupalMailchimp $mc */
+    $mc = mailchimp_get_api_object();
+
+    // Never remove the <style> tags or the responsive css will be lost.
+    $inlined_html = $mc->helper->inlineCss($html, FALSE);
+    $html = !empty($inlined_html['html']) ? $inlined_html['html'] : $html;
+  }
+
+  // Prepare the html to be used in an external client.
+  $html = paddle_mailchimp_prepare_html_content($html);
+
+  return $html;
+}
+
+/**
+ * Prepares the HTML to be sent to e-mail clients.
+ *
+ * @param string $html
+ *   The html content.
+ *
+ * @return string
+ *   The prepared html.
+ */
+function paddle_mailchimp_prepare_html_content($html) {
+  $document = new DOMDocument();
+  $document->loadHTML($html);
+
+  // As http://us2.php.net/manual/en/domnode.removechild.php#90292 says,
+  // keep track of images that we need to remove.
+  $images_to_remove = array();
+
+  $images = $document->getElementsByTagName('img');
+  foreach ($images as $image) {
+    /* @var DOMElement $image */
+    // Remove all the height attributes from image to fix GMail height "fix".
+    $image->removeAttribute('height');
+
+    $styles = _paddle_mailchimp_dom_element_get_inline_styles($image);
+
+    // Remove all images that have a forced display: none as some e-mail
+    // clients don't respect the css property.
+    if (isset($styles['display']) && 'none !important' === $styles['display']) {
+      $images_to_remove[] = $image;
+
+      // We are done with this image.
+      continue;
+    }
+
+    // If we have a pixel width on the image as an inline style, put it as
+    // width attribute so Outlook will behave.
+    if (isset($styles['width']) && FALSE !== strpos($styles['width'], 'px')) {
+      $width = str_replace('px', '', $styles['width']);
+      $image->setAttribute('width', $width);
+    }
+  }
+
+  // Remove now all the images marked as to be remove.
+  foreach ($images_to_remove as $image) {
+    $image->parentNode->removeChild($image);
+  }
+
+  // All the links must be absolute. We have to take this approach as it's the
+  // only way to get also absolute links for WYSIWYG contents.
+  $links = $document->getElementsByTagName('a');
+  $base_path = base_path();
+
+  foreach ($links as $link) {
+    /* @var DOMElement $link */
+    $href = rawurldecode($link->getAttribute('href'));
+
+    // Do not touch merge tags links.
+    if (0 === strpos($href, '*|')) {
+      continue;
+    }
+
+    // Parse back the url to retrieve components.
+    $components = drupal_parse_url($href);
+    $components += array('absolute' => TRUE, 'alias' => TRUE);
+    // Remove the base path from the path component or websites in subfolders
+    // will have it doubled.
+    if (substr($components['path'], 0, strlen($base_path)) == $base_path) {
+      $components['path'] = substr($components['path'], strlen($base_path));
+    }
+
+    $absolute_url = url($components['path'], $components);
+    $link->setAttribute('href', $absolute_url);
+  }
+
+  $finder = new DOMXPath($document);
+  $columns = $finder->query("//table[contains(concat(' ', normalize-space(@class), ' '), ' layout-column ')]");
+  if ($columns->length) {
+    foreach ($columns as $column) {
+      if ($column instanceof DOMElement) {
+        /* @var DOMElement $column */
+        // Try to fetch the column width and set the same width
+        // to all the images.
+        $styles = _paddle_mailchimp_dom_element_get_inline_styles($column);
+        if (isset($styles['width'])) {
+          $width = str_replace('px', '', $styles['width']);
+
+          // Fetch all images inside this column.
+          $images = $column->getElementsByTagName('img');
+
+          foreach ($images as $image) {
+            /* @var DOMElement $image */
+            // Only set the width if the image does not have an inline width
+            // set, as the previous operation on images already moved that into
+            // a valid width attribute.
+            $image_styles = _paddle_mailchimp_dom_element_get_inline_styles($image);
+            if (!isset($image_styles['width']) || FALSE === strpos($image_styles['width'], 'px')) {
+              $image->setAttribute('width', $width);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  $html = $document->saveHTML();
+
+  // Unfortunately DOMDocument might have sanitized the MailChimp merge tags.
+  // Search for *|MERGE:TAGS|* with got their | encoded to %7C and revert
+  // that change.
+  $html = preg_replace('/\*\%7C([A-Z0-9:]+)\%7C\*/', '*|\1|*', $html);
+
+  return $html;
+}
+
+/**
+ * Returns the inline style applied to an element as an array.
+ *
+ * @param DOMElement $element
+ *   The element we want to retrieve styles for.
+ *
+ * @return array
+ *   Associative array of properties and their value.
+ */
+function _paddle_mailchimp_dom_element_get_inline_styles($element) {
+  $properties = array();
+
+  $styles = $element->getAttribute('style');
+  foreach (explode(';', $styles) as $style) {
+    $property = explode(':', $style);
+
+    // Handle only not empty cases.
+    if (isset($property[0], $property[1])) {
+      $properties[trim($property[0])] = trim($property[1]);
+    }
+  }
+
+  return $properties;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_mailchimp_permission() {
+  $return = array();
+
+  $return['send paddle newsletters'] = array(
+    'title' => t('Send Paddle newsletters'),
+  );
+
+  return $return;
+}
+
+/**
+ * Implements hook_panels_renderer_paddle_allowed_content_types_alter().
+ */
+function paddle_mailchimp_panels_renderer_paddle_allowed_content_types_alter(&$content_types, $context) {
+  // Work only on newsletter nodes.
+  if ('entity:node' !== $context['panelizer']->plugin || 'newsletter' !== $context['panelizer']->data->type) {
+    return;
+  }
+
+  // Provide a list of allowed panes.
+  $allowed_content_types = array(
+    'node_content',
+    'add_image',
+    'download_list',
+    'listing',
+    'free_content',
+    'add_menu_structure',
+  );
+
+  // Remove everything that is not allowed.
+  $content_types = array_intersect_key($content_types, array_flip($allowed_content_types));
+}
+
+/**
+ * Implements hook_ctools_render_alter().
+ */
+function paddle_mailchimp_ctools_render_alter(&$info, &$page, &$context) {
+  if (module_exists('paddle_contextual_toolbar')) {
+    if (!empty($context['subtask']['name']) && $context['subtask']['name'] == 'paddle_content_manager_node_view') {
+      if ($node = node_load($context['args'][0])) {
+        if ($node->type == 'newsletter' && user_access('send paddle newsletters')) {
+          // Add a Mailchimp group.
+          $groups = paddle_contextual_toolbar_groups();
+          $groups['mailchimp'] = array('weight' => 20);
+          paddle_contextual_toolbar_groups($groups);
+
+          $actions = paddle_contextual_toolbar_actions();
+          // Add a button to send test e-mails.
+          $actions['Send test e-mail'] = array(
+            'action' => l(t('Send test e-mail'), 'admin/send_newsletter/nojs/' . $node->nid . '/test', array(
+                'attributes' => array(
+                  'class' => array('ui-icon', 'fa-send', 'ctools-use-modal'),
+                ),
+              )),
+            'class' => array('send-test-email'),
+            'weight' => 0,
+            'group' => 'mailchimp',
+          );
+
+          // Add a button to send the newsletter as a campaign if it was never
+          // sent.
+          $campaign = paddle_mailchimp_get_campaign_from_newsletter($node, TRUE);
+
+          if (!in_array($campaign['status'], array('sending', 'sent'))) {
+            $actions['Send'] = array(
+              'action' => l(t('Send'), 'admin/send_newsletter/nojs/' . $node->nid . '/campaign', array(
+                  'attributes' => array(
+                    'class' => array('ui-icon', 'fa-send', 'ctools-use-modal'),
+                  ),
+                )),
+              'class' => array('send-as-campaign'),
+              'weight' => 5,
+              'group' => 'mailchimp',
+            );
+          }
+
+          // Activate the contextual toolbar buttons.
+          paddle_contextual_toolbar_actions($actions);
+        }
+      }
+    }
+  }
+
+  // Load the node context used by panelizer.
+  // @see paddle_landing_page_ctools_render_alter() line 110.
+  if ($context['handler']->handler == 'panelizer_node') {
+    $panelizer_context = _panelizer_panelizer_task_get_context($context['handler'], $context['contexts']);
+    // Unfortunately the context handler name 'panelizer_node' is misleading.
+    // It is actually used by other entity types as well. So check the type
+    // of the context as well.
+    if ($panelizer_context->plugin == 'entity:node') {
+      $node = $panelizer_context->data;
+    }
+  }
+
+  // Only act on newsletter nodes, handled by panelizer.
+  if (!isset($node) || !isset($node->type) || $node->type !== 'newsletter') {
+    return;
+  }
+
+  $info['content'] = !empty($info['content']) ? $info['content'] : '';
+  // Prepend node view on newsletter pages in the admin area.
+  if (path_is_admin(current_path())) {
+    // Render the default node view to get all fields of the view mode.
+    $node_view = node_view($node);
+    // Wrap the node view into a panel-pane-like element to get common styling.
+    $wrapper = array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'class' => array('panel-pane'),
+      ),
+      'content' => $node_view,
+    );
+    $info['content'] = drupal_render($wrapper) . $info['content'];
+  }
+  // Prepend only the body on the frontend view.
+  else {
+    // Always look up for the correct language.
+    $langcode = field_language('node', $node, 'body');
+
+    // If the body is not empty, render it.
+    if (!empty($node->body[$langcode][0]['safe_value'])) {
+      $body = field_view_field('node', $node, 'body', 'default');
+      // Add some layout related classes.
+      $wrapper = array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'class' => array('row', 'newsletter-node-content'),
+        ),
+        'content' => array(
+          '#type' => 'container',
+          '#attributes' => array(
+            'class' => array('col-md-12'),
+          ),
+          'body' => $body,
+        ),
+      );
+      $info['content'] = drupal_render($wrapper) . $info['content'];
+    }
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_mailchimp_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_table_2_col_3_9' => array(
+      'render element' => 'content',
+      'template' => 'paddle-table-2-col-3-9',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+    'paddle_table_2_col_6_6' => array(
+      'render element' => 'content',
+      'template' => 'paddle-table-2-col-6-6',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+    'paddle_table_2_col_9_3' => array(
+      'render element' => 'content',
+      'template' => 'paddle-table-2-col-9-3',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+    'paddle_table_no_column' => array(
+      'render element' => 'content',
+      'template' => 'paddle-table-no-column',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+    'paddle_mailchimp_html' => array(
+      'variables' => array(
+        'content' => '',
+        'node_body' => '',
+        'layout_name' => NULL,
+        'archive_url' => NULL,
+      ),
+      'template' => 'paddle-mailchimp-html',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ */
+function paddle_mailchimp_paddle_contextual_toolbar_actions_alter(&$actions) {
+  $menu = menu_get_item();
+
+  if ($menu['path'] == 'admin/content_manager/node/%/layout' && $menu['page_arguments'][1]->data->type == 'newsletter') {
+    if (module_exists('paddle_contextual_toolbar')) {
+      $actions = paddle_contextual_toolbar_actions();
+
+      // Add the change layout button.
+      $action_link = l(
+        t('Change layout'),
+        'panels/ajax/paddle_landing_page/change_layout/panelizer:node:' . $menu['page_arguments'][1]->argument . ':page_manager',
+        array(
+          'attributes' => array(
+            'class' => array(
+              'panels-ipe-change-layout',
+              'ctools-use-modal',
+              'ctools-modal-wide-modal',
+              'ui-icon',
+              'fa-retweet',
+            ),
+          ),
+        )
+      );
+      $actions[] = array(
+        'action' => $action_link,
+        'class' => array('change_layout'),
+        'weight' => 10,
+      );
+
+      // Set the buttons.
+      paddle_contextual_toolbar_actions($actions);
+      // Load the click delegator.
+      paddle_contextual_toolbar_add_js('click_delegator');
+    }
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function paddle_mailchimp_cron() {
+  mailchimp_get_lists(array(), TRUE);
+}
+
+/**
+ * Returns the MailChimp accepted date format.
+ *
+ * This is the format used by /campaigns/schedule.
+ *
+ * @param bool $parse_format
+ *   Set true if you need the format to parse a date string already in the
+ *   submission format. Otherwise you'll get the submission format - the format
+ *   you need to submit a campaign for scheduling.
+ *
+ * @return string
+ *   The desired date format.
+ */
+function paddle_mailchimp_maichimp_date_format($parse_format = FALSE, $short = FALSE) {
+  if ($parse_format) {
+    return '%Y-%m-%d %H:%M';
+  }
+  return $short ? 'Y-m-d' : 'Y-m-d H:i:s';
+}
+
+/**
+ * Calculates the correct scheduling date.
+ *
+ * @param string $date
+ *   The formatted date to calculate the scheduling date from.
+ * @param bool $sum
+ *   The calculation that needs to happen.
+ *
+ * @return string
+ *   The reformatted scheduling date.
+ */
+function paddle_mailchimp_calculate_scheduling_date($date, $sum = FALSE) {
+  $mc = mailchimp_get_api_object();
+
+  // Get the account details so we can calculate the default scheduling time
+  // because mailchimp will do some calculations as well which can screw our
+  // wanted schedule time.
+  $account_details = $mc->helper->accountDetails();
+
+  $local_date = new DateTime();
+  $remote_timezone = new DateTimeZone($account_details['timezone']);
+  $offset = $remote_timezone->getOffset($local_date);
+
+  $send_time = strtotime($date);
+  $send_time = $sum === FALSE ? $send_time - $offset : $send_time + $offset;
+
+  return format_date($send_time, 'custom', paddle_mailchimp_maichimp_date_format());
+}

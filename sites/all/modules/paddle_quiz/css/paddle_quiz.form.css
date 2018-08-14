@@ -1,0 +1,205 @@
+/**
+ * Make sure the form doesn't get too wide as it reduces readability.
+ */
+.paddle-quiz-form {
+  max-width: 900px;
+}
+
+/**
+ * Center the text in all the buttons.
+ */
+.paddle-quiz-form .form-submit,
+.paddle-quiz-form .button {
+  text-align: center;
+}
+
+/**
+ * Steps "breadcrumbs".
+ */
+.paddle-quiz-form [id="edit-steps"] {
+  margin: 1em 0;
+}
+
+.paddle-quiz-form [id="edit-steps"] .step-button {
+  background: #e0e0e0;
+  color: #333;
+  font-weight: 400;
+  text-transform: none;
+  position: relative;
+  z-index: 5;
+  padding-left: 30px;
+  padding-right: 15px;
+  min-width: 0;
+}
+.paddle-quiz-form [id="edit-steps"] .step-button:first-child {
+  padding-left: 15px;
+  border-bottom-left-radius: 3px;
+  border-top-left-radius: 3px;
+}
+.paddle-quiz-form [id="edit-steps"] .step-button.odd {
+  background: #d1d1d1;
+}
+.paddle-quiz-form [id="edit-steps"] .step-button.active {
+  background: #606060;
+  color: #fff;
+}
+
+.paddle-quiz-form [id="edit-steps"] .step-arrow {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border: 15px solid transparent;
+  border-left-color: #e0e0e0;
+  border-right-width: 0;
+  margin-right: -15px;
+  vertical-align: bottom;
+  position: relative;
+  z-index: 15;
+}
+.paddle-quiz-form [id="edit-steps"] .step-arrow.odd {
+  border-left-color: #d1d1d1;
+}
+.paddle-quiz-form [id="edit-steps"] .step-arrow.active {
+  border-left-color: #606060;
+}
+
+/**
+ * Reset the table layouts from "fixed" to "auto" so cells don't occupy the same
+ * space.
+ */
+.paddle-quiz-form table {
+  table-layout: auto;
+}
+
+/**
+ * By default fieldsets don't have a border in Paddle, but it makes the form
+ * more structured in our case.
+ */
+.paddle-quiz-form fieldset {
+  border: 1px solid #ccc;
+  padding: 0 1em;
+}
+
+/**
+ * By default fieldset legends are capitalized in Paddle. We reset this because
+ * some of our legends are actually small sentences which are hard to read when
+ * every word is capitalized.
+ */
+.paddle-quiz-form fieldset legend {
+  text-transform: none;
+}
+
+/**
+ * Make the tables with questions & answers look more like the wireframes, and
+ * less table-like.
+ */
+.paddle-quiz-form .paddle-quiz-multiple-value-form {
+  margin: -1em 0 0.5em 0;
+}
+.paddle-quiz-form .paddle-quiz-multiple-value-form > tbody,
+.paddle-quiz-form .paddle-quiz-multiple-value-form > tbody > tr,
+.paddle-quiz-form .paddle-quiz-multiple-value-form > tbody > tr > td {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.paddle-quiz-form .paddle-quiz-multiple-value-form > tbody > tr > td {
+  border-bottom: 1px solid #ccc;
+  padding: 1em 0;
+}
+
+/**
+ * Display the image field to the right of to the question title field.
+ */
+.paddle-quiz-form .field-name-field-paddle-quiz-question,
+.paddle-quiz-form .field-name-field-paddle-quiz-question-image {
+  display: inline-block;
+  vertical-align: top;
+}
+.paddle-quiz-form .field-name-field-paddle-quiz-question {
+  margin-right: 2em;
+}
+.paddle-quiz-form .paddle-scald-atom-field .preview {
+  min-width: 0;
+  border: 1px solid #b5b6b7;
+  padding: 10px;
+}
+.paddle-quiz-form .paddle-scald-atom-field .preview .meta {
+  margin-bottom: 0;
+}
+@media all and (max-width: 800px) {
+  .paddle-quiz-form .field-name-field-paddle-quiz-question,
+  .paddle-quiz-form .field-name-field-paddle-quiz-question-image {
+    display: block;
+  }
+
+  .paddle-quiz-form .field-name-field-paddle-quiz-question {
+    float: left;
+  }
+
+  .paddle-quiz-form .field-name-field-paddle-quiz-question-image {
+    clear: both;
+    padding-top: 0.5em;
+  }
+}
+
+/**
+ * Move the remove button a bit down. We can't use vertical-align: baseline
+ * because the button would move down when an image would be selected.
+ */
+.paddle-quiz-form .remove-question {
+  padding: 0;
+  margin: 0;
+  margin-top: 1.9em;
+  background: transparent;
+  color: #2c8fc6;
+  float: right;
+}
+.paddle-quiz-form .remove-question:hover {
+  background: transparent;
+  color: #2c8fc6;
+  text-decoration: underline;
+}
+
+/**
+ * Display the radio buttons to indicate the correct answer to the left of the
+ * answer text boxes.
+ */
+.paddle-quiz-form .field-name-field-paddle-quiz-answers .form-type-radio,
+.paddle-quiz-form .field-name-field-paddle-quiz-answers .form-type-textfield {
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+.paddle-quiz-form .field-name-field-paddle-quiz-answers .form-type-radio {
+  width: 1.75em;
+}
+
+/**
+ * Don't put borders between the answers for a question.
+ */
+.paddle-quiz-form .field-name-field-paddle-quiz-answers .paddle-quiz-multiple-value-form {
+  margin: 0.75em 0;
+}
+.paddle-quiz-form .field-name-field-paddle-quiz-answers .paddle-quiz-multiple-value-form > tbody > tr > td {
+  border-bottom-width: 0;
+  padding: 0.25em 0;
+  font-size: 0;
+}
+.paddle-quiz-form .field-name-field-paddle-quiz-answers .paddle-quiz-multiple-value-form > tbody > tr > td > div {
+  font-size: 1rem;
+}
+
+/**
+ * Indent the "add more" button for answers.
+ */
+.paddle-quiz-form .field-name-field-paddle-quiz-answers .field-add-more-submit {
+  margin: 0 0 0 1.75em;
+}
+
+/**
+ * Put some space above and underneath the submit buttons.
+ */
+.paddle-quiz-form [id="edit-actions"] {
+  margin: 2em 0 3em 0;
+}

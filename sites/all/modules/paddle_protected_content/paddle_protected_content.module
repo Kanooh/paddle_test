@@ -1,0 +1,505 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Protected Content paddlet.
+ */
+
+define('PADDLE_PROTECTED_CONTENT_PADDLE_AUTHENTICATED_GID', 0);
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_protected_content_paddle_content_manager_additional_fields() {
+  return array(
+    'field_paddle_prot_pg_visibility',
+    'field_paddle_prot_pg_user_roles',
+  );
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function paddle_protected_content_form_node_form_alter(&$form, &$form_state, $form_id) {
+  // Remove 'N/A' as a visibility option without having to make the field
+  // mandatory. We can't make it mandatory because it would show up in the 'Add
+  // new content' modal.
+  // Inspired by paddle_news_form_news_item_node_form_alter().
+  unset($form['field_paddle_prot_pg_visibility'][LANGUAGE_NONE]['#options']['_none']);
+
+  // If no default value set, the node is visible to everyone.
+  if (empty($form['field_paddle_prot_pg_visibility'][LANGUAGE_NONE]['#default_value'])) {
+    $form['field_paddle_prot_pg_visibility'][LANGUAGE_NONE]['#default_value'] = 'everyone';
+  }
+
+  // By default, don't show role selection. This relies on the best practice to
+  // hide content.
+  // @see https://www.drupal.org/docs/7/creating-accessible-themes/hide-content-properly
+  $form['field_paddle_prot_pg_user_roles']['#attributes']['class'][] = 'element-hidden';
+  // Only show the user role selection when the visibility has been set to
+  // specific user roles.
+  $form['field_paddle_prot_pg_user_roles']['#states'] = array(
+    'visible' => array(
+      ':input[name^="field_paddle_prot_pg_visibility"]' => array('value' => 'specific_roles'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function paddle_protected_content_node_type_insert($info) {
+  paddle_protected_content_create_field_instances($info);
+}
+
+/**
+ * Creates the field instances for a content type.
+ *
+ * @param StdClass $type
+ *   The content type.
+ */
+function paddle_protected_content_create_field_instances(StdClass $type) {
+  if (!field_read_instance('node', 'field_paddle_prot_pg_visibility', $type->type)) {
+    $field_instance_field_paddle_prot_pg_visibility = array(
+      'bundle' => $type->type,
+      'default_value' => array(
+        0 => array(
+          'value' => 'everyone',
+        ),
+      ),
+      'deleted' => 0,
+      'description' => 'Configure who is allowed to view this version of the page when it\'s <strong>published</strong>.',
+      'display' => array(
+        'default' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 13,
+        ),
+        'diff_standard' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_summary' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => 'node',
+      'field_name' => 'field_paddle_prot_pg_visibility',
+      'label' => 'Page visibility',
+      'required' => 0,
+      'settings' => array(
+        'field_instance_sync' => 0,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'options',
+        'settings' => array(),
+        'type' => 'options_buttons',
+        'weight' => 11,
+      ),
+    );
+
+    field_create_instance($field_instance_field_paddle_prot_pg_visibility);
+  }
+
+  if (!field_read_instance('node', 'field_paddle_prot_pg_user_roles', $type->type)) {
+    $field_instance_field_paddle_prot_pg_user_roles = array(
+      'bundle' => $type->type,
+      'default_value' => array(),
+      'deleted' => 0,
+      'description' => '',
+      'display' => array(
+        'default' => array(
+          'label' => 'above',
+          'module' => 'list',
+          'settings' => array(),
+          'type' => 'list_default',
+          'weight' => 13,
+        ),
+        'diff_standard' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_summary' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => 'node',
+      'field_name' => 'field_paddle_prot_pg_user_roles',
+      'label' => 'Which user roles?',
+      'required' => 0,
+      'settings' => array(
+        'field_instance_sync' => 0,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'options',
+        'settings' => array(),
+        'type' => 'options_buttons',
+        'weight' => 12,
+      ),
+    );
+
+    field_create_instance($field_instance_field_paddle_prot_pg_user_roles);
+  }
+}
+
+/**
+ * Get all user roles except those created by Drupal and Paddle.
+ *
+ * @return array
+ *   An associative array with the role id as the key and the role name as
+ *   value.
+ */
+function paddle_protected_content_custom_user_roles() {
+  // Get all Drupal roles, except the 'anonymous' user role.
+  $drupal_user_roles = user_roles(TRUE);
+
+  // Filter out the 'authenticated' user role.
+  unset($drupal_user_roles[DRUPAL_AUTHENTICATED_RID]);
+
+  // Filter out the 'administrator' role.
+  $administrator_rid = variable_get('user_admin_role');
+  unset($drupal_user_roles[$administrator_rid]);
+
+  // Filter out the Paddle roles.
+  $paddle_custom_user_roles = array_diff($drupal_user_roles, paddle_user_paddle_user_roles());
+
+  return $paddle_custom_user_roles;
+}
+
+/**
+ * @file
+ * Code for the Paddle Protected Content feature.
+ */
+
+include_once 'paddle_protected_content.features.inc';
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_protected_content_permission() {
+  return array(
+    'administer user roles' => array(
+      'title' => t('Administer user roles'),
+      'description' => t('Add, edit or remove user roles.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_protected_content_menu() {
+  $items = array();
+
+  $items['admin/users/roles/%ctools_js/add'] = array(
+    'title' => 'Create role',
+    'page callback' => 'paddle_protected_content_role_form_wrapper',
+    'page arguments' => array(3, NULL),
+    'access arguments' => array('administer user roles'),
+    'file' => 'paddle_protected_content.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/users/roles/%ctools_js/edit/%user_role'] = array(
+    'title' => 'Edit role',
+    'page callback' => 'paddle_protected_content_role_form_wrapper',
+    'page arguments' => array(3, 5),
+    'access arguments' => array('administer user roles'),
+    'file' => 'paddle_protected_content.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/users/roles/%ctools_js/delete/%user_role'] = array(
+    'title' => 'Delete role',
+    'page callback' => 'paddle_protected_content_delete',
+    'page arguments' => array(3, 5),
+    'access arguments' => array('administer user roles'),
+    'file' => 'paddle_protected_content.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Form to add a new user role.
+ *
+ * We reuse the submit and validate functionality from
+ * the user module. We do not reuse user_admin_roles() since
+ * it has way more functionality provided than we need.
+ *
+ * @see user_admin_roles()
+ */
+function paddle_protected_content_role_form($form, &$form_state) {
+  module_load_include('inc', 'user', 'user.admin');
+
+  if (!empty($form_state['build_info']['args'][0])) {
+    $form['rid'] = array(
+      '#type' => 'value',
+      '#value' => $form_state['build_info']['args'][0]->rid,
+    );
+  }
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+
+  $form['body']['name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Name'),
+    '#default_value' => !empty($form_state['build_info']['args'][0]) ? $form_state['build_info']['args'][0]->name : '',
+  );
+
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['buttons']['add'] = array(
+    '#type' => 'submit',
+    '#value' => !empty($form_state['build_info']['args'][0]) ? t('Save role') : t('Add role'),
+    '#validate' => array('user_admin_role_validate'),
+    '#submit' => array('user_admin_role_submit'),
+  );
+
+  return $form;
+}
+
+/**
+ * Form callback for the "Delete role" form.
+ */
+function paddle_protected_content_delete_form($form, &$form_state) {
+  $role = $form_state['build_info']['args'][0];
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+
+  $form['body']['message'] = array(
+    '#type' => 'item',
+    '#markup' => t('Are you sure you want to delete the user role named %word?', array('%word' => $role->name)),
+  );
+
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['buttons']['confirm'] = array(
+    '#type' => 'submit',
+    '#value' => t('Delete'),
+  );
+
+  // Can't use "cancel" as a key here, as that would cause the button to be
+  // hidden by CSS...
+  $form['buttons']['cancelling'] = array(
+    '#type' => 'submit',
+    '#value' => t('Cancel'),
+  );
+
+  return $form;
+}
+
+/**
+ * Form submit for the "Delete role" form.
+ */
+function paddle_protected_content_delete_form_submit($form, &$form_state) {
+  $form_state['completed'] = TRUE;
+  $form_state['refresh'] = FALSE;
+  $role = $form_state['build_info']['args'][0];
+
+  if ($form_state['clicked_button']['#value'] == t('Delete')) {
+    user_role_delete((int) $role->rid);
+    $form_state['refresh'] = TRUE;
+    drupal_set_message(t('Role deleted.'));
+  }
+  $form_state['redirect'] = 'admin/users/roles';
+}
+
+/**
+ * Implements hook_node_access_records().
+ */
+function paddle_protected_content_node_access_records($node) {
+  $grants = array();
+  $nid = $node->nid;
+  $node_wrapper = entity_metadata_wrapper('node', $node);
+  $node_visibility = $node_wrapper->field_paddle_prot_pg_visibility->value();
+
+  if ($node->status == NODE_PUBLISHED) {
+    if ($node_visibility == 'specific_roles' && !empty($node_wrapper->field_paddle_prot_pg_user_roles) && !empty($node_wrapper->field_paddle_prot_pg_user_roles->value())) {
+      $prot_pg_user_roles = $node_wrapper->field_paddle_prot_pg_user_roles->value();
+      $custom_user_roles = paddle_protected_content_custom_user_roles();
+
+      // Create a grant for each custom user role and assign the role ID as gid.
+      // In this use case we assert that every user role is a grant and users
+      // will be granted access to the nodes if they possess the correct user
+      // role.
+      foreach ($prot_pg_user_roles as $prot_pg_user_role) {
+        if (array_key_exists($prot_pg_user_role, $custom_user_roles)) {
+          $grants[] = array(
+            'nid' => $nid,
+            'realm' => 'paddle_protected_content',
+            'gid' => $prot_pg_user_role,
+            'grant_view' => 1,
+            'grant_update' => 0,
+            'grant_delete' => 0,
+            'priority' => 0,
+          );
+        }
+      }
+    }
+    elseif ($node_visibility == 'authenticated') {
+      $grants[] = array(
+        'nid' => $nid,
+        'realm' => 'paddle_protected_content',
+        'gid' => DRUPAL_AUTHENTICATED_RID,
+        'grant_view' => 1,
+        'grant_update' => 0,
+        'grant_delete' => 0,
+        'priority' => 0,
+      );
+    }
+    else {
+      $grants[] = array(
+        'nid' => $nid,
+        'realm' => 'paddle_protected_content',
+        'gid' => DRUPAL_ANONYMOUS_RID,
+        'grant_view' => 1,
+        'grant_update' => 0,
+        'grant_delete' => 0,
+        'priority' => 0,
+      );
+    }
+  }
+
+  // Paddle Users have the same rights no matter the visibility check.
+  $grants[] = array(
+    'nid' => $nid,
+    'realm' => 'paddle_protected_content',
+    'gid' => PADDLE_PROTECTED_CONTENT_PADDLE_AUTHENTICATED_GID,
+    'grant_view' => 1,
+    'grant_update' => 1,
+    'grant_delete' => 1,
+    'priority' => 0,
+  );
+
+  return $grants;
+}
+
+/**
+ * Implements hook_node_grants().
+ */
+function paddle_protected_content_node_grants($account, $op) {
+  $grants = array();
+  $user_roles = $account->roles;
+
+  if (user_is_logged_in() !== FALSE && !empty($user_roles)) {
+    // | Specific Roles visibility |.
+    if ($op == 'view') {
+      $custom_roles = paddle_protected_content_custom_user_roles();
+
+      foreach ($user_roles as $user_role) {
+        $rid = array_search($user_role, $custom_roles);
+
+        if ($rid !== FALSE) {
+          $grants['paddle_protected_content'][] = $rid;
+        }
+      }
+    }
+
+    // | Authenticated visibility |.
+    // Paddle users have another grant because they can edit and delete items.
+    $paddle_user_roles = paddle_user_paddle_user_roles();
+
+    if (!empty(array_intersect($user_roles, $paddle_user_roles))) {
+      $grants['paddle_protected_content'][] = PADDLE_PROTECTED_CONTENT_PADDLE_AUTHENTICATED_GID;
+    }
+    else {
+      $grants['paddle_protected_content'][] = DRUPAL_AUTHENTICATED_RID;
+    }
+  }
+
+  if ($op == 'view') {
+    // Users do not need to logged in for the anonymous grant.
+    $grants['paddle_protected_content'][] = DRUPAL_ANONYMOUS_RID;
+  }
+
+  return $grants;
+}

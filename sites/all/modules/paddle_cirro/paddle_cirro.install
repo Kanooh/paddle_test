@@ -1,0 +1,264 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle CIRRO app.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_cirro_install() {
+  paddle_taxonomy_manager_create_vocabularies(array(
+    'paddle_cirro_action_strategies' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Action strategies',
+          'nl' => 'Educaties',
+        ),
+        'description' => array(
+          'en' => 'Description for Action strategies',
+          'nl' => 'Beschrijving voor Educaties',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+    'paddle_cirro_policy_themes' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Policy themes',
+          'nl' => 'Thema\'s',
+        ),
+        'description' => array(
+          'en' => 'Description for Policy themes',
+          'nl' => 'Beschrijving voor Thema\'s',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+    'paddle_cirro_settings' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Settings',
+          'nl' => 'Sectoren',
+        ),
+        'description' => array(
+          'en' => 'Description for Settings',
+          'nl' => 'Beschrijving voor Sectoren',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+  ));
+
+  _paddle_cirro_create_advanced_search_page_cirro_fields();
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_cirro_enable() {
+  // Prepare our content type to add permissions.
+  paddle_apps_prepare_module_for_permissions('paddle_cirro');
+
+  $permissions = array(
+    'create paddle_cirro_page content',
+    'edit any paddle_cirro_page content',
+    'delete any paddle_cirro_page content',
+    'override paddle_cirro_page authored on option',
+    'administer panelizer node paddle_cirro_page layout',
+    'administer panelizer node paddle_cirro_page content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+
+    if ($role) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+
+  paddle_content_region_panelize_node_type('paddle_cirro_page');
+  paddle_content_region_grant_node_type_permissions('paddle_cirro_page');
+
+  // Clear the cache to display our custom plugin in Feeds as available plugin.
+  cache_clear_all('plugins:feeds:plugins', 'cache');
+
+  features_revert_module('paddle_search');
+}
+
+/**
+ * Creates the required fields for paddle_advanced_search.
+ */
+function _paddle_cirro_create_advanced_search_page_cirro_fields() {
+  $fields = array();
+
+  if (!field_info_field('field_paddle_cirro_adv_method')) {
+    $fields[] = array(
+      'field_name' => 'field_paddle_cirro_adv_method',
+      'label' => t('Add filter by CIRRO resource type'),
+    );
+  }
+  if (!field_info_field('field_paddle_cirro_adv_strats')) {
+    $fields[] = array(
+      'field_name' => 'field_paddle_cirro_adv_strats',
+      'label' => t('Add filter by action strategy'),
+    );
+  }
+  if (!field_info_field('field_paddle_cirro_adv_themes')) {
+    $fields[] = array(
+      'field_name' => 'field_paddle_cirro_adv_themes',
+      'label' => t('Add filter by policy theme'),
+    );
+  }
+  if (!field_info_field('field_paddle_cirro_adv_settings')) {
+    $fields[] = array(
+      'field_name' => 'field_paddle_cirro_adv_settings',
+      'label' => t('Add filter by setting'),
+    );
+  }
+
+  foreach ($fields as $field) {
+    $field_base = array(
+      'field_name' => $field['field_name'],
+      'type' => 'list_boolean',
+      'active' => 1,
+      'cardinality' => 1,
+      'deleted' => 0,
+      'entity_types' => array(),
+      'foreign keys' => array(),
+      'indexes' => array(
+        'value' => array(
+          0 => 'value',
+        ),
+      ),
+      'locked' => 0,
+      'module' => 'list',
+      'settings' => array(
+        'allowed_values' => array(
+          0 => '',
+          1 => '',
+        ),
+        'allowed_values_function' => '',
+      ),
+    );
+    field_create_field($field_base);
+
+    $instance = array(
+      'field_name' => $field['field_name'],
+      'label' => $field['label'],
+      'entity_type' => 'node',
+      'bundle' => 'paddle_advanced_search_page',
+      'default_value' => array(
+        0 => array(
+          'value' => 0,
+        ),
+      ),
+      'settings' => array(
+        'field_instance_sync' => FALSE,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'options',
+        'settings' => array(
+          'display_label' => 1,
+        ),
+        'type' => 'options_onoff',
+        'weight' => 0,
+      ),
+    );
+
+    if (!field_read_instance($instance['entity_type'], $instance['field_name'], $instance['bundle'])) {
+      field_create_instance($instance);
+    }
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_cirro_uninstall() {
+  paddle_apps_remove_field('field_paddle_cirro_adv_method');
+  paddle_apps_remove_field('field_paddle_cirro_adv_strats');
+  paddle_apps_remove_field('field_paddle_cirro_adv_themes');
+  paddle_apps_remove_field('field_paddle_cirro_adv_settings');
+}
+
+/**
+ * Remove all duplicate CIRRO taxonomy field entries.
+ */
+function paddle_cirro_update_7000() {
+  $taxonomy_vocabulary_fields = array(
+    'field_paddle_cirro_settings',
+    'field_paddle_cirro_policy_themes',
+    'field_paddle_cirro_action_strats',
+  );
+
+  foreach ($taxonomy_vocabulary_fields as $taxonomy_vocabulary_field) {
+    db_add_field('field_data_' . $taxonomy_vocabulary_field, 'tempid', array(
+      'type' => 'serial',
+      'not null' => TRUE,
+      'description' => 'Tempid.',
+    ), array(
+      'unique keys' => array(
+        'tempid' => array('tempid'),
+      ),
+    ));
+    db_query('DELETE t1 FROM {field_data_' . $taxonomy_vocabulary_field . '} as t1 join {field_data_' . $taxonomy_vocabulary_field . '} as t2 WHERE t1.entity_id = t2.entity_id AND t1.' . $taxonomy_vocabulary_field . '_tid = t2.' . $taxonomy_vocabulary_field . '_tid and t1.tempid > t2.tempid');
+    db_drop_field('field_data_' . $taxonomy_vocabulary_field, 'tempid');
+  }
+}
+
+/**
+ * Updates the breadcrumb setting for cirro pages.
+ */
+function paddle_cirro_update_7001() {
+  ctools_include('export');
+  $themes = ctools_export_load_object('paddle_themer_theme');
+
+  foreach ($themes as $theme) {
+    $in_code = $theme->export_type & EXPORT_IN_CODE;
+    $inherits_from_paddle_theme = in_array($theme->theme, array(
+      'paddle_theme',
+      'kanooh_theme_v2',
+      'kanooh_theme_v2_page_wide',
+    ));
+
+    // Only target 'custom' themes that do not live in code, and inherit from
+    // our other themes.
+    if (!$in_code && $inherits_from_paddle_theme) {
+      // Turn the breadcrumb settings off.
+      $theme->style['show_breadcrumbs_for_paddle_cirro_page']['show_breadcrumbs_for_paddle_cirro_page'] = FALSE;
+      ctools_export_crud_save('paddle_themer_theme', $theme);
+    }
+  }
+}
+
+/**
+ * Updates all pages with the default breadcrumbs setting.
+ */
+function paddle_cirro_update_7002() {
+  // Retrieve all CIRRO page nids.
+  $nids = db_select('node', 'n')
+    ->fields('n', array('nid'))
+    ->condition('type', 'paddle_cirro_page', '=')
+    ->execute()->fetchCol();
+
+  $drush = function_exists('drush_print');
+
+  foreach ($nids as $nid) {
+    db_update('field_data_field_show_breadcrumb')
+      ->fields(array('field_show_breadcrumb_value' => 0))
+      ->condition('entity_id', $nid, '=')
+      ->execute();
+    db_update('field_revision_field_show_breadcrumb')
+      ->fields(array('field_show_breadcrumb_value' => 0))
+      ->condition('entity_id', $nid, '=')
+      ->execute();
+
+    if ($drush) {
+      drush_print("Updated node {$nid}");
+    }
+  }
+}

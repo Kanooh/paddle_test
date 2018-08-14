@@ -1,0 +1,453 @@
+<?php
+/**
+ * @file
+ * Tests the presence of the front-end menu display blocks.
+ */
+
+/**
+ * Test class for front-end menu displays.
+ * @see https://one-agency.atlassian.net/browse/KANWEBS-409
+ * @see https://one-agency.atlassian.net/browse/KANWEBS-410
+ */
+class FrontEndPaddleMenuDisplay extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Front-end menu displays',
+      'description' => 'Tests the presence of the front-end menu display blocks.',
+      'group' => 'Paddle - Menu',
+    );
+  }
+
+  /**
+   * Tests the presence of the front-end menus.
+   */
+  public function testPresenceFrontEndMenus() {
+    // Menu displays to check.
+    $menu_displays = paddle_menu_display_get_displays();
+
+    // The vertical menu and disclaimer menu are hidden by default, so exclude
+    // them from this test.
+    unset($menu_displays['full_vertical']);
+    unset($menu_displays['disclaimer_menu']);
+
+    $this->drupalLogin($this->chiefEditor);
+
+    // Prepare some menu items from the 2 types - internal and external.
+    $raw_menu_items = array();
+    $rand = rand(1, 8);
+    for ($index = 0; $index < $rand; $index++) {
+      // Create a few nodes and publish them so they appear in the menus.
+      $edit = array(
+        'title' => $this->getRandomTitle(),
+      );
+      $node = $this->drupalCreateUiNode('basic_page', $edit);
+      $this->moderateNode($node, 'Publish');
+      $raw_menu_items[] = array(
+        'path' => 'node/' . $node->nid,
+        'title' => $this->getRandomTitle(),
+        'type' => 'internal',
+      );
+
+      // Add an external menu item.
+      $raw_menu_items[] = array(
+        'path' => 'http://example.com/user/' . rand(1, 4),
+        'title' => $this->getRandomTitle(),
+        'type' => 'external',
+      );
+    }
+
+    $checked_menus = array();
+    foreach ($menu_displays as $menu_display) {
+      $menu_display_name = $menu_display->name;
+      if ($menu_display->menu_name == 'management') {
+        continue;
+      }
+      $menu_display_xpath = '//div[@id="block-paddle-menu-display-' . str_replace('_', '-', $menu_display_name);
+      $menu_display_xpath .= '"]//div[contains(@class, "content")]//div[contains(@class, "menu_wrapper")]//ul[contains(@class, "menu")]';
+
+      // Determine menu display levels.
+      $menu_display_levels = array();
+      if (($menu_display->from_level != 'curr_lvl_plus_1' && $menu_display->to_level != 'curr_lvl_plus_1')) {
+        $menu_display_levels = range($menu_display->from_level, $menu_display->to_level);
+      }
+
+      // Add the menu items to this menu.
+      $menu_display_items = array();
+      if (!isset($checked_menus[$menu_display->menu_name])) {
+        $menu_display_items = $this->makeMenuItems($menu_display->menu_name, $raw_menu_items);
+        $checked_menus[$menu_display->menu_name] = TRUE;
+      }
+
+      if (count($menu_display_levels) > 0) {
+        $this->drupalGet("node");
+        $this->assertTrue($this->xpath($menu_display_xpath), "The $menu_display_name menu display has been found on the appropriate page");
+      }
+
+      // Check for individual menu items.
+      $xpath = $menu_display_xpath . '/li[contains(@class, "menu-item")]/a[text() = :text]';
+      foreach ($menu_display_items as $index => $item) {
+        if (count($menu_display_levels) == 0 && $index > 1) {
+          // In case its menu display with levels like curr_lvl_plus_1 we go to
+          // the parent page.
+          $path_to_check = $menu_display_items[--$index]['path'];
+          // The parent might be a empty item so we check.
+          if (drupal_lookup_path($path_to_check)) {
+            $this->drupalGet($path_to_check);
+          }
+          else {
+            // We cannot check for this item.
+            continue;
+          }
+          $menu_display_levels = array($item['level']);
+        }
+        if (in_array($item['level'], $menu_display_levels)) {
+          // The item should be displayed - its within the range.
+          $link_found = $this->xpath($this->buildXPathQuery($xpath, array(':text' => $item['title'])));
+          $this->assertTrue($link_found, "Menu item " . $item['title'] . " has been found in the $menu_display_name menu display");
+        }
+      }
+    }
+  }
+
+  /**
+   * Regression test: check presence of fat footer child menu item on 404 page.
+   *
+   * @see https://one-agency.atlassian.net/browse/LABOWMIN-59
+   */
+  public function testFatFooterMenuDisplayDepth() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a new theme with the fat footer.
+    $new_theme = paddle_themer_clone_theme('vo_standard', 'fat_footer');
+    $new_theme->style['footer']['footer_style'] = 'fat_footer';
+    paddle_themer_save_theme($new_theme);
+
+    // Enable the theme with the fat footer.
+    variable_set('paddle_theme', $new_theme->name);
+
+    // Create a node and place it in the footer menu.
+    $edit = array(
+      'title' => $this->randomString(),
+    );
+    $parent_node = $this->drupalCreateUiNode('basic_page', $edit);
+    // Set the menu settings.
+    $edit = array(
+      'link_title' => $this->randomString(),
+      'navigation' => 'footer_menu_nl',
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/node/' . $parent_node->nid .  '/add_menu_link', $edit, t('Add menu link'));
+    $this->moderateNode($parent_node, 'Publish');
+    $parent_menu_link = menu_link_get_preferred('node/' . $parent_node->nid);
+
+    // Create another node and place it in the footer menu as a child of the
+    // first node.
+    $edit = array(
+      'title' => $this->randomString(),
+    );
+    $child_node = $this->drupalCreateUiNode('basic_page', $edit);
+    // Set the menu settings.
+    $edit = array(
+      'link_title' => $this->randomString(),
+      'navigation' => 'footer_menu_nl',
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/node/' . $child_node->nid .  '/add_menu_link', $edit, t('Add menu link'));
+    $this->moderateNode($child_node, 'Publish');
+    $child_menu_link = menu_link_get_preferred('node/' . $child_node->nid);
+
+    // Load a non-existing page and check that both menu items are visible.
+    $this->drupalGet('kaldorei-spider-kabob');
+    $this->assertRaw(check_plain(trim($parent_menu_link['link_title'])), 'The parent menu item is visible.');
+    $this->assertRaw(check_plain(trim($child_menu_link['link_title'])), 'The child menu item is visible.');
+  }
+
+  /**
+   * Check presence of current level + 1 menu display on user created themes.
+   *
+   * Regression test for support ticket KANSUPP-39.
+   * @see https://one-agency.atlassian.net/browse/KANSUPP-39
+   */
+  public function testDisplayMenusOnPaddleTheme() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a node and place it in the main menu.
+    $edit = array(
+      'title' => $this->randomString() . '><"\'&',
+    );
+    $parent_node = $this->drupalCreateUiNode('basic_page', $edit);
+    $edit = array(
+      'link_title' => $this->randomString(),
+      'navigation' => 'main_menu_nl',
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/node/' . $parent_node->nid .  '/add_menu_link', $edit, t('Add menu link'));
+    $this->moderateNode($parent_node, 'Publish');
+    $parent_menu_link = menu_link_get_preferred('node/' . $parent_node->nid);
+
+    // Create another node and place it in the main menu as a child of the first
+    // node.
+    $link_title = $this->randomName();
+    $edit = array(
+      'title' => $this->randomString() . '><"\'&',
+    );
+    $child_node = $this->drupalCreateUiNode('basic_page', $edit);
+
+    $item = array(
+      'link_title' => $link_title,
+      'link_path' => 'node/' . $child_node->nid,
+      'menu_name' => 'main_menu_nl',
+      'plid' => $parent_menu_link['mlid'],
+    );
+    menu_link_save($item);
+
+    $this->moderateNode($child_node, 'Publish');
+    $child_menu_link = menu_link_get_preferred('node/' . $child_node->nid);
+
+    // Create a new Paddle theme.
+    $theme_name = $this->createPaddleTheme();
+
+    // Enable the new Paddle theme.
+    variable_set('paddle_theme', $theme_name);
+
+    // Go to the parent page and check that a link to the child page is present
+    // in the 'current level + 1' menu.
+    $this->drupalGet('node/' . $parent_node->nid);
+    $elements = $this->xpath('//*[@id="block-paddle-menu-display-current-level-plus-one"]//a/span[normalize-space(text())=:label]', array(':label' => trim($link_title)));
+    $this->assertEqual(count($elements), 1, 'The "current level + 1" menu is shown on a custom theme.');
+  }
+
+
+  /**
+   * Test if "Management level 2" menu display is present on 403 and 404 pages.
+   */
+  public function testManagementMenuDisplayOn403and404() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Check the 404 - go to non-existent node and check if you see the
+    // management menu display. Then check the 403 by going to forbidden path.
+    foreach (array(403 => 'admin/config', 404 => 'node/1/edit') as $page => $path) {
+      $this->drupalGet($path);
+      $elements = $this->xpath('//div[@id="block-paddle-menu-display-management-level-2"]//div[contains(@class, "menu_wrapper")]//ul[contains(@class, "menu")]/li');
+      $this->assertTrue(count($elements), 'When landing on ' . $page . ' the "Management level 2" menu display is present.');
+    }
+  }
+
+  /**
+   * Check that current level + 1 menu display shows only the items below it.
+   *
+   * Regression test for ticket KANWEBS-1133.
+   * @see https://one-agency.atlassian.net/browse/KANWEBS-1133
+   */
+  public function testCurrentLevelPlusOneDisplayOnlyChildren() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a node and place it in the main menu on level 1.
+    $edit = array(
+      'title' => 'L1a',
+    );
+    $target_node = $this->drupalCreateUiNode('basic_page', $edit);
+    $edit = array(
+      'link_title' => 'L1a',
+      'navigation' => 'main_menu_nl',
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/node/' . $target_node->nid .  '/add_menu_link', $edit, t('Add menu link'));
+    $this->moderateNode($target_node, 'Publish');
+
+    // Create another node and place it in the main menu on level 1.
+    $edit = array(
+      'title' => 'L1b',
+    );
+    $parent_node = $this->drupalCreateUiNode('basic_page', $edit);
+    $edit = array(
+      'link_title' => 'L1b',
+      'navigation' => 'main_menu_nl',
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/node/' . $parent_node->nid .  '/add_menu_link', $edit, t('Add menu link'));
+    $this->moderateNode($parent_node, 'Publish');
+    $parent_menu_link = menu_link_get_preferred('node/' . $parent_node->nid);
+
+    // Create another node and place it in the main menu as a child of the first
+    // node.
+    $link_title = 'L2';
+    $edit = array(
+      'title' => $link_title,
+    );
+    $child_node = $this->drupalCreateUiNode('basic_page', $edit);
+
+    $item = array(
+      'link_title' => $link_title,
+      'link_path' => 'node/' . $child_node->nid,
+      'menu_name' => 'main_menu_nl',
+      'plid' => $parent_menu_link['mlid'],
+    );
+    menu_link_save($item);
+
+    $this->moderateNode($child_node, 'Publish');
+
+    $xpath = '//*[@id="block-paddle-menu-display-current-level-plus-one"]//a/span[normalize-space(text())=:label]';
+    // Go to the target page and check that a link to the child page is not
+    // present in the 'current level + 1' menu.
+    $this->drupalGet('node/' . $target_node->nid);
+    $elements = $this->xpath($xpath, array(':label' => trim($link_title)));
+    $this->assertFalse(count($elements), 'The "current level + 1" menu display follows the active trail.');
+
+    // Go to the parent page and check that a link to the child page is present
+    // in the 'current level + 1' menu.
+    $this->drupalGet('node/' . $parent_node->nid);
+    $elements = $this->xpath($xpath, array(':label' => trim($link_title)));
+    $this->assertTrue(count($elements), 'The "current level + 1" menu display follows the active trail.');
+  }
+
+  /**
+   * Regression test: disclaimer menu disappears when footer is disabled.
+   *
+   * @see https://one-agency.atlassian.net/browse/KANWEBS-1404
+   */
+  public function testDisclaimerMenuWithDisabledFooter() {
+    // Create a new theme with the 'Show disclaimer' option enabled and the
+    // footer style set to 'No footer'.
+    $options['style'] = array(
+      'show_disclaimer' => array(
+        'show_disclaimer' => TRUE,
+      ),
+      'footer' => array(
+        'footer_style' => 'no_footer',
+      ),
+    );
+    $theme_name = $this->createPaddleTheme($options);
+
+    // Set the theme as the default theme.
+    variable_set('paddle_theme', $theme_name);
+
+    // Log in as chief editor.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a menu item in the disclaimer menu.
+    $link_title = $this->randomString();
+    $this->createUiMenuItem(array('link_title' => $link_title), 'disclaimer_menu_nl');
+
+    // Go to the front end and make sure the disclaimer menu is shown.
+    $this->drupalGet('<front>');
+    $this->assertRaw(check_plain($link_title), 'The link in the disclaimer menu is shown.');
+  }
+
+  /**
+   * Check that current level + 1 menu display shows only the items below it.
+   *
+   * @todo This needs to be in selenium when KANWEBS-1310 has been done.
+   * @see https://one-agency.atlassian.net/browse/KANWEBS-1310
+   */
+  public function testActiveTrail() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create 2 basic pages.
+    $edit_1 = array(
+      'title' => 'L1',
+    );
+    $node_1 = $this->drupalCreateUiNode('basic_page', $edit_1);
+    $this->moderateNode($node_1, 'Publish');
+
+    $edit_2 = array(
+      'title' => 'L2',
+    );
+    $node_2 = $this->drupalCreateUiNode('basic_page', $edit_2);
+    $this->moderateNode($node_2, 'Publish');
+
+    // Create 2 structures in the main menu, 1 where node 1 is the parent and 1
+    // where node 2 is the parent.
+    $link_1 = $this->createUiMenuItem(array(
+      'link_title' => $edit_1['title'],
+      'internal_link' => 'node/' . $node_1->nid,
+    ));
+    $this->createUiMenuItem(array(
+      'link_title' => $edit_2['title'],
+      'navigation' => 'main_menu_nl:' . $link_1['mlid'],
+      'internal_link' => 'node/' . $node_2->nid,
+    ));
+
+    $link_2 = $this->createUiMenuItem(array(
+      'link_title' => 'test2',
+      'internal_link' => 'node/' . $node_2->nid,
+    ));
+    $this->createUiMenuItem(array(
+      'link_title' => 'test1',
+      'navigation' => 'main_menu_nl:' . $link_2['mlid'],
+      'internal_link' => 'node/' . $node_1->nid,
+    ));
+
+    // Go to the front end to the automatic generated node alias for node 1 and
+    // verify that the corresponding menu link is the active trail.
+    $this->drupalGet('l1');
+    $this->assertTrue($this->xpath('//ul[contains(@class, "menu level-1")]//li[contains(@class, "active-trail")]/a[contains(@class, "mlid-' . $link_1['mlid'] . '")]'), 'Going to the first node in main menu sets the active trail correctly.');
+
+    // Go to the front end to node/1 and verify that the corresponding menu link
+    // is the active trail.
+    $this->drupalGet('l2');
+    $this->assertTrue($this->xpath('//ul[contains(@class, "menu level-1")]//li[contains(@class, "active-trail")]/a[contains(@class, "mlid-' . $link_2['mlid'] . '")]'), 'Going to the second node in main menu sets the active trail correctly.');
+  }
+
+  /**
+   * Processes the raw menu items and add them in the passed menu.
+   *
+   * @param string $menu_display_name
+   *   The machine name of the menu to which the items should be added.
+   * @param array $menu_display_items
+   *   The menu items to process.
+   *
+   * @return array
+   *   The processed menu items.
+   */
+  protected function makeMenuItems($menu_display_name, $menu_display_items) {
+    shuffle($menu_display_items);
+
+    $level = 1;
+    foreach ($menu_display_items as $index => $item) {
+      $parent = 0;
+      if ($level > 1) {
+        $parent = $menu_display_items[$index - ($level - 1)]['mlid'];
+      }
+
+      $edit = array(
+        'link_title' => $menu_display_name . '..' . $item['title'],
+        'navigation' => $menu_display_name . ':' . $parent,
+        'content_button' => $item['type'],
+      );
+
+      $edit[$item['type'] . '_link'] = $item['path'];
+      $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu_display_name . '/add', $edit, t('Save'));
+
+      // Get the mlid of the menu item we just created.
+      $mlid = db_select('menu_links', 'ml')
+        ->condition('ml.link_title', $edit['link_title'])
+        ->fields('ml', array('mlid'))
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+
+      $menu_display_items[$index]['mlid'] = $mlid;
+      $menu_display_items[$index]['parent'] = $parent;
+      $menu_display_items[$index]['level'] = $level;
+      $menu_display_items[$index]['title'] = $edit['link_title'];
+
+      $level++;
+      if ($level > 3) {
+        $level = 1;
+      }
+    }
+
+    return $menu_display_items;
+  }
+
+  /**
+   * Generates and returns random title with some hard-to-process characters.
+   *
+   * @return string
+   *   The generated title.
+   */
+  protected function getRandomTitle() {
+    return $this->randomString() . '"&%\'"';
+  }
+
+}

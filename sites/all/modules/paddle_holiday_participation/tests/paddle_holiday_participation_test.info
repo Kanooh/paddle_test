@@ -1,0 +1,12 @@
+name = Paddle Holiday Participation test module
+description = Provides some dummy functionality to facilitate automated testing.
+core = 7.x
+package = Testing
+hidden = TRUE
+
+dependencies[] = paddle_holiday_participation
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_holiday_participation"
+datestamp = "1455518250"

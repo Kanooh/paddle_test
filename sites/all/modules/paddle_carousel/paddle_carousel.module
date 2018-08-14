@@ -1,0 +1,253 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Carousel module.
+ */
+
+include_once 'paddle_carousel.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_carousel_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && $plugin_type == 'content_types') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_carousel_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_carousel_slides_table' => array(
+      'render element' => 'element',
+    ),
+    'paddle_carousel' => array(
+      'slides' => array(),
+      'autoplay' => FALSE,
+      'speed' => 5000,
+    ),
+  );
+}
+
+/**
+ * Theme function for the carousel slides configuration table.
+ */
+function theme_paddle_carousel_slides_table($vars) {
+  $element = $vars['element'];
+
+  $slide_fieldsets = element_children($element['list']);
+
+  // We want the table rows to be draggable.
+  drupal_add_tabledrag('paddle-carousel-slides-table', 'order', 'sibling', 'row-weight');
+
+  // Loop over each slide and render the necessary fields organized in field
+  // groups.
+  $field_groups = array(
+    'image' => array('image'),
+    'weight' => array('weight'),
+    'link' => array('caption', 'url_type', 'internal_url', 'external_url'),
+    'remove' => array('remove'),
+  );
+  $rows = array();
+  foreach ($slide_fieldsets as $key) {
+    $row = array();
+    $row['data'] = array();
+    foreach ($field_groups as $group_name => $fields) {
+      $data = '';
+      foreach ($fields as $field) {
+        $data .= drupal_render($element['list'][$key][$field]);
+      }
+      $row['data'][] = array(
+        'data' => $data,
+        'class' => $group_name,
+      );
+      $row['class'] = array('draggable');
+      $row['data-slide-uuid'] = $key;
+    }
+    $rows[] = $row;
+  }
+
+  // Render the list as a table.
+  $slides = theme('table', array(
+    'header' => array(),
+    'rows' => $rows,
+    'attributes' => array('id' => 'paddle-carousel-slides-table'),
+    'empty' => t('No slides have been added yet.'),
+  ));
+
+  // Render the add button.
+  $add_button = drupal_render($element['add']);
+
+  // Glue everything together and return the final HTML.
+  return $slides . $add_button;
+}
+
+/**
+ * Theme function for the actual carousel.
+ */
+function theme_paddle_carousel($vars) {
+  $markup = '<div class="carousel" data-slider-speed="' . $vars['speed'] . '" ';
+  $markup .= 'data-slideshow="' . (!empty($vars['autoplay']) ? 1 : 0) . '" ';
+  $markup .= '><ul class="slides">';
+
+  foreach ($vars['slides'] as $slide) {
+    $attributes = array(
+      'class' => 'slide',
+      'data-slide-uuid' => $slide['uuid'],
+      'data-atom-id' => $slide['atom_id'],
+    );
+
+    $markup .= '<li ' . drupal_attributes($attributes) . '>';
+
+    $slide_markup = $slide['image'];
+
+    // Add the caption if there is one.
+    if (!empty($slide['caption'])) {
+      $slide_markup .= '<div class="figcaption">' . check_plain($slide['caption']) . '</div>';
+    }
+
+    if (!empty($slide['url'])) {
+      $attributes = array('class' => 'carousel-slide-link', 'href' => $slide['url']);
+      if ($slide['external']) {
+        $attributes['target'] = '_blank';
+      }
+      $markup .= theme('html_tag', array(
+        'element' => array(
+          '#tag' => 'a',
+          '#attributes' => $attributes,
+          '#value' => $slide_markup,
+        ),
+      ));
+    }
+    else {
+      $markup .= $slide_markup;
+    }
+
+    $markup .= '</li>';
+  }
+
+  $markup .= '</ul>';
+
+  // Add the pager.
+  $markup .= '<div class="slider-counter"><span class="current-slide">1</span>/<span class="total-slides"></span></div>';
+
+  // Add the play/pause button.
+  $class = !empty($vars['autoplay']) ? 'pause' : 'play';
+  $markup .= '<a class="autoplay-control" href="#"><i class="fa fa-' . $class . '"></i></a></div>';
+
+  return $markup;
+}
+
+/**
+ * Preprocess the variables of the carousel template.
+ *
+ * See template_preprocess_hook().
+ */
+function template_preprocess_paddle_carousel(&$vars) {
+  drupal_add_js(drupal_get_path('module', 'paddle_carousel') . '/js/jquery.slides.min.js', array(
+    'type' => 'file',
+    'scope' => 'header',
+    'group' => JS_THEME,
+    'every_page' => FALSE,
+  ));
+
+  $slides = array();
+
+  foreach ($vars['slides'] as $key => $slide) {
+    // Take into account old configurations.
+    if (isset($slide['image']) && !isset($slide['image']['sid'])) {
+      $slide['image'] = array('sid' => $slide['image']);
+    }
+
+    if (!isset($slide['image']['sid'][0])) {
+      continue;
+    }
+
+    $atom_id = $slide['image']['sid'][0];
+    $atom = scald_atom_load($atom_id);
+    if (empty($atom)) {
+      continue;
+    }
+
+    $image_style = !empty($slide['image']['style']) ? $slide['image']['style'] : 'paddle_carousel_slide';
+    $image = theme('image_style', array(
+      'path' => $atom->file_source,
+      'style_name' => $image_style,
+      'alt' => $atom->field_scald_alt_tag[LANGUAGE_NONE][0]['value'],
+    ));
+
+    // Set the link if any.
+    $url = '';
+    if ($slide['url_type'] == 'internal') {
+      $matches = array();
+      $result = preg_match('/node\/(\d+)/', $slide['internal_url'], $matches);
+      if ($result && strpos($matches[0], 'node/') === 0) {
+        $url = drupal_valid_path($matches[0]) ? url($matches[0]) : '';
+      }
+      else {
+        $url = drupal_valid_path($slide['internal_url']) ? url($slide['internal_url']) : '';
+      }
+    }
+    elseif ($slide['url_type'] == 'external') {
+      $url = url($slide['external_url'], array('external' => TRUE));
+    }
+    $slides[] = array(
+      'image' => $image,
+      'caption' => $slide['caption'],
+      'atom_id' => $atom_id,
+      'uuid' => $key,
+      'url' => $url,
+      'external' => $slide['url_type'] == 'external',
+    );
+  }
+
+  $vars['slides'] = $slides;
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors_alter().
+ */
+function paddle_carousel_paddle_color_palettes_color_selectors_alter(&$data, $theme) {
+  if ($theme->name != variable_get('admin_theme', 'paddle_admin_theme')) {
+    $data[0]['background-color'][] = array('.panel-pane{} .figcaption' => 0.7);
+    $data[1]['background-color'][] = '.panel-pane{} .carousel .flex-direction-nav i';
+    $data[1]['color'][] = '.panel-pane{} .carousel .flex-direction-nav i:hover';
+    $data[1]['background-color'][] = '.panel-pane{} .carousel .autoplay-control i';
+    $data[1]['color'][] = '.panel-pane{} .carousel .autoplay-control i:hover';
+  }
+}
+
+/**
+ * Implements hook_reference_tracker_value_types_parse_info().
+ */
+function paddle_carousel_reference_tracker_value_types_parse_info() {
+  $info = array();
+
+  $info['paddle_carousel_slides'] = array(
+    'parser_callback' => array('paddle_reference_tracker_paddle_carousel_slides_value_parser'),
+  );
+
+  return $info;
+}
+
+/**
+ * Reference tracker value parser for the slides in a carousel.
+ */
+function paddle_reference_tracker_paddle_carousel_slides_value_parser($value, $context) {
+  $references = array();
+  foreach ($value as $uuid => $slide) {
+    if (!empty($slide['image']['sid'])) {
+      $atom_ids = is_array($slide['image']['sid']) ? $slide['image']['sid'] : array($slide['image']['sid']);
+      $references = array_merge_recursive($references, array('scald_atom' => $atom_ids));
+    }
+
+    if (!empty($slide['internal_url']) && !empty($slide['url_type']) && $slide['url_type'] == 'internal') {
+      $references = array_merge_recursive($references, paddle_reference_tracker_node_autocomplete_value_parser($slide['internal_url'], $context));
+    }
+  }
+
+  return $references;
+}

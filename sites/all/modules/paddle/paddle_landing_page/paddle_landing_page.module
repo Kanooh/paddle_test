@@ -1,0 +1,1128 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Landing Page module.
+ */
+
+include_once 'paddle_landing_page.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_landing_page_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+    'panels:display_renderers',
+    'ctools:arguments',
+    'ctools:relationships',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_landing_page_menu() {
+  $items = array();
+
+  $items['paddle_landing_page_get_menu_items'] = array(
+    'page callback' => '_paddle_landing_page_get_menu_items',
+    'access arguments' => array('create landing_page content'),
+    'theme callback' => 'ajax_base_page_theme',
+    'delivery callback' => 'ajax_deliver',
+  );
+
+  $items['paddle_landing_page_get_menu_levels'] = array(
+    'page callback' => '_paddle_landing_page_get_menu_levels',
+    'access arguments' => array('create landing_page content'),
+    'theme callback' => 'ajax_base_page_theme',
+    'delivery callback' => 'ajax_deliver',
+  );
+
+  return $items;
+}
+
+/**
+ * Submit handler for the node form to manage the menu item.
+ *
+ * If the menu title field is empty and a menu item exists
+ * the menu item will be removed.
+ */
+function paddle_landing_page_node_menu_item($form, &$form_state) {
+  if (!empty($form_state['values']['menu'])) {
+    // Make sure the description is set to avoid notices.
+    if (!isset($form_state['values']['menu']['description'])) {
+      $form_state['values']['menu']['description'] = NULL;
+    }
+
+    if (!empty($form_state['values']['menu']['link_title'])) {
+      $form_state['values']['menu']['enabled'] = 1;
+    }
+
+    if ($form_state['values']['menu']['mlid'] !== 0 && empty($form_state['values']['menu']['link_title'])) {
+      menu_link_delete($form_state['values']['menu']['mlid']);
+      $form_state['values']['menu']['mlid'] = 0;
+      $form_state['values']['menu']['enabled'] = FALSE;
+    }
+  }
+}
+
+/**
+ * Implements hook_ctools_render_alter().
+ */
+function paddle_landing_page_ctools_render_alter(&$info, &$page, &$context) {
+  // @todo Is it necessary to include these files every time this hook fires?
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  // Change buttons on the page information edit page of landing pages.
+  // We only want the cancel and the save button, which are the first 2.
+  if ($context['task']['name'] == 'node_edit' && module_exists('paddle_contextual_toolbar')) {
+    $node = $context['contexts']['argument_node_edit_1']->data;
+
+    if ($node && $node->type === 'landing_page') {
+      $actions = paddle_contextual_toolbar_actions();
+      $actions = array_slice($actions, 0, 2, TRUE);
+
+      paddle_contextual_toolbar_actions($actions);
+    }
+
+    return;
+  }
+
+  // Load the node context used by panelizer.
+  if ($context['handler']->handler == 'panelizer_node') {
+    $panelizer_context = _panelizer_panelizer_task_get_context($context['handler'], $context['contexts']);
+    // Unfortunately the context handler name 'panelizer_node' is misleading.
+    // It is actually used by other entity types as well. So check the type
+    // of the context as well.
+    if ($panelizer_context->plugin == 'entity:node') {
+      $node = $panelizer_context->data;
+    }
+  }
+
+  // Only act on landing pages, handled by panelizer.
+  if (!isset($node) || !isset($node->type) || $node->type !== 'landing_page') {
+    return;
+  }
+
+  // Prepend title and body on landing pages in the admin area.
+  if (path_is_admin(current_path())) {
+    $info['title'] = '';
+    $info['content'] = !empty($info['content']) ? $info['content'] : '';
+    $info['content'] = paddle_landing_page_render_title_and_body($node) . $info['content'];
+  }
+
+  if (module_exists('paddle_contextual_toolbar') && !empty($context['subtask']['name'])) {
+    // Set an array of weights for the standard buttons.
+    $weights = array(
+      'cancel' => 0,
+      'edit' => 1,
+      'edit_content' => 2,
+    );
+
+    $landing_page_admin_view_path = 'admin/content_manager/node/' . $node->nid . '/view';
+    switch ($context['subtask']['name']) {
+      case 'paddle_content_manager_node_view':
+        $actions = paddle_contextual_toolbar_actions();
+        // Remove the edit button.
+        $buttons_to_remove = array('edit');
+        foreach ($actions as $index => $action) {
+          if (count(array_intersect($action['class'], $buttons_to_remove)) > 0) {
+            unset($actions[$index]);
+          }
+        }
+
+        if (node_access('update', $node)) {
+          // Define a destination in case the user tries to edit a locked node.
+          // By default the user will be sent to "node/<nid>" and we want the
+          // destination to be the administrative node view.
+          $query = array(
+            'query' => array('destination' => $landing_page_admin_view_path),
+            'attributes' => array('class' => array('ui-icon', 'fa-edit')),
+          );
+          // Add the edit page information button.
+          $actions['Page properties'] = array(
+            'action' => l(t('Page properties'), "node/{$node->nid}/edit", $query),
+            'class' => array('edit', 'page-information'),
+            'weight' => $weights['edit'],
+            'group' => 'content',
+          );
+
+          $actions['Page layout'] = array(
+            'action' => l(
+              t('Page layout', array(), array('context' => 'Contextual toolbar button')),
+              "admin/content_manager/node/{$node->nid}/panels_content",
+              array(
+                'attributes' => array('class' => array('ui-icon', 'fa-th')),
+              )
+            ),
+            'class' => array('edit', 'edit-panes'),
+            'weight' => $weights['edit_content'],
+            'group' => 'content',
+          );
+        }
+
+        break;
+
+      case 'paddle_landing_page_admin_panels_content':
+
+        $actions = array();
+
+        // Set an array of weights for the standard buttons.
+        $weights = array(
+          'cancel' => 0,
+          'save' => 5,
+          'change_layout' => 39,
+          // Equal to the preview button on the administrative node view.
+          'save_preview' => 40,
+        );
+
+        $cancel_path = $landing_page_admin_view_path;
+
+        $destination = drupal_get_destination();
+        if (!empty($destination['destination']) && $destination['destination'] == 'admin/content_manager/list/search') {
+          $cancel_path = $destination['destination'];
+        }
+
+        // Add the cancel button.
+        $action_link = l(
+          t('Back'),
+          $cancel_path,
+          array(
+            'html' => TRUE,
+            'attributes' => array(
+              'class' => array(
+                'go_back',
+                'release_node_lock',
+                'ui-icon',
+                'fa-arrow-left',
+              ),
+            ),
+          )
+        );
+        $actions['Cancel'] = array(
+          'action' => $action_link,
+          'class' => array('cancel'),
+          'weight' => $weights['cancel'],
+        );
+
+        // Add the save button.
+        $action_link = l(
+          t('Save'),
+          '',
+          array(
+            'html' => TRUE,
+            'external' => TRUE,
+            'attributes' => array(
+              'data-paddle-contextual-toolbar-click' => 'panels-ipe-save',
+              'class' => array('ui-icon', 'fa-check'),
+            ),
+          )
+        );
+        $actions['Save'] = array(
+          'action' => $action_link,
+          'class' => array('save'),
+          'weight' => $weights['save'],
+        );
+        if (module_exists('content_lock')) {
+          // Add a class to prevent unlock message appearing when saving.
+          $lock = content_lock_fetch_lock($node->nid);
+          if ($lock !== FALSE) {
+            // This should be the "Save" button.
+            $actions['Save']['class'][] = 'content_lock_no_leave_msg';
+          }
+        }
+
+        // Add the change layout button.
+        // @todo Move the 'ctools-modal-wide-modal' class to a preprocess
+        //   function on Paddle Admin Theme once #KANWEBS-758 is in.
+        // @see https://one-agency.atlassian.net/browse/KANWEBS-719
+        $action_link = l(
+          t('Change layout'),
+          'panels/ajax/paddle_landing_page/change_layout/panelizer:node:' . $node->nid . ':page_manager',
+          array(
+            'attributes' => array(
+              'class' => array(
+                'panels-ipe-change-layout',
+                'ctools-use-modal',
+                'ctools-modal-wide-modal',
+                'ui-icon',
+                'fa-exchange',
+              ),
+            ),
+          )
+        );
+        $actions['Change layout'] = array(
+          'action' => $action_link,
+          'class' => array('change_layout'),
+          'weight' => $weights['change_layout'],
+        );
+
+        // Add some JS settings.
+        $js_settings = array(
+          'paddle_panels_renderer_redirect_after_successful_ajax_call_url' => url("node/{$node->nid}/current-revision"),
+        );
+        drupal_add_js($js_settings, 'setting');
+
+        break;
+    }
+
+    if (isset($actions)) {
+      paddle_contextual_toolbar_actions($actions);
+      paddle_contextual_toolbar_add_js('click_delegator');
+      drupal_add_js(drupal_get_path('module', 'paddle_content_manager') . '/js/paddle_content_manager_assignee_states.js');
+    }
+  }
+}
+
+/**
+ * Get the moderation-related contextual toolbar actions for a landing page.
+ *
+ * @param object $node
+ *   A landing page node.
+ *
+ * @return array
+ *   An array of contextual toolbar actions.
+ */
+function paddle_landing_page_panelizer_moderation_contextual_toolbar_actions($node) {
+  $moderation_state = $node->workbench_moderation['current']->state;
+
+  // We have a use case where a live node is being edited. This will always
+  // revert back to the original node status.
+  if ($moderation_state == workbench_moderation_state_published()) {
+    $moderation_state = workbench_moderation_state_none();
+  }
+
+  $states = workbench_moderation_states_next($moderation_state, NULL, $node);
+
+  // We don't add a button to transition to the current state.
+  if (isset($states[$moderation_state])) {
+    unset($states[$moderation_state]);
+  }
+
+  $actions = array();
+
+  $weights = paddle_content_manager_action_weights();
+
+  foreach (array_keys($states) as $state_to) {
+    $classes = array(
+      'workbench-moderation',
+      drupal_html_class('moderate-to-' . $state_to),
+    );
+    $assignee_items = array();
+
+    // Assignees dropdowns.
+    $assignee_users = paddle_content_manager_get_assignee_users_for_state($state_to);
+    if (count($assignee_users)) {
+      $assignee_class = 'assignee_state';
+      foreach ($assignee_users as $uid => $name) {
+        $assignee_items[$uid] = array(
+          'data' => l($name, '', array(
+            'attributes' => array(
+              'data-paddle-content-manager-assignee' => $uid,
+              'data-paddle-content-manager-parent-any-link-id' => 'assignee-state-' . drupal_html_class($state_to) . '-any-link',
+            ),
+            'html' => TRUE,
+            'external' => TRUE,
+          )),
+          'class' => array('assignee_user'),
+        );
+      };
+    }
+
+    $button_to_click_id = 'edit-moderate-to-' . drupal_html_class($state_to);
+    $label = paddle_content_manager_workbench_moderation_state_transition_button_label($moderation_state, $state_to);
+    $action_link_attributes = array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => $button_to_click_id,
+      ),
+      'html' => TRUE,
+      'external' => TRUE,
+    );
+    $action_link = l($label, '', $action_link_attributes);
+    $action_item = array(
+      'action' => $action_link,
+      'class' => $classes,
+    );
+
+    $action_item['weight'] = isset($weights[$state_to]) ? $weights[$state_to] : 0;
+
+    // Add the users list.
+    if (count($assignee_items)) {
+      $any = array(
+        'data' => l(t('Assign to any'), '', array(
+          'attributes' => array(
+            'data-paddle-contextual-toolbar-click' => $button_to_click_id,
+            'id' => 'assignee-state-' . drupal_html_class($state_to) . '-any-link',
+          ),
+          'html' => TRUE,
+          'external' => TRUE,
+        )),
+        'class' => array('assignee_any'),
+      );
+      // Add $any to the beginning of the array.
+      // array_unshift() would modify the uids (keys), and ksort()
+      // would no longer sort the users by name, so use array_merge().
+      $assignee_items = array_merge(array($any), $assignee_items);
+      $assignee_list = theme('item_list', array(
+        'items' => $assignee_items,
+        'attributes' => array(
+          'class' => 'assignee-dropdown',
+          'id' => 'assignee-items-list-' . drupal_html_class($state_to),
+        ),
+      ));
+      $action_item['action'] = '<a href="#" class="contextual-dropdown">' . $label . '</a>' . $assignee_list;
+
+      if (!empty($assignee_class)) {
+        $action_item['class'][] = $assignee_class;
+      }
+    }
+
+    $actions[$label] = $action_item;
+  }
+
+  return $actions;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Add buttons to the IPE control form to moderate the landing page.
+ *
+ * @see paddle_content_manager_form_node_form_alter()
+ */
+function paddle_landing_page_form_panels_ipe_edit_control_form_alter(&$form, &$form_state) {
+  // Check that we are editing a landing page.
+  if (!empty($form['#display']->context['panelizer']->data->type) && $form['#display']->context['panelizer']->data->type == 'landing_page') {
+    $node = $form['#display']->context['panelizer']->data;
+
+    $moderation_state = $node->workbench_moderation['current']->state;
+
+    // We have a use case where a live node is being edited. This will always
+    // revert back to the original node status.
+    if ($moderation_state == workbench_moderation_state_published()) {
+      $moderation_state = workbench_moderation_state_none();
+    }
+
+    $states = workbench_moderation_states_next($moderation_state, NULL, $node);
+
+    if (empty($states)) {
+      return;
+    }
+
+    // We don't add a button to transition to the current state.
+    if (isset($states[$moderation_state])) {
+      unset($states[$moderation_state]);
+    }
+
+    $i = 11;
+    foreach ($states as $state_name => $state_label) {
+      $button_label = paddle_content_manager_workbench_moderation_state_transition_button_label($moderation_state, $state_name);
+
+      $form['buttons']['moderate-to-' . $state_name] = array(
+        '#type' => 'submit',
+        '#workbench_moderation_state_new' => $state_name,
+        '#value' => $button_label,
+        '#weight' => $i,
+        '#attributes' => array(
+          'class' => array(
+            'workbench-moderation',
+            'panels-ipe-save',
+          ),
+        ),
+        '#save-display' => TRUE,
+        '#submit' => array('panels_edit_display_form_submit'),
+      );
+      $i++;
+    }
+
+    // Add a field to keep the chosen assignee's uid.
+    $form['assignee_uid'] = array(
+      '#type' => 'hidden',
+      '#default_value' => 0,
+      '#attributes' => array(
+        'id' => 'paddle-node-assignee-uid',
+      ),
+    );
+  }
+}
+
+/**
+ * Ajax callback function for returning menu items for a specific menu.
+ *
+ * This returns both published and unpublished menu items depending on whether
+ * the user has the permission 'view all unpublished content'.
+ *
+ * This is used in the autocomplete results for the Menu Structure pane.
+ *
+ * @see add_menu_structure_edit_form()
+ */
+function _paddle_landing_page_get_menu_items() {
+  $commands = array();
+  $options = '';
+
+  // Get form data from $_POST.
+  list($form, $form_state) = ajax_get_form();
+
+  // Check for empty $form / $form_state.
+  if ($form && $form_state) {
+    // Build our menu tree from the selected menu.
+    $m_name = isset($form_state['input']['menus']) ? $form_state['input']['menus'] : FALSE;
+
+    if ($m_name) {
+      // Build the menu tree, depending on whether the user has permission to
+      // view all unpublished content.
+      $m_tree = user_access('view all unpublished content') ? paddle_landing_page_menu_build_tree($m_name) : menu_build_tree($m_name);
+
+      // Define our first option within the select.
+      $menu = paddle_menu_manager_get_menu($m_name);
+      $first_option = !empty($menu['title']) ? t('@menu-items', array('@menu' => $menu['title'])) : FALSE;
+      // Build our custom menu item list array.
+      $menu_items = paddle_landing_page_build_menu_structure($m_tree, $first_option);
+
+      if ($menu_items) {
+        // Create HTML option values.
+        foreach ($menu_items as $key => $value) {
+          $options .= '<option value="' . check_plain($key) . '">' . filter_xss_admin($value) . '</option>';
+        }
+
+        // Alter select field by id and populate option values.
+        $commands[] = ajax_command_invoke('#edit-menu-items', 'html', array($options));
+
+        // We must ensure when a different menu is selected
+        // the item levels field is reset to avoid inconsistent data.
+        // Create HTML option values.
+        $menu_item_levels = paddle_landing_page_menu_get_levels($m_name);
+        if ($menu_item_levels) {
+          $level_options = '';
+          foreach ($menu_item_levels as $key => $value) {
+            $level_options .= '<option value="' . check_plain($key) . '">' . filter_xss_admin($value) . '</option>';
+          }
+
+          $commands[] = ajax_command_invoke('#edit-item-levels', 'html', array($level_options));
+
+          return array(
+            '#type' => 'ajax',
+            '#commands' => $commands,
+          );
+        }
+      }
+    }
+  }
+
+  return MENU_NOT_FOUND;
+}
+
+/**
+ * Returns a menu tree.
+ *
+ * This is based on menu_build_tree(), but also returns unpublished items.
+ *
+ * @param string $menu_name
+ *   The name of the menu for which to return the tree.
+ * @param array $parameters
+ *   (optional) An associative array of build parameters. Possible keys:
+ *   - expanded: An array of parent link ids to return only menu links that are
+ *     children of one of the plids in this list. If empty, the whole menu tree
+ *     is built, unless 'only_active_trail' is TRUE.
+ *   - active_trail: An array of mlids, representing the coordinates of the
+ *     currently active menu link.
+ *   - only_active_trail: Whether to only return links that are in the active
+ *     trail. This option is ignored, if 'expanded' is non-empty. Internally
+ *     used for breadcrumbs.
+ *   - min_depth: The minimum depth of menu links in the resulting tree.
+ *     Defaults to 1, which is the default to build a whole tree for a menu
+ *     (excluding menu container itself).
+ *   - max_depth: The maximum depth of menu links in the resulting tree.
+ *   - conditions: An associative array of custom database select query
+ *     condition key/value pairs; see _menu_build_tree() for the actual query.
+ *
+ * @see menu_build_tree()
+ */
+function paddle_landing_page_menu_build_tree($menu_name, $parameters = array()) {
+  // Build the menu tree.
+  $data = _menu_build_tree($menu_name, $parameters);
+
+  // Perform access checks on the menu items. This is a variant of
+  // menu_tree_check_access() that allows unpublished items.
+  // @see menu_tree_check_access()
+  if ($data['node_links']) {
+    $nids = array_keys($data['node_links']);
+    $select = db_select('node', 'n');
+    $select->fields('n', array('nid', 'status'));
+    $select->condition('n.nid', $nids, 'IN');
+    $select->addTag('node_access');
+    $nids = $select->execute()->fetchAllKeyed();
+    foreach ($nids as $nid => $status) {
+      foreach ($data['node_links'][$nid] as $mlid => $link) {
+        $data['node_links'][$nid][$mlid]['access'] = TRUE;
+      }
+    }
+  }
+  _menu_tree_check_access($data['tree']);
+
+  return $data['tree'];
+}
+
+/**
+ * Ajax callback function for returning levels for a specific menu item.
+ */
+function _paddle_landing_page_get_menu_levels() {
+  $commands = array();
+  $options = '';
+
+  // Get form data from $_POST.
+  list($form, $form_state) = ajax_get_form();
+
+  // Check for empty $form / $form_state.
+  if ($form && $form_state) {
+    // Build our menu tree from the selected menu.
+    $m_item = isset($form_state['input']['menu_items']) ? $form_state['input']['menu_items'] : FALSE;
+
+    if ($m_item <> FALSE) {
+      // Attempt to traverse up the given menu items parents
+      // to calculate levels.
+      $menu_item_levels = paddle_landing_page_menu_item_get_levels($m_item);
+    }
+    else {
+      // Since we have no menu item as a point of reference to
+      // calculate the depth we must consider the whole tree
+      // and calculate the depth using the 'dash' which
+      // is being printed out to visually show the depth.
+      $m_name = isset($form_state['input']['menus']) ? $form_state['input']['menus'] : FALSE;
+      $menu_item_levels = paddle_landing_page_menu_get_levels($m_name);
+    }
+
+    if ($menu_item_levels) {
+      // Create HTML option values.
+      foreach ($menu_item_levels as $key => $value) {
+        $options .= '<option value="' . check_plain($key) . '">' . filter_xss_admin($value) . '</option>';
+      }
+
+      $commands[] = ajax_command_invoke('#edit-item-levels', 'html', array($options));
+
+      return array(
+        '#type' => 'ajax',
+        '#commands' => $commands,
+      );
+    }
+  }
+
+  return MENU_NOT_FOUND;
+}
+
+/**
+ * Generates an array of menu items prefixing a "dash".
+ *
+ * The dash represents the menu items depth.
+ * E.g. Depth value of 2 would prefix "--", depth of 3 "---" etc.
+ *
+ * @param array $tree
+ *   Entire menu tree for a given menu.
+ * @param string $first_option
+ *   The first option in the array.
+ *
+ * @return array
+ *   Menu items for option select.
+ */
+function paddle_landing_page_build_menu_structure($tree, $first_option = '') {
+  $items = array();
+
+  // Filter out hidden links and unpublished links if the user does not have
+  // access to them.
+  foreach ($tree as $data) {
+    if (!isset($data['link']['access'])) {
+      $map = explode('/', $data['link']['link_path']);
+      _menu_check_access($data['link'], $map);
+    }
+    if ($data['link']['access'] && !$data['link']['hidden']) {
+      $items[] = $data;
+    }
+  }
+
+  $unpublished_mlids = paddle_landing_page_get_mlids_leading_to_unpublished_nodes($items);
+  $element = array();
+  if (!empty($first_option)) {
+    $element[FALSE] = $first_option;
+  }
+  foreach ($items as $i => $data) {
+    // Mark unpublished items.
+    $suffix = in_array($data['link']['mlid'], $unpublished_mlids) ? ' (' . t('unpublished') . ')' : '';
+
+    // Calculate depth and use "dash" to display depth level.
+    $element[$data['link']['mlid']] = str_repeat("-", $data['link']['depth']) . $data['link']['title'] . $suffix;
+
+    // If we have children repeat the function with the child elements.
+    if ($data['below']) {
+      $element += paddle_landing_page_build_menu_structure($data['below']);
+    }
+  }
+
+  return $element;
+}
+
+/**
+ * Filter the passed menu links that point to published node.
+ *
+ * @param array $menu_items
+ *   The menu items to check.
+ *
+ * @return array
+ *   An array with menu link ids, keyed by their related unpublished node ids.
+ */
+function paddle_landing_page_get_mlids_leading_to_unpublished_nodes(array $menu_items) {
+  $node_mlids = array();
+
+  // Collect all node ids from the given menu items.
+  foreach ($menu_items as $menu_item) {
+    // Only check for node paths.
+    if ($menu_item['link']['router_path'] == 'node/%') {
+      list(, $nid) = explode('/', $menu_item['link']['link_path']);
+      $node_mlids[$nid] = $menu_item['link']['mlid'];
+    }
+  }
+
+  $unpublished_mlids = array();
+  // Get all mlids that link to an unpublished node at once.
+  if (count($node_mlids)) {
+    $unpublished_nids = _paddle_landing_page_get_unpublished_node_ids();
+    $unpublished_mlids = array_intersect_key($node_mlids, array_flip($unpublished_nids));
+  }
+
+  return $unpublished_mlids;
+}
+
+/**
+ * Get all node ids of nodes that are not published.
+ *
+ * @return array
+ *   An array with node ids as values.
+ */
+function _paddle_landing_page_get_unpublished_node_ids() {
+  $unpublished_node_ids = &drupal_static(__FUNCTION__);
+
+  if (!isset($unpublished_node_ids)) {
+    $unpublished_node_ids = db_select('node', 'n')
+      ->fields('n', array('nid'))
+      ->condition('status', 0)
+      ->execute()
+      ->fetchCol();
+  }
+
+  return $unpublished_node_ids;
+}
+
+/**
+ * Calculates menu levels based on the number of dashes.
+ *
+ * Adds a prefix to each menu item (dash).
+ * This prefix is used as a pointer to determine the depth.
+ *
+ * @param string $menu_name
+ *   Machine name of the menu.
+ *
+ * @return array
+ *   Levels for the entire menu.
+ */
+function paddle_landing_page_menu_get_levels($menu_name) {
+  $m_tree = menu_build_tree($menu_name);
+
+  // Calculate the max depth for our menu structure
+  // by iterating through each menu item.
+  $menu_items = paddle_landing_page_build_menu_structure($m_tree);
+  $max_depth = 0;
+  foreach ($menu_items as $item) {
+    // Extract the dashes and trim off the rest.
+    $dash = preg_replace('/[^-]/', NULL, $item);
+    // Calculate the number of dashes in our string.
+    $depth = strlen($dash);
+
+    if ($depth > $max_depth) {
+      $max_depth = $depth;
+    }
+  }
+
+  // With our $max_depth generate the levels, this will return an array
+  // of levels which can be used in a select dropdown.
+  $menu_item_levels = paddle_landing_page_menu_item_get_levels(FALSE, $max_depth);
+
+  return $menu_item_levels;
+}
+
+/**
+ * Returns an array of child levels under a given menu item.
+ *
+ * @param string $mlid
+ *   Contains menu link id.
+ * @param string $menu_name
+ *   String containing the menu name of the menu we selected.
+ *
+ * @return array
+ *   array(0 => 'All levels') if menu item has no children,
+ *   otherwise an array of levels under the current menu item.
+ */
+function paddle_landing_page_menu_item_get_levels($mlid, $max_depth = 0, $menu_name = NULL) {
+  // In-case the menu item has no children we must default to all
+  // levels beneath the given menu item.
+  $levels[FALSE] = t('All levels');
+
+  if ($mlid <> FALSE && $max_depth == FALSE) {
+    // Load menu object from menu link id.
+    $item = menu_link_load($mlid);
+    // If the current menu item has children calculate the maximum depth
+    // in order to define our level options.
+    if ($item['has_children'] == '1') {
+      // Returns maximum depth.
+      $max_depth = menu_link_children_relative_depth($item);
+    }
+  }
+  elseif ($mlid == FALSE && $max_depth == FALSE && !empty($menu_name)) {
+    // Since we don't have a $mlid we must calculate menu levels
+    // based on the menu structure. Call a helper function which
+    // adds a prefix to each menu item. This prefix is used as
+    // a pointer to determine the depth.
+    return paddle_landing_page_menu_get_levels($menu_name);
+  }
+
+  // Create the array of options keyed on menu item depth.
+  // Use the $max_depth to limit the number of loops in
+  // order to get accurate levels for a given menu or
+  // menu item.
+  for ($lvl = 1; $lvl <= $max_depth; $lvl++) {
+    $depth = isset($item['depth']) ? $item['depth'] + $lvl : $lvl;
+    $levels[$depth] = 'Level ' . $lvl;
+  }
+
+  return $levels;
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function paddle_landing_page_preprocess_page(&$variables) {
+  // Show the title when needed.
+  $menu_item = menu_get_item();
+
+  if (in_array($menu_item['path'], array('node/%/draft', 'node/%')) &&
+      isset($variables['node']) &&
+      ($node = $variables['node']) &&
+      $node->type == 'landing_page') {
+    // Ensure we use the current revision when previewing a draft.
+    if ($menu_item['path'] == 'node/%/draft' && $node->workbench_moderation['current']->vid != $node->vid) {
+      $node = workbench_moderation_node_current_load($node);
+    }
+
+    // Hide title if 'Show title' is unchecked.
+    $show_title = field_get_items('node', $node, 'field_show_title');
+    if ($show_title[0]['value'] != 1) {
+      $variables['title'] = '';
+    }
+
+    // Show the description when needed.
+    $show_body = field_get_items('node', $node, 'field_show_body');
+    if ($show_body[0]['value'] != 1) {
+      $variables['landing_page_body'] = '';
+    }
+    else {
+      $body = field_get_items('node', $node, 'body');
+      if (!empty($body[0]['safe_value'])) {
+        $description = array(
+          'landing_page_body' => array(
+            '#prefix' => '<div class="row"><div class="field-name-body landing-page-body col-md-12">',
+            '#markup' => $body[0]['safe_value'],
+            '#suffix' => '</div></div>',
+          ),
+        );
+        array_unshift($variables['page']['content'], $description);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function paddle_landing_page_preprocess_panels_pane(&$variables) {
+  $pane = &$variables['pane'];
+
+  // If a menu structure pane is based on a menu item that points to an
+  // unpublished node, add a CSS class to indicate that it is unpublished.
+  if ($pane->type == 'add_menu_structure') {
+    $mlid = $pane->configuration['menu_items'];
+    $menu_link = menu_link_load($mlid);
+    if ($menu_link['router_path'] == 'node/%') {
+      $node = menu_get_object('node', 1, $menu_link['link_path']);
+      if (empty($node->status)) {
+        $variables['classes_array'][] = 'panels-pane-unpublished';
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_node_submit().
+ */
+function paddle_landing_page_node_submit($node, $form, &$form_state) {
+  // This is a work around to save the summary correctly for landing pages,
+  // because for some weird reason: at first save - when adding a landing page -
+  // summary always gets the default value, being: empty.
+  // Following saves - when editing the landing page - save correctly.
+  if (!empty($form_state['input']['body'][LANGUAGE_NONE][0]['summary']) && $node->type == 'landing_page') {
+    $node->body[LANGUAGE_NONE][0]['summary'] = $form_state['input']['body'][LANGUAGE_NONE][0]['summary'];
+  }
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function paddle_landing_page_node_update($node) {
+  // If this is a new revision, then clone the display and the panes.
+  // The panels keep track of which panes are placed in which regions.
+  // In the panels we have an array with regions and each region holds an array
+  // with the position in the region as key and as value the pane-id.
+  // There is also an associative array with content which holds the pane-id and
+  // its content.
+  //
+  // $display->panels['left'][0] = 1;
+  // $display->content[1] = pane-content;
+  //
+  // @see panels_save_display().
+  if (!empty($node->old_vid) && isset($node->panelizer)) {
+    // Changes in the $panelizer_entity variable will be picked up by update
+    // hooks in the Panelizer module.
+    $panelizer_entity = $node->panelizer['page_manager'];
+    // Mark the display as modified to ensure the panelizer module will save our
+    // display on entity_save().
+    $panelizer_entity->display_is_modified = TRUE;
+    $display = clone $node->panelizer['page_manager']->display;
+    $display->did = NULL;
+
+    foreach ($display->panels as $region => $value) {
+      foreach ($value as $key => $pid) {
+        $display->panels[$region][$key] = 'new-' . $pid;
+
+        if (isset($display->content[$pid])) {
+          $display->content['new-' . $pid] = $display->content[$pid];
+          $display->content['new-' . $pid]->pid = 'new-' . $pid;
+          unset($display->content[$pid]);
+        }
+      }
+    }
+
+    $node->panelizer['page_manager']->display = $display;
+    $panelizer_entity->did = $display->did;
+  }
+}
+
+/**
+ * Returns the rendered title & body of a landing page, when needed.
+ *
+ * @param object $node
+ *   A landing page node.
+ *
+ * @return string
+ *   The rendered title & body.
+ */
+function paddle_landing_page_render_title_and_body($node) {
+  $output = '';
+
+  $show_title = field_get_items('node', $node, 'field_show_title');
+  if ($show_title[0]['value']) {
+    $output .= '<h1 class="landing-page-title-view">' . check_plain($node->title) . '</h1>';
+  }
+
+  $show_body = field_get_items('node', $node, 'field_show_body');
+  $body = field_get_items('node', $node, 'body');
+  if ($show_body[0]['value'] && !empty($body[0]['value'])) {
+    $output .= '<div class="landing-page-body-view">' . check_markup($body[0]['value'], $body[0]['format']) . '</div>';
+  }
+
+  return $output;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function paddle_landing_page_field_formatter_info() {
+  return array(
+    'paddle_landing_page_summary_or_trimmed_plain_text' => array(
+      'label' => t('Summary or trimmed, in plain text'),
+      'field types' => array('text_with_summary'),
+      'settings' => array('trim_length' => 600),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function paddle_landing_page_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+
+  switch ($display['type']) {
+    case 'paddle_landing_page_summary_or_trimmed_plain_text':
+      foreach ($items as $delta => $item) {
+        if (!empty($item['summary'])) {
+          $output = _text_sanitize($instance, $langcode, $item, 'summary');
+        }
+        else {
+          $untrimmed_field_text = _text_sanitize($instance, $langcode, $item, 'value');
+          $trim_length = $display['settings']['trim_length'];
+          // Increase the trim length with enough characters to still give
+          // truncate_utf8() something meaningful to trim, including wordsafe.
+          $text_summary = text_summary(strip_tags($untrimmed_field_text), $instance['settings']['text_processing'] ? $item['format'] : NULL,  $trim_length + 25);
+          // Add an ellipsis to the end of the text if the text is being trimmed.
+          $output = truncate_utf8($text_summary, $trim_length, TRUE, TRUE);
+        }
+        $element[$delta] = array(
+          '#markup' => strip_tags($output),
+          '#prefix' => '<p>',
+          '#suffix' => '</p>',
+        );
+      }
+      break;
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_landing_page_paddle_content_manager_additional_fields() {
+  return array(
+    'field_show_title',
+    'field_show_body',
+  );
+}
+
+/**
+ * Implements hook_panelizer_pre_render_alter().
+ *
+ * Adds specific javascript code.
+ */
+function paddle_landing_page_panelizer_pre_render_alter($panelizer, $display, $entity) {
+  if ($panelizer->pipeline == 'paddle_landing_page') {
+    $menu = menu_get_item();
+    if ('admin/content_manager/node/%/layout' == $menu['path']) {
+      drupal_add_js(drupal_get_path('module', 'paddle_landing_page') . '/js/paddle_landing_page_actions.js', array('type' => 'file'));
+    }
+  }
+}
+
+/**
+ * Implements hook_workbench_moderation_transition().
+ */
+function paddle_landing_page_workbench_moderation_transition($node, $old_state, $new_state) {
+  if ($new_state != $old_state &&
+     in_array(workbench_moderation_state_published(), array($new_state, $old_state))) {
+    // Check in which menus a menu item targeting the node appears.
+    $query = db_select('menu_links', 'ml')
+      ->distinct()
+      ->fields('ml', array('menu_name'))
+      ->condition('link_path', 'node/' . $node->nid);
+
+    $menu_names = $query->execute()->fetchCol();
+
+    // Clear our menu caches.
+    foreach ($menu_names as $menu_name) {
+      cache_clear_all('links:' . $menu_name . ':menu-structure:', 'cache_menu', TRUE);
+    }
+  }
+
+}
+
+/**
+ * Implements hook_paddle_social_media_add_drupal_title_alter().
+ */
+function paddle_landing_page_paddle_social_media_add_drupal_title_alter(&$value, $node) {
+  if ($node->type == 'landing_page') {
+    $show_title = field_get_items('node', $node, 'field_show_title');
+    $value = $show_title && !empty($show_title[0]['value']) && $show_title[0]['value'];
+  }
+}
+
+/**
+ * Clears the page cache of pages containing menu structure panes.
+ *
+ * @param array $menu_item
+ *   The Identifier of the menu item.
+ *
+ * @see paddle_codex_flanders_clear_page_cache
+ */
+function paddle_landing_page_clear_page_cache_of_menu_structure_panes($menu_item) {
+  $mlid = $menu_item['mlid'];
+
+  $results = db_select('panels_pane', 'pp')
+    ->fields('pp')
+    ->condition('type', 'add_menu_structure', '=')
+    ->execute()
+    ->fetchAllAssoc('pid');
+
+  if (!empty($results)) {
+    $dids = array();
+    foreach ($results as $pid => $pane) {
+      $conf = unserialize($pane->configuration);
+
+      if (!empty(in_array($mlid, $conf['menu_items'])) && !in_array($pane->did, $dids)) {
+        $dids[] = $pane->did;
+      }
+    }
+
+    if (!empty($dids)) {
+      $entities = db_select('panelizer_entity', 'pe')
+        ->fields('pe')
+        ->condition('did', $dids, 'IN')
+        ->execute()
+        ->fetchAllAssoc('entity_id');
+
+      if (!empty($entities)) {
+        foreach (array_keys($entities) as $key) {
+          $cids[] = 'node/' . $key;
+          $cids[] = drupal_get_path_alias('node/' . $key);
+
+          if (module_exists('paddle_varnish')) {
+            paddle_varnish_expire_cache($cids);
+          }
+          else {
+            global $base_url;
+
+            foreach ($cids as $cid) {
+              cache_clear_all($base_url . '/' . $cid, 'cache_page');
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Generates the configuration of the menu to be used to cache it.
+ *
+ * @param array|bool $starting_menu_item
+ *   The start item of the menu structure pane. FALSE if there is no menu item
+ *   selected.
+ * @param int $max_depth
+ *   How deep we want to travel through the menu in the menu structure pane.
+ *
+ * @return array
+ *   The hashed config.
+ */
+function paddle_landing_page_generate_menu_structure_pane_cache_config($starting_menu_item, $max_depth) {
+  // Load our menu item which we use as the root element in our tree.
+  $min_depth = is_array($starting_menu_item) ? $starting_menu_item['depth'] : 1;
+
+  $config = array(
+    'min_depth' => $min_depth,
+    'max_depth' => $max_depth == FALSE ? NULL : $max_depth,
+    'mlid' => $starting_menu_item['mlid'],
+  );
+
+  return $config;
+}

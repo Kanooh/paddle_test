@@ -1,0 +1,289 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleContentManagerAssigneesTest.
+ */
+
+/**
+ * UI tests for listings and overviews for the Paddle Content Manager module.
+ */
+class PaddleContentManagerAssigneesTest extends DrupalWebTestCase {
+  protected $adminUser;
+  protected $editor;
+  protected $chiefEditor;
+  protected $contentType;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Content assignees',
+      'description' => 'Test the assignees.',
+      'group' => 'Paddle Content Manager',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp();
+
+    module_enable(array(
+      'views',
+      'workbench_moderation',
+      'paddle_contextual_toolbar',
+      'paddle_content_manager',
+    ));
+
+    $this->contentType = $this->drupalCreateContentType(array());
+
+    // Add a workbench moderation transition from 'draft' to published. This is
+    // supported in the Paddle distribution.
+    $draft_to_published_transition = (object) array(
+      'from_name' => workbench_moderation_state_none(),
+      'to_name' => workbench_moderation_state_published(),
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($draft_to_published_transition);
+
+    // Add 2 new states, "To check" and "Offline".
+    $state = (object) array(
+      'name' => 'to_check',
+      'label' => 'To check',
+      'description' => '',
+      'weight' => -50,
+    );
+    workbench_moderation_state_save($state);
+
+    $state = (object) array(
+      'name' => 'offline',
+      'label' => 'Offline',
+      'description' => '',
+      'weight' => 80,
+    );
+    workbench_moderation_state_save($state);
+
+    // Add the transitions for the 2 new states.
+    $transition = (object) array(
+      'from_name' => 'draft',
+      'to_name' => 'to_check',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'to_check',
+      'to_name' => 'draft',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'to_check',
+      'to_name' => 'needs_review',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'to_check',
+      'to_name' => 'published',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'needs_review',
+      'to_name' => 'to_check',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'published',
+      'to_name' => 'to_check',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'published',
+      'to_name' => 'offline',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'offline',
+      'to_name' => 'to_check',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'offline',
+      'to_name' => 'needs_review',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'offline',
+      'to_name' => 'published',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    // Reset the static cache of the moderation states and
+    // DrupalWebTestCase::checkPermissions().
+    // Otherwise permissions related to the newly added moderation state
+    // will not be available.
+    drupal_static_reset('workbench_moderation_states');
+    drupal_static_reset('workbench_moderation_transitions');
+    drupal_static_reset('checkPermissions');
+    $this->adminUser = $this->drupalCreateUser(array(
+      'administer content types',
+      'bypass node access',
+      'view the administration theme',
+      'manage paddle_content_manager',
+      'moderate content from draft to needs_review',
+      'moderate content from needs_review to published',
+      'moderate content from draft to published',
+      'moderate content from draft to to_check',
+      'moderate content from to_check to draft',
+      'moderate content from to_check to needs_review',
+      'moderate content from needs_review to to_check',
+      'moderate content from to_check to published',
+      'moderate content from published to to_check',
+      'moderate content from published to offline',
+      'moderate content from offline to to_check',
+      'moderate content from offline to needs_review',
+      'moderate content from offline to published',
+      'have content assigned in state to_check',
+      'have content assigned in state needs_review',
+    ));
+
+    $this->editor = $this->drupalCreateUser(array(
+      'bypass node access',
+      'view the administration theme',
+      'manage paddle_content_manager',
+      'moderate content from draft to needs_review',
+      'moderate content from draft to to_check',
+      'moderate content from to_check to needs_review',
+      'have content assigned in state to_check',
+    ));
+
+    $this->chiefEditor = $this->drupalCreateUser(array(
+      'bypass node access',
+      'view the administration theme',
+      'manage paddle_content_manager',
+      'moderate content from draft to needs_review',
+      'moderate content from needs_review to published',
+      'moderate content from draft to published',
+      'moderate content from draft to to_check',
+      'moderate content from to_check to draft',
+      'moderate content from to_check to needs_review',
+      'moderate content from needs_review to to_check',
+      'moderate content from to_check to published',
+      'moderate content from published to to_check',
+      'moderate content from published to offline',
+      'moderate content from offline to to_check',
+      'moderate content from offline to needs_review',
+      'moderate content from offline to published',
+      'have content assigned in state needs_review',
+    ));
+
+    $this->drupalLogin($this->adminUser);
+    // Configure the content type to use moderation.
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType->type);
+    $edit = array(
+      'node_options[revision]' => TRUE,
+      'node_options[moderation]' => TRUE,
+    );
+    $this->drupalPost(NULL, $edit, t('Save content type'));
+  }
+
+  /**
+   * Tests if the list of possible assignees is sorted alphabetically.
+   */
+  public function testAssigneeOrder() {
+    // Create a second editor so we have enough users.
+    $second_editor = $this->drupalCreateUser(array(
+      'bypass node access',
+      'view the administration theme',
+      'manage paddle_content_manager',
+      'moderate content from draft to needs_review',
+      'moderate content from draft to to_check',
+      'moderate content from to_check to needs_review',
+      'have content assigned in state to_check',
+    ));
+
+    // Get all users that can be assigned "to check".
+    $to_check = paddle_content_manager_get_assignee_users_for_state('to_check');
+    $this->assertEqual(3, count($to_check), 'There are 3 users who can get nodes assigned in status "to check".');
+
+    // Get the same users, and sort them alphabetically.
+    $to_check_sorted = paddle_content_manager_get_assignee_users_for_state('to_check');
+    asort($to_check_sorted);
+
+    // Compare both arrays, both keys and values.
+    $diff = array_diff_assoc($to_check_sorted, $to_check);
+
+    // If the difference array is empty, the users in the original array
+    // were sorted alphabetically.
+    $this->assertTrue(empty($diff), 'Assignee users are sorted alphabetically.');
+  }
+
+  /**
+   * Tests if assigning goes correctly from the Backend Node View.
+   */
+  public function testBackendViewAssigning() {
+    // Run the tests for the admin user.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a node.
+    $edit = array(
+      'title' => $this->randomName(),
+    );
+    $this->drupalPost('admin/content_manager/nojs/' . $this->contentType->type . '/add', $edit, t('Save'));
+
+    // Then check if we can assign it to any editor.
+    $this->drupalPost('admin/content_manager/node/1/view', array(), 'Assign to ' . $this->editor->name);
+
+    // Check if the assignation was recorded.
+    $node = node_load(1);
+    $sql = "SELECT uid FROM {paddle_content_manager_revision_assignee} WHERE entity_type = 'node' AND entity_id = 1 AND workbench_hid = :workbench_hid";
+    $uid = db_query($sql, array(':workbench_hid' => $node->workbench_moderation['current']->hid))->fetchField();
+    $this->assertEqual($uid, $this->editor->uid, t('Assignee saved correctly from Backend Node View for to_check state.'));
+
+    // Now assign it to chief editor.
+    $this->drupalPost('admin/content_manager/node/1/view', array(), 'Assign to ' . $this->chiefEditor->name);
+    $this->assertAssignee($node);
+
+    // Edit the node and save it to make sure the node gets sent back to draft.
+    $this->drupalPost('node/' . $node->nid . '/edit', array(), t('Save'));
+    $node = workbench_moderation_node_current_load($node);
+    $this->assertEqual('draft', $node->workbench_moderation['current']->from_state);
+  }
+
+  /**
+   * Tests if the assignee is assigned to the node.
+   *
+   * @param object $node
+   *   The node object to test the assignee for.
+   */
+  protected function assertAssignee($node) {
+    // Reload the node to get the current workbench data.
+    entity_get_controller('node')->resetCache(array(1));
+    $node = node_load(1);
+    $node = workbench_moderation_node_current_load($node);
+    // Check if the assignation is still present.
+    $sql = "SELECT uid FROM {paddle_content_manager_revision_assignee} WHERE entity_type = 'node' AND entity_id = 1 AND workbench_hid = :workbench_hid";
+    $uid = db_query($sql, array(':workbench_hid' => $node->workbench_moderation['current']->hid))->fetchField();
+    $this->assertEqual($uid, $this->chiefEditor->uid, t('Assignee saved correctly from Backend Node View for needs_review state.'));
+  }
+
+}

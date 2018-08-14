@@ -1,0 +1,1017 @@
+<?php
+/**
+ * @file
+ * Code for the opening_hours_sets feature.
+ */
+
+include_once 'opening_hours_sets.features.inc';
+include_once 'opening_hours_sets.forms.inc';
+
+/**
+ * @file
+ * Main functions and hook implementations for the Opening Hours Sets module.
+ */
+
+/**
+ * Implements hook_entity_info().
+ */
+function opening_hours_sets_entity_info() {
+  return array(
+    'opening_hours_set' => array(
+      'label' => t('Opening hours set'),
+      'description' => t('An entity containing an opening hours set.'),
+      'plural label' => t('Opening hours sets'),
+      'entity class' => 'Entity',
+      'controller class' => 'EntityAPIControllerExportable',
+      'base table' => 'opening_hours_sets',
+      'fieldable' => TRUE,
+      'entity keys' => array(
+        'id' => 'ohsid',
+        'label' => 'title',
+      ),
+      'bundles' => array(
+        'opening_hours_set' => array(
+          'label' => t('Opening hours set'),
+          'admin' => array(
+            'path' => 'admin/structure/opening_hours_sets',
+            'access arguments' => array('administer opening hours sets'),
+          ),
+        ),
+      ),
+      'admin ui' => array(
+        'path' => 'admin/structure/opening_hours_sets',
+        'controller class' => 'EntityDefaultUIController',
+      ),
+      'module' => 'opening_hours_sets',
+      'access callback' => 'opening_hours_sets_access',
+      'views controller class' => 'EntityDefaultViewsController',
+    ),
+  );
+}
+
+/**
+ * Access callback for the opening hours set entity.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ * @param object $opening_hours_set
+ *   The opening hours set entity to check for.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ *
+ * @return bool
+ *   Whether access is allowed or not. If the entity type does not specify any
+ *   access information, NULL is returned.
+ *
+ * @see entity_metadata_no_hook_node_access()
+ */
+function opening_hours_sets_access($op, $opening_hours_set = NULL, $account = NULL) {
+  if ($opening_hours_set) {
+    return user_access('manage opening hours sets', $account);
+  }
+  else {
+    return user_access('administer opening hours sets', $account);
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function opening_hours_sets_permission() {
+  return array(
+    'administer opening hours sets' => array(
+      'title' => t('Administer opening hours sets configuration'),
+    ),
+    'manage opening hours sets' => array(
+      'title' => t('Manage opening hours sets configuration'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function opening_hours_sets_menu() {
+  $items = array();
+
+  $items['admin/content/opening_hours_set/add'] = array(
+    'title' => 'Add opening hours set',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('opening_hours_set_form'),
+    'access arguments' => array('manage opening hours sets'),
+    'file' => 'opening_hours_sets.forms.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content/opening_hours_set/edit/%opening_hours_sets'] = array(
+    'title' => 'Edit opening hours set',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('opening_hours_set_form', 4),
+    'access arguments' => array('manage opening hours sets'),
+    'file' => 'opening_hours_sets.forms.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content/opening_hours_set/delete/%opening_hours_sets'] = array(
+    'title' => 'Delete opening hours set',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('opening_hours_sets_delete_form', 4),
+    'access arguments' => array('manage opening hours sets'),
+    'file' => 'opening_hours_sets.forms.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+
+/**
+ * Opening hour wildcard loader.
+ *
+ * @param int $ohsid
+ *   Opening hours set ID.
+ *
+ * @return object
+ *   Opening hours set entity.
+ */
+function opening_hours_sets_load($ohsid) {
+  return entity_load_single('opening_hours_set', $ohsid);
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function opening_hours_sets_form_opening_hours_set_form_alter(&$form, &$form_state) {
+  $path = drupal_get_path('module', 'opening_hours_sets');
+  drupal_add_js($path . '/js/opening_hours_sets_edit.js');
+
+  $days = array(
+    'field_ous_sunday',
+    'field_ous_monday',
+    'field_ous_tuesday',
+    'field_ous_wednesday',
+    'field_ous_thursday',
+    'field_ous_friday',
+    'field_ous_saturday',
+  );
+
+  foreach (element_children($form['wrapper']['field_ous_exc_opening_hours'][LANGUAGE_NONE]) as $index) {
+    $period = &$form['wrapper']['field_ous_exc_opening_hours'][LANGUAGE_NONE][$index];
+
+    foreach ($days as $day_index => $name) {
+      $period[$name]['#attributes']['data-weekday'] = $day_index;
+      $period[$name]['#attributes']['class'][] = 'weekday';
+    }
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function opening_hours_sets_theme($existing, $type, $theme, $path) {
+  return array(
+    'opening_hours_info' => array(
+      'path' => $path . '/templates',
+      'template' => 'opening-hours-sets',
+    ),
+    'opening_hours_status' => array(
+      'path' => $path . '/templates',
+      'template' => 'opening-hours-sets-status',
+    ),
+    'opening_hours_sets_fieldsets' => array(
+      'variables' => array(
+        'weekdays' => array(),
+        'closing_days' => array(),
+        'exceptional_opening_hours' => array(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function opening_hours_sets_ctools_plugin_directory($module, $plugin_type) {
+  if ($module == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Retrieve the content for every regular day of the week.
+ *
+ * @param object $wrapper
+ *   The entity metadata wrapper.
+ *
+ * @return array
+ *   An array consisting of all of the weekday's information.
+ */
+function opening_hours_sets_get_weekdays($wrapper) {
+  $weekdays = array();
+  $weekdays_numeric = array(0, 1, 2, 3, 4, 5, 6);
+
+  foreach ($weekdays_numeric as $weekday_index) {
+
+    $weekday = opening_hours_get_weekday_by_switch($wrapper, $weekday_index);
+    if (isset($weekday)) {
+      array_push($weekdays, $weekday);
+    }
+  }
+  return $weekdays;
+}
+
+/**
+ * Retrieves the weekday opening hours by using a switch statement.
+ *
+ * @param object $wrapper
+ *   The entity metadata wrapper.
+ * @param int $weekday_index
+ *   The numerical week index retrieved from the date() function.
+ *
+ * @return array|bool
+ *   The Weekday opening hours based on the index.
+ */
+function opening_hours_get_weekday_by_switch($wrapper, $weekday_index) {
+  $info = opening_hours_sets_get_day_info($weekday_index);
+  if (isset($info['field']) && isset($info['title'])) {
+    return opening_hours_sets_get_weekday($wrapper, $info['field'], $info['title']);
+  }
+
+  return FALSE;
+}
+
+/**
+ * Retrieve the content for one day of the week.
+ *
+ * @param object $wrapper
+ *   The entity metadata wrapper.
+ * @param string $field
+ *   The name of the day field.
+ * @param string $title
+ *   The day title.
+ *
+ * @return array
+ *   An array consisting of the weekday information.
+ */
+function opening_hours_sets_get_weekday($wrapper, $field, $title) {
+  $weekday['title'] = $title;
+  $opening_hours = array();
+  $has_data = TRUE;
+
+  try {
+    $day = $wrapper->$field->value();
+  }
+  catch (EntityMetadataWrapperException $exc) {
+    $has_data = FALSE;
+  }
+
+  if ($has_data && isset($day)) {
+    $day_wrapper = entity_metadata_wrapper('field_collection_item', $day);
+    $unformatted_opening_hours = $day_wrapper->field_ous_opening_hours->value();
+
+    foreach ($unformatted_opening_hours as $unformatted_opening_hour) {
+      $opening_hour_wrapper = entity_metadata_wrapper('field_collection_item', $unformatted_opening_hour);
+
+      if (!empty($opening_hour_wrapper->field_ous_ou_description->value())) {
+        $opening_hour['description'] = $opening_hour_wrapper->field_ous_ou_description->value();
+      }
+      else {
+        $opening_hour['description'] = "";
+      }
+      if (!empty($opening_hour_wrapper->field_ous_ou_hours->value())) {
+        $unformatted_start_time = $opening_hour_wrapper->field_ous_ou_hours->value->value();
+        $unformatted_end_time = $opening_hour_wrapper->field_ous_ou_hours->value2->value();
+        $opening_hour['time'] = opening_hours_sets_period_to_string('H:i', $unformatted_start_time, $unformatted_end_time);
+      }
+
+      if ($opening_hour['time'] === '00:00') {
+        $opening_hour['time'] = t('Closed');
+      }
+      array_push($opening_hours, $opening_hour);
+    }
+  }
+  else {
+    $opening_hour['time'] = t('Closed');
+    $opening_hour['description'] = "";
+    array_push($opening_hours, $opening_hour);
+  }
+
+  $weekday['opening_hours'] = $opening_hours;
+  return $weekday;
+}
+
+/**
+ * Retrieve the closing days.
+ *
+ * @param object $wrapper
+ *   The entity metadata wrapper.
+ *
+ * @return array
+ *   An array consisting of all the closing day's information.
+ */
+function opening_hours_sets_get_closing_days($wrapper) {
+  $closing_days = $wrapper->field_ous_closing_days->value();
+  $closed = array();
+
+  foreach ($closing_days as $closing_day) {
+    $closing_day_wrapper = entity_metadata_wrapper('field_collection_item', $closing_day);
+
+    // Only add the ones which are within 14 days.
+    $closing_day_value = $closing_day_wrapper->field_ous_closing_days_date->value->value();
+    if (strtotime(date('Y-m-d')) <= $closing_day_value && $closing_day_value < strtotime('+2 weeks')) {
+      $closed['soon'][$closing_day_wrapper->getIdentifier()] = array(
+        'value' => opening_hours_sets_period_to_string(
+            'j F',
+            $closing_day_wrapper->field_ous_closing_days_date->value->value(),
+            $closing_day_wrapper->field_ous_closing_days_date->value2->value()) . ' ' . t('closed'),
+      );
+    }
+    // Only add the ones that will end today or in the future.
+    if (strtotime(date('Y-m-d')) <= $closing_day_wrapper->field_ous_closing_days_date->value2->value()) {
+      $closed['all'][$closing_day_wrapper->getIdentifier()] = array(
+        'value' => opening_hours_sets_period_to_string(
+          'd/m/Y',
+          $closing_day_wrapper->field_ous_closing_days_date->value->value(),
+          $closing_day_wrapper->field_ous_closing_days_date->value2->value()),
+        'description' => $closing_day_wrapper->field_ous_closing_description->value(),
+      );
+    }
+  }
+
+  return $closed;
+}
+
+/**
+ * Retrieve the exceptional opening hours.
+ *
+ * @param object $wrapper
+ *   The entity metadata wrapper.
+ *
+ * @return array
+ *   An array consisting of all the exception opening hours' information.
+ */
+function opening_hours_sets_get_exceptional_opening_hours($wrapper) {
+  $exceptional_opening_hours = $wrapper->field_ous_exc_opening_hours->value();
+  $exceptional = array();
+
+  foreach ($exceptional_opening_hours as $exceptional_opening_hour) {
+    $exceptional_opening_hour_wrapper = entity_metadata_wrapper('field_collection_item', $exceptional_opening_hour);
+
+    // Get the weekdays for the exceptional opening hours. These only need to be
+    // shown when actual exceptional hours have been filled out.
+    $weekdays = opening_hours_sets_get_weekdays($exceptional_opening_hour_wrapper);
+
+    foreach ($weekdays as $index => $weekday) {
+      if (count($weekday['opening_hours']) == 1 && $weekday['opening_hours'][0]['time'] === t('Closed')) {
+        unset($weekdays[$index]);
+      }
+    }
+
+    if (!empty($weekdays)) {
+      try {
+        $exceptional_day_start_value = $exceptional_opening_hour_wrapper->field_ous_exc_oh_date->value->value();
+        $exceptional_day_end_value = $exceptional_opening_hour_wrapper->field_ous_exc_oh_date->value2->value();
+      }
+      catch (EntityMetadataWrapperException $exc) {
+        return FALSE;
+      }
+
+      if ($exceptional_day_start_value < strtotime('+2 weeks') && strtotime(date('Y-m-d')) <= $exceptional_day_end_value) {
+        // Only add the ones which are within 14 days.
+        $exceptional['soon'][$exceptional_opening_hour_wrapper->getIdentifier()] = array(
+          'value' => opening_hours_sets_period_to_string(
+            'j F',
+            $exceptional_day_start_value,
+            $exceptional_day_end_value),
+          'description' => $exceptional_opening_hour_wrapper->field_ous_exc_oh_description->value(),
+        );
+      }
+
+      $exceptional['all'][$exceptional_opening_hour_wrapper->getIdentifier()] = array(
+        'value' => opening_hours_sets_period_to_string(
+          'd/m/Y',
+          $exceptional_day_start_value,
+          $exceptional_day_end_value),
+        'description' => $exceptional_opening_hour_wrapper->field_ous_exc_oh_description->value(),
+        'weekdays' => $weekdays,
+      );
+    }
+  }
+
+  return $exceptional;
+}
+
+/**
+ * Formats the datetime elements into a string.
+ *
+ * @param string $format
+ *   The Date format.
+ * @param string $start
+ *   The start time.
+ * @param string $end
+ *   The end time.
+ * @param string $delim
+ *   The delimiter to separate the start and end time.
+ *
+ * @return string
+ *   The formatted time string.
+ */
+function opening_hours_sets_period_to_string($format, $start, $end, $delim = '-') {
+  $start_time = format_date($start, 'custom', $format);
+  $end_time = format_date($end, 'custom', $format);
+
+  if ($start_time !== $end_time) {
+    return $start_time . $delim . $end_time;
+  }
+  else {
+    return $start_time;
+  }
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors_alter().
+ */
+function opening_hours_sets_paddle_color_palettes_color_selectors_alter(&$data, $theme) {
+  $data[0]['background-color'][] = '.title-box';
+
+  $data[4]['border-color'][] = '.title-box';
+
+  $data[5]['color'][] = '.title-box';
+
+  $data[6]['background-color'][] = '.title-box.selected';
+  $data[6]['background-color'][] = '.title-box:hover';
+  $data[6]['border-color'][] = '.pane-calendar{} table.mini td.mini > .month';
+}
+
+/**
+ * Retrieves the current opening hours status.
+ *
+ * @param object $wrapper
+ *   The entity metadata wrapper.
+ *
+ * @return string
+ *   The current status of the opening hours set.
+ */
+function opening_hours_sets_get_current_opening_hour($wrapper) {
+  // Retrieve the opening hours for today.
+  $current_date = date('Ymd');
+  $is_closed = opening_hours_sets_is_closed_day($wrapper, $current_date);
+
+  if ($is_closed) {
+    return FALSE;
+  }
+
+  $exceptional_today = opening_hours_sets_get_exceptional_ohs($wrapper, $current_date);
+
+  if (!empty($exceptional_today)) {
+    return opening_hours_sets_is_open($exceptional_today);
+  }
+
+  $today_index = date('w');
+  $regular_today = opening_hours_get_weekday_by_switch($wrapper, $today_index);
+  return opening_hours_sets_is_open($regular_today);
+}
+
+/**
+ * Retrieves the current week to fill the calendar with.
+ *
+ * @param object $wrapper
+ *   The entity metadata wrapper.
+ *
+ * @return array
+ *   The opening hours of the current week.
+ */
+function opening_hours_sets_get_current_week($wrapper) {
+  $weekdays = array();
+  $weekdays_numeric = array(0, 1, 2, 3, 4, 5, 6);
+
+  // Slice the weekdays based on today and push the removed elements back.
+  // This will allow to create a opening hour table starting from today.
+  $today = date('w');
+  $upcoming_weekdays = array_slice($weekdays_numeric, $today);
+  $days_next_week = array_diff($weekdays_numeric, $upcoming_weekdays);
+
+  foreach ($days_next_week as $day) {
+    $upcoming_weekdays[] = $day;
+  }
+
+  $current_day = date('Ymd');
+
+  foreach ($upcoming_weekdays as $index => $weekday_index) {
+    if ($index == 0) {
+      $date = $current_day;
+    }
+    else {
+      $date_string = strtotime($current_day . " +" . $index . " day");
+      $date = date('Ymd', $date_string);
+    }
+
+    // @todo opening_hours_sets_is_closed_day() should only give back a boolean
+    // when it is not closed. Otherwise it should give back the Closed string
+    // and the description.git ad
+    $is_closed = opening_hours_sets_is_closed_day($wrapper, $date);
+
+    if ($is_closed) {
+      // Place the Closed day in the correct place in the multidimensional
+      // array.
+      $opening_hours = array();
+      $opening_hour['time'] = t('Closed');
+      $closing_days = opening_hours_sets_get_closing_days($wrapper);
+
+      foreach ($closing_days['all'] as $closed) {
+        if ($closed['value'] == date('d/m/Y', strtotime($date))) {
+          $opening_hour['description'] = $closed['description'];
+        }
+      }
+
+      array_push($opening_hours, $opening_hour);
+      $weekday['opening_hours'] = $opening_hours;
+      $info = opening_hours_sets_get_day_info($weekday_index);
+      $weekday['title'] = $info['title'];
+    }
+    else {
+      $exceptional_hours = opening_hours_sets_get_exceptional_ohs($wrapper, $date);
+
+      if ($exceptional_hours) {
+        $weekday = $exceptional_hours;
+      }
+      else {
+        $weekday = opening_hours_get_weekday_by_switch($wrapper, $weekday_index);
+      }
+    }
+    if (isset($weekday)) {
+      array_push($weekdays, $weekday);
+    }
+  }
+  return $weekdays;
+}
+
+/**
+ * Returns the weekday info.
+ *
+ * @param int $index
+ *   The weekday index.
+ *
+ * @return array
+ *   Array containing the weekday title and field name.
+ */
+function opening_hours_sets_get_day_info($index) {
+  $title = "";
+  switch ($index) {
+    case 0:
+      return array(
+        'title' => t('Sun'),
+        'field' => 'field_ous_sunday',
+      );
+      break;
+
+    case 1:
+      return array(
+        'title' => t('Mon'),
+        'field' => 'field_ous_monday',
+      );
+      break;
+
+    case 2:
+      return array(
+        'title' => t('Tue'),
+        'field' => 'field_ous_tuesday',
+      );
+      break;
+
+    case 3:
+      return array(
+        'title' => t('Wed'),
+        'field' => 'field_ous_wednesday',
+      );
+      break;
+
+    case 4:
+      return array(
+        'title' => t('Thu'),
+        'field' => 'field_ous_thursday'
+      );
+      break;
+
+    case 5:
+      return array(
+        'title' => t('Fri'),
+        'field' => 'field_ous_friday',
+      );
+      break;
+
+    case 6:
+      return array(
+        'title' => t('Sat'),
+        'field' => 'field_ous_saturday',
+      );
+      break;
+  }
+}
+
+/**
+ * Retrieves if the given day is part of the Closed Days set.
+ *
+ * @param object $wrapper
+ *   The entity metadata wrapper.
+ * @param string $date
+ *   The given day.
+ *
+ * @return bool
+ *   Whether the opening hours set is closed or not on the given day.
+ */
+function opening_hours_sets_is_closed_day($wrapper, $date) {
+  $is_closed = FALSE;
+  $closing_days = $wrapper->field_ous_closing_days->value();
+
+  foreach ($closing_days as $closing_day) {
+    $closing_day_wrapper = entity_metadata_wrapper('field_collection_item', $closing_day);
+    $closing_day_value_from = $closing_day_wrapper->field_ous_closing_days_date->value->value();
+    $closing_day_value_to = $closing_day_wrapper->field_ous_closing_days_date->value2->value();
+
+    $formatted_closing_day_from = date('Ymd', $closing_day_value_from);
+    $formatted_closing_day_to = date('Ymd', $closing_day_value_to);
+
+    // Check if the given date corresponds to the $closing_day.
+    // It's considered as closing if the set of closing days starts with today,
+    // or if it ends with today,or if today is in between the tow dates.
+    if ($formatted_closing_day_from <= $date && $formatted_closing_day_to >= $date) {
+      $is_closed = TRUE;
+    }
+  }
+  return $is_closed;
+}
+
+/**
+ * Retrieves the given day of the Exceptional OH set if it exists.
+ *
+ * @param object $wrapper
+ *   The entity metadata wrapper.
+ * @param string $date
+ *   The given day.
+ *
+ * @return array|bool
+ *   The opening hours of the given day if it is exceptional.
+ */
+function opening_hours_sets_get_exceptional_ohs($wrapper, $date) {
+  $exceptional_opening_hours = $wrapper->field_ous_exc_opening_hours->value();
+
+  foreach ($exceptional_opening_hours as $exceptional_opening_hour) {
+    $exceptional_opening_hour_wrapper = entity_metadata_wrapper('field_collection_item', $exceptional_opening_hour);
+
+    // Get the weekdays for the exceptional opening hours. These only need to be
+    // shown when actual exceptional hours have been filled out.
+    $weekdays = opening_hours_sets_get_weekdays($exceptional_opening_hour_wrapper);
+
+    foreach ($weekdays as $index => $weekday) {
+      if (count($weekday['opening_hours']) == 1 && $weekday['opening_hours'][0]['time'] === 'Closed') {
+        unset($weekdays[$index]);
+      }
+    }
+
+    if (!empty($weekdays)) {
+      try {
+        $exceptional_day_start_value = $exceptional_opening_hour_wrapper->field_ous_exc_oh_date->value->value();
+        $exceptional_day_end_value = $exceptional_opening_hour_wrapper->field_ous_exc_oh_date->value2->value();
+      }
+      catch (EntityMetadataWrapperException $exc) {
+        return FALSE;
+      }
+
+      $formatted_start_date = date('Ymd', $exceptional_day_start_value);
+      $formatted_end_date = date('Ymd', $exceptional_day_end_value);
+
+      if ($formatted_start_date <= $date && $date <= $formatted_end_date) {
+        $date_index = date('w', strtotime($date));
+        return opening_hours_get_weekday_by_switch($exceptional_opening_hour_wrapper, $date_index);
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Returns either the current opening hours or a closed string.
+ *
+ * @param array $today
+ *   The opening hours of the current day.
+ *
+ * @return bool|string
+ *   The opening hours if the set is open, otherwise FALSE.
+ */
+function opening_hours_sets_is_open($today) {
+  $opening_hours = $today['opening_hours'];
+
+  foreach ($opening_hours as $opening_hour) {
+    $opening_hour_string = $opening_hour['time'];
+
+    if ($opening_hour_string == t('Closed')) {
+      return FALSE;
+    }
+
+    $hours = explode("-", $opening_hour_string);
+    $start_hour_string = $hours[0];
+    $end_hour_string = $hours[1];
+    $current_time = time();
+
+    if (strtotime($start_hour_string) <= $current_time && $current_time <= strtotime($end_hour_string)) {
+      return $opening_hour;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Theme function to output the opening hours sets fieldsets.
+ */
+function theme_opening_hours_sets_fieldsets($variables) {
+  $output = array();
+
+  // Get the output for the closing days.
+  if (!empty($variables['closing_days']['all'])) {
+    $output['closing_days'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Exceptional closing days'),
+      '#attributes' => array(
+        'class' => array(
+          'collapsible',
+          'collapsed',
+          'exceptional-closing-days',
+        ),
+      ),
+      'content' => array(
+        '#markup' => '',
+      ),
+      '#attached' => array(
+        'js' => array(
+          'misc/collapse.js',
+          'misc/form.js',
+        ),
+      ),
+    );
+
+    // For all closing days, print out the date and description.
+    foreach ($variables['closing_days']['all'] as $closing_day) {
+      $closing_day_array = array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'class' => array('closing-day'),
+        ),
+      );
+
+      $closing_day_array['date'] = array(
+        '#type' => 'markup',
+        '#markup' => $closing_day['value'],
+        '#prefix' => '<div class="closing-day-date col-md-6">',
+        '#suffix' => '</div>',
+      );
+
+      if (!empty($closing_day['description'])) {
+        $closing_day_array['description'] = array(
+          '#type' => 'markup',
+          '#markup' => $closing_day['description'],
+          '#prefix' => '<div class="closing-day-description col-md-6">',
+          '#suffix' => '</div>',
+        );
+      }
+
+      $output['closing_days']['content']['#markup'] .= drupal_render($closing_day_array);
+    }
+  }
+
+  // Get the output for the exceptional opening hours.
+  if (!empty($variables['exceptional_opening_hours']['all'])) {
+    $output['exceptional_opening_hours'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Exceptional opening hours'),
+      '#attributes' => array(
+        'class' => array(
+          'collapsible',
+          'collapsed',
+          'exceptional-opening-hours',
+        ),
+      ),
+      'content' => array(
+        '#markup' => '',
+      ),
+      '#attached' => array(
+        'js' => array(
+          'misc/collapse.js',
+          'misc/form.js',
+        ),
+      ),
+    );
+
+    // For all exceptional opening hours, print out the date and description.
+    foreach ($variables['exceptional_opening_hours']['all'] as $exceptional_opening_hour) {
+      $exceptional_opening_hour_array = array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'class' => array('exceptional-hours'),
+        ),
+      );
+
+      $exceptional_opening_hour_array['info'] = array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'class' => array('exceptional-hours-info'),
+        ),
+      );
+
+      if (!empty($exceptional_opening_hour['description'])) {
+        $exceptional_opening_hour_array['info']['description'] = array(
+          '#type' => 'markup',
+          '#markup' => $exceptional_opening_hour['description'],
+          '#prefix' => '<div class="fieldset-description">',
+          '#suffix' => ': </div>',
+        );
+      }
+
+      $exceptional_opening_hour_array['info']['date'] = array(
+        '#type' => 'markup',
+        '#markup' => $exceptional_opening_hour['value'],
+        '#prefix' => '<div class="fieldset-date">',
+        '#suffix' => '</div>',
+      );
+
+      // For all exceptional opening hours, print out the weekdays with their
+      // separate opening hours and descriptions.
+      $exceptional_opening_hour_array['weekdays'] = array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'class' => array('exceptional-hours-weekdays'),
+        ),
+      );
+
+      foreach ($exceptional_opening_hour['weekdays'] as $weekday) {
+        $result = array();
+
+        foreach ($weekday['opening_hours'] as $opening_hour) {
+          if ($opening_hour['time'] !== t('Closed')) {
+            $result['content'][] = array(
+              'time' => array(
+                '#type' => 'markup',
+                '#markup' => $opening_hour['time'],
+                '#prefix' => '<div class="weekday-opening-hour"><div class="weekday-opening-hour-time col-md-6">',
+                '#suffix' => '</div>',
+              ),
+              'description' => array(
+                '#type' => 'markup',
+                '#markup' => $opening_hour['description'],
+                '#prefix' => '<div class="weekday-opening-hour-description col-md-6">',
+                '#suffix' => '</div></div>',
+              ),
+            );
+          }
+        }
+
+        if (!empty($result)) {
+          $exceptional_opening_hour_array['weekdays'][$weekday['title']] = array(
+            '#type' => 'container',
+            '#attributes' => array(
+              'class' => array('exceptional-hours-weekday'),
+            ),
+          );
+
+          $exceptional_opening_hour_array['weekdays'][$weekday['title']]['title'] = array(
+            '#type' => 'markup',
+            '#markup' => $weekday['title'],
+            '#prefix' => '<div class="weekday-title">',
+            '#suffix' => '</div>',
+          );
+
+          $exceptional_opening_hour_array['weekdays'][$weekday['title']]['content'] = $result['content'];
+        }
+      }
+
+      $output['exceptional_opening_hours']['content']['#markup'] .= drupal_render($exceptional_opening_hour_array);
+    }
+  }
+
+  // Get the output for the standard opening hours.
+  if (!empty($variables['weekdays'])) {
+    $output['weekdays'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Standard opening hours'),
+      '#attributes' => array(
+        'class' => array(
+          'collapsible',
+          'collapsed',
+          'standard-weekdays',
+        ),
+      ),
+      'content' => array(
+        '#markup' => '',
+      ),
+      '#attached' => array(
+        'js' => array(
+          'misc/collapse.js',
+          'misc/form.js',
+        ),
+      ),
+    );
+
+    $weekdays = array();
+
+    // For all standard opening hours, print out the weekdays with their
+    // separate opening hours and descriptions.
+    foreach ($variables['weekdays'] as $weekday) {
+      $weekday_array = array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'class' => array('weekday-container'),
+        ),
+      );
+
+      $weekday_array['title'] = array(
+        'title' => array(
+          '#type' => 'markup',
+          '#markup' => $weekday['title'],
+          '#prefix' => '<div class="weekday-title">',
+          '#suffix' => '</div>',
+        ),
+      );
+
+
+      foreach ($weekday['opening_hours'] as $opening_hour) {
+        if ($opening_hour['time'] !== t('Closed')) {
+          $weekday_array['hours']['content'][] = array(
+            'time' => array(
+              '#type' => 'markup',
+              '#markup' => $opening_hour['time'],
+              '#prefix' => '<div class="weekday-opening-hour"><div class="weekday-opening-hour-time col-md-6">',
+              '#suffix' => '</div>',
+            ),
+            'description' => array(
+              '#type' => 'markup',
+              '#markup' => $opening_hour['description'],
+              '#prefix' => '<div class="weekday-opening-hour-description col-md-6">',
+              '#suffix' => '</div></div>',
+            ),
+          );
+        }
+      }
+
+      if (!empty($weekday_array['hours'])) {
+        $weekdays[$weekday['title']] = $weekday_array;
+      }
+    }
+
+    if (!empty($weekdays)) {
+      // We need to sort the weekdays from monday to sunday.
+      $ordering = array(
+        1 => t('Mon'),
+        2 => t('Tue'),
+        3 => t('Wed'),
+        4 => t('Thu'),
+        5 => t('Fri'),
+        6 => t('Sat'),
+        7 => t('Sun'),
+      );
+
+      $end_result = array();
+      foreach ($weekdays as $day => $value) {
+        if ($key = array_search($day, $ordering)) {
+          $end_result[$key] = $value;
+        }
+      }
+
+      ksort($end_result);
+      $output['weekdays']['content']['#markup'] = drupal_render($end_result);
+    }
+    else {
+      unset($output['weekdays']);
+    }
+  }
+
+  return drupal_render($output);
+}
+
+/**
+ * Retrieves the field name of the entity reference between the node & the ohs.
+ *
+ * @param string $type
+ *   The node type of the node which is linked to the ohs.
+ *
+ * @return string|bool
+ *   The field name of the entity reference field contained by the node.
+ */
+function opening_hours_status_get_field_name($type) {
+  $entity_fields = field_read_fields(array('type' => 'entityreference', 'bundle' => $type));
+
+  if (!empty($entity_fields)) {
+    foreach ($entity_fields as $entity_field) {
+      $field_name = $entity_field['field_name'];
+      $field_info = field_info_field($field_name);
+
+      if (!empty($field_info['settings']['target_type']) && $field_info['settings']['target_type'] == 'opening_hours_set') {
+        return $field_name;
+      }
+    }
+  }
+
+  return FALSE;
+}

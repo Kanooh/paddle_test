@@ -1,0 +1,112 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Themer Test module.
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_themer_test_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'paddle_style' && $plugin_type == 'paddle_style') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_paddle_themer_style_set().
+ */
+function paddle_themer_test_paddle_themer_style_set() {
+  $style_sets = array();
+
+  $style_sets['global'] = array(
+    'title' => t('Global'),
+    'sections' => array(
+      'styles' => array(
+        'title' => t('Global styles'),
+        'plugins' => array(
+          'h1_font' => t('Heading 1'),
+        ),
+      ),
+      'main' => array(
+        'title' => t('Main content'),
+        'plugins' => array(
+          'paddle_themer_test' => '',
+        ),
+      ),
+    ),
+  );
+
+  $style_sets['paddle_themer_test_header'] = array(
+    'title' => t('Header'),
+    'plugins' => array(
+      'header_font' => t('Heading 1'),
+    ),
+  );
+
+  return $style_sets;
+}
+
+/**
+ * Implements hook_paddle_themer_plugin_instances().
+ */
+function paddle_themer_test_paddle_themer_plugin_instances() {
+  return array(
+    'h1_font' => array(
+      'plugin' => 'font',
+      'selector' => 'h1',
+    ),
+    'h1_background' => array(
+      'plugin' => 'background',
+      'selector' => 'h1',
+    ),
+    'header_font' => array(
+      'plugin' => 'font',
+      'selector' => '#header h1',
+    ),
+    'paddle_themer_test' => array(
+      'plugin' => 'paddle_themer_test',
+      'selector' => '#header h1',
+      'allowed_values' => array(
+        'css' => TRUE,
+        'exec' => TRUE,
+      ),
+      'default_values' => array(
+        'css' => 0,
+        'exec' => 1,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements theme_preprocess_html().
+ */
+function paddle_themer_test_preprocess_html(&$variables) {
+  global $theme;
+
+  // Add a class to the body element to help identify the active theme.
+  $variables['classes_array'][] = drupal_html_class('theme-' . $theme);
+
+  $paddle_theme = paddle_themer_active_theme();
+
+  if ($paddle_theme) {
+    $variables['classes_array'][] = drupal_html_class('paddle-theme-' . $paddle_theme->name);
+  }
+}
+
+/**
+ * Implements hook_system_theme_info().
+ */
+function paddle_themer_test_system_theme_info() {
+  $themes = array();
+
+  $base_path = drupal_get_path('module', 'paddle_themer') . '/tests/themes';
+
+  $themes['paddle_themer_test_theme'] = $base_path . '/paddle_themer_test_theme/paddle_themer_test_theme.info';
+  $themes['paddle_themer_test_sub_theme'] = $base_path . '/paddle_themer_test_sub_theme/paddle_themer_test_sub_theme.info';
+  $themes['paddle_themer_test_overridden_theme'] = $base_path . '/paddle_themer_test_overridden_theme/paddle_themer_test_overridden_theme.info';
+
+  return $themes;
+}

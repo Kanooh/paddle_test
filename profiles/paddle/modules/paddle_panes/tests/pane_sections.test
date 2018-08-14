@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * @file
+ * Tests for pane sections.
+ */
+
+/**
+ * Tests for pane sections.
+ *
+ * @see paddle_panes_pane_sections.inc
+ */
+class PaddlePanesPaneSectionsTestCase extends DrupalWebTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'testing';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Pane sections',
+      'description' => 'Tests for pane sections.',
+      'group' => 'Paddle Landing Page',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp() {
+    parent::setUp(array('paddle_panes'));
+  }
+
+  /**
+   * Checks whether the pane sections are disabled by default.
+   *
+   * @see https://one-agency.atlassian.net/browse/KANWEBS-1314
+   */
+  public function testSectionsDisabledByDefault() {
+    module_load_include('inc', 'paddle_panes', 'paddle_panes_pane_sections');
+
+    // Define a stub form and form state.
+    $form = array('section_body' => array());
+    $form_state = array('conf' => array());
+
+    // Add the pane sections to the form.
+    paddle_panes_pane_sections_build_edit_form($form, $form_state);
+
+    // Check that both the top and bottom sections are disabled.
+    $this->assertFalse($form['pane_settings']['top']['enable_section']['#default_value'], 'The top section is disabled by default.');
+    $this->assertFalse($form['pane_settings']['bottom']['enable_section']['#default_value'], 'The bottom section is disabled by default.');
+  }
+
+}

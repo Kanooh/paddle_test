@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * @file
+ * Definition of AuthCacheTest.
+ */
+
+/**
+ * Test the AuthCache after enabling the OH module.
+ */
+class OpeningHoursAuthCacheTest extends DrupalWebTestCase {
+  protected $profile = 'minimal';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'AuthCache Page Cache when Opening Hours Enabled',
+      'description' => 'When the Opening Hour module is enabled, we switch for the Drupal Core cache to AuthCache. The settings to retain the page cache functionality is tested here',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * @inheritdoc.
+   */
+  public function setUp($enable_modules = array()) {
+    // Enable the paddle_opening_hours module.
+    parent::setUp(array(
+      'paddle_content_manager',
+    ));
+
+    $this->drupalCreateRole(array(), 'Editor');
+    $this->drupalCreateRole(array(), 'Chief Editor');
+    $this->drupalCreateRole(array(), 'Site Manager');
+    module_enable(array('paddle_opening_hours'));
+  }
+
+  /**
+   * Test the the page cache with our current AuthCache settings.
+   */
+  public function testAuthCachePageCache() {
+    // Pages without opening hours should still be fully cached for anonymous
+    // users, even if pages with opening hours are not cached.
+    $basic_page = $this->drupalCreateNode(array('type' => 'basic_page'));
+    // Check that there is no caching on the first load, but there is
+    // on the second.
+    $this->drupalLogout();
+    $this->drupalGet('node/' . $basic_page->nid);
+    $this->assertEqual($this->drupalGetHeader('x-drupal-cache'), 'MISS', 'Page was cacheable but was not in the cache.');
+    $this->drupalGet('node/' . $basic_page->nid);
+    $this->assertEqual($this->drupalGetHeader('x-drupal-cache'), 'HIT', 'Page was cached.');
+  }
+
+}

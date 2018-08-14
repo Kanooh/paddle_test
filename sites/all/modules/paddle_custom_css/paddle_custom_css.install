@@ -1,0 +1,100 @@
+<?php
+
+/**
+ * @file
+ * Install and update hook for the Custom CSS paddlet.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_custom_css_enable() {
+  // Make sure the site managers can manage contexts.
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, array('administer contexts'));
+
+  $admin_theme = 'paddle_admin_theme';
+
+  _block_rehash($admin_theme);
+  $pages = "admin/content_manager/list/search\nadmin/paddle_scald/*\nadmin/structure/context/add\nadmin/structure/context/list/*/edit";
+
+  // On the context pages, the management level 4 should not be displayed.
+  db_update('block')
+    ->fields(array(
+      'region' => 'sidebar_first',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $admin_theme,
+      'title' => '<none>',
+      'visibility' => BLOCK_VISIBILITY_NOTLISTED,
+      'pages' => $pages,
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'management_level_4')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  // Add the context pages to the management menu display path root items.
+  if ('paddle' == variable_get('install_profile')) {
+    $path_roots = array(
+      array(
+        'path' => 'admin/structure/context/add',
+        'root_item' => 'admin/paddlet_store',
+      ),
+      array(
+        'path' => 'admin/structure/context/list/%/edit',
+        'root_item' => 'admin/paddlet_store',
+      ),
+    );
+    module_load_include('install', 'paddle');
+    _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+  }
+}
+
+/**
+ * Enable context and context_ui modules.
+ */
+function paddle_custom_css_update_7000() {
+  module_enable(array('context', 'context_ui'));
+
+  // Make sure the site managers can manage contexts.
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, array('administer contexts'));
+
+  $admin_theme = 'paddle_admin_theme';
+
+  _block_rehash($admin_theme);
+  $pages = "admin/content_manager/list/search\nadmin/paddle_scald/*\nadmin/structure/context/add\nadmin/structure/context/list/*/edit";
+
+  // On the context pages, the management level 4 should not be displayed.
+  db_update('block')
+    ->fields(array(
+      'region' => 'sidebar_first',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $admin_theme,
+      'title' => '<none>',
+      'visibility' => BLOCK_VISIBILITY_NOTLISTED,
+      'pages' => $pages,
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'management_level_4')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  // Add the context pages to the management menu display path root items.
+  if ('paddle' == variable_get('install_profile')) {
+    $path_roots = array(
+      array(
+        'path' => 'admin/structure/context/add',
+        'root_item' => 'admin/paddlet_store',
+      ),
+      array(
+        'path' => 'admin/structure/context/list/%/edit',
+        'root_item' => 'admin/paddlet_store',
+      ),
+    );
+    module_load_include('install', 'paddle');
+    _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+  }
+}

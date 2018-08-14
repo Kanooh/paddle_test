@@ -1,0 +1,139 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Advanced Search app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_advanced_search_enable() {
+  // Flush the entity caches, allowing the search index to be altered.
+  entity_flush_caches();
+
+  paddle_apps_prepare_module_for_permissions('paddle_advanced_search');
+
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_advanced_search'));
+
+  $permissions = array(
+    'create paddle_advanced_search_page content',
+    'edit any paddle_advanced_search_page content',
+    'delete any paddle_advanced_search_page content',
+    'edit advanced_search content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  paddle_apps_prepare_module_for_permissions('paddle_advanced_search');
+
+  $panelizer_permissions = array(
+    'administer panelizer node paddle_advanced_search_page layout',
+    'administer panelizer node paddle_advanced_search_page content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $panelizer_permissions);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_advanced_search_disable() {
+  // Flush the entity caches, allowing the search index reverted to default.
+  entity_flush_caches();
+}
+
+/**
+ * Grant permissions for the advanced search pane content type.
+ */
+function paddle_advanced_search_update_7100() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_advanced_search'));
+
+  // Give permissions to work with the advanced search content type.
+  $permissions = array(
+    'edit advanced_search content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Grant permissions to edit the panels for the advanced search content type.
+ */
+function paddle_advanced_search_update_7101() {
+  $permissions = array(
+    'administer panelizer node paddle_advanced_search_page layout',
+    'administer panelizer node paddle_advanced_search_page content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Recognize the new sort option fields and adds them to all entities.
+ */
+function paddle_advanced_search_update_7102() {
+  features_revert_module('paddle_advanced_search');
+}
+
+/**
+ * Adds the default values of the sorting options to existing advanced search pages.
+ */
+function paddle_advanced_search_update_7103(&$sandbox) {
+  $limit = 5;
+  $entities = paddle_core_get_entity_revisions('node', array('paddle_advanced_search_page'));
+  $sandbox['entities'] = $entities;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      return count($sandbox['entities']);
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+      return array_slice($sandbox['entities'], $offset, $limit);
+    },
+    // Single item update callback.
+    function ($entity, &$sandbox) {
+      try {
+        $entity_wrapper = entity_metadata_wrapper('node', $entity);
+        $entity_wrapper->field_paddle_default_sort_option->set('search_api_relevance');
+        $entity_wrapper->field_paddle_default_sort_order->set('DESC');
+        $entity_wrapper->save();
+        return TRUE;
+      } catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "Advanced search page {$item->nid} rev {$item->vid} lang {$item->language}";
+      $action = $updated ? " its default sorting values have been updated" : "could NOT be updated";
+      return $id_string . " " . $action . ".";
+    }
+  );
+}

@@ -1,0 +1,106 @@
+/**
+ * @file
+ * Comment Paddlet styling.
+ */
+
+#comments {
+  margin-top: 2em;
+}
+
+.comment-wrapper {
+  max-width: 740px;
+
+  > .title {
+    margin-bottom: 1em;
+    font-size: 1.2em;
+  }
+
+  .region-content > & {
+    box-sizing: border-box;
+    margin-bottom: 15px;
+    padding: 0 15px;
+  }
+}
+
+.comment-form {
+  &.title {
+    font-size: 1.2em;
+  }
+}
+
+.comment {
+  margin-bottom: 20px;
+
+  .meta {
+    margin-bottom: .5em;
+  }
+
+  .username {
+    display: block;
+    line-height: 1;
+  }
+
+  .created {
+    margin: 5px 0;
+    font-size: .8em;
+  }
+
+  .new {
+    font-style: italic;
+    color: #f00;
+  }
+
+  .content {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+    padding: 20px;
+    border: 1px solid #ebebeb;
+  }
+
+  .links {
+    list-style: none;
+    margin: 1em 0 0;
+    padding: 0;
+
+    > li {
+      display: inline-block;
+      margin-right: 1em;
+
+      > a {
+        text-decoration: none;
+
+        &:link,
+        &:visited,
+        &:hover {
+          // Cannot use ems as this element is available also in the
+          // add reply page.
+          font-size: 12px;
+        }
+
+        &:hover,
+        &:focus {
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+
+  @media (min-width: $screen-sm-min) {
+    .meta {
+      float: left;
+      width: 150px;
+      padding-top: 10px;
+    }
+
+    .content {
+      margin-left: 170px;
+    }
+  }
+}
+
+#comment-confirm-delete {
+  .form-submit {
+    margin-right: 20px;
+  }
+}

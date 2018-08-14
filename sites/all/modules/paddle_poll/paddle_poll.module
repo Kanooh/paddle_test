@@ -1,0 +1,457 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Poll feature.
+ */
+
+include_once 'paddle_poll.features.inc';
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Poll module.
+ */
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_poll_module_implements_alter(&$implementations, $hook) {
+  // The label for the title field for the poll content type is specified in
+  // hook_node_info() in the poll.module file. We want to alter the title label
+  // So we make sure that hook_node_info() is not run from the poll module so
+  // we can implement it ourselves.
+  if ($hook == 'node_info') {
+    unset($implementations['poll']);
+  }
+  elseif ($hook == 'panels_pane_content_alter') {
+    // Move the authcache_panels implementation to the end of the list so the
+    // poll implementation gets called earlier.
+    $implementation = $implementations['authcache_panels'];
+    unset($implementations['authcache_panels']);
+    $implementations['authcache_panels'] = $implementation;
+  }
+}
+
+/**
+ * Implements hook_node_info().
+ *
+ * @see poll_node_info()
+ */
+function paddle_poll_node_info() {
+  return array(
+    'poll' => array(
+      'name' => t('Poll'),
+      'base' => 'poll',
+      'description' => t('A <em>poll</em> is a question with a set of possible responses. A <em>poll</em>, once created, automatically provides a simple running count of the number of votes received for each response.'),
+      'title_label' => t('Title'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_poll_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_poll_chart_legend' => array(
+      'variables' => array('node' => NULL, 'colors' => array()),
+      'template' => 'poll-chart-legend',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_poll_form_paddle_content_manager_node_add_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_state['type'] == 'poll') {
+    // Unset the validate from the poll module because we cannot set the choices
+    // for a poll on the poll add form.
+    unset($form['#validate']);
+
+    // We need to set defaults to prevent errors to be thrown because
+    // poll_insert() expects certain properties to be set.
+    $form_state['node']->runtime = 0;
+    $form_state['node']->active = 1;
+    $form_state['node']->choice = array();
+  }
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_poll_paddle_content_manager_additional_fields() {
+  return array(
+    'field_paddle_poll_question',
+    'field_paddle_poll_chart_type',
+  );
+}
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_poll_paddle_content_region_content_type_info() {
+  return 'poll';
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_poll_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Values callback for the poll chart type field.
+ *
+ * @return array
+ *   The available chart types.
+ */
+function paddle_poll_get_chart_types() {
+  return array(
+    'pie' => t('Pie'),
+    'column' => t('Column'),
+  );
+}
+
+/**
+ * Implements hook_default_page_manager_handlers_alter().
+ */
+function paddle_poll_default_page_manager_handlers_alter(&$export) {
+  $item = menu_get_item();
+
+  // Add the poll additional fields pane to the node edit form.
+  if (!empty($export['node_edit_panel_context']) && !empty($item['page_arguments'][0]->type) && $item['page_arguments'][0]->type == 'poll') {
+    $pane = new stdClass();
+    $pane->pid = 'new-d3d4c959-f99d-4465-8733-7bd3a21fe18a';
+    $pane->panel = 'left';
+    $pane->type = 'poll_additional_fields';
+    $pane->subtype = 'poll_additional_fields';
+    $pane->shown = TRUE;
+    $pane->access = array();
+    $pane->configuration = array(
+      'extended' => FALSE,
+      'collapsible' => FALSE,
+      'horizontal' => FALSE,
+      'context' => 'argument_node_edit_1',
+      'override_title' => 0,
+      'override_title_text' => '',
+      'override_title_heading' => 'h2',
+    );
+    $pane->cache = array();
+    $pane->style = array(
+      'settings' => NULL,
+    );
+    $pane->css = array();
+    $pane->extras = array();
+    $pane->position = 3;
+    $pane->locks = array();
+    $pane->uuid = 'd3d4c959-f99d-4465-8733-7bd3a21fe18a';
+    $panes_to_insert[] = $pane->pid;
+
+    // Shortcut to the left column.
+    $left_column = &$export['node_edit_panel_context']->conf['display']->panels['left'];
+    $export['node_edit_panel_context']->conf['display']->content[$pane->pid] = $pane;
+
+    // Find the additional fields panes. We want to show it together with
+    // the other node specific panes.
+    if ($key = array_search('new-f14a7a22-a05e-ae44-c122-e71a20f44d45', $left_column)) {
+      unset($left_column[$key]);
+      // Reset the keys to have a proper count again.
+      $left_column = array_values($left_column);
+      // Show it before the others.
+      array_unshift($panes_to_insert, 'new-f14a7a22-a05e-ae44-c122-e71a20f44d45');
+    }
+
+    // Find the body pane key in the left column.
+    if ($key = array_search('new-bcec2608-deb8-49ee-86ec-8ea34723fcce', $left_column)) {
+      unset($left_column[$key]);
+      // Reset the keys to have a proper count again.
+      $left_column = array_values($left_column);
+      // Show it before the others.
+      array_unshift($panes_to_insert, 'new-bcec2608-deb8-49ee-86ec-8ea34723fcce');
+      // Insert the new panes after the body.
+      array_splice($left_column, $key, 1, $panes_to_insert);
+    }
+    else {
+      // For some impossible reason we didn't find the body pane. Just
+      // append to the end of the page.
+      $left_column = array_merge($left_column, $panes_to_insert);
+    }
+  }
+}
+
+/**
+ * Implements hook_node_view_alter().
+ */
+function paddle_poll_node_view_alter(&$build) {
+  if ($build['#bundle'] !== 'poll' || empty($build['poll_view_results'])) {
+    return;
+  }
+
+  $node = $build['#node'];
+  $wrapper = entity_metadata_wrapper('node', $node);
+  $chart_type = $wrapper->field_paddle_poll_chart_type->value();
+
+  // If no chart type has been selected, we don't override the default Poll
+  // results rendering.
+  if (empty($chart_type)) {
+    return;
+  }
+
+  // Make sure that choices are ordered by their weight.
+  uasort($node->choice, 'drupal_sort_weight');
+
+  $build['poll_view_results'] = paddle_poll_render_chart($node, $chart_type);
+}
+
+/**
+ * Renders a poll chart for a node.
+ *
+ * @param object $node
+ *   The node the chart is needed for.
+ * @param string $chart_type
+ *   The chart type.
+ *
+ * @return array
+ *   The build array containing the chart.
+ */
+function paddle_poll_render_chart($node, $chart_type) {
+  $build = array();
+
+  $callback = "paddle_poll_chart_{$chart_type}_render_callback";
+  if (function_exists($callback)) {
+    $build['chart'] = $callback($node);
+
+    // Append defaults.
+    $build['chart'] += array(
+      '#type' => 'chart',
+      '#chart_type' => $chart_type,
+      '#colors' => paddle_poll_chart_colors(),
+      '#legend_position' => FALSE,
+    );
+
+    // Add legend.
+    $build['legend'] = array(
+      '#theme' => 'paddle_poll_chart_legend',
+      '#node' => $node,
+      '#colors' => $build['chart']['#colors'],
+    );
+  }
+
+  return $build;
+}
+
+/**
+ * Callback to render poll choices as pie chart.
+ *
+ * @param object $node
+ *   The node object.
+ *
+ * @return array
+ *   Render array for the chart.
+ */
+function paddle_poll_chart_pie_render_callback($node) {
+  $data = array();
+  foreach ($node->choice as $choice) {
+    $data[] = array($choice['chtext'], (int) $choice['chvotes']);
+  }
+
+  $chart = array(
+    '#data_labels' => TRUE,
+    'graph_data' => array(
+      '#type' => 'chart_data',
+      '#title' => t('Votes'),
+      '#data' => $data,
+    ),
+  );
+
+  return $chart;
+}
+
+/**
+ * Callback to render poll choices as column chart.
+ *
+ * @param object $node
+ *   The node object.
+ *
+ * @return array
+ *   Render array for the chart.
+ */
+function paddle_poll_chart_column_render_callback($node) {
+  $chart = array();
+
+  // Calculate the highest number of votes between all answers, in order to fix
+  // the grid lines rendering in polls with less than four votes casted.
+  $most_votes = 0;
+
+  foreach ($node->choice as $choice) {
+    $votes = (int) $choice['chvotes'];
+    $most_votes = max($most_votes, $votes);
+
+    $chart[$choice['chid']] = array(
+      '#type' => 'chart_data',
+      '#title' => $choice['chtext'],
+      '#data' => array($votes),
+    );
+  }
+
+  // Pass the vote value as a property, so it can be picked up by
+  // paddle_poll_chart_definition_alter() as it's the only way to change
+  // the axis option values.
+  $chart['#most_votes'] = $most_votes;
+
+  return $chart;
+}
+
+/**
+ * Implements hook_chart_definition_alter().
+ */
+function paddle_poll_chart_definition_alter(&$definition, $chart, $chart_id) {
+  // If less than four votes are casted, render less grid lines.
+  // The line for the 0 value is taken into account in the number of grid lines.
+  // Google default value is 5, for from 4 votes up there are no duplicated
+  // lines.
+  if ($definition['visualization'] == 'ColumnChart' && $chart['#most_votes'] < 4) {
+    // Google documentation states that the minimum value should be 2.
+    // We need to increment the gridlines by one because also the 0 value
+    // is taken into account.
+    $definition['options']['vAxis']['gridlines']['count'] = max(2, $chart['#most_votes'] + 1);
+  }
+}
+
+/**
+ * Implements hook_node_load().
+ */
+function paddle_poll_node_load($nodes, $types) {
+  global $user;
+
+  foreach ($nodes as $node) {
+    if ($node->type == 'poll' && user_access('vote on polls') && $node->active) {
+      // True if the user has voted already as anonymous.
+      $has_session_vote = !empty($_SESSION['poll_vote'][$node->nid]);
+
+      if (!$user->uid) {
+        // Anonymous users can vote if they didn't already for this session.
+        $node->allowvotes = !$has_session_vote;
+      }
+      elseif ($has_session_vote) {
+        // Logged in users can vote only if they didn't already vote for this
+        // session. This check won't help if the user logs out and then logs
+        // in again, as sessions will be destroyed. When users log in,
+        // their anonymous session data is kept by drupal_session_regenerate().
+        $node->allowvotes = FALSE;
+      }
+    }
+  }
+}
+
+/**
+ * Helper function to define chart colors.
+ *
+ * These colors are the default ones used in Google Charts.
+ *
+ * @return array
+ *   List of hexadecimal colors.
+ */
+function paddle_poll_chart_colors() {
+  return array(
+    '#3366cc',
+    '#dc3912',
+    '#ff9900',
+    '#109618',
+    '#990099',
+    '#0099c6',
+    '#dd4477',
+    '#66aa00',
+    '#b82e2e',
+    '#316395',
+    '#994499',
+    '#22aa99',
+    '#aaaa11',
+    '#6633cc',
+    '#e67300',
+    '#8b0707',
+    '#651067',
+    '#329262',
+    '#5574a6',
+    '#3b3eac',
+    '#b77322',
+    '#16d620',
+    '#b91383',
+    '#f4359e',
+    '#9c5935',
+    '#a9c413',
+    '#2a778d',
+    '#668d1c',
+    '#bea413',
+    '#0c5922',
+    '#743411',
+  );
+}
+
+/**
+ * Implements hook_panels_pane_content_alter().
+ */
+function paddle_poll_panels_pane_content_alter($content, $pane, $args, $contexts) {
+  $array = array(
+    'poll',
+  );
+
+  // Provide AuthCache settings for poll panes on the fly.
+  if (in_array($pane->type, $array)) {
+    $pane->cache = array(
+      'method' => 'authcache_panels',
+      'settings' => array(
+        'machine_name' => $pane->type,
+        'authcache' => array(
+          'status' => '1',
+          'lifespan' => '0',
+          'clients' => array(
+            'authcache_ajax' => array(
+              'status' => '1',
+              'weight' => '0',
+            ),
+          ),
+          'fallback' => 'cancel',
+          'peruser' => 0,
+          'perpage' => 0,
+        ),
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_poll_form_poll_view_voting_alter(&$form, &$form_state, $form_id) {
+  if (user_is_anonymous()) {
+    // Execute paddle_poll_handle_vote_submit() after poll_vote() for anonymous
+    // users.
+    $form['vote']['#submit'][] = 'paddle_poll_handle_vote_submit';
+  }
+}
+
+/**
+ * Anonymous users may vote once per session instead of once per IP address.
+ */
+function paddle_poll_handle_vote_submit($form, &$form_state) {
+  $ip_address = ip_address();
+  $node = $form['#node'];
+  $identifier = uniqid('poll_');
+
+  // Create distinctive string to replace the real IP address.
+  $fake_ip_value = "$ip_address#$identifier";
+
+  // Alter the hostname.
+  db_update('poll_vote')
+    ->fields(array(
+      'hostname' => $fake_ip_value,
+    ))
+    ->condition('nid', $node->nid, '=')
+    ->condition('hostname', $ip_address, '=')
+    ->execute();
+}

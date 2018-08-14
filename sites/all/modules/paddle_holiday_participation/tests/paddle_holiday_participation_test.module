@@ -1,0 +1,16 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Holiday Test module.
+ */
+
+/**
+ * Implements hook_geocoder_geocode_values_alter().
+ */
+function paddle_holiday_participation_test_geocoder_geocode_values_alter(&$source_field_values, &$field_info, &$handler_settings, &$field_instance) {
+  // We do this to prevent geocoder from querying google. This could result
+  // in an exception stating that we ran out of requests and thus preventing
+  // our nodes from saving.
+  $source_field_values = array();
+}

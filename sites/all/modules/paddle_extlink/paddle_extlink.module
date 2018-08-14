@@ -1,0 +1,59 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle External Links feature.
+ */
+
+include_once 'paddle_extlink.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_extlink_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_extlink_configuration_form',
+  );
+}
+
+/**
+ * App configuration form callback.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_extlink_configuration_form($form, &$form_state) {
+  $form = array();
+
+  // Based on the configuration form from the Extlink contrib module.
+  $default_form = extlink_admin_settings();
+
+  // Checkbox to show an icon next to external links.
+  $form['extlink_class'] = $default_form['extlink_class'];
+  // Checkbox to open external links in a new window.
+  $form['extlink_target'] = $default_form['extlink_target'];
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_extlink_contextual_actions_configuration_form';
+  }
+
+  return system_settings_form($form);
+}
+
+/**
+ * After-build function of app configuration form.
+ *
+ * @param array $form
+ *   Form render array.
+ * @param array $form_state
+ *   Form state array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_extlink_contextual_actions_configuration_form($form, &$form_state) {
+  // Hide the original save button placed at the bottom.
+  $form['actions']['submit']['#attributes']['class'][] = 'hidden';
+
+  return $form;
+}

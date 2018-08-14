@@ -1,0 +1,387 @@
+/**
+* @file
+* Styling for the paddle theme configuration form.
+*
+*/
+
+#edit-submit {
+  margin-right: 5px;
+}
+#edit-actions {
+  margin-top: 20px;
+}
+.paddle-style-plugin-font h3 {
+  display: inline-block;
+  vertical-align: top;
+  width: 12em;
+  margin-top: 5px;
+  margin-right: 5px;
+}
+h3.paddle-themer-section-title {
+  font-size: 1.4em;
+  color: #005384;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-item {
+  margin-left: 20px;
+}
+#page-wrapper .paddle-style-plugin .select-wrapper {
+  margin-left: 10px;
+}
+.paddle-style-plugin-background .form-type-radio {
+  display: inline-block;
+  vertical-align: top;
+  margin-right: 30px;
+}
+#page-wrapper .paddle-style-plugin .select-wrapper {
+  margin-top: 0;
+}
+.paddle-style-plugin .paddle-style-selector h3 {
+  display: inline-block;
+  vertical-align: top;
+  width: 12em;
+}
+
+/* @styling: typography */
+.paddle-style-plugin.paddle-style-plugin-font,
+.paddle-style-plugin.paddle-style-plugin-font .form-item {
+  display: inline-block;
+  vertical-align: top;
+  float: none;
+  width: auto;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-item {
+  margin-left: 0;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-item:first-child {
+  margin-left: 0;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-select > label,
+.paddle-style-plugin.paddle-style-plugin-font .form-type-radios > label:first-child,
+.paddle-style-plugin.paddle-style-plugin-font .form-type-checkboxes > label:first-child,
+.paddle-style-plugin.paddle-style-plugin-font .form-type-textfield > label {
+  visibility: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  top: -3000px;
+}
+#paddle-style-plugin-instance-header-subtitle-text,
+#paddle-style-plugin-instance-header-title-text {
+  display: inline-block;
+}
+#paddle-style-plugin-instance-header-subtitle-font,
+#paddle-style-plugin-instance-header-title-font {
+  vertical-align: middle;
+  height: 41px;
+}
+
+/* @Position */
+.paddle-style-plugin.paddle-style-plugin-boxmodel .form-type-textfield,
+.paddle-style-plugin.paddle-style-plugin-boxmodel label,
+.paddle-style-plugin.paddle-style-plugin-boxmodel .form-text {
+  display: inline-block;
+  vertical-align: top;
+}
+.paddle-style-plugin.paddle-style-plugin-boxmodel label {
+  width: 6em;
+}
+.paddle-style-plugin.paddle-style-plugin-boxmodel .form-item {
+  margin-left: 30px;
+}
+.paddle-style-plugin.paddle-style-plugin-boxmodel .form-item:first-child {
+  margin-left: 0;
+}
+#edit-styling-font-top-navigation-style-font-style-bold + label {
+  color: blue;
+}
+.form-image-checkboxes {
+  position: relative;
+}
+.paddle-style-plugin-font .form-image-checkboxes {
+  margin: 0 20px;
+}
+.paddle-style-plugin .form-image-checkboxes .form-checkbox,
+.paddle-style-plugin .form-image-radios .form-radio,
+.paddle-style-plugin .label-hidden,
+.paddle-style-plugin .form-type-jquery-colorpicker label {
+  clip: rect(1px, 1px, 1px, 1px);
+  left: -9999px;
+  position: absolute;
+}
+/* we need that to override the styling for Set Color */
+.paddle-style-plugin .form-type-checkbox input[id*="font-color-enabled"] {
+  position: static;
+  clip: auto;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-item {
+  margin-top: 5px;
+}
+.paddle-style-plugin.paddle-style-plugin-font div[class*="font-color-enabled"] {
+  margin-top: 13px;
+}
+.form-image-checkboxes .form-checkbox,
+.form-image-radios .form-radio {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  opacity: 0;
+}
+.paddle-style-plugin .form-image-checkboxes label,
+.paddle-style-plugin .form-image-radios label {
+  cursor: pointer;
+  display: block;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-image-checkboxes .form-type-checkbox label,
+.paddle-style-plugin.paddle-style-plugin-font .form-image-radios .form-type-radio label {
+  width: 21px;
+  height: 18px;
+  padding: 0;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-image-checkboxes .form-type-checkbox .form-checkbox + label,
+.paddle-style-plugin.paddle-style-plugin-font  .form-image-radios .form-type-radio .form-radio + label {
+  background: url(../images/font-styles.png) no-repeat;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-checkbox .font-style-option-bold.form-checkbox:checked + label {
+  background-position: 0 -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-checkbox .font-style-option-italic.form-checkbox + label {
+  background-position: -55px 0;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-checkbox .font-style-option-italic.form-checkbox:checked + label {
+  background-position: -55px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-checkbox .font-style-option-underline.form-checkbox + label {
+  background-position: -28px 0;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-checkbox .font-style-option-underline.form-checkbox:checked + label {
+  background-position: -28px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-radio .font-capitalization-option-none.form-radio + label {
+  background-position: -81px 0;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-radio .font-capitalization-option-none.form-radio:checked + label {
+  background-position: -81px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-radio .font-capitalization-option-uppercase.form-radio + label {
+  background-position: -107px 0;
+}
+.paddle-style-plugin.paddle-style-plugin-font  .form-type-radio .font-capitalization-option-uppercase.form-radio:checked + label {
+  background-position: -107px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-radio .font-capitalization-option-capitalize.form-radio + label {
+  background-position: -133px 0;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-radio .font-capitalization-option-capitalize.form-radio:checked + label {
+  background-position: -133px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-radio .font-capitalization-option-lowercase.form-radio + label {
+  background-position: -161px 0;
+}
+.paddle-style-plugin.paddle-style-plugin-font .form-type-radio.font-capitalization-option-lowercase.form-radio:checked + label {
+  background-position: -161px -18px;
+}
+/* IE8 */
+.paddle-style-plugin.paddle-style-plugin-font .font-style-option-bold.form-checkbox.checked + label.checked {
+  background-position: 0 -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .font-style-option-italic.form-checkbox.checked + label.checked {
+  background-position: -55px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .font-style-option-underline.form-checkbox.checked + label.checked {
+  background-position: -28px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .font-capitalization-option-none.form-radio.checked + label.checked {
+  background-position: -81px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .font-capitalization-option-uppercase.form-radio.checked + label.checked {
+  background-position: -107px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .font-capitalization-option-capitalize.form-radio.checked + label.checked {
+  background-position: -133px -18px;
+}
+.paddle-style-plugin.paddle-style-plugin-font .font-capitalization-option-lowercase.form-radio.checked + label.checked {
+  background-position: -161px -18px;
+}
+
+body .paddle-style-plugin .form-item.form-type-jquery-colorpicker {
+  display: inline-block;
+  margin-bottom: 0;
+}
+
+
+/* @background plugin. */
+.paddle-style-plugin-background .form-type-managed-file label {
+  display: inline-block;
+  width: 4em;
+}
+.paddle-style-plugin.paddle-style-plugin-background .form-type-radios .form-image-radios {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 0.5em;
+}
+.paddle-style-plugin.paddle-style-plugin-background .form-type-radios > label[for*="style-background-position"] {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 4em;
+  font-size: 1em;
+  font-weight: normal;
+  font-style: normal;
+  color: inherit;
+  font-family: inherit;
+}
+.paddle-style-plugin-background .form-image-radios label {
+  width: 33px;
+  height: 33px;
+  border: 2px solid #ccc;
+}
+.paddle-style-plugin-background .form-image-radios .form-radio + label[for*="background-pattern-no-image"] {
+  background-position: 0 0;
+}
+.paddle-style-plugin-background .form-image-radios .form-radio + label[for*="background-pattern-upload-image"] {
+  background: #fff url(../images/upload.png) no-repeat center;
+}
+.paddle-style-plugin-background .form-image-radios .form-radio + label[for*="background-pattern-tiles"] {
+  background: #fff url(../patterns/stripe.png);
+}
+.paddle-style-plugin-background .form-image-radios .form-radio + label[for*="background-pattern-weave"] {
+  background: #fff url(../patterns/binding_dark.png);
+}
+.paddle-style-plugin-background .form-image-radios .form-radio + label[for*="background-pattern-honey"] {
+  background: #fff url(../patterns/honey.png);
+}
+.paddle-style-plugin-background .form-image-radios .form-radio + label[for*="background-pattern-p6"] {
+  background: #fff url(../patterns/p6.png);
+}
+.paddle-style-plugin-background .form-image-radios .form-radio + label[for*="background-pattern-squared-metal"] {
+  background: #fff url(../patterns/squared_metal.png);
+}
+.paddle-style-plugin-background .form-image-radios .form-radio + label[for*="background-pattern-subtle-carbon"] {
+  background: #fff url(../patterns/subtle_carbon.png);
+}
+.paddle-style-plugin-background .form-image-radios .form-radio + label[for*="background-pattern-white-carbonfiber"] {
+  background: #fff url(../patterns/white_carbonfiber.png);
+}
+.paddle-style-plugin-background .form-image-radios .form-radio:checked + label,
+.paddle-style-plugin-background .form-image-radios .form-radio + label:hover {
+  border: 2px solid #55c5e9;
+}
+.paddle-style-plugin .paddle-style-background-attachment .form-item {
+  margin-bottom: 0;
+}
+.paddle-style-plugin .paddle-style-background-repeat .form-item {
+  margin-top: 0.2em;
+}
+.paddle-style-plugin .paddle-style-background-attachment > .form-item > label {
+  font-weight: bold;
+}
+.paddle-style-plugin .paddle-style-background-position > .form-item > label {
+  font-weight: bold;
+}
+
+/* Pattern previews */
+.ui-tooltip-container div[class*="background-pattern"] {
+  background-color: #fff;
+  width: 180px;
+  height: 180px;
+}
+.ui-tooltip-container div[class*="background-pattern-weave"] {
+  background-image: url(../patterns/binding_dark.png);
+}
+.ui-tooltip-container div[class*="background-pattern-honey"] {
+  background-image: url(../patterns/honey.png);
+}
+.ui-tooltip-container div[class*="background-pattern-p6"] {
+  background-image: url(../patterns/p6.png);
+}
+.ui-tooltip-container div[class*="background-pattern-squared-metal"] {
+  background-image: url(../patterns/squared_metal.png);
+}
+.ui-tooltip-container div[class*="background-pattern-tiles"] {
+  background-image: url(../patterns/stripe.png);
+}
+.ui-tooltip-container div[class*="background-pattern-subtle-carbon"] {
+  background-image: url(../patterns/subtle_carbon.png);
+}
+.ui-tooltip-container div[class*="background-pattern-white-carbonfiber"] {
+  background-image: url(../patterns/white_carbonfiber.png);
+}
+.ui-tooltip-container .labeltext {
+  padding: 3px;
+}
+
+/* VO theme specific */
+.paddle-style-plugin .form-radios-label-image .form-type-radio {
+  vertical-align: top;
+  display: inline-block;
+}
+.paddle-style-plugin .form-radios-label-image .form-type-radio .form-radio {
+  vertical-align: top;
+  display: inline-block;
+  margin: 4px 0 0 0;
+}
+.paddle-style-plugin .form-radios-label-image label {
+  vertical-align: top;
+  display: inline-block;
+  margin-left: 5px;
+  cursor: pointer;
+}
+.paddle-style-plugin .form-radios-label-image label:after {
+  content: "";
+  width: 237px;
+  height: 138px;
+  position: relative;
+  left: -17px;
+  display: block;
+  top: 5px;
+}
+.paddle-style-plugin.paddle-style-plugin-paddle-core-branding .form-radios-label-image label[for*="global-header-vo-branding-no-branding"]:after {
+  background: url(../images/no-vo-branding.png) no-repeat;
+}
+.paddle-style-plugin.paddle-style-plugin-paddle-core-branding .form-radios-label-image label[for*="global-header-vo-branding-vo-branding"]:after {
+  background: url(../images/vo-branding.png) no-repeat;
+}
+.paddle-style-plugin.paddle-style-plugin-paddle-core-branding .form-radios-label-image label[for*="global-header-vo-branding-federal-branding"]:after {
+  background: url(../images/fed-branding.png) no-repeat;
+}
+.paddle-style-plugin.paddle-style-plugin-paddle-core-footer .form-radios-label-image label[for*="footer-footer-style-no-footer"]:after {
+  background: url(../images/no-footer.png) no-repeat;
+}
+.paddle-style-plugin.paddle-style-plugin-paddle-core-footer .form-radios-label-image label[for*="footer-footer-style-thin-footer"]:after {
+  background: url(../images/thin-footer.png) no-repeat;
+}
+.paddle-style-plugin.paddle-style-plugin-paddle-core-footer .form-radios-label-image label[for*="footer-footer-style-fat-footer"]:after {
+  background: url(../images/fat-footer.png) no-repeat;
+}
+.paddle-style-plugin.paddle-style-plugin-paddle-core-footer .form-radios-label-image label[for*="footer-footer-style-rich-footer"]:after {
+  background: url(../images/rich-footer.png) no-repeat;
+}
+
+/* color palette */
+.paddle-color-palettes-primary-palette {
+  display: inline-block;
+}
+.paddle-color-palettes-primary-palette .paddle-color-palettes-color {
+  width: 50px;
+  height: 50px;
+  display: inline-block;
+  border: 1px solid #ccc;
+}
+.paddle-color-palettes-secondary-palette {
+  display: inline-block;
+  margin: 10px;
+}
+.paddle-color-palettes-secondary-palette .paddle-color-palettes-color {
+  width: 17px;
+  height: 17px;
+  display: inline-block;
+  border: 1px solid #ccc;
+}
+.paddle-color-palettes-primary-palette.palette-with-color-picker .paddle-color-palettes-color {
+  background-image: url("../images/color_picker_frame_large.png");
+  background-position: center center;
+}
+.paddle-color-palettes-secondary-palette.palette-with-color-picker .paddle-color-palettes-color {
+  border: 1px solid #000000;
+}

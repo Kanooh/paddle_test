@@ -1,0 +1,49 @@
+<?php
+
+/**
+ * @file
+ * Tests for the Paddle Style module.
+ */
+
+/**
+ * Dependency test.
+ */
+class PaddleStyleRequirementsTestCase extends DrupalWebTestCase {
+  // The installation profile that will be used to run the tests.
+  protected $profile = 'testing';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Dependency test',
+      'description' => 'Tests if the required dependencies are installed.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array(
+      'paddle_style',
+    ));
+  }
+
+  /**
+   * Check that all modules that are required for the test suite are available.
+   */
+  public function testRequiredModules() {
+    $required_modules = array(
+      'ctools',
+      'jquery_colorpicker',
+    );
+
+    foreach ($required_modules as $module) {
+      $this->assertTrue(module_exists($module), format_string('The required module @module exists.', array('@module' => $module)));
+    }
+  }
+
+}

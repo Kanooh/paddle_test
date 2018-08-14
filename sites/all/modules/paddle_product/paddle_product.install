@@ -1,0 +1,54 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Product app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_product_enable() {
+  // Rebuild the content type list to make Drupal aware of the new type.
+  // Otherwise the granting of permissions will fail.
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions. Otherwise our new content type is not yet
+  // known.
+  drupal_load('module', 'paddle_product');
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_product');
+  node_type_cache_reset();
+  drupal_static_reset();
+  _node_types_build(TRUE);
+
+  $permissions = array(
+    'create paddle_product content',
+    'edit any paddle_product content',
+    'delete any paddle_product content',
+    'administer panelizer node paddle_product layout',
+    'administer panelizer node paddle_product content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  paddle_content_region_panelize_node_type('paddle_product');
+  paddle_content_region_grant_node_type_permissions('paddle_product');
+}
+
+/**
+ * Reloads permissions on paddle_product.
+ */
+function paddle_product_update_7000() {
+  $permissions = array(
+      'administer panelizer node paddle_product layout',
+      'administer panelizer node paddle_product content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}

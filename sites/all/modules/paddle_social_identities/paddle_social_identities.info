@@ -1,0 +1,23 @@
+name = Social identities
+description = Show visitors the social media channels on which your organisation is active. This Paddlet allows display a feed from your social media account on your web pages.
+core = 7.x
+package = Paddle
+
+dependencies[] = url
+
+features[features_api][] = api:2
+features[field_base][] = field_social_identity_urls
+features[field_instance][] = paddle_social_identity-paddle_social_identity-field_social_identity_urls
+
+apps[logo]=apps/logo.png
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+
+stylesheets[all][] = css/paddle_social_identities.css
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_social_identities"
+datestamp = "1473170450"
+

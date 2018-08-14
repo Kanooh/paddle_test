@@ -1,0 +1,339 @@
+<?php
+/**
+ * @file
+ * Defines a YouTube provider for Scald.
+ *
+ * This module was copied from scald_youtube and adapted where necessary to fit
+ * our needs.
+ */
+
+define('PADDLE_SCALD_YOUTUBE_WEB', 'http://www.youtube.com/watch');
+define('PADDLE_SCALD_YOUTUBE_API', 'https://www.googleapis.com/youtube/v3/');
+// @deprecated
+define('PADDLE_SCALD_YOUTUBE_OEMBED', 'http://www.youtube.com/oembed');
+define('PADDLE_SCALD_YOUTUBE_ID_REGEXP', '/^[a-zA-Z0-9\-_]+$/');
+define('PADDLE_SCALD_YOUTUBE_WEB_REGEXP', '#https?://www\.youtube\.com/\S+[\?&]v=([a-zA-Z0-9\-_]+)#');
+define('PADDLE_SCALD_YOUTUBE_RSS', 'http://gdata.youtube.com/feeds/api/videos/');
+// @deprecated
+define('PADDLE_SCALD_YOUTUBE_MEDIA', 'http://search.yahoo.com/mrss/');
+
+/**
+ * Implements hook_scald_atom_providers().
+ */
+function paddle_scald_youtube_scald_atom_providers() {
+  // This code is necessary to mark the string for translation on localize.d.o
+  t('Video hosted on YouTube');
+
+  return array(
+    'video' => 'Video hosted on YouTube',
+  );
+}
+
+/**
+ * Implements hook_scald_add_form().
+ */
+function paddle_scald_youtube_scald_add_form(&$form, &$form_state) {
+  $form['identifier'] = array(
+    '#type' => 'textfield',
+    '#title' => t('YouTube video identifier or URL'),
+    '#element_validate' => array('paddle_scald_youtube_validate_id'),
+    '#default_value' => '',
+  );
+}
+
+/**
+ * Implements hook_scald_add_form_fill().
+ */
+function paddle_scald_youtube_scald_add_form_fill(&$atom, $form, $form_state) {
+
+  // Get the identifier.
+  $identifier = paddle_scald_youtube_parse_id($form_state['values']['identifier'], TRUE);
+
+  // Get video info.
+  $infos = paddle_scald_youtube_video($identifier);
+
+  $atom->base_id = $identifier;
+  $atom->title = $infos->title;
+
+  // Save video width and height.
+  if (!isset($atom->data)) {
+    $atom->data = array();
+  }
+  $atom->data['video_width'] = $infos->width;
+  $atom->data['video_height'] = $infos->height;
+
+  // Download a copy of the video thumbnail. This makes it possible to do
+  // interesting manipulation with image styles presets.
+  $thumb = drupal_http_request($infos->thumbnail['src']);
+  if ($thumb->code == 200 && $directory = ScaldAtomController::getThumbnailPath('video')) {
+    $dest = $directory . '/youtube-' . $infos->id . '.jpg';
+    $file = file_save_data($thumb->data, $dest);
+
+    if ($file) {
+      // Set the file status to temporary.
+      $query = db_update('file_managed')
+        ->condition('fid', $file->fid)
+        ->fields(array('status' => 0))
+        ->execute();
+      $langcode = field_language('scald_atom', $atom, 'scald_thumbnail');
+      $atom->scald_thumbnail[$langcode][0] = (array) $file;
+    }
+  }
+}
+
+/**
+ * Implements hook_scald_fetch().
+ */
+function paddle_scald_youtube_scald_fetch($atom, $type) {
+  $items = field_get_items('scald_atom', $atom, 'scald_thumbnail');
+  if ($items && file_exists($items[0]['uri'])) {
+    $atom->file_source = $atom->thumbnail_source = $items[0]['uri'];
+  }
+}
+
+/**
+ * Analyze a YouTube RSS feed to extract videos information.
+ *
+ * @param string $type
+ *   RSS Type of the feed. Example, 'user', 'video', 'tag'.
+ * @param string $id
+ *   Identifier or string associated with the type. For example, user name,
+ *   video id or tag
+ *
+ * @return array
+ *   An array of object, each one containing an analyzed video.
+ */
+function paddle_scald_youtube_feed($type, $id) {
+  $query = array(
+    'key' => variable_get('scald_youtube_api_key', ''),
+  );
+
+  $path = PADDLE_SCALD_YOUTUBE_API . 'videos';
+  $query['id'] = $id;
+  $query['part'] = 'snippet';
+
+  $url = url($path, array('query' => $query));
+  $response = drupal_http_request($url);
+  $items = array();
+  if ($response->code >= 200 && $response->code < 400 && !empty($response->data)) {
+    $decoded = json_decode($response->data, TRUE);
+    if ($decoded) {
+      foreach ($decoded['items'] as $item) {
+        $items[] = paddle_scald_youtube_parse_item($item);
+      }
+    }
+  }
+  return $items;
+}
+
+/**
+ * Analyze the youtube feed for a specific video.
+ */
+function paddle_scald_youtube_video($id) {
+  $items = paddle_scald_youtube_feed('video', $id);
+  return $items[0];
+}
+
+/**
+ * Analyze a Youtube item to extract interesting info.
+ *
+ * @param array $item
+ *   An array corresponding to an element of the feed.
+ *
+ * @return array
+ *   An object containing various video informations.
+ */
+function paddle_scald_youtube_parse_item($item) {
+  $info = new stdClass();
+
+  // Fetch the video ID.
+  $info->id = $item['id'];
+
+  // Video Title.
+  $info->title = $item['snippet']['title'];
+
+  // Author.
+  $info->author = $item['snippet']['channelTitle'];
+
+  // Creation Date.
+  $info->pubDate = $item['snippet']['publishedAt'];
+
+  $info_extra = paddle_scald_youtube_video_get_info($info->id);
+  $info->width = $info_extra->video_width;
+  $info->height = $info_extra->video_height;
+  $info->tags = $info_extra->tags;
+  $info->license = $info_extra->license;
+  $info->thumbnail = array(
+    'src' => $info_extra->thumbnail,
+  );
+
+  return $info;
+}
+
+
+/**
+ * Analyze OEmbed response for a given video ID.
+ *
+ * @param string $id
+ *   Youtube id of the video.
+ *
+ * @deprecated
+ * @see scald_youtube_video_get_info()
+ */
+function paddle_scald_youtube_video_oembed($id) {
+  return paddle_scald_youtube_video_get_info($id);
+}
+
+/**
+ * Returns meta data on a YouTube video that are not found on the Gdata feed.
+ *
+ * Unfortunately the YouTube API doesn't provide original video dimensions
+ * see: http://code.google.com/p/gdata-issues/issues/detail?id=1083
+ * We need both oembed data and parsing the web page to have author information
+ * and video dimensions.
+ */
+function paddle_scald_youtube_video_get_info($id) {
+  static $cache = array();
+
+  if (isset($cache[$id])) {
+    return $cache[$id];
+  }
+
+  // Initialize default values.
+  $info = new stdClass();
+  $info->id = $id;
+  $info->license = 'YT';
+  $info->video_width = 480;
+  $info->video_height = 365;
+
+  $url = PADDLE_SCALD_YOUTUBE_WEB . '?v=' . $id;
+  $response = drupal_http_request($url);
+  if ($response->code >= 200 && $response->code < 400 && !empty($response->data)) {
+    $data = $response->data;
+    // DOMDocument does not work well with UTF-8, we need to use HTML entities
+    // to be safe.
+    if (function_exists('mb_convert_encoding')) {
+      $data = mb_convert_encoding($data, 'HTML-ENTITIES', 'UTF-8');
+    }
+
+    $dom = new DOMDocument();
+    $dom->preserveWhiteSpace = FALSE;
+    @$dom->loadHTML($data);
+
+    foreach ($dom->getElementsByTagName('meta') as $meta) {
+      $content = $meta->getAttribute('content');
+
+      switch ($meta->getAttribute('name')) {
+        case 'keywords':
+          $info->tags = explode(', ', $content);
+          break;
+
+        case 'title':
+          $info->title = $content;
+          break;
+      }
+
+      switch ($meta->getAttribute('property')) {
+        case 'og:image':
+          $info->thumbnail = $content;
+          break;
+
+        case 'og:video:width':
+          $info->video_width = $content;
+          break;
+
+        case 'og:video:height':
+          $info->video_height = $content;
+          break;
+      }
+    }
+  }
+
+  $cache[$id] = $info;
+
+  return $info;
+}
+
+/**
+ * Checks if a video has already been imported, based on its video id.
+ *
+ * @param string $id
+ *   The video identifier
+ *
+ * @return mixed
+ *   FALSE if the video was never imported, the scald identifier of
+ *   the video otherwise.
+ */
+function paddle_scald_youtube_already_imported($id) {
+  $query = array('provider' => 'paddle_scald_youtube', 'base_id' => $id);
+  return scald_search($query, FALSE, TRUE);
+}
+
+/**
+ * Form element validation handler for YouTube identifier.
+ */
+function paddle_scald_youtube_validate_id($element, &$form_state) {
+  $id = paddle_scald_youtube_parse_id($form_state['values']['identifier'], TRUE);
+  if (!$id) {
+    if (variable_get('scald_youtube_api_key', '') == '') {
+      form_error($element, t('YouTube API key missing.'));
+    }
+    else {
+      form_error($element, t('Invalid YouTube video identifier.'));
+    }
+  }
+  elseif (paddle_scald_youtube_already_imported($id)) {
+    form_error($element, t('YouTube video already imported.'));
+  }
+}
+
+/**
+ * Parse a YouTube ID and check validity.
+ */
+function paddle_scald_youtube_parse_id($string, $check) {
+  $id = NULL;
+  $string = trim($string);
+  if (!preg_match(PADDLE_SCALD_YOUTUBE_ID_REGEXP, $string)) {
+    // The string ID is not easy to parse, let's try to analyze it.
+    if (preg_match(PADDLE_SCALD_YOUTUBE_WEB_REGEXP, $string, $m)) {
+      // This string is a full YouTube URL.
+      $id = $m[1];
+    }
+    elseif (preg_match("/^http/", $string)) {
+      // This string is a URL, most likely a shortened one.
+      // (eg. http://dai.ly, http://bit.ly, etc...)
+      $response = drupal_http_request($string);
+      if ($response->code == 200 && isset($response->redirect_code) && ($response->redirect_code == 301 || $response->redirect_code == 302)) {
+        return paddle_scald_youtube_parse_id($response->redirect_url, $check);
+      }
+    }
+  }
+  else {
+    $id = $string;
+  }
+
+  if ($id && $check) {
+    // Last check to confirm this video really exists on YouTube.
+    if (!paddle_scald_youtube_video($id)) {
+      $id = FALSE;
+    }
+  }
+  return $id;
+}
+
+/**
+ * Creates a download url for an atom provided by this module.
+ */
+function paddle_scald_youtube_download_url($atom) {
+  return '//youtube.com/watch?v=' . $atom->base_id;
+}
+
+/**
+ * Provides download link options for an atom provided by this module.
+ */
+function paddle_scald_youtube_download_link_options() {
+  return array(
+    'absolute' => TRUE,
+    'external' => TRUE,
+  );
+}

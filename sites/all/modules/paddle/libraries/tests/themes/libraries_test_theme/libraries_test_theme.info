@@ -1,0 +1,9 @@
+name = Libraries test theme
+description = Tests that themes can provide and alter library information.
+core = 7.x
+hidden = TRUE
+
+; Information added by drush on 2014-02-09
+version = "7.x-2.2"
+project = "libraries"
+datestamp = "1391964984"

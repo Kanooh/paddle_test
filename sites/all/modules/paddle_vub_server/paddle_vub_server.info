@@ -1,0 +1,13 @@
+name = Paddle VUB Server
+description = Module which provides a server to manage news articles from external sources.
+core = 7.x
+package = Paddle
+dependencies[] = active_tags
+dependencies[] = paddle_news
+dependencies[] = paddle_vub_fields
+dependencies[] = restws
+dependencies[] = restws_basic_auth
+dependencies[] = restws_i18n
+dependencies[] = restws_file
+files[] = plugins/restws/paddle_vub_server.entity.inc
+files[] = plugins/restws/paddle_vub_server.formats.inc

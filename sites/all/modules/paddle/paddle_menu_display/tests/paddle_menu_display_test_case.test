@@ -1,0 +1,334 @@
+<?php
+
+/**
+ * @file
+ * Base class for the Paddle Menu Display automated tests.
+ */
+
+class PaddleMenuDisplayTestCase extends DrupalWebTestCase {
+
+  /**
+   * XPath query to find the menu block.
+   */
+  const MENU_DISPLAY_BLOCK_XPATH_QUERY = '//div[@id="block-paddle-menu-display-custom-menu-display"]/div[@class="content"]/div[@class="menu_wrapper"]/ul[contains(@class, "menu")]';
+
+  /**
+   * A first menu to use during testing.
+   *
+   * @var array $complexMenu
+   */
+  protected $complexMenu = array();
+
+  /**
+   * A second menu to use during testing.
+   *
+   * @var array $simpleMenu
+   */
+  protected $simpleMenu = array();
+
+  /**
+   * A menu link first hierarchy.
+   *
+   * @var array $complexHierarchy
+   */
+  protected $complexHierarchy = array(
+    1 => array(
+      'link_title' => 'Test 1a',
+      'children' => array(
+        2 => array(
+          'link_title' => 'Test 2a.1a',
+        ),
+        3 => array(
+          'link_title' => 'Test 2b.1a',
+          'children' => array(
+            4 => array(
+              'link_title' => 'Test 3a.2b.1a',
+            ),
+            5 => array(
+              'link_title' => 'Test 3b.2b.1a',
+              'children' => array(
+                6 => array(
+                  'link_title' => 'Test 4a.3b.2b.1a',
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+    7 => array(
+      'link_title' => 'Test 1b',
+      'children' => array(
+        8 => array(
+          'link_title' => 'Test 2a.1b',
+        ),
+        9 => array(
+          'link_title' => 'Test 2b.1b',
+          'children' => array(
+            10 => array(
+              'link_title' => 'Test 3a.2b.1b',
+              'children' => array(
+                11 => array(
+                  'link_title' => 'Test 4a.3a.2b.1b',
+                  'children' => array(
+                    12 => array(
+                      'link_title' => 'Test 5a.4a.3a.2b.1b',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  /**
+   * A second menu link hierarchy.
+   *
+   * @var array $simpleHierarchy
+   */
+  protected $simpleHierarchy = array(
+    13 => array(
+      'link_title' => 'Second test 1a',
+      'children' => array(),
+    ),
+  );
+
+  /**
+   * A content type definition to use for testing.
+   *
+   * @var stdClass $contentType
+   */
+  protected $contentType;
+
+  /**
+   * Creates a custom menu display for testing.
+   *
+   * @param array $menu_display
+   *   The menu display object to create. Missing data will be filled in with
+   *   default values.
+   *
+   * @return array
+   *   The generated menu display.
+   */
+  protected function createMenuDisplay($menu_display = array()) {
+    module_load_include('inc', 'paddle_menu_display', 'paddle_menu_display');
+
+    $menu_display += array(
+      'title' => 'Custom menu display',
+      'name' => 'custom_menu_display',
+      'description' => '',
+      'menu_name' => 'main-menu',
+      'from_level' => '1',
+      'to_level' => '9',
+      'tag_classes' => serialize(array(
+        'div_class' => 'menu_wrapper',
+        'ul_class' => 'menu',
+        'li_class' => 'menu-item',
+        'a_class' => '',
+      )),
+      'follow_active_trail' => 1,
+      'path_roots' => '',
+      'root_path' => '',
+      'cont_types_roots' => serialize(array()),
+      'no_links' => serialize(array()),
+    );
+    drupal_write_record('menu_displays', $menu_display);
+
+    return new PaddleMenuDisplay((object) $menu_display);
+  }
+
+  /**
+   * Recursively creates a hierarchy of menu links.
+   *
+   * @param array $hierarchy
+   *   An associative array of menu link arrays, keyed by path, with each array
+   *   containing the following keys:
+   *   - link_title: The title to use for the menu link.
+   *   - children: An associative array of menu link arrays, keyed by path.
+   * @param int $menu_name
+   *   The name of the menu in which we create the links.
+   * @param int $plid
+   *   An optional parent link id for the menu link.
+   */
+  protected function createLinkHierarchy(&$hierarchy, $menu_name, $plid = NULL) {
+    foreach ($hierarchy as $id => $item) {
+      // Create a node for the item.
+      $node = array(
+        'title' => $item['link_title'],
+        'language' => 'en',
+        'body' => array('en' => array(array())),
+        'type' => $this->contentType->type,
+      );
+      $node = $this->drupalCreateNode($node);
+      $hierarchy[$id]['nid'] = $node->nid;
+
+      // Create a menu link for the item.
+      $item += array(
+        'link_path' => 'node/' . $node->nid,
+        'plid' => $plid,
+        'menu_name' => $menu_name,
+        'module' => 'menu',
+      );
+      $mlid = menu_link_save($item);
+      $hierarchy[$id]['mlid'] = $mlid;
+
+      // Recurse through the children.
+      if (isset($item['children'])) {
+        $this->createLinkHierarchy($hierarchy[$id]['children'], $menu_name, $mlid);
+      }
+    }
+  }
+
+  /**
+   * Updates the menu display object with the passed fields.
+   */
+  protected function updateMenuDisplay($fields) {
+    db_update('menu_displays')
+      ->fields($fields)
+      ->condition('name', 'custom_menu_display')
+      ->execute();
+  }
+
+  /**
+   * Creates a custom menu for testing.
+   *
+   * @param string $lang
+   *   The language parameter to save in the database for the created menu.
+   *   Defaults to 'en'.
+   *
+   * @return array
+   *   The generated menu.
+   */
+  protected function createMenu($lang = 'en') {
+    $menu = array(
+      'menu_name' => drupal_strtolower($this->randomName()),
+      'title' => $this->randomString(),
+      'description' => $this->randomString(),
+    );
+    if (module_exists('i18n_menu')) {
+      $menu += array(
+        'language' => $lang,
+        'i18n_mode' => I18N_MODE_LANGUAGE,
+      );
+    }
+    menu_save($menu);
+    return $menu;
+  }
+
+  /**
+   * Creates a custom menu link for testing.
+   *
+   * @param array $menu
+   *   The menu for which to create a menu link.
+   * @param array $item
+   *   An associative array containing optional settings for the menu link item.
+   *   These are identical to the elements supported by the $items argument of
+   *   menu_link_save().
+   *
+   * @return array
+   *   The generated menu link.
+   *
+   * @see menu_link_save()
+   */
+  protected function createMenuLink(array $menu, array $item = array()) {
+    // Provide some defaults.
+    $item = $item + array(
+      'link_path' => '<front>',
+      'link_title' => strtolower($this->randomName()),
+      'menu_name' => $menu['menu_name'],
+      'options' => array(
+        'attributes' => array(
+          'title' => $this->randomName(20),
+        ),
+      ),
+      'language' => !empty($menu['language']) ? $menu['language'] : LANGUAGE_NONE,
+    );
+    $item['mlid'] = menu_link_save($item);
+    return $item;
+  }
+
+  /**
+   * Retrieves a list of menu link ids from a hierarchy.
+   *
+   * @param array $hierarchy
+   *   A menu link hierarchy.
+   * @param int $depth
+   *   The maximum depth of menu items to retrieve. Defaults to 1.
+   * @param int $from_level
+   *   From which level to retrieve the menu items. Defaults to 0 (the root
+   *   level).
+   * @param array $active_trail
+   *   An array containing mlids that represent the active trail. Only branches
+   *   that contain these mlids will be returned. If left empty the entire tree
+   *   will be returned.
+   *
+   * @return array
+   *   A flat array of mlids.
+   */
+  protected function getMlidsFromHierarchy($hierarchy, $depth = 1, $from_level = 0, $active_trail = array()) {
+    $menu_items = array();
+
+    // Check if the current level is in the active trail, or if the active trail
+    // is empty and should be ignored.
+    $in_active_trail = !$active_trail || (bool) array_filter($hierarchy, function ($item) use ($active_trail) {
+      return in_array($item['mlid'], $active_trail);
+    });
+
+    foreach ($hierarchy as $item) {
+      // Add the current level items if the current level is requested.
+      if (!$from_level && $in_active_trail) {
+        $menu_items[$item['mlid']] = $item['mlid'];
+      }
+      // Recurse if the current item has children, except if the current level
+      // is requested and there are no deeper levels requested.
+      if (!empty($item['children']) && ($from_level || $depth > 1)) {
+        // Decrease the depth only if we are already on a requested level.
+        $recurse_depth = $from_level ? $depth : $depth - 1;
+        // Decrease the from level only if it is higher than the current level.
+        $recurse_from_level = $from_level ? $from_level - 1 : 0;
+        // If we recurse deeper than the depth of the active trail we should no
+        // longer limit by active trail, but start showing all child items. So
+        // clear the active trail if we exceed its depth.
+        $recurse_active_trail = $item['mlid'] == end($active_trail) ? array() : $active_trail;
+        $menu_items = array_merge($menu_items, $this->getMlidsFromHierarchy($item['children'], $recurse_depth, $recurse_from_level, $recurse_active_trail));
+      }
+    }
+
+    return $menu_items;
+  }
+
+  /**
+   * Generates a cache id.
+   *
+   * @param int $mlid
+   *   The menu link id to use to generate the cache id. If this is omitted the
+   *   value '0' will be used. This represents the root level of the menu.
+   * @param array $rids
+   *   An array of user role ids. If omitted the roles of the active user will
+   *   be used.
+   * @param PaddleMenuDisplay $menu_display
+   *   The menu display. If omitted the test menu display will be used.
+   *
+   * @return string
+   *   The generated cache id.
+   */
+  protected function generateCid($mlid = 0, $rids = array(), $menu_display = NULL) {
+    // Default to the roles of the currently logged in user.
+    $rids = $rids ?: array_keys($this->loggedInUser->roles);
+    sort($rids);
+
+    // Default to the test menu display.
+    $menu_display = $menu_display ?: $this->menuDisplay;
+
+    return implode(':', array(
+      $menu_display->mdid,
+      $this->menuDisplay->getCacheHash(),
+      implode('|', $rids),
+      $mlid,
+    ));
+  }
+
+}

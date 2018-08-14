@@ -1,0 +1,103 @@
+/*------------------------------------*\
+    #CONFIGURATION FORM
+\*------------------------------------*/
+
+#contextual-actions-list .edit-api-key {
+  background-color: #ff8c40;
+}
+
+.page-admin-paddlet-store-app-paddle-mailchimp-configure [id="page-title"] {
+  margin-bottom: 30px;
+  padding-left: 80px;
+  font-size: 36px;
+  line-height: 66px;
+  font-weight: normal;
+  color: #6b6b6b;
+  background: transparent url('assets/freddie_og_small.gif') no-repeat 0 50%;
+}
+
+/*------------------------------------*\
+    #ENTITY PAGE/FORM
+\*------------------------------------*/
+
+[id="mailchimp-signup-form"] input[name="title"] {
+  width: 400px;
+  margin-right: 10px;
+}
+
+[id="mailchimp-signup-form"] fieldset,
+[id="mailchimp-signup-form"] #edit-settings {
+  position: relative;
+  padding: 40px 40px 20px;
+  background-color: #e4e4e4;
+}
+
+html.js [id="mailchimp-signup-form"] fieldset.collapsed {
+  height: auto;
+}
+
+[id="mailchimp-signup-form"] legend,
+[id="mailchimp-signup-form"] #edit-settings > legend {
+  position: absolute;
+  top: 20px;
+  left: 40px;
+  display: block;
+  font-size: 16px;
+  line-height: 20px;
+  text-transform: uppercase;
+}
+
+[id="mailchimp-signup-form"] legend a,
+[id="mailchimp-signup-form"] #edit-settings > legend a {
+  line-height: 20px;
+  color: #868686;
+}
+
+[id="mailchimp-signup-form"] fieldset fieldset {
+  margin: 0;
+  padding: 20px;
+  border: 1px solid #a1a1a1;
+}
+
+[id="mailchimp-signup-form"] fieldset fieldset > legend {
+  top: 20px;
+  left: 20px;
+}
+
+html.js [id="mailchimp-signup-form"] fieldset fieldset .fieldset-legend {
+  padding: 0;
+  background: transparent none;
+}
+
+[id="mailchimp-signup-form"] fieldset fieldset > .fieldset-wrapper {
+  padding-top: 30px;
+}
+
+[id="mailchimp-signup-form"] .form-checkboxes {
+  overflow: hidden;
+  *zoom: 1;
+}
+
+[id="mailchimp-signup-form"] .form-checkboxes .form-type-checkbox {
+  float: left;
+  width: 300px;
+}
+
+[id="mailchimp-signup-form"] .form-type-checkbox > label {
+  font-size: 14px;
+  font-weight: normal;
+}
+
+[id="mailchimp-signup-form"] .ajax-progress .message {
+  font-size: 12px;
+  line-height: 30px;
+}
+
+.view-signup-forms .views-field-mcs-id,
+#mailchimp-signup-form .form-item-mode,
+#mailchimp-signup-form .form-item-include-interest-groups,
+#mailchimp-signup-form #edit-cancel,
+#mailchimp-signup-form #edit-save,
+#mailchimp-signup-form #edit-delete {
+  display: none;
+}

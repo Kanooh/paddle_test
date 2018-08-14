@@ -1,0 +1,3364 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Content Manager feature.
+ */
+
+include_once 'paddle_content_manager.features.inc';
+
+/**
+ * Returns all node metadata groups and items.
+ *
+ * @param object $node
+ *   Node to get the metadata for.
+ * @param bool $extended
+ *   Whether or not to show the extended metadata.
+ *
+ * @return array
+ *   All metadata of the node, grouped and sorted.
+ */
+function paddle_content_manager_node_metadata($node, $extended = FALSE) {
+  $metadata = _paddle_content_manager_node_metadata_groups($node, $extended);
+  foreach ($metadata as $group => $info) {
+    $metadata[$group]['items'] = _paddle_content_manager_node_metadata_items($node, $group, $extended);
+
+    // Unset any group without items.
+    if (empty($metadata[$group]['items'])) {
+      unset($metadata[$group]);
+    }
+  }
+
+  return $metadata;
+}
+
+/**
+ * Returns a list of all node metadata groups.
+ *
+ * @param object $node
+ *   The node object.
+ * @param bool $extended
+ *   Whether or not to include the extended metadata groups.
+ *
+ * @return array
+ *   List of all node metadata group with their weight.
+ */
+function _paddle_content_manager_node_metadata_groups($node, $extended = FALSE) {
+  $groups = module_invoke_all('node_metadata_groups', $node);
+  drupal_alter('node_metadata_groups', $node, $groups);
+  uasort($groups, 'drupal_sort_weight');
+
+  foreach ($groups as $key => $group) {
+    // Skip "extended" groups if specified.
+    if ($extended == FALSE && !empty($group['extended'])) {
+      unset($groups[$key]);
+      continue;
+    }
+
+    $groups[$key]['class'] = !empty($groups[$key]['class']) ? $groups[$key]['class'] : array();
+
+    $css_class = 'node-metadata-group-' . drupal_html_class($key);
+    if (!in_array($css_class, $groups[$key]['class'])) {
+      $groups[$key]['class'][] = $css_class;
+    }
+
+    $summary_class = 'node-metadata-summary';
+    if (!in_array($summary_class, $groups[$key]['class'])) {
+      $groups[$key]['class'][] = $summary_class;
+    }
+  }
+
+  return $groups;
+}
+
+/**
+ * Implements hook_node_metadata_groups().
+ */
+function paddle_content_manager_node_metadata_groups($node) {
+  return array(
+    'general' => array('weight' => 0),
+    'created' => array('weight' => 25),
+    'workflow' => array('weight' => 50),
+    'publication' => array('weight' => 75),
+    'structure' => array('weight' => 100, 'extended' => TRUE),
+    'seo' => array('weight' => 125, 'extended' => TRUE),
+  );
+}
+
+/**
+ * Returns a list of node metadata items in a group, sorted by weight.
+ *
+ * @param object $node
+ *   Node for which to define the groups.
+ * @param string $group
+ *   Name of the node metadata group.
+ * @param bool $extended
+ *   Whether or not to show the extended metadata.
+ *
+ * @return array
+ *   List of all node metadata items in the specified group.
+ */
+function _paddle_content_manager_node_metadata_items($node, $group, $extended) {
+  $items = module_invoke_all('node_metadata_' . $group . '_items', $node, $extended);
+  drupal_alter('node_metadata_' . $group . '_items', $node, $items);
+  uasort($items, 'drupal_sort_weight');
+
+  foreach ($items as $key => $item) {
+    $items[$key]['class'] = !empty($items[$key]['class']) ? $items[$key]['class'] : array();
+
+    $css_class = 'node-metadata-item-' . drupal_html_class($key);
+    if (!in_array($css_class, $items[$key]['class'])) {
+      $items[$key]['class'][] = $css_class;
+    }
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_metadata_GROUP_items().
+ */
+function paddle_content_manager_node_metadata_general_items($node) {
+  $items = array();
+
+  // Content type.
+  $items['type'] = array(
+    'label' => t('Content type'),
+    'metadata' => node_type_get_name($node),
+    'raw' => $node->type,
+    'weight' => 0,
+  );
+
+  // NID.
+  $nid = isset($node->nid) ? $node->nid : '';
+  $items['nid'] = array(
+    'label' => t('ID'),
+    'metadata' => $nid,
+    'raw' => $nid,
+    'weight' => 25,
+  );
+
+  // Current status.
+  $items['status'] = array(
+    'label' => t('Status'),
+    'metadata' => paddle_content_manager_get_node_status_label($node),
+    'raw' => '',
+    'class' => array('status'),
+    'weight' => 50,
+  );
+
+  // Add the revisions button only if user has the correct permissions.
+  if (diff_node_revision_access($node)) {
+    $revision_link = l(
+      t('Revisions'),
+      "node/$nid/moderation/diff",
+      array(
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-files-o', 'btn-revisions'),
+        ),
+      )
+    );
+    $items['revisions'] = array(
+      'metadata' => $revision_link,
+      'html' => TRUE,
+      'raw' => '',
+      'weight' => 75,
+    );
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_metadata_GROUP_items().
+ */
+function paddle_content_manager_node_metadata_created_items($node) {
+  $items = array();
+
+  // Creation date.
+  $created = !empty($node->created) ? format_date($node->created, 'short') : '';
+  $items['created'] = array(
+    'label' => t('Creation date'),
+    'metadata' => $created,
+    'raw' => !empty($created) ? $node->created : '',
+    'weight' => 0,
+  );
+
+  // Creation author.
+  $items['created_author'] = array(
+    'label' => t('Created by'),
+    'metadata' => $node->name,
+    'raw' => $node->uid,
+    'weight' => 25,
+  );
+
+  // The page Responsible author.
+  $page_responsible_author = field_get_items('node', $node, 'field_page_responsible_author');
+  $user = !empty($page_responsible_author) ? user_load($page_responsible_author[0]['target_id'])->name : NULL;
+  $items['page_responsible_author'] = array(
+    'label' => t('Page responsible author'),
+    'metadata' => $user,
+    'raw' => '',
+    'weight' => 50,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_metadata_GROUP_items().
+ */
+function paddle_content_manager_node_metadata_workflow_items($node) {
+  $items = array();
+
+  // Assigned author.
+  $assigned_uid = paddle_content_manager_get_node_current_assignee_uid($node);
+  $assigned = $assigned_uid != 0 ? user_load($assigned_uid)->name : '';
+  $items['assigned'] = array(
+    'label' => t('Assigned to'),
+    'metadata' => $assigned,
+    'raw' => $assigned_uid,
+    'weight' => 0,
+  );
+
+  // Last modification date.
+  $changed = isset($node->revision_timestamp) ? format_date($node->revision_timestamp, 'short') : '';
+  $items['changed'] = array(
+    'label' => t('Last modification date'),
+    'metadata' => $changed,
+    'raw' => isset($node->revision_timestamp) ? $node->revision_timestamp : 0,
+    'weight' => 25,
+  );
+
+  // Last modification author.
+  $changed_author = isset($node->revision_uid) ? user_load($node->revision_uid)->name : '';
+  $items['changed_author'] = array(
+    'label' => t('Last modification by'),
+    'metadata' => $changed_author,
+    'raw' => isset($node->revision_uid) ? $node->revision_uid : 0,
+    'weight' => 50,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_metadata_GROUP_items().
+ */
+function paddle_content_manager_node_metadata_publication_items($node) {
+  $items = array();
+
+  // Publication date.
+  $publish_raw = paddle_content_manager_get_node_publication_date($node);
+  $publish = !empty($publish_raw) ? format_date($publish_raw, 'short') : '';
+  $items['publish'] = array(
+    'label' => t('Publication date'),
+    'metadata' => $publish,
+    'raw' => $publish_raw,
+    'weight' => 0,
+  );
+
+  // Depublication date.
+  $unpublish_raw = paddle_content_manager_get_node_unpublication_date($node);
+  $unpublish = !empty($unpublish_raw) ? format_date($unpublish_raw, 'short') : '';
+  $items['unpublish'] = array(
+    'label' => t('Depublication date'),
+    'metadata' => $unpublish,
+    'raw' => $unpublish_raw,
+    'weight' => 25,
+  );
+
+  // Validation author.
+  $validation_uid = paddle_content_manager_get_node_validation_uid($node);
+  $validation = !empty($validation_uid) ? user_load($validation_uid)->name : '';
+  $items['validation'] = array(
+    'label' => t('Validated by'),
+    'metadata' => $validation,
+    'raw' => $validation_uid,
+    'weight' => 50,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_metadata_GROUP_items().
+ */
+function paddle_content_manager_node_metadata_structure_items($node) {
+  $items = array();
+
+  // URL (alias). Use a very light weight so there's enough space for any extra
+  // paths added by other menu modules.
+  $alias = url('node/' . $node->nid);
+  $items['alias'] = array(
+    'label' => t('URL'),
+    'metadata' => $alias,
+    'html' => TRUE,
+    'raw' => $alias,
+    'weight' => 0,
+  );
+
+  // General tags. This field is exported into paddle_content_manager as a
+  // base field and synced to every content-type, so no need to move this to
+  // paddle_taxonomy_manager like we did with the menu link metadata (to
+  // paddle_menu_manager in that case).
+  $general_tags = paddle_content_manager_get_node_tags($node, 'field_paddle_general_tags');
+  $items['general_tags'] = array(
+    'label' => t('General tags'),
+    'metadata' => !empty($general_tags) ? implode($general_tags, ', ') : '',
+    'raw' => !empty($general_tags) ? implode(array_keys($general_tags), ',') : '',
+    'weight' => 25,
+  );
+
+  // Tags. Same idea as general tags.
+  $tags = paddle_content_manager_get_node_tags($node, 'field_paddle_tags');
+  $items['tags'] = array(
+    'label' => t('Tags'),
+    'metadata' => !empty($tags) ? implode($tags, ', ') : '',
+    'raw' => !empty($tags) ? implode(array_keys($tags), ',') : '',
+    'weight' => 50,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_metadata_GROUP_items().
+ */
+function paddle_content_manager_node_metadata_seo_items($node) {
+  $items = array();
+
+  // SEO title.
+  $seo_title = '';
+  $seo_title_items = field_get_items('node', $node, 'field_paddle_seo_title', LANGUAGE_NONE);
+  if (!empty($seo_title_items)) {
+    $seo_title = $seo_title_items[0]['safe_value'];
+  }
+  $items['seo_title'] = array(
+    'label' => t('SEO title'),
+    'metadata' => $seo_title,
+    'weight' => 0,
+  );
+
+  // SEO description.
+  $seo_description = '';
+  $seo_description_items = field_get_items('node', $node, 'field_paddle_seo_description', LANGUAGE_NONE);
+  if (!empty($seo_description_items)) {
+    $seo_description = $seo_description_items[0]['safe_value'];
+  }
+  $items['seo_description'] = array(
+    'label' => t('SEO description'),
+    'metadata' => $seo_description,
+    'weight' => 25,
+  );
+
+  return $items;
+}
+
+/**
+ * Returns the current assignee's uid of a node.
+ *
+ * @param object $node
+ *   The node for which to find the current assignee.
+ *
+ * @return int
+ *   The uid of the current assignee, or 0 if no assignee was found.
+ */
+function paddle_content_manager_get_node_current_assignee_uid($node) {
+  if (!isset($node->workbench_moderation['current']->hid)) {
+    return 0;
+  }
+  $hid = $node->workbench_moderation['current']->hid;
+
+  $select = db_select('paddle_content_manager_revision_assignee', 'a')
+    ->fields('a', array('uid'))
+    ->condition('a.entity_type', 'node')
+    ->condition('a.entity_id', $node->nid)
+    ->condition('a.workbench_hid', $hid)
+    ->execute();
+  $results = $select->fetchAssoc();
+
+  if (!empty($results)) {
+    return $results['uid'];
+  }
+
+  return 0;
+}
+
+/**
+ * Return the validation author's uid of a node.
+ *
+ * @param object $node
+ *   The node for which to find the validation author.
+ *
+ * @return int
+ *   The uid of the validation author, or 0 if no validation author was found.
+ */
+function paddle_content_manager_get_node_validation_uid($node) {
+  if (!isset($node->nid)) {
+    return 0;
+  }
+
+  $select = db_select('paddle_content_manager_validate_user', 'v')
+    ->fields('v', array('uid'))
+    ->condition('v.nid', $node->nid)
+    ->orderBy('v.hid', 'DESC')
+    ->execute();
+  $results = $select->fetchAssoc();
+
+  if (!empty($results['uid'])) {
+    return $results['uid'];
+  }
+
+  return 0;
+}
+
+/**
+ * Returns a timestamp of a node's publication date.
+ *
+ * This is either the date the node was published (manually or scheduled), or
+ * the date the node is scheduled to be published on.
+ *
+ * @param object $node
+ *   The node for which to return the publication date.
+ *
+ * @return int
+ *   The node's publication date, as a Unix timestamp.
+ */
+function paddle_content_manager_get_node_publication_date($node) {
+  // Check first if the node is or was scheduled to be published.
+  $scheduled = isset($node->scheduler['publish_on']) ? $node->scheduler['publish_on'] : 0;
+  if ($scheduled != 0) {
+    return $scheduled;
+  }
+
+  // Otherwise use the timestamp of the 'published' revision.
+  if (isset($node->workbench_moderation['published'])) {
+    return $node->workbench_moderation['published']->stamp;
+  }
+
+  // If no publication date has been found so far, none exists.
+  return 0;
+}
+
+/**
+ * Returns a timestamp of a node's depublication date.
+ *
+ * This is either the date the node was unpublished (manually or scheduled), or
+ * the date the node is scheduled to be unpublished on.
+ *
+ * @param object $node
+ *   The node for which to return the depublication date.
+ *
+ * @return int
+ *   The node's depublication date, as a Unix timestamp.
+ */
+function paddle_content_manager_get_node_unpublication_date($node) {
+  // Check first if the node is or was scheduled to be published.
+  $scheduled = isset($node->scheduler['unpublish_on']) ? $node->scheduler['unpublish_on'] : 0;
+  if ($scheduled != 0) {
+    return $scheduled;
+  }
+
+  // Otherwise, check if the revision was 'published' before.
+  if (isset($node->workbench_moderation['my_revision'])) {
+    $node_revision = $node->workbench_moderation['my_revision'];
+    if ($node_revision->state == 'offline') {
+      return $node_revision->stamp;
+    }
+  }
+
+  // If no depublication date has been found so far, none exists.
+  return 0;
+}
+
+/**
+ * Returns a human-readable label for a node's status.
+ *
+ * @param object $node
+ *   The node for which to return a status label.
+ *
+ * @return string
+ *   The status label.
+ */
+function paddle_content_manager_get_node_status_label($node) {
+  if (workbench_moderation_node_type_moderated($node->type)) {
+    $state = !empty($node->workbench_moderation['current']->state) ? $node->workbench_moderation['current']->state : 'draft';
+    return workbench_moderation_state_label($state);
+  }
+  return $node->status ? t('Online') : t('Offline');
+}
+
+/**
+ * Returns an array of tags from the specified field of a node.
+ *
+ * @param object $node
+ *   The node object.
+ * @param string $field
+ *   Name of the taxonomy term field.
+ *
+ * @return array
+ *   Array of tag labels, keyed by their tid.
+ */
+function paddle_content_manager_get_node_tags($node, $field) {
+  $tags = array();
+
+  $field_tags = field_get_items('node', $node, $field, LANGUAGE_NONE);
+  if (!empty($field_tags)) {
+    foreach ($field_tags as $field_tag) {
+      $tid = $field_tag['tid'];
+      $term = taxonomy_term_load($tid);
+      $tags[$tid] = $term->name;
+    }
+  }
+
+  return $tags;
+}
+
+/**
+ * Implements hook_init().
+ */
+function paddle_content_manager_init() {
+  // Add extra BEF datepicker configuration on the admin view.
+  if (current_path() == 'admin/content_manager/list/search') {
+    drupal_add_js(drupal_get_path('module', 'paddle_content_manager') . '/js/paddle_content_manager_datepicker.js');
+  }
+}
+
+/**
+ * Implements hook_preprocess_html().
+ */
+function paddle_content_manager_preprocess_html(&$variables) {
+  $menu_item = menu_get_item();
+  $node = menu_get_object();
+
+  // Only continue when we're on a node's detail page and can load the node.
+  if ($menu_item['path'] != 'node/%' || !$node) {
+    return;
+  }
+
+  // Always display the title in the <head>.
+  if (empty($variables['head_title_array']['title'])) {
+    $variables['head_title_array']['title'] = strip_tags($node->title);
+    $variables['head_title'] = implode(' | ', $variables['head_title_array']);
+  }
+
+  // Get the SEO title of the node, or stop if no SEO title is found.
+  $seo_title_items = field_get_items('node', $node, 'field_paddle_seo_title');
+  $seo_title = isset($seo_title_items[0]['value']) ? $seo_title_items[0]['value'] : '';
+  if (empty($seo_title)) {
+    return;
+  }
+
+  // The head_title_array contains not only the page title, but also the site
+  // name and sometimes other data. This array is used to construct the final
+  // title by imploding all parts with a separator.
+  $variables['head_title_array']['title'] = $seo_title;
+
+  // The head title string may get overwritten in the theme with a different
+  // separator, but for consistency's sake we should update it here with the new
+  // page title as well. Otherwise it still contains the old page title,
+  // which could cause problems if the title isn't changed anymore later on.
+  $variables['head_title'] = implode(' | ', $variables['head_title_array']);
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_content_manager_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+  if ("$owner:$plugin_type" == 'panels:display_renderers') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ *
+ * Change buttons on a node's content region panel edit page.
+ * Based on paddle_landing_page_ctools_render_alter().
+ */
+function paddle_content_manager_paddle_contextual_toolbar_actions_alter(&$actions) {
+  $menu_item = menu_get_item();
+
+  if ($menu_item['path'] == 'admin/content_manager/node/%/layout' && module_exists('paddle_contextual_toolbar')) {
+    $node = $menu_item['page_arguments'][1]->data;
+    $actions = paddle_contextual_toolbar_actions();
+
+    // Get the buttons.
+    $actions = array_merge($actions, _paddle_content_manager_regions_contextual_toolbar_cancel_save_buttons($node));
+
+    // Load the click delegator.
+    paddle_contextual_toolbar_add_js('click_delegator');
+  }
+
+  if ($menu_item['path'] == 'node/%/moderation/diff/view') {
+    $actions = array();
+
+    // Add the 'Revisions' button.
+    $action_link = l(
+      t('Revisions'),
+      'node/' . $menu_item['page_arguments'][0]->nid . '/moderation/diff',
+      array(
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-arrow-left'),
+        ),
+      )
+    );
+    $actions[] = array(
+      'action' => $action_link,
+      'class' => array('cancel'),
+      'weight' => 0,
+    );
+  }
+
+  // Set the buttons.
+  paddle_contextual_toolbar_actions($actions);
+}
+
+/**
+ * Defines buttons for a node's content regions contextual toolbar.
+ *
+ * Cancel and save buttons.
+ *
+ * @return array
+ *   The contextual buttons we want to show.
+ */
+function _paddle_content_manager_regions_contextual_toolbar_cancel_save_buttons($node) {
+  $actions = array();
+  $cancel_path = 'admin/content_manager/node/' . $node->nid . '/view';
+
+  $destination = drupal_get_destination();
+  if (!empty($destination['destination']) && $destination['destination'] == 'admin/content_manager/list/search') {
+    $cancel_path = $destination['destination'];
+  }
+
+  // Add the cancel button.
+  $action_link = l(
+    t('Back'),
+    $cancel_path,
+    array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-arrow-left'),
+      ),
+    )
+  );
+  $actions[] = array(
+    'action' => $action_link,
+    'class' => array('cancel'),
+    'weight' => 0,
+  );
+
+  // Add the save button.
+  $classes = array('save');
+
+  // Add a class to prevent unlock message appearing when saving.
+  if (module_exists('content_lock') && content_lock_fetch_lock($node->nid) !== FALSE) {
+    $classes[] = 'content_lock_no_leave_msg';
+  }
+
+  $action_link = l(
+    t('Save'),
+    'admin/content_manager/node/' . $node->nid . '/view',
+    array(
+      'html' => TRUE,
+      'external' => TRUE,
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'panels-ipe-save',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )
+  );
+  $actions[] = array(
+    'action' => $action_link,
+    'class' => $classes,
+    'weight' => 5,
+  );
+
+  $js_settings = array(
+    'paddle_panels_renderer_redirect_after_successful_ajax_call_url' => url('admin/content_manager/node/' . $node->nid . '/view'),
+  );
+  drupal_add_js($js_settings, 'setting');
+
+  return $actions;
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_content_manager_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'menu_alter') {
+    // Move paddle_content_manager_menu_alter() to the end of the list.
+    // module_implements() iterates through $implementations with a foreach loop
+    // which PHP iterates in the order that the items were added, so to move an
+    // item to the end of the array, we remove it and then add it. This is
+    // required because we need to ensure any other hook_menu_alter() has
+    // already been performed so we can do the final tweaks.
+    $paddle = $implementations['paddle_content_manager'];
+    unset($implementations['paddle_content_manager']);
+    $implementations['paddle_content_manager'] = $paddle;
+  }
+
+  // @todo Document why it is necessary to do this.
+  // @todo Why is there a check if Paddle Content Manager implements this hook?
+  // Either it does and the check can be removed, or it doesn't and this block
+  // of code can be removed.
+  if ($hook == 'form_alter' && isset($implementations['paddle_content_manager'])) {
+    $group = $implementations['paddle_content_manager'];
+    unset($implementations['paddle_content_manager']);
+    $implementations['paddle_content_manager'] = $group;
+  }
+}
+
+/**
+ * Implements hook_menu_alter().
+ *
+ * The page callbacks for editing and creating nodes are altered to support the
+ * language switcher block. In case the user is editing or creating a node and
+ * clicks on one of the other languages she should be redirected to a node edit
+ * or node create page, depending on whether the node already exists in that
+ * language.
+ */
+function paddle_content_manager_menu_alter(&$items) {
+  // Current menu node edit page settings.
+  $edit_callback = $items['node/%node/edit']['page callback'];
+  $edit_arguments = $items['node/%node/edit']['page arguments'];
+
+  // Split off the first argument which represents the node number. This will
+  // be passed separately to our handler.
+  $node_argument = array_shift($edit_arguments);
+
+  // Override callback and arguments.
+  $items['node/%node/edit']['page callback'] = 'paddle_content_manager_node_check_langcode';
+  $items['node/%node/edit']['page arguments'] = array(
+    $node_argument, $edit_callback, $edit_arguments,
+  );
+
+  // Use our wrapper callback for diffs pages.
+  if (isset($items['node/%node/moderation/diff/view'])) {
+    $items['node/%node/moderation/diff/view']['page callback'] = 'paddle_content_manager_diffs_show';
+    $items['node/%node/moderation/diff/view']['file path'] = drupal_get_path('module', 'paddle_content_manager');
+    $items['node/%node/moderation/diff/view']['file'] = 'paddle_content_manager.pages.inc';
+  }
+
+  // Redirect Diff module diff pages to Workbench Moderation pages.
+  if (isset($items['node/%node/revisions/view'])) {
+    $items['node/%node/revisions/view']['page callback'] = 'paddle_content_manager_diffs_show_redirect';
+    $items['node/%node/revisions/view']['file path'] = drupal_get_path('module', 'paddle_content_manager');
+    $items['node/%node/revisions/view']['file'] = 'paddle_content_manager.pages.inc';
+  }
+
+  if (isset($items['node/%node/clone/%clone_token'])) {
+    $items['node/%node/clone/%clone_token']['access callback'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_content_manager_permission() {
+  $permissions = array();
+
+  $permissions['manage paddle_content_manager'] = array(
+    'title' => t('Manage content'),
+  );
+
+  // Provide permissions to edit content in different moderation states.
+  foreach (workbench_moderation_states() as $state) {
+    $permissions["edit content in state {$state->name}"] = array(
+      'title' => t('Edit content in moderation state %state', array('%state' => $state->label)),
+      'description' => t('Only users with this permission can edit content of which the current revision has the moderation state %state.', array('%state' => $state->label)),
+    );
+  }
+
+  // Provide permissions to assign content in different states to roles.
+  foreach (workbench_moderation_states() as $state) {
+    $permissions["have content assigned in state {$state->name}"] = array(
+      'title' => t('Have content assigned in state %state', array('%state' => $state->label)),
+    );
+  }
+
+  // Provide a permission to unpublish the live revision of published content,
+  // without changing the moderation state of the current revision.
+  $permissions['unpublish published content'] = array(
+    'title' => t('Unpublish published content'),
+  );
+
+  return $permissions;
+}
+
+/**
+ * Implements hook_node_access().
+ *
+ * Do not allow users to edit content of which the current revision has a
+ * particular moderation state unless they have permission.
+ */
+function paddle_content_manager_node_access($node, $op, $account) {
+  $node_type = is_object($node) ? $node->type : $node;
+
+  if (!in_array($node_type, array_keys(node_type_get_names()))) {
+    return NODE_ACCESS_DENY;
+  }
+
+  if ($op == 'update' && workbench_moderation_node_type_moderated($node_type) && !user_access("edit content in state {$node->workbench_moderation['current']->state}", $account)) {
+    return NODE_ACCESS_DENY;
+  }
+
+  if ($op == 'delete' && workbench_moderation_node_type_moderated($node_type) && $node->workbench_moderation['current']->state != 'archived') {
+    return NODE_ACCESS_DENY;
+  }
+
+  return NODE_ACCESS_IGNORE;
+}
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function paddle_content_manager_preprocess_page(&$variables) {
+  $menu_item = menu_get_item();
+
+  $node_detail_admin_paths = array(
+    'admin/content_manager/node/%/layout',
+    'admin/content_manager/node/%/panels_content',
+    'admin/content_manager/node/%/view',
+  );
+  if (in_array($menu_item['path'], $node_detail_admin_paths) && is_object($menu_item['page_arguments'][1])) {
+    // Make sure we always display the current revision.
+    $node = workbench_moderation_node_current_load($menu_item['page_arguments'][1]->data);
+    // Put metadata summary in front of page title.
+    $variables['title_prefix']['metadata_summary'] = array(
+      '#markup' => paddle_content_manager_render_metadata_summary($node),
+    );
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function paddle_content_manager_preprocess_node(&$variables) {
+  $menu_item = menu_get_item();
+
+  if ($menu_item['path'] == 'paddle_content_manager/node_iframe/%') {
+    $variables['page'] = TRUE;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_content_manager_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_content_manager_node_summary_metadata' => array(
+      'variables' => array(
+        'label' => NULL,
+        'metadata' => NULL,
+      ),
+    ),
+    'paddle_content_manager_node_summary_metadata_group' => array(
+      'variables' => array(
+        'group' => array(),
+      ),
+    ),
+    'paddle_content_manager_node_summary_metadata_container' => array(
+      'variables' => array(
+        'metadata' => array(),
+      ),
+    ),
+    'paddle_content_manager_node_summary_metadata_container_collapsible' => array(
+      'variables' => array(
+        'metadata' => array(),
+      ),
+    ),
+    'paddle_content_manager_moderation_history' => array(
+      'variables' => array(
+        'items' => array(),
+        'total_item_count' => 0,
+        'node' => NULL,
+      ),
+    ),
+
+    // The theme system automatically discovers the theme's functions and
+    // templates that implement more targeted "suggestions" of generic theme
+    // hooks. But suggestions implemented by a module must be explicitly
+    // registered.
+    'page__paddle_content_manager__node_iframe' => array(
+      'template' => 'page--paddle-content-manager--node-iframe',
+      'variables' => array(),
+    ),
+    'html__paddle_content_manager__node_iframe' => array(
+      'template' => 'html--paddle-content-manager--node-iframe',
+      'variables' => array(),
+    ),
+
+    // Provide a template for additional fields groups.
+    'additional_fields_group' => array(
+      'variables' => array('content' => '', 'title' => NULL, 'classes' => ''),
+      'path' => drupal_get_path('module', 'paddle_content_manager') . '/templates',
+      'template' => 'additional-fields-group',
+    ),
+    'paddle_content_manager_add_links' => array(
+      'variables' => array(
+        'items' => array(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Templating function for generating a list on the add content page.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - items: An associative array with the items to render containing:
+ *     - title: the title of the item which will be wrapped in <h4>
+ *     - icon: the name of the FA icon to display inside the link.
+ *     - help_text: the HTML on which the link is put.
+ *     - link: An associative array containing:
+ *       - url: the URL for the link.
+ *       - query: an array, the query part of the URL. See l().
+ *       - attributes: an array containing optional link attributes. See l().
+ *
+ * @return string
+ *   Themed html for the links list.
+ */
+function theme_paddle_content_manager_add_links($variables) {
+  $items = array();
+
+  foreach ($variables['items'] as $item) {
+    // Generate the title.
+    $title = theme('html_tag', array('element' => array('#tag' => 'h4', '#value' => $item['title'])));
+
+    // Generate the link.
+    $link = $item['link'];
+    $options = array('html' => TRUE, 'attributes' => $link['attributes']);
+
+    // Add URL query if there is one set.
+    if (isset($link['query'])) {
+      $options['query'] = $link['query'];
+    }
+    $items[] = l($title . $item['help_text'], $link['url'], $options);
+  }
+
+  return theme('item_list', array('items' => $items));
+}
+
+/**
+ * Theme preprocess function for additional fields groups.
+ *
+ * @see additional-fields-group.tpl.php
+ */
+function template_preprocess_additional_fields_group(&$variables) {
+  if (isset($variables['name'])) {
+    // Theme suggestions may only contain underscores, no dashes.
+    // The actual template file name, on the other hand, will only contain
+    // dashes.
+    $variables['theme_hook_suggestion'] = 'additional_fields_group__' .
+      strtr($variables['name'], '-', '_');
+  }
+}
+
+/**
+ * Returns HTML for the summary of node metadata.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - label: An optional label to use for the metadata.
+ *   - metadata: The metadata as a text string.
+ *
+ * @ingroup themeable
+ */
+function theme_paddle_content_manager_node_summary_metadata($variables) {
+  $output = '';
+
+  // Optionally output a label.
+  if (!empty($variables['label'])) {
+    $output .= '<span class="label">' . check_plain($variables['label']) . ':</span>';
+  }
+
+  // Output the metadata.
+  $raw = !empty($variables['raw']) ? check_plain($variables['raw']) : '';
+  $metadata = !empty($variables['metadata']) ? $variables['metadata'] : '-';
+  $metadata = !empty($variables['html']) ? $metadata : check_plain($metadata);
+  $output .= '<span class="value" data-raw="' . $raw . '">' . $metadata . '</span>';
+
+  return $output;
+}
+
+/**
+ * Returns HTML for a group of metadata items.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - group: The metadata group as an array.
+ *
+ * @return string
+ *   HTML to render.
+ */
+function theme_paddle_content_manager_node_summary_metadata_group($variables) {
+  $items = $variables['group']['items'];
+
+  $item_list = array();
+  foreach ($items as $item) {
+    $item_list[] = array(
+      'data' => theme('paddle_content_manager_node_summary_metadata', $item),
+      'class' => isset($item['class']) ? $item['class'] : array(),
+    );
+  }
+
+  $item_list_theme_vars = array(
+    'items' => $item_list,
+  );
+
+  return '<div class="' . implode($variables['group']['class'], " ") . '">' .
+    theme('item_list', $item_list_theme_vars) . '</div>';
+}
+
+/**
+ * Returns HTML for the node metadata summary container.
+ *
+ * @param array $vars
+ *   An associative array containing:
+ *   - metadata: All metadata to show in the summary, as an array.
+ *
+ * @return string
+ *   HTML to render.
+ */
+function theme_paddle_content_manager_node_summary_metadata_container($vars) {
+  $output = '';
+  $metadata = $vars['metadata'];
+
+  foreach ($metadata as $group) {
+    $output .= theme('paddle_content_manager_node_summary_metadata_group', array(
+      'group' => $group,
+    ));
+  }
+
+  return $output;
+}
+
+/**
+ * Returns HTML for the collapsible node metadata summary container.
+ *
+ * @param array $vars
+ *   An associative array containing:
+ *   - metadata: All metadata to show in the summary, as an array.
+ *
+ * @return string
+ *   HTML to render.
+ */
+function theme_paddle_content_manager_node_summary_metadata_container_collapsible($vars) {
+  $output = '';
+
+  $metadata = $vars['metadata'];
+  $metadata_groups = array_keys($metadata);
+  if (empty($metadata)) {
+    return $output;
+  }
+
+  // The first group will always be visible.
+  $first_group = $metadata[$metadata_groups[0]];
+  $first_metadata = theme('paddle_content_manager_node_summary_metadata_group', array(
+    'group' => $first_group,
+  ));
+  $output .= '<div class="main-metadata">' . $first_metadata . '</div>';
+
+  // Other metadata will be put in a collapsible fieldset.
+  $other_metadata = '';
+  foreach ($metadata as $group_name => $group) {
+    // Skip the first one.
+    if ($group_name == $metadata_groups[0]) {
+      continue;
+    }
+
+    $other_metadata .= theme('paddle_content_manager_node_summary_metadata_group', array(
+      'group' => $group,
+    ));
+  }
+
+  // The fieldset is a regular form fieldset, but we need to process it so it
+  // gets the correct attributes to be collapsible. To do this we need to pass
+  // a fake form state, and add a #parents property on the fieldset to avoid
+  // warnings. See also https://www.drupal.org/node/1099132.
+  $fieldset = array(
+    '#type' => 'fieldset',
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#title' => t('More metadata'),
+    'metadata' => array(
+      '#markup' => $other_metadata,
+    ),
+    '#parents' => array(),
+  );
+  $form_state = array();
+  form_process_fieldset($fieldset, $form_state);
+  $output .= render($fieldset);
+
+  $output = '<div class="has-show-more-fieldset">' . $output . '</div>';
+
+  return $output;
+}
+
+/**
+ * Returns HTML for the moderation history.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - items: Moderation history log items.
+ *   - total_item_count: The total amount of history log items
+ *     available, for example to show a 'more' link.
+ *   - node: The node the moderation history belongs to.
+ *
+ * @ingroup themeable
+ */
+function theme_paddle_content_manager_moderation_history($variables) {
+  $items = $variables['items'];
+  $total_item_count = $variables['total_item_count'];
+  $node = $variables['node'];
+
+  $return = '';
+
+  foreach ($items as $item) {
+    $author = user_load($item->uid);
+    $args = array(
+      '!state' => workbench_moderation_state_label($item->state),
+      '@date' => date('d/m/Y H:i', $item->stamp),
+      '!author' => l($author->name, 'user/' . $author->uid),
+    );
+    $item_list[] = t('!state on @date by !author', $args);
+  }
+
+  if (!empty($item_list)) {
+    $return = theme('item_list', array('items' => $item_list));
+
+    // Show a 'See more' link if there are more than 5 revisions.
+    if ($total_item_count > count($items)) {
+      $link = array(
+        '#markup' => l(t('See more'), 'node/' . $node->nid . '/moderation'),
+        '#prefix' => '<div class="node-moderation-history">',
+        '#suffix' => '</div>',
+      );
+      $return .= render($link);
+    }
+  }
+
+  return $return;
+}
+
+/**
+ * Get button labels for workbench moderation state transitions.
+ *
+ * By implementing
+ * hook_workbench_moderation_state_transition_button_labels_alter(),
+ * other modules can alter the labels. By default, the label of the state
+ * transitioned
+ * to is used.
+ *
+ * @return array
+ *   An array of state transitions, including a button label.
+ */
+function paddle_content_manager_workbench_moderation_state_transition_button_labels() {
+  $labels = &drupal_static(__FUNCTION__);
+
+  if (!$labels) {
+    $transitions = workbench_moderation_transitions();
+
+    foreach ($transitions as $transition) {
+      $transition->label = workbench_moderation_state_label($transition->to_name);
+      $labels["{$transition->from_name} to {$transition->to_name}"] = $transition;
+    }
+
+    drupal_alter('workbench_moderation_state_transition_button_labels', $labels);
+  }
+
+  return $labels;
+}
+
+/**
+ * Returns a button label for a state transition.
+ *
+ * @param string $state_from
+ *   Name of the state to transition from.
+ * @param string $state_to
+ *   Name of the state to transition to.
+ */
+function paddle_content_manager_workbench_moderation_state_transition_button_label($state_from, $state_to) {
+  $labels = paddle_content_manager_workbench_moderation_state_transition_button_labels();
+
+  $key = "{$state_from} to {$state_to}";
+
+  if (isset($labels[$key])) {
+    return $labels[$key]->label;
+  }
+  else {
+    // No transition found, current user might have the bypass permission.
+    // Use the label of the state to transition to.
+    return workbench_moderation_state_label($state_to);
+  }
+}
+
+/**
+ * Helper function to build an iframe for rendering.
+ *
+ * @param array $properties
+ *   Contains HTML attributes to create for the iframe.
+ *
+ * @return string
+ *   Rendered iframe.
+ */
+function paddle_content_manager_build_iframe($properties) {
+  // Add JavaScript to the page in order to resize iframe dynamically.
+  drupal_add_js('function resizeIframe(iframe) {
+    iframe.height = iframe.contentWindow.document.body.scrollHeight + 200 + "px";
+  }', 'inline');
+
+  $output = '';
+
+  // Build iframe HTML attributes.
+  foreach ($properties as $key => $val) {
+    $output .= ' ' . check_plain($key) . '="' . check_plain($val) . '"';
+  }
+
+  return '<iframe' . $output . '></iframe>';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_content_manager_form_node_form_alter(&$form, &$form_state) {
+  // Add an extra "creation date" field to the node edit form. Don't use the
+  // Drupal core "authored on" field as it's too hard to change the date format
+  // used by that field.
+  $type = $form['#node']->type;
+  if (user_access('override ' . $type . ' authored on option')) {
+    // Default value MUST be in the 'Y-m-d H:i:s' format.
+    $form['creation_date'] = array(
+      '#title' => t('Creation date'),
+      '#type' => 'date_popup',
+      '#date_format' => variable_get('date_format_short'),
+      '#default_value' => format_date($form['#node']->created, 'custom', 'Y-m-d H:i:s'),
+    );
+    // Only add an extra submit handler. The date_popup element already has its
+    // own validate handlers.
+    $form['#submit'][] = 'paddle_content_manager_creation_date_submit';
+  }
+
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_content_manager_add_contextual_actions_node_edit';
+  }
+
+  if (module_exists('active_tags')) {
+    // Apply overrides to active_tags module by
+    // attaching custom javascript file.
+    $form['#attached']['js'][] = drupal_get_path('module', 'paddle_content_manager') . '/js/paddle_content_manager_active_tags.js';
+  }
+
+  // Make the form a bit 'friendlier' by removing some elements.
+  $form['menu']['link']['link_title']['#title'] = t('Navigation menu title');
+  unset($form['menu']['link']['description']);
+
+  // We want to hide the weight in the frontend.
+  // This field might not exist (eg when previewing) so check before removing
+  // permission to access.
+  if (isset($form['menu']['link']['weight'])) {
+    $form['menu']['link']['weight']['#access'] = FALSE;
+  }
+
+  // By default show the menu options and hide the checkbox.
+  $form['menu']['enabled']['#default_value'] = TRUE;
+  $form['menu']['enabled']['#access'] = FALSE;
+
+  // Custom submit for handling menu item creation.
+  $form['#submit'][] = 'paddle_content_manager_node_menu_item';
+
+  // We add an extra submit handler to set the description automatically.
+  $form['#submit'][] = 'paddle_content_manager_set_description';
+  $form['#validate'][] = 'paddle_content_manager_assignee_validation';
+
+  // If only a time has been given, set the date to today.
+  $form['#submit'][] = 'paddle_content_manager_set_default_date';
+
+  $actions = element_children($form['actions']);
+  foreach ($actions as $action) {
+    $form['actions'][$action]['#submit'][] = 'paddle_content_manager_redirect_backend_display';
+  }
+
+  // Add an extra validation to
+  // the path alias field.
+  $form['path']['#element_validate'][] = 'paddle_content_manager_path_alias_validate';
+}
+
+/**
+ * Form validation callback for path alias field.
+ *
+ * A url alias should never have a trailing slash, as it will confuse Drupal.
+ * Eg. If your alias is "bla/", the full url would be (according to Drupal)
+ * http://yoursite.dev/bla/. But when that page gets loaded Drupal interprets
+ * the path as "bla", not "bla/", which results in a 404.
+ * (Unless you also have a "bla" alias)
+ * We use an array of disallowed trailing characters in case we run into some
+ * other characters that cause problems later on.
+ */
+function paddle_content_manager_path_alias_validate($element, &$form_state, $complete_form) {
+  // Do nothing if there's no alias.
+  if (!isset($form_state['values']['path']['alias']) || empty($form_state['values']['path']['alias'])) {
+    return;
+  }
+
+  // Don't validate the alias if it's set to be (re)generated by pathauto.
+  // Pathauto removes trailing slashes itself if there are any in the title.
+  if (isset($form_state['values']['path']['pathauto']) && $form_state['values']['path']['pathauto'] === 1) {
+    return;
+  }
+
+  $forbidden_trailing_chars = array('/');
+  $alias = trim($form_state['values']['path']['alias']);
+  $trailing_char = substr($alias, -1);
+  if (in_array($trailing_char, $forbidden_trailing_chars)) {
+    $message = t('URL alias should not have a trailing "%character" character.', array('%character' => $trailing_char));
+    form_set_error('path][alias', $message);
+  }
+}
+
+/**
+ * Form submit callback for node creation date field.
+ */
+function paddle_content_manager_creation_date_submit($form, &$form_state) {
+  $form_state['values']['date'] = $form_state['values']['creation_date'];
+}
+
+/**
+ * Form submit callback for a workbench moderation button.
+ */
+function paddle_content_manager_node_form_state_transition_submit($form, &$form_state) {
+  if (isset($form_state['clicked_button']['#workbench_moderation_state_new'])) {
+    $form_state['values']['workbench_moderation_state_new'] = $form_state['clicked_button']['#workbench_moderation_state_new'];
+  }
+}
+
+/**
+ * Custom menu callback function for node add/edit forms.
+ *
+ * This will take into account any given language code parameter and call the
+ * associated node edit or node add form for that given language.
+ *
+ * @param object $node
+ *   A node object.
+ *
+ * @param string $callback
+ *   String containing the original callback function.
+ *
+ * @param array $arguments
+ *   Array of arguments that were originally provided for the menu callback,
+ *   minus the node argument.
+ *
+ * @return mixed
+ *   The return value of the callback, or FALSE on failure.
+ */
+function paddle_content_manager_node_check_langcode($node, $callback, $arguments) {
+  $params = drupal_get_query_parameters();
+
+  if (isset($params['language'])) {
+    $langcode = $params['language'];
+
+    // Returns language object from given key, otherwise uses the default
+    // language object.
+    $check_language = i18n_language($langcode);
+
+    // Ensure the given $langcode is a valid language and is enabled.
+    if ($check_language->language == $langcode && $check_language->enabled == TRUE) {
+
+      // Get translation nid from node object.
+      $tnid = (isset($node->tnid) && !empty($node->tnid)) ? $node->tnid : '1';
+
+      $lang_nid = page_content_manager_validate_translation($tnid, $langcode);
+
+      if (!empty($lang_nid)) {
+        drupal_goto("node/{$lang_nid}/edit");
+      }
+    }
+  }
+
+  if ($node) {
+    $node = array($node);
+    $args = array_merge($node, $arguments);
+  }
+  else {
+    $args = $arguments;
+  }
+
+  return call_user_func_array($callback, $args);
+}
+
+/**
+ * Validates given translation node id against given language code.
+ *
+ * @param string $tnid
+ *   Translation node id.
+ *
+ * @param string $langcode
+ *   Two letter ISO 639-1 language code.
+ *
+ * @return mixed
+ *   Returns string, otherwise FALSE.
+ */
+function page_content_manager_validate_translation($tnid, $langcode) {
+  // Check if tsid exists for current nid and language.
+  $translations = translation_node_get_translations($tnid);
+  // Check $langcode exists in $translations.
+  if (array_key_exists($langcode, $translations)) {
+    // Get correct nid based on $langcode from $translations.
+    return $translations[$langcode]->nid;
+  }
+
+  return FALSE;
+}
+
+/**
+ * After-build function of the node edit form.
+ */
+function paddle_content_manager_add_contextual_actions_node_edit($form, $form_state) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $cancel_path = 'admin/content_manager/add';
+
+  if (isset($form_state['node']->nid)) {
+    // If we come from the content manager overview page, we need to use the
+    // destination when hitting cancel. Default to the node view otherwise.
+    $destination = drupal_get_destination();
+    if (!empty($destination['destination']) && $destination['destination'] == 'admin/content_manager/list/search') {
+      $cancel_path = $destination['destination'];
+    }
+    else {
+      $cancel_path = 'admin/content_manager/node/' . $form_state['node']->nid . '/view';
+    }
+
+    unset($_GET['destination']);
+  }
+
+  $actions = paddle_contextual_toolbar_actions();
+  $actions[] = array(
+    'action' => l(
+      t('Back'),
+      $cancel_path,
+      array(
+        'attributes' => array('class' => array('ui-icon', 'fa-arrow-left')),
+      )
+    ),
+    'class' => array('cancel'),
+    'weight' => -10,
+  );
+
+  $actions[] = array(
+    'action' => l(t('Save'), 'admin/content_manager/node/' . $form_state['node']->nid . '/view', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-submit',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+      'html' => TRUE,
+      'external' => TRUE,
+    )),
+    'class' => array('submit', 'save'),
+    'weight' => 0,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_ctools_render_alter().
+ */
+function paddle_content_manager_ctools_render_alter(&$info, &$page, &$context) {
+  if (module_exists('paddle_contextual_toolbar')) {
+    if (!empty($context['subtask']['name']) && $context['subtask']['name'] == 'paddle_content_manager_node_view') {
+      if ($node = node_load($context['args'][0])) {
+
+        $groups = paddle_contextual_toolbar_groups();
+        $groups['content'] = array('weight' => 0);
+        $groups['moderation'] = array('weight' => 5);
+        $groups['publishing'] = array('weight' => 10);
+        $groups['view'] = array('weight' => 15);
+        paddle_contextual_toolbar_groups($groups);
+
+        $actions = array();
+        $weights = paddle_content_manager_action_weights();
+        $weights['preview'] = 90;
+        $weights['online_version'] = 95;
+
+        // Edit button.
+        $update_access = node_access('update', $node);
+        if ($update_access) {
+          // Define a destination in case the user tries to edit a locked node.
+          // By default the user will be send to "node/<nid>" and we want the
+          // destination to be the admin node view.
+          $query = array(
+            'query' => array('destination' => 'admin/content_manager/node/' . $node->nid . '/view'),
+            'attributes' => array('class' => array('ui-icon', 'fa-edit')),
+          );
+          $actions['Page properties'] = array(
+            'action' => l(t('Page properties'), 'node/' . $node->nid . '/edit', $query),
+            'class' => array('edit'),
+            'weight' => 0,
+            'group' => 'content',
+          );
+
+          $actions['Page layout'] = array(
+            'action' => l(
+              t('Page layout'),
+              'admin/content_manager/node/' . $node->nid . '/layout',
+              array(
+                'attributes' => array('class' => array('ui-icon', 'fa-th')),
+              )
+            ),
+            'class' => array('edit'),
+            'weight' => 5,
+            'group' => 'content',
+          );
+        }
+
+        if (!empty($node->workbench_moderation['current']->state)) {
+          $current_state = $node->workbench_moderation['current']->state;
+          $next_states = workbench_moderation_states_next($current_state, NULL, $node);
+
+          if ($update_access) {
+            $have_assignees = FALSE;
+            $action_info = array(
+              'draft' => array(
+                'group' => 'moderation',
+                'data-click' => 'edit-moderate-draft',
+              ),
+              'to_check' => array(
+                'group' => 'moderation',
+                'data-click' => 'edit-moderate-to-check',
+                'class' => array(
+                  'ui-icon',
+                  'fa-flag',
+                ),
+              ),
+              'needs_review' => array(
+                'group' => 'moderation',
+                'data-click' => 'edit-moderate-needs-review',
+                'class' => array(
+                  'ui-icon',
+                  'fa-flag-checkered',
+                ),
+              ),
+              'scheduled' => array(
+                'group' => 'publishing',
+                'data-click' => 'edit-moderate-scheduled',
+                'class' => array(
+                  'ui-icon',
+                  'fa-desktop',
+                ),
+              ),
+              'published' => array(
+                'group' => 'publishing',
+                'data-click' => 'edit-moderate-published',
+                'class' => array(
+                  'ui-icon',
+                  'fa-desktop',
+                ),
+              ),
+              'offline' => array(
+                'group' => 'publishing',
+                'data-click' => 'edit-moderate-offline',
+                'class' => array(
+                  'ui-icon',
+                  'im-unpublish',
+                ),
+              ),
+              'archived' => array(
+                'group' => 'publishing',
+                'data-click' => 'edit-moderate-archived',
+                'class' => array(
+                  'ui-icon',
+                  'fa-archive',
+                ),
+              ),
+            );
+
+            foreach (array_keys($next_states) as $state_to) {
+              if ($state_to == 'archived') {
+                continue;
+              }
+
+              $label = paddle_content_manager_workbench_moderation_state_transition_button_label($current_state, $state_to);
+
+              // Assignees dropdowns.
+              $assignee_items = array();
+              $assignee_users = paddle_content_manager_get_assignee_users_for_state($state_to);
+              if (count($assignee_users)) {
+                $have_assignees = TRUE;
+                $assignee_class = 'assignee_state';
+                if (count($assignee_users)) {
+                  foreach ($assignee_users as $uid => $name) {
+                    $link_options = array(
+                      'html' => TRUE,
+                      'external' => TRUE,
+                      'attributes' => array(
+                        'data-paddle-contextual-toolbar-click' => 'edit-assign-' . str_replace('_', '-', $state_to) . '-' . $uid,
+                      ),
+                    );
+
+                    $assignee_items[$uid] = array(
+                      'data' => l($name, '', $link_options),
+                      'class' => array('assignee_user'),
+                    );
+                  };
+                }
+              }
+
+              $link_options = array(
+                'html' => TRUE,
+                'external' => TRUE,
+                'attributes' => array(
+                  'data-paddle-contextual-toolbar-click' => $action_info[$state_to]['data-click'],
+                ),
+              );
+
+              if (!empty($action_info[$state_to]['class']) && !in_array($state_to, array('to_check', 'needs_review'))) {
+                $link_options['attributes']['class'] = $action_info[$state_to]['class'];
+              }
+
+              $action_item = array(
+                'action' => l($label, '', $link_options),
+                'class' => array(
+                  'workbench-moderation',
+                  drupal_html_class('moderate-to-' . $state_to),
+                ),
+                'weight' => $weights[$state_to],
+                'group' => isset($action_info[$state_to]['group']) ? $action_info[$state_to]['group'] : 'default',
+              );
+
+              // Add the users list.
+              if (count($assignee_items)) {
+                $any = array(
+                  'data' => l(t('Assign to any'), '', $link_options),
+                  'class' => array('assignee_any'),
+                );
+                // Add $any to the beginning of the array.
+                // array_unshift() would modify the uids (keys), and ksort()
+                // would no longer sort the users by name, so use array_merge().
+                $assignee_items = array_merge(array($any), $assignee_items);
+                $assignee_list = theme('item_list', array(
+                  'items' => $assignee_items,
+                  'attributes' => array(
+                    'class' => 'assignee-dropdown',
+                    'id' => 'assignee-items-list-' . $state_to,
+                  ),
+                ));
+
+                $action_item['action'] = '<a href="#" class="contextual-dropdown ui-icon ' . implode(' ', $action_info[$state_to]['class']) . '"><span>' . $label . '</span></a>' . $assignee_list;
+
+                if (!empty($assignee_class)) {
+                  $action_item['class'][] = $assignee_class;
+                }
+              }
+              $actions[$label] = $action_item;
+            }
+
+            if ($have_assignees) {
+              drupal_add_js(drupal_get_path('module', 'paddle_content_manager') . '/js/paddle_content_manager_assignee_states.js');
+            }
+
+            // Add a button to unpublish the node if the node is published an
+            // the current user has the rights to unpublish it. Only add this if
+            // the node cannot be unpublished using regular moderation
+            // transitions.
+            $moderate_to_offline_allowed = array_key_exists('offline', $next_states);
+            $user_can_unpublish = user_access('unpublish published content');
+            if ($node->status && !$moderate_to_offline_allowed && $user_can_unpublish) {
+              $link_options = array(
+                'html' => TRUE,
+                'external' => TRUE,
+                'attributes' => array(
+                  'data-paddle-contextual-toolbar-click' => $action_info['offline']['data-click'],
+                  'class' => array('ui-icon', 'im-unpublish'),
+                ),
+              );
+              $actions['Unpublish'] = array(
+                'action' => l(t('Unpublish'), '', $link_options),
+                'class' => array('workbench-moderation', drupal_html_class('moderate-to-offline')),
+                'weight' => $weights['offline'],
+                'group' => 'publishing',
+              );
+            }
+
+            if (isset($next_states['archived'])) {
+              ctools_include('ajax');
+              ctools_include('modal');
+              ctools_modal_add_js();
+
+              $classes = array('ui-icon', 'fa-archive', 'ctools-use-modal');
+              $actions['Archive'] = array(
+                'action' => l(
+                  t('Archive', array(), array('context' => 'verb')),
+                  "admin/content_manager/node/nojs/{$node->nid}/archive",
+                  array('attributes' => array('class' => $classes))
+                ),
+                'class' => array('archive'),
+                'weight' => $weights['archived'],
+                'group' => 'publishing',
+              );
+            }
+          }
+
+          if ($current_state == 'archived') {
+            if (isset($next_states['draft'])) {
+              $classes = array('ctools-use-modal', 'ui-icon', 'fa-undo');
+              $actions['Restore'] = array(
+                'action' => l(
+                  t('Restore'),
+                  "admin/content_manager/node/nojs/{$node->nid}/restore",
+                  array('attributes' => array('class' => $classes))
+                ),
+                'class' => array('restore'),
+                'weight' => $weights['archived'],
+                'group' => 'publishing',
+              );
+            }
+
+            if (node_access('delete', $node)) {
+              $delete_path = 'node/' . $node->nid . '/delete';
+              $delete_options = array(
+                'query' => array(
+                  'destination' => "admin/content_manager/node/{$node->nid}/view",
+                ),
+              );
+              $actions['Delete'] = array(
+                'action' => l(t('Delete'), $delete_path, $delete_options),
+                'class' => array('delete'),
+                'weight' => $weights['delete'],
+                'group' => 'publishing',
+              );
+            }
+          }
+        }
+
+        // User can always preview a node.
+        $actions['Preview revision'] = array(
+          'action' => l(t('Preview revision'), 'node/' . $node->nid . '/current-revision', array('attributes' => array('class' => array('ui-icon', 'fa-eye')))),
+          'class' => array('preview'),
+          'weight' => $weights['preview'],
+          'group' => 'view',
+        );
+
+        if (!workbench_moderation_node_is_current($node)) {
+          $actions['Online version'] = array(
+            'action' => l(t('Online version'), 'node/' . $node->nid, array('attributes' => array('class' => array('ui-icon', 'fa-eye')))),
+            'class' => array('online-version'),
+            'weight' => $weights['online_version'],
+            'group' => 'view',
+          );
+        }
+
+        // Add a form to the page with buttons for every possible action.
+        module_load_include('inc', 'paddle_content_manager', 'paddle_content_manager.admin');
+        $workflow_form = drupal_get_form('paddle_content_manager_workflow_form', $node);
+        $info['content'] .= render($workflow_form);
+
+        // Activate the contextual toolbar buttons.
+        paddle_contextual_toolbar_actions($actions);
+      }
+    }
+  }
+
+  $task = $context['task'];
+  $subtask = $context['subtask'];
+  $contexts = $context['contexts'];
+
+  // Lock nodes that are edited through the "Page layout" button on
+  // administrative overviews. This is used mainly to order panes using the
+  // in-place editor on panelized nodes such as landing pages.
+  if (module_exists('content_lock')) {
+    // Check the task.
+    global $user;
+    if ($task['module'] == 'page_manager' && $task['name'] == 'page') {
+      // Check the subtask.
+      if ($subtask['name'] == 'node_panels_layout' || $subtask['name'] == 'paddle_landing_page_admin_panels_content') {
+        if (!empty($contexts['argument_node_current_revision_1']->data) || !empty($contexts['argument_landing_page_current_revision_1']->data)) {
+          $node = !empty($contexts['argument_node_current_revision_1']->data) ? $contexts['argument_node_current_revision_1']->data : $contexts['argument_landing_page_current_revision_1']->data;
+          $lock = content_lock_fetch_lock($node->nid);
+          if ($lock !== FALSE && $user->uid != $lock->uid) {
+            content_lock_node($node->nid, $user->uid);
+            drupal_goto("admin/content_manager/node/{$node->nid}/view");
+          }
+          else {
+            content_lock_node($node->nid, $user->uid);
+            // Add the (un)locking js.
+            drupal_add_js(drupal_get_path('module', 'paddle_core') . '/js/paddle_content_locking.js', array('type' => 'file'));
+            $form = array('nid' => array('#value' => $node->nid));
+            _content_lock_add_unload_js($form, array());
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_content_manager_menu() {
+  $items = array();
+
+  // Menu item to perform a workbench moderation state transition. Deprecated,
+  // but removing this menu item seems to cause errors instead of just returning
+  // a 403 status.
+  $items['admin/content_manager/node/%node/moderate/%'] = array(
+    'access callback' => FALSE,
+  );
+
+  $items['paddle_content_manager/taxonomy/autocomplete'] = array(
+    'title' => 'Autocomplete taxonomy',
+    'page callback' => 'paddle_content_manager_taxonomy_autocomplete',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content_manager'] = array(
+    'title' => 'Content',
+    'access arguments' => array('manage paddle_content_manager'),
+    'page callback' => 'drupal_goto',
+    'page arguments' => array('admin/content_manager/list/search'),
+  );
+
+  $items['admin/content_manager/list'] = array(
+    'title' => 'Manage content',
+    'access arguments' => array('manage paddle_content_manager'),
+    'page callback' => 'drupal_goto',
+    'page arguments' => array('admin/content_manager/list/search'),
+    'weight' => -10,
+  );
+
+  $items['paddle_content_manager/node_iframe/%'] = array(
+    'page callback' => 'paddle_content_manager_node_iframe_output',
+    'page arguments' => array(2),
+    'access arguments' => array('manage paddle_content_manager'),
+    'type' => MENU_CALLBACK,
+    'file' => 'paddle_content_manager.pages.inc',
+  );
+
+  foreach (node_type_get_names() as $type => $name) {
+    $items['admin/content_manager/%ctools_js/' . $type . '/add'] = array(
+      'title' => 'Add ' . $name,
+      'page arguments' => array(2, 3),
+      'page callback' => 'paddle_content_manager_modal_node_add_form',
+      'access callback' => 'node_access',
+      'access arguments' => array('create', $type),
+      'type' => MENU_CALLBACK,
+    );
+  }
+
+  $items['admin/content_manager/%ctools_js/node/%node/clone/%clone_token'] = array(
+    'access callback' => 'clone_access_cloning',
+    'access arguments' => array(4, TRUE, 6),
+    'page callback' => 'paddle_content_manager_clone_node_check',
+    'page arguments' => array(2, 4),
+    'title' => 'Clone content',
+    'title callback' => 'clone_action_link_title',
+    'title arguments' => array(4),
+    'weight' => 5,
+    'file' => 'paddle_content_manager.pages.inc',
+    'type' => MENU_CALLBACK,
+    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+  );
+
+  $items['admin/content_manager/node/%ctools_js/%node/archive'] = array(
+    'title' => 'Archive node',
+    'page callback' => 'paddle_content_manager_confirm_form_modal',
+    'page arguments' => array(3, 4, 'paddle_content_manager_archive_node_confirm_form'),
+    'access callback' => 'paddle_content_manager_workbench_moderation_allowed',
+    'access arguments' => array(4, 'archived'),
+    'file' => 'paddle_content_manager.pages.inc',
+  );
+
+  $items['admin/content_manager/node/%ctools_js/%node/restore'] = array(
+    'title' => 'Restore node from archive',
+    'page callback' => 'paddle_content_manager_confirm_form_modal',
+    'page arguments' => array(3, 4, 'paddle_content_manager_restore_node_confirm_form'),
+    'access callback' => 'paddle_content_manager_restore_node_access',
+    'access arguments' => array(4),
+    'file' => 'paddle_content_manager.pages.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Access callback for workbench state transitions.
+ *
+ * Checks if transition to a certain workbench moderation state
+ * is allowed.
+ *
+ * Variant of Workbench Moderation's private method
+ * _workbench_moderation_moderate_access().
+ *
+ * @param object $node
+ *   The node to perform the moderation on.
+ * @param string $new_state
+ *   The state to transition towards.
+ *
+ * @return bool
+ *   If the transition is allowed or not.
+ */
+function paddle_content_manager_workbench_moderation_allowed($node, $new_state, $uid = NULL) {
+  if (!isset($node->workbench_moderation)) {
+    return FALSE;
+  }
+  // Check if the user can have content assigned to them in this state.
+  if ($uid && is_int((int) $uid)) {
+    $user = user_load($uid);
+    if ($user && !user_access('have content assigned in state ' . $new_state, $user)) {
+      return FALSE;
+    }
+  }
+
+  $current_state = $node->workbench_moderation['current']->state;
+  $next_states = workbench_moderation_states_next($current_state, NULL, $node);
+  return node_access('update', $node) &&
+         array_key_exists($new_state, $next_states);
+}
+
+/**
+ * Page callback to perform a workbench moderation state transition.
+ *
+ * @param object $node
+ *   The node to perform the moderation on.
+ * @param string $new_state
+ *   The state to transition towards.
+ * @param int $uid
+ *   The user id of the assignee.
+ */
+function paddle_content_manager_workbench_moderate($node, $new_state, $uid = NULL) {
+  // Check if the node is locked.
+  $lock = module_exists('content_lock') ? content_lock_fetch_lock($node->nid) : FALSE;
+  if ($lock !== FALSE) {
+    global $user;
+    if ($user->uid != $lock->uid) {
+      content_lock_node($node->nid, $user->uid);
+    }
+  }
+  else {
+    // Get the current revision of the node.
+    $node = workbench_moderation_node_current_load($node);
+    if ($uid && is_int((int) $uid)) {
+      $node->assignee_uid = $uid;
+    }
+    workbench_moderation_moderate($node, $new_state);
+  }
+  drupal_goto('admin/content_manager/node/' . $node->nid . '/view');
+}
+
+/**
+ * Submit handler for the node form to set the description for a menu link.
+ */
+function paddle_content_manager_set_description($form, &$form_state) {
+  if (!empty($form_state['input']['menu']['enabled']) && empty($form_state['input']['menu']['description'])) {
+    $form_state['values']['menu']['description'] = $form_state['input']['title'];
+  }
+}
+
+/**
+ * Node add/edit actions callback handling redirect to backend node display.
+ */
+function paddle_content_manager_redirect_backend_display($form, &$form_state) {
+  if (!empty($form_state['nid'])) {
+    $form_state['redirect'] = "admin/content_manager/node/{$form_state['nid']}/view";
+  }
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function paddle_content_manager_field_widget_form_alter(&$element, &$form_state, $context) {
+  if ($context['instance']['widget']['module'] == 'active_tags') {
+    $element['term_entry']['#autocomplete_path'] = 'paddle_content_manager/taxonomy/autocomplete/' . $element['#field_name'] . '/' . $element['#entity']->language;
+    $element['#element_validate'][] = 'paddle_content_manager_taxonomy_autocomplete_validate';
+  }
+
+  if ('field_page_responsible_author' == $context['field']['field_name']) {
+    $element['target_id']['#element_validate'][] = 'paddle_content_manager_responsible_author_validate';
+  }
+}
+
+/**
+ * Validate handler for the responsible author field.
+ */
+function paddle_content_manager_responsible_author_validate($element, &$form_state) {
+  if (!empty($element['#value'])) {
+    $user = NULL;
+
+    // Match the id inside the parenthesis.
+    if (preg_match("/.+\((\d+)\)/", $element['#value'], $matches)) {
+      $entity_id = $matches[1];
+
+      $user = user_load($entity_id);
+    }
+
+    if (!$user) {
+      form_error($element, t('Unable to find user %user', array('%user' => $element['#value'])));
+      return;
+    }
+  }
+}
+
+/**
+ * Validate handler for the taxonomy autocomplete field.
+ *
+ * @see active_tags_taxonomy_autocomplete_validate()
+ */
+function paddle_content_manager_taxonomy_autocomplete_validate($element, &$form_state) {
+  // If any input is left in the field, add it as a new tag.
+  if (!empty($element['term_entry']['#value']) || $element['terms']['#default_value'] != $element['terms']['#value']) {
+    // Check if we have to split the tags on commas ('csv mode'). If not, wrap
+    // the tag with quotes.
+    $instance = field_widget_instance($element, $form_state);
+    $csv_mode = !empty($instance['widget']['settings']['mode']) && $instance['widget']['settings']['mode'] == 'csv';
+    $values = drupal_array_get_nested_value($form_state['values'], $element['#parents']);
+    $term_entry = !empty($values['term_entry']) ? $values['term_entry'] : '';
+    $value = $csv_mode ? $term_entry : '"' . $term_entry . '"';
+
+    // Append the new term to the list of existing terms.
+    $element['terms']['#value'] .= ', ' . $value;
+    $parents = array_merge($element['#array_parents'], array('terms', '#value'));
+    drupal_array_set_nested_value($form_state['complete form'], $parents, $element['terms']['#value']);
+
+    // Clear the term entry field.
+    $parents = array_merge($element['#array_parents'], array('term_entry', '#value'));
+    drupal_array_set_nested_value($form_state['complete form'], $parents, '');
+  }
+
+  // Perform the regular validation.
+  $element['#value'] = $element['terms']['#value'];
+
+  // Autocomplete widgets do not send their tids in the form, so we must detect
+  // them here and process them independently.
+  $value = array();
+  if ($tags = $element['#value']) {
+    // Collect candidate vocabularies.
+    $field = field_widget_field($element, $form_state);
+    $vocabularies = array();
+    foreach ($field['settings']['allowed_values'] as $tree) {
+      if ($vocabulary = taxonomy_vocabulary_machine_name_load($tree['vocabulary'])) {
+        $vocabularies[$vocabulary->vid] = $vocabulary;
+      }
+    }
+
+    // Translate term names into actual terms.
+    $typed_terms = drupal_explode_tags($tags);
+    $vocabulary = reset($vocabularies);
+    foreach ($typed_terms as $typed_term) {
+      // See if the term exists in the chosen vocabulary and return the tid;
+      // otherwise, create a new 'autocreate' term for insert/update.
+      $conditions = array(
+        'name' => trim($typed_term),
+        'vid' => $vocabulary->vid,
+        'language' => $element['#entity']->language,
+      );
+      $query = new EntityFieldQuery();
+      $query
+        ->entityCondition('entity_type', 'taxonomy_term')
+        ->propertyCondition('name', $conditions['name'])
+        ->propertyCondition('language', $conditions['language'])
+        ->propertyCondition('vid', $conditions['vid']);
+      $result = $query->execute();
+      if (isset($result['taxonomy_term'])) {
+        $possibilities = taxonomy_term_load_multiple(array_keys($result['taxonomy_term']));
+        $term = array_pop($possibilities);
+      }
+      else {
+        $term = array(
+          'tid' => 'autocreate',
+          'vid' => $vocabulary->vid,
+          'name' => $typed_term,
+          'vocabulary_machine_name' => $vocabulary->machine_name,
+        );
+      }
+      $value[] = (array) $term;
+    }
+  }
+
+  form_set_value($element, $value, $form_state);
+
+  // Retheme existing terms to make sure they show up after form validation.
+  if ($items = drupal_array_get_nested_value($form_state['values'], $element['#parents'], $key_exists)) {
+    $tags = array();
+    foreach ($items as $item) {
+      $tags[] = (object) array('name' => $item['name']);
+    }
+    $parents = array_merge($element['#array_parents'], array('field_terms', '#markup'));
+    $value = theme('active_tags_term_list_remove', array('terms' => $tags));
+    drupal_array_set_nested_value($form_state['complete form'], $parents, $value);
+  }
+}
+
+/**
+ * Language aware variation on the core taxonomy autocomplete.
+ *
+ * @param string $field_name
+ *   The name of the term reference field.
+ * @param string $language
+ *   The language of the node being added/edited.
+ * @param string $tags_typed
+ *   (optional) A comma-separated list of term names entered in the
+ *   autocomplete form element. Only the last term is used for autocompletion.
+ *   Defaults to '' (an empty string).
+ *
+ * @see taxonomy_autocomplete()
+ */
+function paddle_content_manager_taxonomy_autocomplete($field_name, $language, $tags_typed = '') {
+  // If the request has a '/' in the search text, then the menu system will have
+  // split it into multiple arguments, recover the intended $tags_typed.
+  $args = func_get_args();
+  // Shift off the $field_name and $language argument.
+  array_shift($args);
+  array_shift($args);
+  $tags_typed = implode('/', $args);
+
+  // Make sure the field exists and is a taxonomy field.
+  if (!($field = field_info_field($field_name)) || $field['type'] !== 'taxonomy_term_reference') {
+    // Error string. The JavaScript handler will realize this is not JSON and
+    // will display it as debugging information.
+    print t('Taxonomy field @field_name not found.', array('@field_name' => $field_name));
+    exit;
+  }
+
+  // The user enters a comma-separated list of tags. We only autocomplete the
+  // last tag.
+  $tags_typed = drupal_explode_tags($tags_typed);
+  $tag_last = drupal_strtolower(array_pop($tags_typed));
+
+  $matches = array();
+  if ($tag_last != '') {
+
+    // Part of the criteria for the query come from the field's own settings.
+    $vids = array();
+    $vocabularies = taxonomy_vocabulary_get_names();
+    foreach ($field['settings']['allowed_values'] as $tree) {
+      $vids[] = $vocabularies[$tree['vocabulary']]->vid;
+    }
+
+    $query = db_select('taxonomy_term_data', 't');
+    $query->addTag('translatable');
+    $query->addTag('term_access');
+
+    // Do not select already entered terms.
+    if (!empty($tags_typed)) {
+      $query->condition('t.name', $tags_typed, 'NOT IN');
+    }
+    $query->condition('t.language', $language, '=');
+    // Select rows that match by term name.
+    $tags_return = $query
+      ->fields('t', array('tid', 'name'))
+      ->condition('t.vid', $vids)
+      ->condition('t.name', '%' . db_like($tag_last) . '%', 'LIKE')
+      ->range(0, 10)
+      ->execute()
+      ->fetchAllKeyed();
+
+    $prefix = count($tags_typed) ? drupal_implode_tags($tags_typed) . ', ' : '';
+
+    $term_matches = array();
+    foreach ($tags_return as $tid => $name) {
+      $n = $name;
+      // Term names containing commas or quotes must be wrapped in quotes.
+      if (strpos($name, ',') !== FALSE || strpos($name, '"') !== FALSE) {
+        $n = '"' . str_replace('"', '""', $name) . '"';
+      }
+      $term_matches[$prefix . $n] = check_plain($name);
+    }
+  }
+
+  drupal_json_output($term_matches);
+}
+
+/**
+ * Implements hook_workbench_moderation_transition().
+ */
+function paddle_content_manager_workbench_moderation_transition($node, $previous_state, $new_state) {
+  global $user;
+
+  module_load_include('inc', 'scheduler', 'scheduler.rules');
+
+  // Keep track of nodes that are being "validated". This is usually a final
+  // approvement by a chief editor. In the Paddle distribution this is covered
+  // by the "published" and "scheduled" moderation states.
+  $validation_states = variable_get('paddle_content_manager_validation_states', array(workbench_moderation_state_published()));
+  if (in_array($new_state, $validation_states)) {
+    // Retrieve the latest workbench moderation history id for the node.
+    $hid = db_select('workbench_moderation_node_history', 'h')
+      ->fields('h', array('hid'))
+      ->condition('h.nid', $node->nid)
+      ->orderBy('h.hid', 'DESC')
+      ->range(0, 1)
+      ->execute()
+      ->fetchColumn();
+
+    // Store the node validation author information.
+    $query = db_merge('paddle_content_manager_validate_user')
+      ->key(array('nid' => $node->nid))
+      ->fields(array(
+        'uid' => $user->uid,
+        'hid' => $hid,
+      ))
+      ->execute();
+  }
+
+  if (!isset($node->assignee_uid) && $previous_state == $new_state && !empty($node->original)) {
+    $result = db_select('paddle_content_manager_revision_assignee', 'ra')
+      ->fields('ra')
+      ->condition('workbench_hid', $node->original->workbench_moderation['current']->hid, '=')
+      ->execute()
+      ->fetchAll();
+
+    if (!empty($result) && !empty($result[0]->uid)) {
+      $node->assignee_uid = $result[0]->uid;
+    }
+  }
+
+  // Check if it was assigned to user and save the assignment.
+  if (isset($node->assignee_uid) && is_int((int) $node->assignee_uid) && $node->assignee_uid > 0) {
+    paddle_content_manager_set_assignee($node, $new_state);
+  }
+}
+
+/**
+ * Generates the list of users that can be assigned to in the passed state.
+ *
+ * @param array $state
+ *   The Workbench moderation state for which we want the list made.
+ *
+ * @return array
+ *   All the users who can be assigned to in that state.
+ */
+function paddle_content_manager_get_assignee_users_for_state($state) {
+  $users = array();
+
+  if (in_array($state, array('to_check', 'needs_review'))) {
+    $permission = 'have content assigned in state ' . $state;
+    $rid_result = db_query('SELECT rid FROM {role_permission} WHERE permission = :permission', array(':permission' => $permission));
+    $rids = array();
+    foreach ($rid_result as $rid_record) {
+      $rids[] = $rid_record->rid;
+    }
+
+    if (empty($rids)) {
+      return $users;
+    }
+
+    $uid_query = db_select('users', 'u');
+    $uid_query->join('users_roles', 'ur', 'u.uid = ur.uid');
+    $uid_query = $uid_query->fields('u', array('uid', 'name'))
+      ->condition('rid', $rids)
+      ->condition('u.uid', 0, '<>')
+      ->condition('u.status', 0, '<>')
+      ->orderBy('u.name');
+    $uid_result = $uid_query->execute();
+
+    foreach ($uid_result as $uid_record) {
+      if ($uid_record->uid) {
+        $users[$uid_record->uid] = $uid_record->name;
+      }
+    }
+  }
+
+  return $users;
+}
+
+/**
+ * Retrieves the user that has validated a given node.
+ *
+ * The act of "validating" (or "approving") a node is usually reserved for chief
+ * editors. In the Paddle distribution this is done by changing the moderation
+ * state to "Published" or "Scheduled for publication".
+ *
+ * @param int $nid
+ *   The node id of the node for which to retrieve the user.
+ *
+ * @return mixed
+ *   A fully populated user object representing the user that has validated the
+ *   node, or FALSE if the node has not yet been validated.
+ */
+function paddle_content_manager_get_validate_user($nid) {
+  $uid = db_select('paddle_content_manager_validate_user', 'v')
+    ->fields('v', array('uid'))
+    ->condition('v.nid', $nid)
+    ->execute()
+    ->fetchColumn();
+  return !empty($uid) ? user_load($uid) : FALSE;
+}
+
+/**
+ * Retrieves moderation history data about the transition that validated a node.
+ *
+ * The act of "validating" (or "approving") a node is usually reserved for chief
+ * editors. In the Paddle distribution this is done by changing the moderation
+ * state to "Published" or "Scheduled for publication".
+ *
+ * @param int $nid
+ *   The node id of the node for which to retrieve the user.
+ *
+ * @return mixed
+ *   An array containing moderation history data, or FALSE if the node has not
+ *   yet been validated.
+ */
+function paddle_content_manager_get_validate_data($nid) {
+  $query = db_select('workbench_moderation_node_history', 'h');
+  $query->join('paddle_content_manager_validate_user', 'v', 'h.hid = v.hid');
+  return $query->fields('h')
+    ->condition('v.nid', $nid)
+    ->execute()
+    ->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Form validation handler for node_form().
+ */
+function paddle_content_manager_assignee_validation($form, &$form_state) {
+  if (isset($form_state['clicked_button']['#workbench_moderation_state_new'])) {
+    if (isset($form_state['values']['assignee_uid']) && $form_state['values']['assignee_uid'] != 0) {
+      $uid = $form_state['values']['assignee_uid'];
+      $new_state = $form_state['clicked_button']['#workbench_moderation_state_new'];
+      if ($uid && is_int((int) $uid)) {
+        $user = user_load($uid);
+        if ($user && !user_access('have content assigned in state ' . $new_state, $user)) {
+          form_set_error('assignee_uid', t('Invalid assigned author.'));
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Views filter options callback for the creation author.
+ */
+function paddle_content_manager_creation_user_options() {
+  $options = array();
+  $result = db_select('users', 'u')
+    ->condition('u.uid', 0, '<>')
+    ->condition('u.status', 1)
+    ->fields('u', array('uid', 'name'))
+    ->orderBy('u.name')
+    ->execute()
+    ->fetchAll();
+
+  foreach ($result as $user) {
+    $options[$user->uid] = $user->name;
+  }
+
+  return $options;
+}
+
+/**
+ * Views filter options callback for the last modified author.
+ */
+function paddle_content_manager_last_modified_user_options() {
+  // Right now this function and paddle_content_manager_creation_user_options()
+  // need to return the same result so we just return the result from the first
+  // function.
+  return paddle_content_manager_creation_user_options();
+}
+
+/**
+ * Views filter options callback for the assignees.
+ */
+function paddle_content_manager_assignee_options($state = NULL) {
+  $options = array();
+  if (!$state) {
+    $result = db_select('users', 'u')
+      ->condition('u.uid', 0, '<>')
+      ->condition('u.status', 1)
+      ->fields('u', array('uid', 'name'))
+      ->orderBy('u.name')
+      ->execute()
+      ->fetchAll();
+
+    foreach ($result as $user) {
+      $options[$user->uid] = $user->name;
+    }
+  }
+  else {
+    $options = paddle_content_manager_get_assignee_users_for_state($state);
+  }
+  return $options;
+}
+
+/**
+ * Views filter options callback for the validate user.
+ */
+function paddle_content_manager_validate_user_options() {
+  $options = array();
+
+  // Fetch all users that have validated at least one node.
+  // Note that joins cannot be chained.
+  $result = db_select('users', 'u');
+  $result->join('paddle_content_manager_validate_user', 'vu', 'u.uid = vu.uid');
+  $result = $result->fields('u', array('uid', 'name'))
+    ->orderBy('u.name')
+    ->execute();
+
+  foreach ($result as $user) {
+    $options[$user->uid] = $user->name;
+  }
+
+  return $options;
+}
+
+/**
+ * Get all the weights for the actions.
+ *
+ * @return array
+ *   Returns all the actions with their weight.
+ */
+function paddle_content_manager_action_weights() {
+  return array(
+    'submit' => 0,
+    'preview_changes' => 1,
+    'draft' => 5,
+    'to_check' => 10,
+    'needs_review' => 20,
+    'preview' => 40,
+    'online_version' => 45,
+    'scheduled' => 50,
+    'published' => 60,
+    'offline' => 70,
+    'unpublish' => 75,
+    'archived' => 80,
+    'delete' => 85,
+  );
+}
+
+/**
+ * Returns the rendered metadata summary.
+ *
+ * @param object $node
+ *   The related node.
+ *
+ * @return string
+ *   The rendered metadata summary.
+ */
+function paddle_content_manager_render_metadata_summary($node) {
+  module_load_include('inc', 'paddle_content_manager', 'plugins/content_types/node_summary_metadata');
+
+  $context = new stdClass();
+  $context->data = $node;
+  $conf = array(
+    'extended' => TRUE,
+    'collapsible' => TRUE,
+    'horizontal' => TRUE,
+  );
+  $block = paddle_content_manager_node_summary_metadata_content_type_render('node_summary_metadata', $conf, array(), $context);
+
+  return $block->content;
+}
+
+/**
+ * Submit handler for the node form to set the Scheduler publish/unpublish date.
+ *
+ * This will set the date to today if a time has been given but the date field
+ * has been left empty.
+ */
+function paddle_content_manager_set_default_date($form, &$form_state) {
+  if (!empty($form_state['input']['publish_on']['time']) && empty($form_state['input']['publish_on']['date'])) {
+    $form_state['values']['publish_on'] = date('Y-m-d') . ' ' . $form_state['input']['publish_on']['time'];
+  }
+
+  if (!empty($form_state['input']['unpublish_on']['time']) && empty($form_state['input']['unpublish_on']['date'])) {
+    $form_state['values']['unpublish_on'] = date('Y-m-d') . ' ' . $form_state['input']['unpublish_on']['time'];
+  }
+}
+
+/**
+ * Submit handler for the node form to manage the menu item.
+ *
+ * Since now the node save has no part in the menu items handling we prevent
+ * Drupal from saving any menu links.
+ */
+function paddle_content_manager_node_menu_item($form, &$form_state) {
+  unset($form_state['values']['menu']);
+  unset($form_state['node']->menu);
+}
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_content_manager_paddle_content_region_content_type_info() {
+  return 'basic_page';
+}
+
+/**
+ * Saves the assignee for a moderated node.
+ *
+ * @param object $node
+ *   The node for which to save the assignee.
+ * @param string $new_state
+ *   The state the node is being moderated to.
+ */
+function paddle_content_manager_set_assignee($node, $new_state) {
+  $assignee = user_load($node->assignee_uid);
+  if ($assignee && user_access('have content assigned in state ' . $new_state, $assignee)) {
+    $assignee_record = array(
+      'entity_type' => 'node',
+      'entity_id' => $node->nid,
+      'workbench_hid' => $node->workbench_moderation['current']->hid,
+      'uid' => $node->assignee_uid,
+    );
+    drupal_write_record('paddle_content_manager_revision_assignee', $assignee_record);
+
+    // Allow other modules to react on changes.
+    module_invoke_all('paddle_content_manager_assignee_set', $node, $assignee, $new_state);
+  }
+}
+
+/**
+ * Displays the node add form in a modal dialog if supported.
+ *
+ * @param bool $js
+ *   Whether or not the page was called via javascript.
+ * @param string $type
+ *   The machine name of the content type.
+ *
+ * @return array
+ *   Returns a render array in case a modal dialog is not supported.
+ *   Otherwise renders the necessary ajax commands itself and exits.
+ */
+function paddle_content_manager_modal_node_add_form($js, $type) {
+  $types = node_type_get_names();
+  $form_state = array(
+    'type' => $type,
+    'type_name' => $types[$type],
+  );
+  // If the page was requested without javascript, return the form itself.
+  if (!$js) {
+    return drupal_build_form('paddle_content_manager_node_add_form', $form_state);
+  }
+  // Page was requested with javascript, open in a modal dialog.
+  ctools_include('modal');
+  ctools_include('ajax');
+  // Check if we have a valid content type.
+  $output = array();
+
+  if (!empty($types[$type])) {
+    $form_state['ajax'] = TRUE;
+    $form_state['title'] = t('@type_name information modal dialog', array('@type_name' => $types[$type]));
+
+    // Output the simplified node add form.
+    $output = ctools_modal_form_wrapper('paddle_content_manager_node_add_form', $form_state);
+
+    // If the form has been submitted successfully, redirect to the admin node
+    // view.
+    if ($form_state['executed'] && !$form_state['rebuild']) {
+      $output = array();
+      $options = array();
+      if (!empty($form_state['query'])) {
+        $options['query'] = $form_state['query'];
+      }
+      $output[] = ctools_ajax_command_redirect('admin/content_manager/node/' . $form_state['node']->nid . '/view', 0, $options);
+    }
+  }
+
+  print ajax_render($output);
+  ajax_footer();
+  exit();
+}
+
+/**
+ * Form builder for the simplified node add form.
+ */
+function paddle_content_manager_node_add_form($form, &$form_state) {
+  global $language_content;
+  global $user;
+
+  module_load_include('inc', 'node', 'node.pages');
+  $content_type = $form_state['type'];
+
+  // Check if a layout was passed and that it's valid. This is done here rather
+  // than in a validate handler because this is a hidden setting and cannot be
+  // corrected in the interface. This would only occur if the URL has been
+  // tampered with, or an outdated URL is visited. For the moment we need this
+  // only for landing pages, so the code is a bit more specific for them.
+  $query_parameters = drupal_get_query_parameters();
+  if (!empty($query_parameters['layout'])) {
+    $chosen_layout_name = $query_parameters['layout'];
+    $chosen_layout_id = str_replace('node:' . $content_type . ':', '', $chosen_layout_name);
+    ctools_include('common', 'panels');
+    $allowed_layouts = panels_common_get_allowed_layouts('panelizer_node:' . $content_type);
+    if (array_key_exists($chosen_layout_id, $allowed_layouts)) {
+      $form_state['layout'] = $chosen_layout_name;
+    }
+    else {
+      drupal_not_found();
+      drupal_exit();
+    }
+  }
+
+  // During initial form build, add the node entity to the form state for use
+  // during form building and processing. During a rebuild, use what is in the
+  // form state.
+  if (!isset($form_state['node'])) {
+    $form_state['node'] = (object) array(
+      'uid' => $user->uid,
+      'name' => (isset($user->name) ? $user->name : ''),
+      'type' => $content_type,
+      'language' => $language_content->language,
+      'title' => NULL,
+    );
+
+    node_object_prepare($form_state['node']);
+  }
+
+  $node = $form_state['node'];
+
+  // Basic node information.
+  $basic_node_info = array('nid', 'vid', 'uid', 'type', 'language', 'changed');
+
+  foreach ($basic_node_info as $key) {
+    $form[$key] = array(
+      '#type' => 'value',
+      '#value' => isset($node->$key) ? $node->$key : NULL,
+    );
+  }
+
+  // Invoke hook_form() to get the node-specific bits.
+  if ($extra = node_content_form($node, $form_state)) {
+    $form = array_merge_recursive($form, $extra);
+  }
+  $form['#node'] = $node;
+
+  // Add placeholder text to the title.
+  $form['title']['#attributes']['placeholder'] = t('Enter the name of the @content_type_name', array('@content_type_name' => $form_state['type_name']));
+  $form['title']['#weight'] = -15;
+
+  // Let auto_nodetitle form alteration code have its impact.
+  // Don't invoke all form alter functions, because that would give us too much.
+  if (function_exists('auto_nodetitle_form_node_form_alter')) {
+    auto_nodetitle_form_node_form_alter($form, $form_state, $form_state['build_info']['form_id']);
+  }
+
+  // Attach all required fields to the form.
+  $field_info_instances = field_info_instances('node', $node->type);
+  foreach ($field_info_instances as $field_info) {
+    if ($field_info['required']) {
+      field_attach_form('node', $node, $form, $form_state, $node->language, array('field_id' => $field_info['field_id']));
+    }
+  }
+
+  // Set #parents to 'top-level'. This is needed by field_default_form().
+  $form['#parents'] = array();
+
+  // When the the form is loaded into a modal, we need a container containing
+  // all our form fields.
+  if (isset($form_state['ajax']) && $form_state['ajax']) {
+    // Add a container around the form fields.
+    $form['container'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('form-body')),
+    );
+
+    foreach ($form as $key => $field) {
+      if ($key != 'container') {
+        unset($form[$key]);
+        $form['container'][$key] = $field;
+      }
+    }
+
+    // When the the form is loaded into a modal, we need a container containing
+    // all our form actions.
+    $form['actions'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('form-buttons')),
+    );
+  }
+  else {
+    $form['actions'] = array('#type' => 'actions');
+  }
+
+  // Add the standard node validate handler.
+  $form['#validate'][] = 'node_form_validate';
+
+  // Add the submit button with standard submit handler.
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#submit' => array(
+      'node_form_submit',
+    ),
+  );
+
+  // Workbench moderation adds some javascript that depends on drupal.form /
+  // misc/form.js, but does not ensure it is loaded. So we ensure it gets
+  // loaded.
+  $form['#attached']['library'][] = array('system', 'drupal.form');
+
+  return $form;
+}
+
+/**
+ * Submit handler for paddle_content_manager_node_add_form().
+ */
+function paddle_content_manager_node_add_form_submit($form, &$form_state) {
+  $node = $form_state['node'];
+
+  if (isset($form_state['layout'])) {
+    list($entity_id, $revision_id, $bundle) = entity_extract_ids('node', $node);
+    ctools_include('export');
+    $node->panelizer['page_manager'] = ctools_export_crud_load('panelizer_defaults', $form_state['layout']);
+    $node->panelizer['page_manager']->entity_id = $entity_id;
+    $node->panelizer['page_manager']->revision_id = $revision_id;
+    // Make sure a new Panels display is created. This prevents the user from
+    // accidentally overwriting the default presets.
+    // @see PanelizerEntityDefault::hook_entity_insert()
+    $node->panelizer['page_manager']->did = NULL;
+    $node->panelizer['page_manager']->name = NULL;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_content_manager_form_views_exposed_form_alter(&$form, &$form_state) {
+  // Set the weight of the filters properly.
+  $form['secondary']['search_body']['#weight'] = 0;
+  $form['secondary']['field_paddle_tags_tid']['#weight'] = 5;
+  $form['secondary']['field_paddle_general_tags_tid']['#weight'] = 10;
+  $form['secondary']['created']['#weight'] = 15;
+  $form['secondary']['changed']['#weight'] = 20;
+  $form['secondary']['field_page_responsible_author_target_id']['#weight'] = 25;
+  $form['secondary']['state']['#weight'] = 30;
+  $form['secondary']['uid']['#weight'] = 35;
+  $form['secondary']['nid']['#weight'] = 40;
+  $form['secondary']['uid_1']['#weight'] = 45;
+  $form['secondary']['last_modified_uid']['#weight'] = 50;
+  $form['secondary']['creation_uid']['#weight'] = 55;
+  // The titles for the dates are being stripped because the the fields are
+  // being pulled out of their wrapper container. Add them in a cheecky way.
+  if (!empty($form['secondary']['changed']['#title'])) {
+    $form['secondary']['changed']['min']['#title'] = $form['secondary']['changed']['#title'];
+  }
+  if (!empty($form['secondary']['created']['#title'])) {
+    $form['secondary']['created']['min']['#title'] = $form['secondary']['created']['#title'];
+  }
+}
+
+/**
+ * Implements hook_action_info().
+ */
+function paddle_content_manager_action_info() {
+  $info = array();
+  $info['paddle_content_manager_set_workbench_moderation_state'] = array(
+    'type' => 'node',
+    'label' => t('Set moderation state'),
+    'configurable' => TRUE,
+    'behavior' => array('changes_property'),
+    'triggers' => array(
+      'node_presave',
+      'node_insert',
+      'node_update',
+      'workbench_moderation_transition',
+    ),
+  );
+
+  // Get all workbench transitions.
+  $transitions = workbench_moderation_transitions();
+
+  // Add a trigger for each transition.
+  foreach ($transitions as $transition_definition) {
+    $transition_string = 'wmt_' . $transition_definition->from_name . '__' . $transition_definition->to_name;
+    // Hash this string if it's longer than the db field size.
+    if (strlen($transition_string) > 32) {
+      $transition_string = md5($transition_string);
+    }
+
+    $info['paddle_content_manager_set_workbench_moderation_state']['triggers'][] = $transition_string;
+  }
+
+  $info['paddle_content_manager_set_page_responsible_author'] = array(
+    'type' => 'node',
+    'label' => t('Set page responsible author'),
+    'configurable' => FALSE,
+    'behavior' => array('changes_property'),
+    'triggers' => array('any'),
+  );
+
+  // Add an action to allow a user to restore a node.
+  // VBO checks access on the entity before allowing any operation. For archived
+  // nodes, the users do not have any edit permission. So we set this action
+  // to be available to people that can view the entity, but set additional
+  // permission check (done by VBO) to allow only people that can moderate
+  // the node back to draft.
+  $info['paddle_content_manager_restore_node_action'] = array(
+    'type' => 'node',
+    'label' => t('Restore node from archive'),
+    'configurable' => FALSE,
+    'triggers' => array('any'),
+    'behavior' => array('views_property'),
+    'permissions' => array('moderate content from archived to draft'),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_content_manager_form_views_form_content_manager_page_alter(&$form, &$form_state) {
+  if (!empty($form['select']) && $form['select']['operation']['#type'] == 'select') {
+    global $user;
+
+    // Only show the select boxes for nodes if the user is allowed to moderate
+    // them.
+    if (isset($form['views_bulk_operations'])) {
+      foreach ($form['views_bulk_operations'] as $key => $value) {
+        if ($node = node_load($value['#return_value'])) {
+          $wm_node = workbench_moderation_node_current_load($node);
+
+          // Limit the access to the checkbox based on the moderation state.
+          if (!count(paddle_content_manager_transition_from_state_allowed($wm_node->workbench_moderation['current']->state))) {
+            $form['views_bulk_operations'][$key]['#access'] = FALSE;
+          }
+
+          // Disable and hide the checkbox when the current user cannot delete
+          // the current item.
+          if (!node_access('delete', $node)) {
+            $form['views_bulk_operations'][$key]['#states'] = array(
+              'disabled' => array(
+                ':input[name="operation"]' => array('value' => 'action::views_bulk_operations_delete_item'),
+              ),
+              'invisible' => array(
+                ':input[name="operation"]' => array('value' => 'action::views_bulk_operations_delete_item'),
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    if (!empty($form['select']['operation']['#options']['action::paddle_content_manager_set_workbench_moderation_state'])) {
+      $options = workbench_moderation_state_labels();
+
+      // Only a chief editor can moderate to online and offline.
+      if (!count(paddle_content_manager_transition_to_state_allowed('published'))) {
+        unset($options['published']);
+      }
+      if (!user_access('moderate content from published to offline')) {
+        unset($options['offline']);
+      }
+
+      // Unset the scheduled state, we should not be able to moderate to it
+      // trough bulk actions.
+      unset($options['draft']);
+      unset($options['scheduled']);
+
+      $form['select']['bulk_state'] = array(
+        '#type' => 'select',
+        '#options' => $options,
+        '#states' => array(
+          'visible' => array(
+            ':input[name="operation"]' => array('value' => 'action::paddle_content_manager_set_workbench_moderation_state'),
+          ),
+        ),
+        '#weight' => 25,
+      );
+    }
+
+    // Add an extra select for the page responsible author.
+    if (!empty($form['select']['operation']['#options']['action::paddle_content_manager_set_page_responsible_author'])) {
+      // Get the users on the website.
+      $users = user_load_multiple(FALSE, array(), FALSE);
+      $options = array();
+
+      // Create the options array for the select box.
+      foreach ($users as $u) {
+        if (!empty($u->name) && $u->uid != 1) {
+          $options[$u->uid] = $u->name;
+        }
+      }
+
+      // Add the select box.
+      $form['select']['responsible_author'] = array(
+        '#type' => 'select',
+        '#options' => $options,
+        '#states' => array(
+          'visible' => array(
+            ':input[name="operation"]' => array('value' => 'action::paddle_content_manager_set_page_responsible_author'),
+          ),
+        ),
+        '#weight' => 25,
+      );
+    }
+
+    $form['select']['submit']['#weight'] = 50;
+    // We override the standard submit function with our own to change the
+    // moderation state or the page responsible author. This is done because we
+    // skip a step in the process.
+    $form['select']['submit']['#submit'][] = 'paddle_content_manager_views_bulk_operations_form_submit';
+  }
+}
+
+/**
+ * Extra form for the action when choosing to moderate to to check or in review.
+ */
+function paddle_content_manager_set_workbench_moderation_state_form($settings, &$form_state) {
+  $form = array();
+  $state = $form_state['values']['bulk_state'];
+
+  if (in_array($state, array('to_check', 'needs_review'))) {
+    // We need to give the state for the next step, otherwise it gets lost.
+    $form['bulk_state'] = array(
+      '#type' => 'textfield',
+      '#title' => t('State'),
+      '#default_value' => $state,
+      '#required' => TRUE,
+      '#access' => FALSE,
+    );
+
+    $assignees['any'] = t('Assign to any');
+    $assignees += paddle_content_manager_get_assignee_users_for_state($form_state['values']['bulk_state']);
+
+    $form['assignee'] = array(
+      '#type' => 'select',
+      '#title' => t('Assignee'),
+      '#options' => $assignees,
+      '#required' => TRUE,
+      '#default_value' => isset($settings['settings']['assignee']) ? $settings['settings']['assignee'] : 'any',
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * Submit handler for the paddle set moderation bulk action.
+ */
+function paddle_content_manager_views_bulk_operations_form_submit(&$form, &$form_state) {
+  // Only show the config form when the we needs to choose an assignee.
+  // Otherwise go directly to the confirmation step.
+  if (!in_array($form_state['values']['bulk_state'], array('to_check', 'needs_review'))) {
+    $form_state['step'] = 'views_bulk_operations_confirm_form';
+  }
+
+  if ($form_state['step'] == 'views_bulk_operations_confirm_form' && $form_state['operation']->operationId != 'action::views_bulk_operations_delete_item') {
+    $operation = &$form_state['operation'];
+    $operation->formSubmit($form, $form_state);
+  }
+}
+
+/**
+ * Submit handler for the "set moderation state" action.
+ */
+function paddle_content_manager_set_workbench_moderation_state_submit($form, $form_state) {
+  $return = array();
+
+  $return['state'] = $form_state['values']['bulk_state'];
+  $return['assignee'] = !empty($form_state['values']['assignee']) ? $form_state['values']['assignee'] : NULL;
+  // For the moment force the transition from any to any state.
+  $return['force_transition'] = TRUE;
+
+  return $return;
+}
+
+/**
+ * Action callback. Changes the moderation state of a node.
+ */
+function paddle_content_manager_set_workbench_moderation_state(&$node, $context) {
+  if (in_array($context['state'], array('archived', 'offline')) && ($node->status || !empty($node->workbench_moderation['published']))) {
+    // This is taken from the Workbench Moderation module.
+    // @see workbench_moderation_node_unpublish_form_submit()
+    // Remove the moderation record's "published" flag.
+    db_update('workbench_moderation_node_history')
+      ->condition('hid', $node->workbench_moderation['published']->hid)
+      ->fields(array('published' => 0))
+      ->execute();
+
+    // Make sure the 'current' revision is the 'live' revision -- ie, the
+    // revision in {node}.
+    $live_revision = workbench_moderation_node_current_load($node);
+    $live_revision->status = 0;
+    $live_revision->revision = 0;
+    $live_revision->workbench_moderation['updating_live_revision'] = TRUE;
+    node_save($live_revision);
+
+    $node->status = 0;
+    $node->revision = 0;
+  }
+
+  workbench_moderation_set_state_action($node, $context);
+
+  // Set the assignee for the node if needed.
+  if (!empty($context['assignee']) && $context['assignee'] != 'any') {
+    $node->assignee_uid = $context['assignee'];
+    paddle_content_manager_set_assignee($node, $context['state']);
+  }
+}
+
+/**
+ * Submit handler for the "Set page responsible author" action.
+ */
+function paddle_content_manager_set_page_responsible_author_submit($form, $form_state) {
+  $return = array();
+  $return['responsible_author'] = $form_state['values']['responsible_author'];
+  return $return;
+}
+
+/**
+ * Action callback. Changes the page responsible author state of a node.
+ */
+function paddle_content_manager_set_page_responsible_author(&$node, $context) {
+  $node->field_page_responsible_author[LANGUAGE_NONE][0]['target_id'] = $context['responsible_author'];
+}
+
+/**
+ * Determines if the current user can make a transition from this state.
+ *
+ * @param string $from_state
+ *   The state from which the transition will be checked.
+ * @param string $to_state
+ *   Optional transition to check to.
+ *
+ * @return array
+ *   Array with the transitions to which we can make transitions.
+ */
+function paddle_content_manager_transition_from_state_allowed($from_state, $to_state = '') {
+  global $user;
+  // Allow super-users to moderate all content.
+  if (user_access("bypass workbench moderation", $user)) {
+    return TRUE;
+  }
+
+  if ($to_state) {
+    return user_access("moderate content from $from_state to $to_state", $user);
+  }
+
+  // Otherwise check that at least one transition from this state is allowed.
+  $to_states = array();
+  foreach (workbench_moderation_transitions() as $transition) {
+    if ($transition->from_name == $from_state) {
+      $to_states[] = $transition->to_name;
+    }
+  }
+
+  foreach ($to_states as $index => $to_state) {
+    if (!user_access("moderate content from $from_state to $to_state", $user)) {
+      unset($to_states[$index]);
+    }
+  }
+
+  return $to_states;
+}
+
+/**
+ * Determines if the current user can make a transition to this state.
+ *
+ * @param string $to_state
+ *   The state to which the transition will be checked.
+ * @param string $from_state
+ *   Optional transition to check from.
+ *
+ * @return array
+ *   Array with the transitions from which we can make transitions.
+ */
+function paddle_content_manager_transition_to_state_allowed($to_state, $from_state = '') {
+  global $user;
+  // Allow super-users to moderate all content.
+  if (user_access("bypass workbench moderation", $user)) {
+    return TRUE;
+  }
+
+  if ($from_state) {
+    return user_access("moderate content from $from_state to $to_state", $user);
+  }
+
+  // Otherwise check that at least one transition to this state is allowed.
+  $from_states = array();
+  foreach (workbench_moderation_transitions() as $transition) {
+    if ($transition->to_name == $to_state) {
+      $from_states[] = $transition->from_name;
+    }
+  }
+
+  foreach ($from_states as $index => $from_state) {
+    if (!user_access("moderate content from $from_state to $to_state", $user)) {
+      unset($from_states[$index]);
+    }
+  }
+
+  return $from_states;
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function paddle_content_manager_admin_paths() {
+  return array(
+    'node/*/moderation/diff' => TRUE,
+    'node/*/moderation/diff/view' => TRUE,
+    'node/*/moderation/diff/view/*/*' => TRUE,
+    'node/*/revisions/%/revert' => TRUE,
+  );
+}
+
+/**
+ * Implements hook_field_diff_view_alter().
+ */
+function paddle_content_manager_field_diff_view_alter(&$values, &$items, &$context) {
+  if (!empty($values[0])) {
+    // Show the url without all the HTML tags.
+    if ($context['field']['type'] == 'url') {
+      $values[0] = $items[0]['value'];
+    }
+
+    // Show the address field nicely without all the HTML tags.
+    if ($context['field']['type'] == 'addressfield') {
+      $values[0] = $items[0]['name_line'];
+      $values[1] = $items[0]['thoroughfare'];
+      $values[2] = $items[0]['premise'];
+      $values[3] = $items[0]['postal_code'] . ' ' . $items[0]['locality'];
+    }
+
+    // If the field is an image, pass the uri instead of the image name for
+    // easier use in the paddle_admin_theme_diff_content_line() function.
+    if ($context['field']['type'] == 'image') {
+      $values[0] = $items[0]['uri'];
+    }
+
+    // Atoms need to be handled differently then images because we do not
+    // directly get the URL.
+    if ($context['field']['type'] == 'paddle_scald_atom') {
+      $atom = scald_atom_load($items[0]['sid']);
+      $values[0] = $atom->file_source;
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_content_manager_form_node_revision_revert_confirm_alter(&$form, &$form_state) {
+  // Make sure the "Cancel" action goes back to our diff page.
+  $form['actions']['cancel']['#href'] = "node/{$form['#node_revision']->nid}/moderation/diff";
+  // Add our own submit handler for the revert of a node revision.
+  $form['#submit'] = array('paddle_content_manager_revert_revision_submit');
+}
+
+/**
+ * Submit handler for the node revision revert action.
+ *
+ * @see node_revision_revert_confirm_submit()
+ */
+function paddle_content_manager_revert_revision_submit($form, &$form_state) {
+  $node_revision = $form['#node_revision'];
+  $node_revision->revision = 1;
+  $node_revision->log = t('Copy of the revision from %date.', array('%date' => format_date($node_revision->revision_timestamp)));
+
+  node_save($node_revision);
+
+  // Change compared to node_revision_revert_confirm_submit(): set the reverted
+  // revision to 'draft'.
+  $node = node_load($node_revision->nid, $node_revision->vid);
+  workbench_moderation_moderate($node, 'draft');
+
+  watchdog('content', '@type: reverted %title revision %revision.', array(
+    '@type' => $node_revision->type,
+    '%title' => $node_revision->title,
+    '%revision' => $node_revision->vid,
+  ));
+  drupal_set_message(t('@type %title has been reverted back to the revision from %revision-date.', array(
+    '@type' => node_type_get_name($node_revision),
+    '%title' => $node_revision->title,
+    '%revision-date' => format_date($node_revision->revision_timestamp),
+  )));
+
+  // Change compared to node_revision_revert_confirm_submit(): redirect to the
+  // Moderation Diff page instead of the Revisions page.
+  $form_state['redirect'] = 'node/' . $node_revision->nid . '/moderation/diff';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_content_manager_form_diff_node_revisions_alter(&$form, &$form_state) {
+  $node = node_load($form['nid']['#value']);
+
+  // Add the view operation.
+  foreach ($form['operations'] as $vid => $operations) {
+    if (!empty($form['operations'][$vid])) {
+      // If the revision is the current revision, the revert link should not be
+      // there.
+      if ($node->workbench_moderation['current']->vid == $vid) {
+        unset($form['operations'][$vid][0]);
+      }
+
+      // Make sure that the view link is first in the operations.
+      array_unshift($form['operations'][$vid], array(
+        '#markup' => l(
+          t('View'),
+          "node/{$node->nid}/revisions/$vid/view",
+          array('attributes' => array('class' => array('view-revision')))
+        ),
+      ));
+    }
+  }
+
+  if (module_exists('paddle_contextual_toolbar')) {
+    // Hide the original 'Compare' button.
+    $form['submit']['#attributes'] = array('class' => array('element-invisible'));
+    // Because will be accessible via the contextual toolbar button.
+    $form['#after_build'][] = 'paddle_content_manager_add_contextual_actions_diff_node_revisions';
+  }
+}
+
+/**
+ * After-build function of the diff node revisions form.
+ */
+function paddle_content_manager_add_contextual_actions_diff_node_revisions($form, $form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $actions = paddle_contextual_toolbar_actions();
+  $actions[] = array(
+    'action' => l(
+      t('Back'),
+      'admin/content_manager/node/' . $form['nid']['#value'] . '/view',
+      array(
+        'attributes' => array('class' => array('ui-icon', 'fa-arrow-left')),
+      )
+    ),
+    'class' => array('cancel'),
+    'weight' => -10,
+  );
+
+  $action_link = l(
+    t('Compare'),
+    '',
+    array(
+      'html' => TRUE,
+      'external' => TRUE,
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-submit',
+        'class' => array('no-ui-icon'),
+      ),
+    )
+  );
+  $actions[] = array(
+    'action' => $action_link,
+    'class' => array(),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_clone_node_alter().
+ */
+function paddle_content_manager_clone_node_alter(&$node, $context) {
+  // Set workbench_moderation to 0 otherwise this references the original node
+  // so errors are being thrown because we are actually on the cloned node.
+  // @see https://www.drupal.org/node/2501357
+  $node->workbench_moderation = 0;
+}
+
+/**
+ * Menu access callback for the restore node from archive functionality.
+ *
+ * @param object $node
+ *   The node that needs to be restored.
+ *
+ * @return bool
+ *   True if the user can restore the node, false otherwise.
+ */
+function paddle_content_manager_restore_node_access($node) {
+  $current_node = workbench_moderation_node_current_load($node);
+  $current_revision = $current_node->workbench_moderation['current'];
+  $next_states = workbench_moderation_states_next($current_revision->state, NULL, $current_node);
+
+  return ($current_revision->state == 'archived' && isset($next_states['draft']));
+}
+
+/**
+ * Action callback to restore a node from the archive.
+ */
+function paddle_content_manager_restore_node_action(&$node, $context) {
+  workbench_moderation_moderate($node, 'draft');
+}
+
+/**
+ * Implements hook_workbench_moderation_states_next_alter().
+ *
+ * Do not allow to archive published pages.
+ */
+function paddle_content_manager_workbench_moderation_states_next_alter(&$states, $current_state, $context) {
+  if (!empty($context['node']->workbench_moderation['published']) && !user_access('moderate content from published to archived')) {
+    unset($states['archived']);
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_content_manager_form_node_delete_confirm_alter(&$form, $form_state) {
+  $form['#submit'][] = 'paddle_content_manager_form_node_delete_confirm_submit';
+  $form['#action'] = url('node/' . $form['nid']['#value'] . '/delete');
+}
+
+/**
+ * Submit callback for the delete confirm form.
+ *
+ * Redirects the user to the archived pages overview page.
+ *
+ * @param array $form
+ *   The delete confirm form.
+ * @param array $form_state
+ *   The form state of the delete confirm form.
+ */
+function paddle_content_manager_form_node_delete_confirm_submit($form, &$form_state) {
+  // We need to check where we came from - if it was the admin node view go to
+  // the content manager page since the node was deleted.
+  $form_state['redirect'] = 'admin/content_manager/archive';
+}
+
+/**
+ * Implements hook_query_TAG_alter().
+ */
+function paddle_content_manager_query_paddle_menu_manager_internal_link_autocomplete_alter(QueryAlterableInterface $query) {
+  $query->join('workbench_moderation_node_history', 'wmh', 'wmh.nid = n.nid');
+  $query->condition('wmh.state', 'archived', '<>')
+    ->condition('wmh.is_current', 1, '=');
+}
+
+/**
+ * Will Panels already render the fields of the given node?
+ *
+ * @param object $node
+ *   A node object.
+ *
+ * @return bool
+ *   Whether hook_node_view() implementations will be called or not.
+ */
+function paddle_content_manager_panelized_node_uses_entity_view($node) {
+  if (isset($node->panelizer)) {
+    $node_panels = $node->panelizer['page_manager']->display->content;
+    if (!empty($node_panels)) {
+      foreach ($node_panels as $id => $panel) {
+        if ($panel->type == "entity_revision_view" || $panel->type == "entity_view") {
+          return TRUE;
+        }
+      }
+    }
+  }
+  else {
+    // The node seems not panelized so we suspect it to pass through
+    // hook_node_view(), like standard Drupal core does.
+    return TRUE;
+  }
+
+  return FALSE;
+}

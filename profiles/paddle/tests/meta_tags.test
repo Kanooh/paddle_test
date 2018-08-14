@@ -1,0 +1,121 @@
+<?php
+/**
+ * @file
+ * Tests the adding of meta tags to the head of the page.
+ */
+
+/**
+ * Meta tags test.
+ */
+class MetaTagsTestCase extends PaddleWebTestCase {
+
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Meta tags',
+      'description' => 'Tests adding meta tags to the head of the page.',
+      'group' => 'Paddle - SEO',
+    );
+  }
+
+  /**
+   * Tests adding meta tags to the head of the page.
+   */
+  public function testAddMetaTags() {
+    // Allow the chief editors to create overview pages. I found that, at least
+    // in Simpletest, node_save() fails to create an overview page because some
+    // Paddle Themer instances are not initialized.
+    $chief_editor_role = user_role_load_by_name('Chief Editor');
+    user_role_grant_permissions($chief_editor_role->rid, array('create paddle_overview_page content'));
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create terms.
+    $term_name1 = $this->randomName();
+    $this->drupalGet('admin/structure/taxonomy_manager/nojs/paddle_general/add');
+    $edit = array(
+      'name' => $term_name1,
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+
+    $term_name2 = $this->randomName();
+    $this->drupalGet('admin/structure/taxonomy_manager/nojs/paddle_general/add');
+    $edit = array(
+      'name' => $term_name2,
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+
+    // Test for each node type if the meta tags are being set.
+    $types = node_type_get_types();
+    foreach ($types as $machine_name => $type) {
+      if ($machine_name != 'landing_page') {
+        $fields_info = field_info_instances('node', $machine_name);
+
+        $edit = array(
+          'title' => $this->randomName(8),
+        );
+
+        if (array_key_exists('body', $fields_info)) {
+          $edit['body[und][0][value]'] = $this->randomString(500);
+        }
+
+        if (array_key_exists('field_paddle_general_tags', $fields_info)) {
+          $edit['field_paddle_general_tags[und][0][1][1]'] = TRUE;
+        }
+
+        $node = $this->drupalCreateUiNode($machine_name, $edit);
+
+        // Create a separate node that uses the seo description field.
+        if (array_key_exists('body', $fields_info)) {
+          // Need to generate a new random title, otherwise drupalCreateUiNode()
+          // gives us back the previous node.
+          $seo_edit['title'] = $this->randomName(8);
+          $seo_edit['field_paddle_seo_title[und][0][value]'] = $this->randomName(12);
+          $seo_edit['field_paddle_seo_description[und][0][value]'] = $this->randomString(500);
+        }
+        $node_with_seo = $this->drupalCreateUiNode($machine_name, $seo_edit);
+      }
+      else {
+        // Landingspage without summary.
+        $edit = array(
+          'title' => $this->randomName(8),
+          'body[und][0][value]' => $this->randomString(500),
+          'field_paddle_general_tags[und][0][1][1]' => TRUE,
+        );
+        $node = $this->createLandingPage();
+        $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+
+        // Landingspage with seo description.
+        $seo_edit = $edit;
+        $seo_edit['field_paddle_seo_title[und][0][value]'] = $this->randomName(12);
+        $seo_edit['field_paddle_seo_description[und][0][value]'] = $this->randomString(500);
+        $node_with_seo = $this->createLandingPage();
+        $edit_path = 'node/' . $node_with_seo->nid . '/edit';
+        $this->drupalPost($edit_path, $seo_edit, t('Save'));
+      }
+
+      // Test the node with empty SEO fields.
+      $this->drupalGet('node/' . $node->nid);
+
+      // Check that the title tag has been set from the title field.
+      $title = $edit['title'];
+      $this->assertRaw('<title>' . $title . ' - ', "The title tag starts with the node's title.");
+
+      // Check that meta description has been set from body content.
+      $body = strip_tags($edit['body[und][0][value]']);
+      $body = truncate_utf8($body, 157, FALSE, TRUE);
+      $this->assertRaw('<meta name="description" content="' . check_plain($body) . '" />', 'The description meta tag has been set with body content.');
+      $this->assertRaw('<meta name="keywords" content="' . check_plain($term_name1) . '" />', 'The keywords meta tag has been set.');
+
+      // Test the node with SEO data.
+      $this->drupalGet('node/' . $node_with_seo->nid);
+
+      $seo_title = $seo_edit['field_paddle_seo_title[und][0][value]'];
+      $this->assertRaw('<title>' . $seo_title . ' - ', 'The title tag starts with the SEO title.');
+
+      $seo_description = strip_tags($seo_edit['field_paddle_seo_description[und][0][value]']);
+      $this->assertRaw('<meta name="description" content="' . check_plain($seo_description) . '" />', 'The description meta tag has been set with seo description content.');
+    }
+  }
+}

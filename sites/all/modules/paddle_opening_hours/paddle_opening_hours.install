@@ -1,0 +1,97 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Opening Hours.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_opening_hours_enable() {
+  // We need to clear the CTools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  ctools_modules_enabled(array(
+    'paddle_opening_hours',
+    'opening_hours_sets',
+  ));
+
+  $permissions = array(
+    'manage opening hours sets',
+    'edit opening_hours_calendar content in landing pages',
+  );
+
+  paddle_apps_prepare_module_for_permissions('paddle_opening_hours');
+
+  // Make sure the site managers and chief editors can manage opening hour
+  // definitions on Paddle websites.
+  foreach (array('Chief Editor', 'Site Manager', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Add the entity edit page to the management menu display path root items.
+  if ('paddle' == variable_get('install_profile')) {
+    $path_roots = array(
+      array(
+        'path' => 'admin/content/opening_hours_set/add',
+        'root_item' => 'admin',
+      ),
+      array(
+        'path' => 'admin/content/opening_hours_set/edit/%',
+        'root_item' => 'admin',
+      ),
+      array(
+        'path' => 'admin/content/opening_hours_set/delete/%',
+        'root_item' => 'admin',
+      ),
+    );
+    module_load_include('install', 'paddle');
+    _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+  }
+}
+
+/**
+ * Replace the core page caching by AuthCache.
+ */
+function paddle_opening_hours_update_7001() {
+  paddle_apps_enable_authcache();
+}
+
+/**
+ * Add the opening hour permissions to editors.
+ */
+function paddle_opening_hours_update_7002() {
+  $role = user_role_load_by_name('Editor');
+
+  $permissions = array(
+    'manage opening hours sets',
+    'edit opening_hours_calendar content in landing pages',
+  );
+
+  user_role_grant_permissions($role->rid, $permissions);
+}
+
+/**
+ * Add the opening hour permissions to all the required user roles.
+ */
+function paddle_opening_hours_update_7003() {
+  $permissions = array(
+    'manage opening hours sets',
+    'edit opening_hours_calendar content in landing pages',
+  );
+
+  foreach (array('Site Manager', 'Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Finish the intentions of update hook 7001; get page cache working again.
+ */
+function paddle_opening_hours_update_7004() {
+  module_enable(array('authcache_builtin'));
+  paddle_apps_enable_authcache();
+}

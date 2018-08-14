@@ -1,0 +1,53 @@
+/**
+ * @file
+ * Form builder paddlet styling.
+ */
+
+[id="paddle-formbuilder-configure-webform"],
+[id="webform-email-edit-form"],
+[id="paddle-formbuilder-webform-results-download"] {
+  @extend %paddlet-configuration-forms;
+}
+
+.webform-conditional,
+.webform-conditional-new {
+  max-width: none;
+}
+
+.webform-conditional-new {
+  font-size: 0;
+  margin-left: 0;
+  text-align: left;
+
+  > input {
+    font-size: 16px;
+  }
+}
+
+.webform-conditional-operations {
+  margin-top: 0;
+  position: static;
+}
+
+#paddle-formbuilder-configuration-form {
+  #edit-submit {
+    display: none;
+  }
+}
+
+.webform-submission-info{
+  padding-left: 0;
+  margin-top: 20px;
+
+  legend {
+    padding-left: 0;
+  }
+}
+
+ul.webform-submission-actions {
+  padding-top: 10px;
+
+  & > li {
+    padding-left: 0;
+  }
+}

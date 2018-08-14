@@ -1,0 +1,103 @@
+/*------------------------------------*\
+    #HEADER REGION
+\*------------------------------------*/
+[id="header"] .menu-bg {
+  position: relative;
+}
+
+#block-paddle-menu-display-management-level-2 {
+  // We need to remove position relative in order to have a full-width submenu.
+  position: static;
+
+  ul {
+    ul {
+      li {
+        background: url('../images/block-menu-block-management-level-2_sep.png') left 7px no-repeat;
+
+        &:first-child {
+          background: none;
+        }
+
+        a {
+          padding: 4px 10px 0;
+          color: #fff;
+          font-size: 0.9em;
+        }
+      }
+    }
+  }
+
+  a {
+    text-transform: uppercase;
+  }
+
+  .level-2 {
+    > .first {
+      > a {
+        &:first-child {
+          padding-left: 10px;
+        }
+      }
+    }
+  }
+
+  @media screen and (min-width: $menu-display-min-width) {
+    margin-right: 50px;
+
+    .menu {
+      &.is-expanded {
+        margin-bottom: 26px;
+      }
+
+      li {
+        float: left;
+      }
+    }
+
+    .menu_wrapper {
+      .menu_wrapper {
+        position: absolute;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        z-index: 1000;
+        clear: both;
+      }
+    }
+  }
+}
+
+#block-paddle-core-content-search {
+  input[type="text"] {
+    padding-left: 34px;
+    background: #fff url('../images/icon-search.png') no-repeat 5px center;
+  }
+
+  @media screen and (min-width: $menu-display-min-width) {
+    position: relative;
+    float: right;
+    margin-right: 5px;
+
+    form {
+      /*
+       * Use absolute positioning to allow the input
+       * to expand without moving other elements.
+       */
+      position: absolute;
+      top: 0;
+      right: 0;
+    }
+
+    input[type="text"] {
+      display: inline-block;
+      width: 1px;
+      -webkit-transition: width 400ms ease, background 400ms ease;
+      -moz-transition:    width 400ms ease, background 400ms ease;
+      transition:         width 400ms ease, background 400ms ease;
+
+      &:focus {
+        width: 375px;
+      }
+    }
+  }
+}

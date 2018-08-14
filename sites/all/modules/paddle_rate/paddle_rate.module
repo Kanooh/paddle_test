@@ -1,0 +1,375 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Rate feature.
+ */
+
+include_once 'paddle_rate.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_rate_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_rate_configuration_form',
+  );
+}
+
+/**
+ * Paddle Rate configuration form callback.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_rate_configuration_form($form) {
+  $default_values = array();
+  $options = node_type_get_names();
+
+  foreach ($options as $type => $name) {
+    $default_values[$type] = variable_get("paddle_rate_$type", 0) ? $type : 0;
+  }
+
+  $form['paddle_rate_content_types'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Available for the following content types:'),
+    '#options' => $options,
+    '#default_value' => $default_values,
+  );
+
+  $form['save'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#attributes' => array(
+      'class' => array('hidden'),
+    ),
+  );
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_rate_contextual_actions_configuration_form';
+  }
+
+  return $form;
+}
+
+/**
+ * Submit handler for the Paddle Rate configuration form.
+ */
+function paddle_rate_configuration_form_submit($form, $form_state) {
+  $types = node_type_get_names();
+
+  // Save the content type settings.
+  foreach ($types as $type => $name) {
+    $value = $form_state['values']['paddle_rate_content_types'][$type] ? 1 : 0;
+    variable_set('paddle_rate_' . $type, $value);
+  }
+
+  drupal_set_message(t('Your configuration has been saved.'));
+}
+
+/**
+ * After-build function of the Paddle Rate configuration form.
+ *
+ * @param array $form
+ *   Form render array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_rate_contextual_actions_configuration_form($form) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-save',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function paddle_rate_node_type_insert($info) {
+  variable_set('paddle_rate' . $info->type, 0);
+
+  paddle_rate_create_rate_field_instance($info);
+}
+
+/**
+ * Creates the field instance for a content type.
+ *
+ * @param Object $type
+ *   The content type.
+ */
+function paddle_rate_create_rate_field_instance(&$type) {
+  if (!field_read_instance('node', 'field_paddle_rating', $type->type)) {
+    $field_instance_rating = array(
+      'bundle' => $type->type,
+      'default_value' => NULL,
+      'deleted' => 0,
+      'description' => '',
+      'display' => array(
+        'default' => array(
+          'label' => 'hidden',
+          'module' => 'fivestar',
+          'settings' => array(
+            'expose' => 1,
+            'style' => 'average',
+            'text' => 'none',
+            'widget' => array(
+              'fivestar_widget' => 'sites/all/modules/fivestar/widgets/oxygen/oxygen.css',
+            ),
+          ),
+          'type' => 'fivestar_formatter_default',
+          'weight' => 99,
+        ),
+        'diff_standard' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'full' => array(
+          'label' => 'hidden',
+          'module' => 'fivestar',
+          'settings' => array(
+            'expose' => 1,
+            'style' => 'average',
+            'text' => 'none',
+            'widget' => array(
+              'fivestar_widget' => 'sites/all/modules/fivestar/widgets/oxygen/oxygen.css',
+            ),
+          ),
+          'type' => 'fivestar_formatter_default',
+          'weight' => 99,
+        ),
+        'listing_teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_summary' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => 'node',
+      'field_name' => 'field_paddle_rating',
+      'label' => 'Rating',
+      'required' => 0,
+      'settings' => array(
+        'allow_clear' => 0,
+        'allow_ownvote' => 1,
+        'allow_revote' => 1,
+        'authcache' => array(
+          'clients' => array(
+            'authcache_ajax' => array(
+              'status' => 1,
+              'weight' => 0,
+            ),
+          ),
+          'fallback' => 'cancel',
+          'lifespan' => 0,
+          'perpage' => 1,
+          'peruser' => 0,
+          'status' => 1,
+        ),
+        'field_instance_sync' => 0,
+        'stars' => 5,
+        'target' => 'none',
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'fivestar',
+        'settings' => array(),
+        'type' => 'exposed',
+        'weight' => 12,
+      ),
+    );
+
+    field_create_instance($field_instance_rating);
+  }
+
+  if (!field_read_instance('node', 'field_paddle_enable_rating', $type->type)) {
+    $field_instance_enable_rating = array(
+      'bundle' => $type->type,
+      'default_value' => array(
+        0 => array(
+          'value' => 0,
+        ),
+      ),
+      'deleted' => 0,
+      'description' => 'Allows users to rate your content.',
+      'display' => array(
+        'default' => array(
+          'label' => 'hidden',
+          'module' => 'list',
+          'settings' => array(),
+          'type' => 'list_default',
+          'weight' => 100,
+        ),
+        'diff_standard' => array(
+          'label' => 'hidden',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'full' => array(
+          'label' => 'hidden',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_teaser' => array(
+          'label' => 'hidden',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'hidden',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_full' => array(
+          'label' => 'hidden',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_summary' => array(
+          'label' => 'hidden',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'hidden',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => 'node',
+      'field_name' => 'field_paddle_enable_rating',
+      'label' => 'Enable Rating',
+      'required' => 0,
+      'settings' => array(
+        'field_instance_sync' => 1,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'options',
+        'settings' => array(
+          'display_label' => 1,
+        ),
+        'type' => 'options_onoff',
+        'weight' => 13,
+      ),
+    );
+    field_create_instance($field_instance_enable_rating);
+  }
+}
+
+
+/**
+ * Implements hook_preprocess_page().
+ *
+ * Adds the field to all nodes who use panelizer to render their content.
+ */
+function paddle_rate_preprocess_page(&$variables) {
+  if (isset($variables['node']) && ($node = $variables['node'])) {
+    if (!paddle_content_manager_panelized_node_uses_entity_view($node)) {
+      if (paddle_rate_should_field_be_shown($node)) {
+        $rating = field_view_field('node', $node, 'field_paddle_rating', array(
+          'label' => 'hidden',
+          'settings' => array(
+            'expose' => 1,
+            'style' => 'average',
+            'text' => 'none',
+            'widget' => array(
+              'fivestar_widget' => 'sites/all/modules/fivestar/widgets/oxygen/oxygen.css',
+            ),
+          ),
+        ));
+        $variables['page']['content'][$node->type . '_rating'] = $rating;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * We want to hide the Enable Rating checkbox if the content type is not checked
+ * in the Rate configuration form.
+ */
+function paddle_rate_form_node_form_alter(&$form, &$form_state) {
+  $type = $form['#node']->type;
+  $rating_visibility = variable_get('paddle_rate_' . $type, 0);
+
+  if ($rating_visibility == 0) {
+    $form['field_paddle_enable_rating']['#access'] = 0;
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function paddle_rate_preprocess_node(&$variables) {
+  if (!paddle_rate_should_field_be_shown($variables['node'])) {
+    unset($variables['content']['field_paddle_rating']);
+  }
+}
+
+/**
+ * Decide whether the rate field should be shown or not.
+ *
+ * @param object $node
+ *   Node object.
+ *
+ * @return bool
+ *   Should the field be shown?
+ */
+function paddle_rate_should_field_be_shown($node) {
+  $show_on_node_type = variable_get('paddle_rate_' . $node->type, 0);
+
+  $enable_rating_on_node = field_get_items('node', $node, 'field_paddle_enable_rating');
+  $show_on_node = $enable_rating_on_node[0]['value'];
+
+  return $show_on_node_type && $show_on_node;
+}

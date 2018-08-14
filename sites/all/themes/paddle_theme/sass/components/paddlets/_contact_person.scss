@@ -1,0 +1,180 @@
+/**
+ * @file
+ * Contact person Paddlet styling.
+ */
+
+/* oup Pane titles */
+.paddle-cp-title {
+  font-weight: bold;
+  font-size: 1.2em;
+}
+/* oup page contact info headings */
+.paddle-cp-heading {
+  margin-bottom: 5px;
+}
+.paddle-cp-address {
+  margin-bottom: 15px;
+}
+
+.node-type-organizational-unit .pane-node-field-paddle-featured-image {
+  float: left;
+  margin-right: 10px;
+}
+.paddle-cp-head-unit {
+  font-style: italic;
+  font-size: 1.2em;
+  margin-bottom: 10px;
+}
+.panel-pane.pane-node-field-paddle-ou-parent-1 {
+  margin-bottom: 0;
+}
+
+.pane-organizational-unit-info .pane-content {
+  padding: 15px;
+}
+
+/* detailed page view */
+.paddle-cp-contact-info {
+  float: left;}
+.node-type-contact-person #page-title {
+  display: none;
+}
+.paddle-cp-page-title {
+  margin-bottom: 10px;
+  line-height: 30px;
+  font-weight: bold;
+}
+.paddle-cp-photo {
+  float: left;
+  margin-right: 10px;
+
+  img {
+    padding: 15px;
+  }
+}
+.region-content .pane-contact-person-info .pane-content {
+  @include clearfix;
+  border: 0;
+  box-shadow: none;
+}
+.pane-contact-person-meta {
+  line-height: 1.5em;
+
+  .paddle-cp-website, .paddle-cp-linkedin ,.paddle-cp-facebook, .paddle-cp-twitter, .paddle-cp-yammer{
+    display: inline-flex;
+    a{
+      word-break: break-word;
+      display: inline;
+      padding-left: 2px;
+    }
+  }
+  .pane-content {
+    padding: 21px 15px 14px 15px;
+  }
+
+  .paddle-cp {
+    padding: 5px;
+
+    i {
+      padding-right: 5px;
+    }
+  }
+
+  .addressfield-container-inline,
+  .street-block > div {
+    padding: 0 0 5px 0;
+  }
+}
+.col-md-3 .paddle-cp-email .inline-block {
+  max-width: 85%;
+}
+
+.col-md-3, .col-md-12 {
+  .paddle-cp.paddle-cp-email a {
+     display:inline-block;
+  }
+}
+.node-type-contact-person .col-md-12 .paddle-cp.paddle-cp-email a {
+  display:inline-block;
+
+
+}
+.paddle-cp-function {
+  font-family: latoregular, 'Lucida Sans Unicode', 'Lucida Grande', sans-serif;;
+  margin-bottom: 7px;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.node-type-contact-person .paddle-cp-address-container {
+  display: inline-block;
+  width: 91%;
+}
+.paddle-cp-address .inline-block {
+  width: 90%;
+}
+
+.paddle-cp-manager a {
+  width: auto;
+  margin-bottom: 30px;
+}
+
+.pane-contact-person .pane-content .pane-section-body {
+  padding: 15px;
+}
+
+.col-md-3 .pane-contact-person .col-md-6 {
+  width: 100%;
+  margin-left: 0;
+}
+
+// This is an utility mixin to avoid code duplication.
+@mixin paddle-cp-unfloat {
+  .pane-contact-person {
+    .col-md-6 {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .inline-block a {
+      display: inline-block;
+      width: 89%;
+    }
+  }
+}
+
+// Remove columns when space is not enough.
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max) {
+  .col-md-3,
+  .col-md-4,
+  .col-md-5,
+  .col-md-6 {
+    @include paddle-cp-unfloat;
+  }
+}
+
+@media (max-width: $screen-xs-max){
+  .paddle-cp-page-title{
+    float: left;
+    width: 100%;
+  }
+}
+
+@media (min-width: $screen-lg-min) {
+  .col-lg-3,
+  .col-lg-4,
+  .col-lg-5 {
+    @include paddle-cp-unfloat;
+  }
+}
+
+.view-organisations-view {
+  .item-list > ul {
+    margin-left: 0;
+    li.views-row {
+      padding-left: 0;
+      list-style: none;
+      margin-left: 0;
+    }
+  }
+}

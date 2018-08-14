@@ -1,0 +1,136 @@
+/**
+ * @file
+ * Style for paddlets.
+ */
+
+// Paddlet pane forms styling placeholder.
+%paddlet-pane-forms {
+  .form-text,
+  select {
+    box-sizing: border-box;
+    width: 100%;
+  }
+}
+
+// Configuration forms styling.
+%paddlet-configuration-forms {
+  fieldset {
+    position: relative;
+    padding: 40px 40px 20px;
+    background-color: #e4e4e4;
+
+    html.js &.collapsed {
+      // Remove the default height set when closed.
+      height: auto;
+    }
+
+    fieldset {
+      margin: 0;
+      border: 1px solid #a1a1a1;
+
+      html.js &.collapsed {
+        // Default Drupal styling removes all widths except top.
+        border-width: 1px;
+      }
+
+      > legend {
+        top: 20px;
+        left: 20px;
+      }
+    }
+  }
+
+  .fieldset-description {
+    margin-top: 15px;
+  }
+
+  legend {
+    position: absolute;
+    top: 20px;
+    left: 40px;
+    display: block;
+    font-size: 16px;
+    line-height: 20px;
+    text-transform: uppercase;
+
+    a {
+      line-height: 20px;
+      color: #868686;
+    }
+  }
+
+  .form-item {
+    margin: 20px 0;
+
+    // Reduce spacing for nested form items.
+    .form-item {
+      margin: 5px 0;
+
+      // Smaller label for nested fields.
+      > label {
+        font-size: 14px;
+      }
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  // Better styling for textarea fields.
+  .text-format-wrapper {
+    margin-bottom: 25px;
+
+    .filter-wrapper {
+      padding: 5px 0 0;
+
+      + .description {
+        margin-bottom: 10px;
+      }
+    }
+
+    .form-item-confirmation-format {
+      margin: 0;
+      padding-bottom: 0;
+    }
+  }
+
+  // Fix wrong placement of inputs.
+  $types: (
+    radio:    -4px,
+    checkbox: -2px
+  );
+  @each $type, $margin in $types {
+    .form-type-#{$type} {
+      > input {
+        margin-top: $margin;
+      }
+    }
+  }
+}
+
+// Display all (handled) pane forms nicely.
+// @todo move into separate files
+.pane-advanced-search-form,
+.pane-google-custom-search,
+.pane-simple-contact-form,
+.pane-signup-form {
+  @extend %paddlet-pane-forms;
+}
+
+// Pane form styling.
+
+.modal-content {
+  .paddle-add-pane-form {
+    a.panel-link {
+      right: 20px;
+      padding-top: 15px;
+      position: absolute;
+      z-index: 10;
+    }
+
+    .form-body {
+      padding-top: 10px;
+    }
+  }
+}

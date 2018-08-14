@@ -1,0 +1,10 @@
+name = reCAPTCHA
+description = Add a reCAPTCHA to your existing webforms to reduce spam submissions.
+core = 7.x
+package = Paddle
+dependencies[] = recaptcha
+
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+apps[restorable] = 1

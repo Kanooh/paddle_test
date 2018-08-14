@@ -1,0 +1,83 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCorePaddleStylePluginThemeGridTest.
+ */
+
+/**
+ * Tests the Theme grid plugin.
+ */
+class PaddleCorePaddleStylePluginThemeGridTest extends DrupalWebTestCase {
+  protected $profile = 'testing';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Theme grid',
+      'description' => 'Test the Theme grid Paddle Style plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array('ctools', 'paddle_style', 'paddle_core'));
+  }
+
+  /**
+   * Tests the form() function of the Theme Grid plugin without parameters.
+   */
+  public function testThemeGridFormWithoutSettings() {
+    // Instantiate the Theme Grid plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_theme_grid');
+    $instance = new $plugin['handler']['class']();
+
+    // Test if the default elements are being returned.
+    $form_elements = $instance->form();
+    $this->assertEqual(count($form_elements['navigation_behaviour']['#options']), 3, 'The form() method of the Theme Grid plugin returns correct number of options for the radios of navigation behaviour.');
+    $this->assertEqual($form_elements['navigation_behaviour']['#default_value'], 'no_dropdown', 'The navigation behaviour radios returned by the form() method of the Theme grid plugin has correct default value if no values are passed.');
+  }
+
+  /**
+   * Tests the form() function of the Theme Grid plugin with a $values array.
+   */
+  public function testThemeGridFormWithDefaults() {
+    // Instantiate the Theme Grid plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_theme_grid');
+    $instance = new $plugin['handler']['class']();
+
+    // Values array to give to the form function.
+    $navigation_behaviour = 'simple_dropdown';
+    $values = array('navigation_behaviour' => $navigation_behaviour);
+    $form_elements = $instance->form(array(), $values);
+
+    // Check if the default values are set correctly.
+    $this->assertTrue($form_elements['navigation_behaviour']['#default_value'] == $navigation_behaviour, 'Default value is set properly for the navigation behaviour.');
+  }
+
+  /**
+   * Tests the execute() function of the Theme Grid plugin.
+   */
+  public function testThemeGridExecute() {
+    // Instantiate the Theme Grid plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_theme_grid');
+    $instance = new $plugin['handler']['class']();
+
+    // Values array to give to the execute function.
+    $navigation_behaviour = 'mega_dropdown';
+    $values = array('navigation_behaviour' => $navigation_behaviour);
+    $instance->execute($values);
+
+    // Check if the variable is set.
+    global $conf;
+    $this->assertEqual($conf['paddle_core_theme_grid_navigation_behaviour'], 'mega_dropdown', 'The global configuration of the navigation behaviour correctly set.');
+  }
+}

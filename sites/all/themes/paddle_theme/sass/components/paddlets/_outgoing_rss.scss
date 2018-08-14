@@ -1,0 +1,22 @@
+/**
+ * @file
+ * Paddlet styling.
+ */
+
+.pane-outgoing-rss-feeds-list {
+  // Not wrapping in a .pane-section-body {} as we don't have any other
+  // ULs on the frontend.
+  ul {
+    margin: 0;
+    list-style: none;
+
+    li {
+      margin-left: 0;
+      list-style: none none;
+    }
+  }
+
+  .fa-rss:before {
+    padding-right: 3px;
+  }
+}

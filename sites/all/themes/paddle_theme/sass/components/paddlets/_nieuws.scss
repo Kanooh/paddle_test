@@ -1,0 +1,38 @@
+/**
+ * @file
+ * Nieuws Paddlet styling.
+ */
+@import "../variables/*";
+
+
+// Fix listing bullets in listing pane of news item page on IE.
+
+/* IE10 + IE 11 CSS */
+@media all and (-ms-high-contrast: none), (-ms-high-contrast: active) {
+     .node-type-news-item{
+       .pane-node{
+         .field-name-body{
+           ul{
+             li{
+               list-style-position: inside;
+             }
+           }
+         }
+       }
+     }
+}
+
+/* IE EDGE CSS */
+@supports (-ms-accelerator:true) {
+  .node-type-news-item{
+    .pane-node{
+      .field-name-body{
+        ul{
+          li{
+            list-style-position: inside;
+          }
+        }
+      }
+    }
+  }
+}

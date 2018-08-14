@@ -1,0 +1,166 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle overview page content type.
+ */
+
+include_once 'paddle_overview_page.features.inc';
+
+/**
+ * Implements hook_paddle_core_additional_panes_contexts().
+ */
+function paddle_overview_page_paddle_core_additional_panes_contexts() {
+  return array(
+    'overview_page_view' => array(
+      'name' => t('Overview page view'),
+      'regions' => array(
+        'main' => t('Main'),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function paddle_overview_page_node_insert($node) {
+  // We set this static variable to prevent an infinite loop. Otherwise the
+  // node_save() being called here will cause the infinite loop to happen.
+  static $processing = FALSE;
+
+  if ($processing) {
+    return;
+  }
+
+  // When an overview page is being created, we need to create it for all
+  // enabled languages.
+  if ($node->type == 'paddle_overview_page') {
+    if (empty($node->tnid)) {
+      $languages = language_list('enabled');
+      $enabled_languages = $languages[1];
+
+      foreach (array_keys($enabled_languages) as $lang_code) {
+        $id = $node->tnid > 0 ? $node->tnid : $node->nid;
+        if ($lang_code != $node->language && !paddle_overview_page_translation_exists($lang_code, $id)) {
+          $translation = paddle_overview_page_prepare_new_translation($lang_code, $node);
+          $processing = TRUE;
+          node_save($translation);
+          $processing = FALSE;
+        }
+      }
+
+      // This is done because the original node needs to have the tnid set to
+      // his own nid.
+      db_update('node')
+        ->fields(array(
+          'tnid' => $node->nid,
+          'translate' => 0,
+        ))
+        ->condition('nid', $node->nid)
+        ->execute();
+      // Save tnid to avoid loss in case of resave.
+      $node->tnid = $node->nid;
+    }
+  }
+}
+
+/**
+ * Implements hook_multilingual_settings_changed().
+ */
+function paddle_overview_page_multilingual_settings_changed() {
+  // Get all overview pages to translate.
+  $source_nodes = padde_overview_page_get_node_sources();
+
+  $languages = language_list('enabled');
+  foreach ($source_nodes as $node) {
+    // Loop all enabled languages.
+    foreach ($languages[I18N_LANGUAGE_ENABLED] as $lang_code => $language) {
+      $id = $node->tnid > 0 ? $node->tnid : $node->nid;
+      // Add missing overview page translations.
+      if (!paddle_overview_page_translation_exists($lang_code, $id)) {
+        $translation = paddle_overview_page_prepare_new_translation($lang_code, $node);
+        node_save($translation);
+      }
+    }
+  }
+}
+
+/**
+ * Checks if a translation for a node in a given language exists.
+ *
+ * @param string $lang_code
+ *   The language to check for.
+ * @param int $tnid
+ *   The translation id of the source node.
+ *
+ * @return bool
+ *   True if the translation exists, false otherwise.
+ */
+function paddle_overview_page_translation_exists($lang_code, $tnid) {
+  $translated = db_select('node', 'n')
+    ->fields('n')
+    ->condition('n.type', 'paddle_overview_page', '=')
+    ->condition('tnid', $tnid, '=')
+    ->condition('language', $lang_code, '=')
+    ->execute()
+    ->fetchAll();
+
+  if (empty($translated)) {
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * Prepare a new translation for a given node.
+ *
+ * @param string $lang_code
+ *   The language for the new translation.
+ * @param object $node
+ *   The node object to prepare the new translation for.
+ *
+ * @return object
+ *   An updated node object.
+ */
+function paddle_overview_page_prepare_new_translation($lang_code, $node) {
+  $id = $node->tnid > 0 ? $node->tnid : $node->nid;
+
+  $translation = new stdClass();
+  $translation->title = $node->title;
+  $translation->type = $node->type;
+  node_object_prepare($translation);
+
+  $translation->language = $lang_code;
+  $translation->uid = 1;
+  $translation->status = 0;
+  $translation->promote = 0;
+  $translation->comment = 0;
+  $translation->tnid = $id;
+
+  return node_submit($translation);
+}
+
+/**
+ * Get the source nodes for translating overview pages.
+ *
+ * @return array
+ *   An associative array containing the source nodes.
+ */
+function padde_overview_page_get_node_sources() {
+  $nodes = db_select('node', 'n')
+    ->fields('n')
+    ->condition('n.type', 'paddle_overview_page', '=')
+    ->execute()
+    ->fetchAll();
+
+  // Get the source nodes.
+  $source_nodes = array();
+  foreach ($nodes as $node) {
+    if (!array_key_exists($node->tnid, $source_nodes)) {
+      $source_nodes[$node->tnid] = $node;
+    }
+  }
+
+  return $source_nodes;
+}

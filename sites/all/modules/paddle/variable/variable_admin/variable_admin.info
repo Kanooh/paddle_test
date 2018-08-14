@@ -1,0 +1,9 @@
+name = Variable admin
+description = Variable Administration UI
+dependencies[] = variable
+package = Variable
+core = 7.x
+; Information added by drush on 2014-04-11
+version = "7.x-2.5"
+project = "variable"
+datestamp = "1397238993"

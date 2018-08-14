@@ -1,0 +1,16 @@
+name = Paddle Color Palettes
+description = Provides color palettes for Paddle Themer.
+core = 7.x
+version = 1.0
+package = Paddle
+
+dependencies[] = paddle_themer
+
+files[] = tests/paddle_color_palettes_unit_test.test
+files[] = tests/plugins/paddle_style/color_palettes.test
+files[] = tests/plugins/paddle_style/color_subpalettes.test
+
+; Information added by drush on 2015-11-24
+version = "7.x-1.x-dev"
+project = "paddle_color_palettes"
+datestamp = "1448369392"

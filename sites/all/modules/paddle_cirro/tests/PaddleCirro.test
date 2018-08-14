@@ -1,0 +1,173 @@
+<?php
+
+/**
+ * @file
+ * Contains Tests for the CIRRO Paddlet.
+ */
+
+/**
+ * Tests for the Paddle CIRRO Resource Fetcher.
+ *
+ * We aborted trying to make this work after a few days of trying and realising
+ * the client's budget does not allow for more effort put in this.
+ *
+ * We tried but did not succeed:
+ * - actually importing the mock feed:
+ *   - Feeds tests this by providing files (that can be reached at the mother
+ *     Drupal installation from the Simpletest website) instead of actual
+ *     endpoints. We can not use files for CIRRO because of how its API URLs
+ *     are structured, it would require us to have a file and a folder with the
+ *     same name within the same directory.
+ *   - Make Feeds respect / pass on the CURL USER AGENT Simpletest uses so the
+ *     mock feed API URLs are used instead of trying to get them from the
+ *     mother Drupal installation. Tried to achieve it by patching
+ *     http_request_get() like the l10n_update module does, with:
+ *      $test_info = &$GLOBALS['drupal_test_info'];
+ *      if (!empty($test_info['test_run_id'])) {
+ *        curl_setopt($download, CURLOPT_USERAGENT, drupal_generate_test_ua($test_info['test_run_id']));
+ *      }
+ * - disabling the 'paddle_cirro' feed import to improve test speed and reduce
+ *   noise.
+ *
+ * We considered but did not import from the live feed and test its data
+ * because we can not be sure:
+ * - that API is always available. If we would want to test that we'd better
+ *   use a monitoring service.
+ * - that the API response contains data that is extensive enough to test all
+ *   the use cases we programmed some code for.
+ *
+ * We considered but did not enable the Paddle CIRRO test module for all
+ * Simpletest runs from within profiles/paddle/post_install_simple.sh because
+ * that would be overhead for all the other Simpletest tests.
+ */
+class FeedsCirroResourceFetcherTests extends FeedsWebTestCase {
+
+  /**
+   * The mocked FeedsSource.
+   */
+  protected $feeds_url;
+
+  /**
+   * @inheritdoc
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Paddle CIRRO Resource Fetcher test',
+      'description' => 'Unit tests for fetching resources in the Paddle CIRRO Paddlet.',
+      'group' => 'Paddle Apps - unfinished',
+    );
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public function setUp() {
+    parent::setUp('feeds_ex', 'paddle_cirro', 'paddle_cirro_test');
+    global $base_url;
+    $this->feeds_url = $base_url . '/testing/resources';
+
+    $this->drupalGet('admin/structure/feeds');
+    $this->clickLink('Add importer');
+    $edit = array(
+      'name' => 'Paddle CIRRO Test feed',
+      'id' => 'paddle_cirro_test_feed',
+    );
+    $this->drupalPost('admin/structure/feeds/create', $edit, 'Create');
+
+    // Load settings from the module feed configuration.
+    $feeds_importer = paddle_cirro_feeds_importer_default();
+    $feeds_importer_config = $feeds_importer['paddle_cirro_feed']->config;
+
+    // Inherit some settings.
+    $this->setSettings('paddle_cirro_test_feed', NULL, array('content_type' => 'paddle_cirro_page'));
+    $this->setPlugin('paddle_cirro_test_feed', $feeds_importer_config['fetcher']['plugin_key']);
+    // Set the test feed URL.
+    $this->setSettings('paddle_cirro_test_feed', $feeds_importer_config['fetcher']['plugin_key'], array('auto_scheme' => $this->feeds_url));
+    $this->setPlugin('paddle_cirro_test_feed', $feeds_importer_config['parser']['plugin_key']);
+    $this->setJsonSources('paddle_cirro_test_feed', $feeds_importer_config['parser']['config']['sources']);
+    $this->setPlugin('paddle_cirro_test_feed', $feeds_importer_config['processor']['plugin_key']);
+    $this->setSettings('paddle_cirro_test_feed', $feeds_importer_config['processor']['plugin_key'], array('bundle' => 'paddle_cirro_page'));
+    $this->addMappings('paddle_cirro_test_feed', $feeds_importer_config['processor']['config']['mappings']);
+  }
+
+  /**
+   * Tests the full import process.
+   */
+  public function test() {
+    $this->importUrl('paddle_cirro_test_feed', $this->feeds_url);
+    $this->drupalGet('node/1');
+    // Assert the page title.
+    $this->assertTitle('BVOKA-BHK - Minigids en formats voor afgeleide beelden | Drupal', 'The title of the first imported node has been found.');
+    // Assert the body.
+    $this->assertText('Handleiding en formats voor het aanmaken van afgeleide beelden  van de conceptbeelden CvKO', 'The body of the first imported node has been found.');
+    // Assert the contact information, it has been split up by breaklines.
+    $this->assertText('CvKO vzw', 'The contact info of the first node has been found. (part 1)');
+    $this->assertText('Mariane De Vriendt', 'The contact info of the first node has been found. (part 2)');
+    $this->assertText('logos.contact@bevolkingsonderzoek.be', 'The contact info e-mail of the first node has been found.');
+    // Assert that the mail has been converted to a proper mailto URL.
+    $this->assertLinkByHref('mailto:logos.contact@bevolkingsonderzoek.be', 0, 'The contact info e-mail has a proper mailto: URL');
+    $this->assertText('09 332 36 36', 'The contact info of the first node has been found. (part 3)');
+    $this->drupalGet('node/2');
+    // Assert the page title.
+    $this->assertTitle('BVOKA-BHK - Presentatie voor heterogeen doelpubliek | Drupal', 'The title of the second imported node has been found.');
+    // The following Body text has been split into 3 parts by breaklines.
+    $this->assertText('Logo&#039;s kunnen beroep doen op gevormde sprekers (pool) voor het geven van consensuspresentaties voor een heterogeen doelpubliek. Er wordt aandacht besteed aan de bevordering van de geïnformeerde keuze.', 'The body of the second imported node has been found. (part 1)');
+    $this->assertText('Hiervoor wordt de consensuspresentatie door het CvKo ter beschikking gesteld, wordt de spreker vergoed.', 'The body of the second imported node has been found. (part 2)');
+    $this->assertText('Ter ondersteuning van de informatie die gegeven wordt, wordt een publieksfolder ontwikkeld.', 'The body of the second imported node has been found. (part 3)');
+  }
+
+  /**
+   * Overrides the FeedsHTTPFetcher values w/ FeedsCirroResourceFetcher values.
+   *
+   * @inheritdoc
+   */
+  public function importURL($id, $feed_url = NULL) {
+    $edit = array(
+      'feeds[FeedsCirroResourceFetcher][source]' => $feed_url,
+    );
+    $this->drupalPost('import/' . $id, $edit, 'Import');
+
+    // Check whether feed got recorded in feeds_source table.
+    $this->assertEqual(1,
+      db_query("SELECT COUNT(*) FROM {feeds_source} WHERE id = :id AND feed_nid = 0",
+        array(':id' => $id))->fetchField());
+    $source = db_query("SELECT * FROM {feeds_source} WHERE id = :id AND feed_nid = 0",
+      array(':id' => $id))->fetchObject();
+    $config = unserialize($source->config);
+    $this->assertEqual($config['FeedsCirroResourceFetcher']['source'],
+      $feed_url, t('URL in DB correct.'));
+
+    // Check whether feed got properly added to scheduler.
+    $this->assertEqual(1,
+      db_query("SELECT COUNT(*) FROM {job_schedule} WHERE type = :id AND id = 0 AND name = 'feeds_source_import' AND last <> 0 AND scheduled = 0",
+        array(':id' => $id))->fetchField());
+    // Check expire scheduler.
+    if (feeds_importer($id)->processor->expiryTime() == FEEDS_EXPIRE_NEVER) {
+      $this->assertEqual(0,
+        db_query("SELECT COUNT(*) FROM {job_schedule} WHERE type = :id AND id = 0 AND name = 'feeds_source_expire'",
+          array(':id' => $id))->fetchField());
+    }
+    else {
+      $this->assertEqual(1,
+        db_query("SELECT COUNT(*) FROM {job_schedule} WHERE type = :id AND id = 0 AND name = 'feeds_source_expire'",
+          array(':id' => $id))->fetchField());
+    }
+  }
+
+  /**
+   * Sets the form JSON Sources.
+   *
+   * @param string $id
+   *   The importer id.
+   * @param array $values
+   *   The sources values.
+   */
+  protected function setJsonSources($id, $values) {
+    $importer = feeds_importer($id);
+    $config = $importer->parser->getConfig();
+    $config['sources'] = $values;
+    $importer->parser->setConfig($config);
+    $importer->save();
+  }
+
+}

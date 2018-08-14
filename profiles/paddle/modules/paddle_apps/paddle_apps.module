@@ -1,0 +1,1722 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Apps module.
+ */
+
+include_once 'paddle_apps.features.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_apps_menu() {
+  $items = array();
+
+  $items['admin/paddlet_store'] = array(
+    'title' => 'Paddle store',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_apps_paddlets_form'),
+    'access arguments' => array('manage paddle_apps'),
+  );
+
+  $items['admin/paddlet_store/app/%paddle_apps_app'] = array(
+    'page callback' => 'paddle_apps_paddlet_description',
+    'page arguments' => array(3),
+    'access arguments' => array('manage paddle_apps'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/paddlet_store/app/%paddle_apps_app/%ctools_js/activate'] = array(
+    'title' => 'Confirm paddlet activation',
+    'page callback' => 'paddle_apps_paddlet_activate',
+    'page arguments' => array(3, 4),
+    'access arguments' => array(3),
+    'access callback' => 'paddle_apps_activate_access',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/paddlet_store/app/%paddle_apps_app/configure'] = array(
+    'page callback' => 'paddle_apps_paddlet_configure',
+    'page arguments' => array(3),
+    'access arguments' => array(3),
+    'access callback' => 'paddle_apps_configure_access',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/paddlet_store/app/%paddle_apps_app/%ctools_js/deactivate'] = array(
+    'title' => 'Confirm paddlet deactivation',
+    'page callback' => 'paddle_apps_paddlet_deactivate',
+    'page arguments' => array(3, 4),
+    'access arguments' => array(3),
+    'access callback' => 'paddle_apps_deactivate_access',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Loader function.
+ */
+function paddle_apps_app_load($app_name) {
+  return paddle_apps_app_load_by_machine_name($app_name);
+}
+
+/**
+ * Callback to show the confirmation dialog to enable a paddlet.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   An app.
+ * @param bool $js
+ *   Whether or not the page is loaded with js.
+ */
+function paddle_apps_paddlet_activate(Drupal\paddle_apps\App $app, $js) {
+  // This is only supposed to be loaded in a modal.
+  if (!$js) {
+    return;
+  }
+
+  ctools_include('modal');
+  ctools_include('ajax');
+
+  $form_state = array(
+    'ajax' => TRUE,
+    'build_info' => array(
+      'args' => array($app),
+    ),
+  );
+  $commands = ctools_modal_form_wrapper('paddle_apps_confirm_activation', $form_state);
+
+  if ($form_state['executed']) {
+    $commands[] = ctools_modal_command_dismiss();
+    // Redirect only if the "Activate" button was clicked.
+    if ($form_state['triggering_element']['#activate']) {
+      $commands[] = ctools_ajax_command_redirect('admin/paddlet_store');
+    }
+  }
+
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * Confirmation form to display in a modal to enable a paddlet.
+ */
+function paddle_apps_confirm_activation($form, &$form_state, Drupal\paddle_apps\App $app) {
+  // Pass the app we want to activate.
+  $form['app'] = array('#type' => 'value', '#value' => $app);
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $message = t('Installing %title takes a few minutes to complete. During the installation, the site will be in maintenance mode. You can check the status via Paddlet store.', array(
+    '%title' => $app->name,
+  ));
+  $form['body']['message'] = array(
+    '#type' => 'item',
+    '#markup' => $message,
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['buttons']['confirm'] = array(
+    '#type' => 'submit',
+    '#value' => t('Activate paddlet'),
+    '#activate' => TRUE,
+  );
+
+  if ($app->restorable) {
+    module_load_include('module', $app->machineName, $app->machineName);
+    if (module_invoke($app->machineName, 'is_configured')) {
+      // Add an option reactivate the paddlet with previously known settings.
+      $form['buttons']['restore'] = array(
+        '#type' => 'submit',
+        '#value' => t('Recover previous settings'),
+        '#activate' => TRUE,
+        '#restore' => TRUE,
+      );
+
+      // Change the activation button into a clean reactivation button.
+      $form['buttons']['confirm'] = array(
+        '#type' => 'submit',
+        '#value' => t('Clean install'),
+        '#activate' => TRUE,
+        '#restore' => FALSE,
+      );
+    }
+  }
+
+  $form['buttons']['cancel'] = array(
+    '#type' => 'submit',
+    '#value' => t('Cancel'),
+    '#activate' => FALSE,
+  );
+
+  return $form;
+}
+
+/**
+ * Add an app to the activation queue.
+ */
+function paddle_apps_confirm_activation_submit($form, &$form_state) {
+  /* @var $app Drupal\paddle_apps\App */
+  $app = $form_state['values']['app'];
+
+  if ($form_state['triggering_element']['#activate']) {
+    if (isset($form['buttons']['restore']) && !$form_state['triggering_element']['#restore']) {
+      // Clean the app settings before reactivating the app.
+      include_once DRUPAL_ROOT . '/includes/install.inc';
+      drupal_uninstall_modules(array($app->machineName), FALSE);
+    }
+
+    paddle_apps_queue_add_command_activate($app);
+  }
+}
+
+/**
+ * Callback to show the confirmation dialog to disable a paddlet.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   An app.
+ * @param bool $js
+ *   Whether or not the page is loaded with js.
+ */
+function paddle_apps_paddlet_deactivate(Drupal\paddle_apps\App $app, $js) {
+  // This is only supposed to be loaded in a modal.
+  if (!$js) {
+    return;
+  }
+
+  ctools_include('modal');
+  ctools_include('ajax');
+
+  $form_state = array(
+    'ajax' => TRUE,
+    'build_info' => array(
+      'args' => array($app),
+    ),
+  );
+  $commands = ctools_modal_form_wrapper('paddle_apps_confirm_deactivation', $form_state);
+
+  if ($form_state['executed']) {
+    $commands[] = ctools_modal_command_dismiss();
+    // Redirect only if the "Deactivate" button was clicked.
+    if ($form_state['triggering_element']['#deactivate']) {
+      $commands[] = ctools_ajax_command_redirect('admin/paddlet_store');
+    }
+  }
+
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * Confirmation form to display in a modal to disable a paddlet.
+ */
+function paddle_apps_confirm_deactivation($form, &$form_state, Drupal\paddle_apps\App $app) {
+  // Pass the app we want to activate.
+  $form['app'] = array('#type' => 'value', '#value' => $app);
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $message = t('Uninstalling %title takes a few minutes to complete. During the installation, the site will be in maintenance mode. You can check the status via Paddlet store.', array(
+    '%title' => $app->name,
+  ));
+  $form['body']['message'] = array(
+    '#type' => 'item',
+    '#markup' => $message,
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+  $form['buttons']['confirm'] = array(
+    '#type' => 'submit',
+    '#value' => t('Deactivate paddlet'),
+    '#deactivate' => TRUE,
+  );
+  $form['buttons']['cancel'] = array(
+    '#type' => 'submit',
+    '#value' => t('Cancel'),
+    '#activate' => FALSE,
+  );
+
+  return $form;
+}
+
+/**
+ * Add an app to the deactivation queue.
+ */
+function paddle_apps_confirm_deactivation_submit($form, &$form_state) {
+  if ($form_state['triggering_element']['#deactivate']) {
+    paddle_apps_queue_add_command_deactivate($form_state['values']['app']);
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_apps_permission() {
+  $return = array();
+
+  $return['manage paddle_apps'] = array(
+    'title' => t('Manage paddlets'),
+    'description' => t('Manage paddlets: install, enable, disable and configure apps.'),
+  );
+
+  return $return;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_apps_theme($existing, $type, $theme, $path) {
+  // Common base to all elements.
+  $base = array(
+    'path' => $path . '/theme',
+    'file' => 'theme.inc',
+  );
+
+  return array(
+    'paddle_apps_facet_number' => array(
+        'arguments' => array(
+          'n' => 0,
+        ),
+      ) + $base,
+    'paddle_apps_paddlets_overview' => array(
+        'arguments' => array(
+          'apps' => array(),
+        ),
+        'template' => 'paddle_apps_paddlets_overview',
+      ) + $base,
+    'paddle_apps_paddlet_detail' => array(
+        'render element' => 'element',
+        'template' => 'paddle_apps_paddlet_detail',
+      ) + $base,
+    'paddle_apps_paddlet_description' => array(
+        'arguments' => array(
+          'app' => NULL,
+        ),
+        'template' => 'paddle_apps_paddlet_description',
+      ) + $base,
+    'paddle_apps_mailto_link' => array(
+        'arguments' => array(
+            'paddlet_name' => NULL,
+            'website_name' => NULL,
+        ) + $base,
+    )
+  );
+}
+
+/**
+ * Implements hook_image_default_styles().
+ */
+function paddle_apps_image_default_styles() {
+  $styles = array();
+
+  // Exported image style: paddle_apps_screenshot.
+  $styles['paddle_apps_screenshot'] = array(
+    'name' => 'paddle_apps_screenshot',
+    'effects' => array(
+      '2' => array(
+        'label' => 'Scale and crop',
+        'help' => 'Scale and crop will maintain the aspect-ratio of the original image, then crop the larger dimension. This is most useful for creating perfectly square thumbnails without stretching the image.',
+        'effect callback' => 'image_scale_and_crop_effect',
+        'form callback' => 'image_resize_form',
+        'summary theme' => 'image_resize_summary',
+        'module' => 'image',
+        'name' => 'image_scale_and_crop',
+        'data' => array(
+          'width' => '894',
+          'height' => '561',
+        ),
+        'weight' => '1',
+      ),
+    ),
+  );
+
+  return $styles;
+}
+
+/**
+ * Page callback for the paddlets overview page.
+ */
+function paddle_apps_paddlets_form($form, &$form_state) {
+  // Prepare the filters for the search.
+  $filters = array();
+
+  // Only filter by status if either 'enabled' or 'disabled' is selected.
+  if (isset($form_state['values']['status'])) {
+    $status = $form_state['values']['status'];
+    if ($status == 'enabled') {
+      $filters['status'] = 1;
+    }
+    elseif ($status == 'disabled') {
+      $filters['status'] = 0;
+    }
+  }
+  // Only filter by level if at least one level is selected. Multiple levels are
+  // allowed.
+  if (isset($form_state['values']['level'])) {
+    foreach ($form_state['values']['level'] as $level => $checked) {
+      if (!empty($checked)) {
+        $filters['level'][] = $level;
+      }
+    }
+  }
+  // Show only apps that require a third party subscription if checked.
+  if (!empty($form_state['values']['third_party'])) {
+    $filters['third_party'] = TRUE;
+  }
+  // Filter by any selected vendors.
+  if (isset($form_state['values']['vendor'])) {
+    foreach ($form_state['values']['vendor'] as $vendor => $checked) {
+      if (!empty($checked)) {
+        $filters['vendor'][] = $vendor;
+      }
+    }
+  }
+
+  // Search for the relevant apps first, so we have the facets for the form
+  // elements.
+  try {
+    $data = paddle_apps_search_apps($filters);
+  } catch (Exception $e) {
+    drupal_set_message("There was the following error - " . $e->getMessage(), 'warning');
+    return $form;
+  }
+
+  $app_store = paddle_apps_store();
+  if ($app_store->reachingLimit()) {
+    $subscription_type = variable_get('paddle_store_subscription_type', 'pro');
+    $policy = \Drupal\paddle_subscription\Subscription\PolicyFactory::createAppPolicy($subscription_type);
+
+    $formula_message = t('You are using the @formula formula.', array(
+      '@formula' => $policy->humanReadableName(),
+    ));
+
+    if ($policy->freeAppsLeft($app_store) == -1) {
+      $paddlet_limits = t('You can still install :extra extra paddlets.', array(
+        ':extra' => t('unlimited'),
+      ));
+    }
+    else {
+      $paddlet_limits = t('You can still install :free free paddlets and :extra extra paddlets.', array(
+        ':free' => $policy->freeAppsLeft($app_store),
+        ':extra' => t('unlimited'),
+      ));
+    }
+
+    $mail = l(t('Upgrade now'), 'mailto:ikwil@kanooh.be', array(
+      'absolute' => TRUE,
+      'query' => array('subject' => variable_get('site_name') . t('upgrade required')),
+    ));
+
+    $limit_message = $formula_message . ' ' . $paddlet_limits . ' ' .
+      t('If you want to install more, upgrade now.') . $mail;
+
+    // Set the message when the limit is almost reached for the paddlets.
+    drupal_set_message($limit_message, 'warning');
+  }
+
+  $apps = $data['apps'];
+
+  // Loop over each facet, and replace the index numbers of the facet values
+  // with the filter names so it's easier to find them later.
+  $facets = paddle_apps_get_facets($data);
+
+  // Ajax callback info.
+  $content_id = drupal_html_id($form_state['build_info']['form_id'] . '-content');
+  $ajax = array(
+    'callback' => 'paddle_apps_paddlets_form_ajax_callback',
+    'wrapper' => $content_id,
+  );
+
+  // We need to have a single content container so we can easily update the
+  // whole form with ajax.
+  $form['content'] = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'id' => $content_id,
+    ),
+  );
+
+  // Container element for all filters.
+  $form['content']['filters'] = array(
+    '#type' => 'container',
+  );
+
+  // Status filter form elements.
+  $associative_facets = paddle_apps_get_facets(paddle_apps_search_apps());
+
+  $disabled_amount = paddle_apps_facet_value_count('status', 0, $associative_facets);
+  $enabled_amount = paddle_apps_facet_value_count('status', 1, $associative_facets);
+  $all_amount = theme('paddle_apps_facet_number', array(
+    'n' => $enabled_amount + $disabled_amount,
+  ));
+  $enabled_amount = theme('paddle_apps_facet_number', array(
+    'n' => $enabled_amount,
+  ));
+  $disabled_amount = theme('paddle_apps_facet_number', array(
+    'n' => $disabled_amount,
+  ));
+  $form['content']['filters']['status_container'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Show'),
+  );
+  $form['content']['filters']['status_container']['status'] = array(
+    '#title' => t('Status'),
+    '#title_display' => 'invisible',
+    '#type' => 'radios',
+    '#options' => array(
+      'all' => t('All') . ' ' . $all_amount,
+      'enabled' => t('Installed paddlets') . ' ' . $enabled_amount,
+      'disabled' => t('Uninstalled paddlets') . ' ' . $disabled_amount,
+    ),
+    '#default_value' => 'all',
+    '#ajax' => $ajax,
+  );
+
+  // App level & third party filter form elements.
+  $free_amount = theme('paddle_apps_facet_number', array(
+    'n' => paddle_apps_facet_value_count('level', \Drupal\paddle_apps\App::LEVEL_FREE, $facets),
+  ));
+  $extra_amount = theme('paddle_apps_facet_number', array(
+    'n' => paddle_apps_facet_value_count('level', \Drupal\paddle_apps\App::LEVEL_EXTRA, $facets),
+  ));
+  $third_party_amount = theme('paddle_apps_facet_number', array(
+    'n' => paddle_apps_facet_value_count('thirdPartyService', 1, $facets),
+  ));
+  $form['content']['filters']['type_container'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Type'),
+  );
+  $form['content']['filters']['type_container']['level'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Level'),
+    '#title_display' => 'invisible',
+    '#options' => array(
+      \Drupal\paddle_apps\App::LEVEL_FREE => t('Free') . ' ' . $free_amount,
+      \Drupal\paddle_apps\App::LEVEL_EXTRA => t('Extra') . ' ' . $extra_amount,
+    ),
+    '#ajax' => $ajax,
+  );
+  $form['content']['filters']['type_container']['third_party'] = array(
+    '#title' => t('Third party subscription') . ' ' . $third_party_amount,
+    '#type' => 'checkbox',
+    '#ajax' => $ajax,
+  );
+
+  // Vendor form elements.
+  $vendor_options = isset($facets['vendor']) ? array_keys($facets['vendor']) : array();
+  if (!empty($vendor_options)) {
+    $vendor_options = drupal_map_assoc($vendor_options);
+    foreach ($vendor_options as $key => $vendor) {
+      $vendor_amount = theme('paddle_apps_facet_number', array(
+        'n' => paddle_apps_facet_value_count('vendor', $key, $facets),
+      ));
+      $vendor_options[$key] = $vendor . ' ' . $vendor_amount;
+    }
+    $form['content']['filters']['vendor_container'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Developed by'),
+    );
+    $form['content']['filters']['vendor_container']['vendor'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Vendor'),
+      '#title_display' => 'invisible',
+      '#options' => $vendor_options,
+      '#ajax' => $ajax,
+    );
+  }
+
+  // App results.
+  $form['content']['apps'] = array(
+    '#type' => 'markup',
+    '#markup' => theme('paddle_apps_paddlets_overview', array(
+      'apps' => $apps,
+    )),
+  );
+
+  return $form;
+}
+
+/**
+ * Replace the index of the facet values with the filter names.
+ *
+ * @param array $data
+ *   The data containing the required facets.
+ *
+ * @return array
+ *   The wanted facets.
+ */
+function paddle_apps_get_facets($data) {
+  $facets = $data['search_api_facets'];
+  $associative_facets = array();
+  foreach ($facets as $facet_name => $facet_values) {
+    foreach ($facet_values as $index => $facet_value) {
+      // For some reason the filter names have quotation marks around them.
+      $key = trim($facet_value['filter'], '"');
+      $associative_facets[$facet_name][$key] = $facet_value;
+    }
+  }
+  return $associative_facets;
+}
+
+/**
+ * Fetches a facet value count from a facets array.
+ *
+ * @param string $facet
+ *   Facet name.
+ * @param string $value
+ *   Filter value.
+ * @param array $facets
+ *   Array of facets.
+ *
+ * @return int
+ *   Facet value count.
+ */
+function paddle_apps_facet_value_count($facet, $value, $facets) {
+  if (isset($facets[$facet][$value]['count'])) {
+    return $facets[$facet][$value]['count'];
+  }
+  else {
+    return 0;
+  }
+}
+
+/**
+ * Submit handler for the paddle store search form.
+ */
+function paddle_apps_paddlets_form_submit($form, &$form_state) {
+  // Don't reset the form after a successful submit.
+  $form_state['rebuild'] = TRUE;
+}
+
+/**
+ * Ajax callback for the paddle store overview form.
+ */
+function paddle_apps_paddlets_form_ajax_callback($form, $form_state) {
+  // We need to re-render the whole form content as both the facets and the
+  // search results will have changed.
+  return $form['content'];
+}
+
+/**
+ * Access callback to check if the current user can activate an app.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ *
+ * @return bool
+ *   If access is allowed or not.
+ */
+function paddle_apps_activate_access(Drupal\paddle_apps\App $app) {
+  $app_store = paddle_apps_store();
+  return
+    user_access('manage paddle_apps') &&
+    !paddle_apps_app_is_active($app) &&
+    !paddle_apps_app_activation_is_pending($app) &&
+    $app_store->canInstall($app);
+}
+
+/**
+ * Access callback to check if the current user can deactivate an app.
+ *
+ * The path is currently nowhere exposed in the UI. It's just left here
+ * to be used by administrators while troubleshooting.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ *
+ * @return bool
+ *   If access is allowed or not.
+ */
+function paddle_apps_deactivate_access(Drupal\paddle_apps\App $app) {
+  // Currently access is only allowed for admins.
+  return paddle_apps_app_is_active($app) && !paddle_apps_app_deactivation_is_pending($app);
+}
+
+/**
+ * Access callback to check if the current user can configure an app.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ *
+ * @return bool
+ *   If access is allowed or not.
+ */
+function paddle_apps_configure_access(Drupal\paddle_apps\App $app) {
+  return
+    user_access('manage paddle_apps') &&
+    paddle_apps_app_is_active($app) &&
+    !paddle_apps_app_deactivation_is_pending($app) &&
+    paddle_apps_paddlet_configure_callback($app);
+}
+
+/**
+ * Page callback for the paddlet detail page.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ *
+ * @return string
+ *   Rendered description page content.
+ *
+ * @throws \Exception
+ */
+function paddle_apps_paddlet_description(Drupal\paddle_apps\App $app) {
+  // Adds carousel to slide through the screenshots.
+  if (count($app->screenshots)) {
+    libraries_load('flexslider');
+    drupal_add_js(drupal_get_path('module', 'paddle_apps') . '/javascript/screenshots.js', array('type' => 'file', 'scope' => 'footer'));
+  }
+
+  // Add the contextual actions.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $actions = array();
+    $paddle_store_path = 'admin/paddlet_store';
+
+    $actions[] = array(
+      'action' => l(t('Back'), $paddle_store_path, array('attributes' => array('class' => array('ui-icon', 'fa-arrow-left')))),
+      'class' => array('cancel'),
+      'weight' => 0,
+    );
+
+    if (paddle_apps_activate_access($app)) {
+      $install_path = "admin/paddlet_store/app/" . $app->machineName . "/activate";
+      $actions[] = array(
+        'action' => l(t('Install'), $install_path, array('attributes' => array('class' => array('ui-icon', 'fa-plus')))),
+        'class' => array('activate'),
+        'weight' => 1,
+      );
+    }
+
+    paddle_contextual_toolbar_actions($actions);
+  }
+
+  $output = theme('paddle_apps_paddlet_description', array(
+    'app' => $app,
+  ));
+
+  return $output;
+}
+
+/**
+ * Get the apps command queue.
+ *
+ * The returned queue can be used to queue activation & deactivation of apps.
+ *
+ * @return DrupalQueueInterface
+ *   The apps command queue.
+ */
+function paddle_apps_queue_get() {
+  $queue = DrupalQueue::get('paddle_apps');
+  return $queue;
+}
+
+/**
+ * Get the commands that are in the queue.
+ *
+ * Unfortunately the Queue API does not expose its items, without
+ * claiming them. The Queue UI module could have been used here, but
+ * it does too much for what we need.
+ */
+function paddle_apps_queu_get_commands() {
+  $commands =& drupal_static(__FUNCTION__, NULL);
+
+  if (!is_array($commands)) {
+    $query = db_select('queue', 'q')
+      ->fields('q', array('item_id', 'expire', 'created', 'data'))
+      ->condition('q.name', 'paddle_apps')
+      ->orderBy('q.created');
+
+    $result = $query->execute();
+    $commands = $result->fetchAll();
+
+    foreach ($commands as &$command) {
+      $command->data = unserialize($command->data);
+    }
+  }
+
+  return $commands;
+}
+
+/**
+ * Check if an action on an app has been queued.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ * @param string $action
+ *   The app action to look for.
+ *
+ * @return bool
+ *   If the action is present or not.
+ */
+function paddle_apps_queue_contains_command_targeting_app(Drupal\paddle_apps\App $app, $action) {
+  $commands = paddle_apps_queu_get_commands();
+
+  foreach ($commands as $command) {
+    if ($command->data->app == $app->machineName && $command->data->action == $action) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Queue activation of an app.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ */
+function paddle_apps_queue_add_command_activate(Drupal\paddle_apps\App $app) {
+  paddle_apps_queue_add_command('activate', $app->machineName);
+}
+
+/**
+ * Queue deactivation of an app.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ */
+function paddle_apps_queue_add_command_deactivate(Drupal\paddle_apps\App $app) {
+  paddle_apps_queue_add_command('deactivate', $app->machineName);
+}
+
+/**
+ * Queue a particular action on an app.
+ *
+ * @param string $action
+ *   The action, for example 'activate', 'deactivate'.
+ * @param string $machine_name
+ *   The machine name of the app.
+ */
+function paddle_apps_queue_add_command($action, $machine_name) {
+  global $user;
+
+  $command = new stdClass();
+  $command->action = $action;
+  $command->app = $machine_name;
+  // Remember uid instead of name because anonymous users don't have a name.
+  $command->user = $user->uid;
+
+  paddle_apps_queue_get()->createItem($command);
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Processes queued actions on apps.
+ */
+function paddle_apps_cron() {
+  $queue = paddle_apps_queue_get();
+
+  if ($queue->numberOfItems() > 0) {
+    // Install only 1 app per cron run instead of processing all queued items
+    // at once. Multiple apps queued for installation can easily cause timeouts
+    // because drupal_cron_run() gives cron tasks maximum 240 seconds.
+    // @see drupal_cron_run()
+    // Once this doesn't suffice any more, we can resort to increasing
+    // elysia_cron_time_limit.
+    // @see elysia_cron_prepare_run()
+    if ($item = $queue->claimItem()) {
+      // Go in maintenance mode.
+      variable_set('maintenance_mode', 1);
+      watchdog('paddle_apps', 'Site goes in maintenance mode');
+
+      try {
+        paddle_apps_process_command($item);
+        $queue->deleteItem($item);
+      } catch (Exception $e) {
+        // In case of exception log it and leave the item in the queue
+        // to be processed again later.
+        watchdog_exception('cron', $e);
+      }
+
+      // Go back out of maintenance mode.
+      variable_set('maintenance_mode', 0);
+      watchdog('paddle_apps', 'Site goes out of maintenance mode');
+    }
+  }
+}
+
+/**
+ * Performs a single action on an app.
+ *
+ * @param object $command
+ *   The command item coming from the apps queue.
+ */
+function paddle_apps_process_command($command) {
+  switch ($command->data->action) {
+    case 'activate':
+      watchdog('paddle_apps', 'enable app %module', array('%module' => $command->data->app));
+      module_enable(array($command->data->app));
+      drupal_flush_all_caches();
+      break;
+
+    case 'deactivate':
+      $app_name = $command->data->app;
+      paddle_apps_deactivate_paddlet($app_name);
+      break;
+  }
+}
+
+/**
+ * Deactivate a paddlet.
+ *
+ * @param string $app_name
+ *   The paddlet module name.
+ */
+function paddle_apps_deactivate_paddlet($app_name) {
+  watchdog('paddle_apps', 'disable app %module', array('%module' => $app_name));
+  $dependencies = paddle_apps_disable_dependencies($app_name);
+  array_unshift($dependencies, $app_name);
+  module_disable($dependencies, FALSE);
+  drupal_flush_all_caches();
+}
+
+/**
+ * Get a list of the dependencies that have no other dependents.
+ *
+ * @param string $app_name
+ *   The module name from which we search the dependencies from.
+ *
+ * @return array
+ *   A list of modules.
+ */
+function paddle_apps_disable_dependencies($app_name) {
+  $module_data = system_rebuild_module_data();
+  $requires = array_keys($module_data[$app_name]->requires);
+  $dependencies = array();
+  foreach ($requires as $dependency) {
+    $required_by = array_keys($module_data[$dependency]->required_by);
+    if (count($required_by) == 1 && in_array($app_name, $required_by)) {
+      array_push($dependencies, $dependency);
+    }
+  }
+
+  return $dependencies;
+}
+
+/**
+ * Get the apps that need to be shown in the active overview page.
+ *
+ * @return array
+ *   A list of apps.
+ */
+function paddle_apps_active_apps() {
+  $apps = paddle_apps_apps(function ($app) {
+    return paddle_apps_app_is_active($app) || paddle_apps_app_activation_is_pending($app);
+  });
+
+  return $apps;
+}
+
+/**
+ * Get the apps that need to be shown in the available overview page.
+ *
+ * @return array
+ *   A list of apps.
+ */
+function paddle_apps_available_apps() {
+  $apps = paddle_apps_apps(function ($app) {
+    return !paddle_apps_app_is_active($app) || paddle_apps_app_deactivation_is_pending($app);
+  });
+
+  return $apps;
+}
+
+/**
+ * Get the apps that are enabled.
+ *
+ * @return array
+ *   A list of apps.
+ */
+function paddle_apps_enabled_apps() {
+  $enabled = array();
+
+  foreach (entity_load('paddle_app') as $id => $app) {
+    if ($app->status) {
+      $enabled[$id] = $app;
+    }
+  }
+
+  return $enabled;
+}
+
+/**
+ * Get the apps that are disabled.
+ *
+ * @return array
+ *   A list of apps.
+ */
+function paddle_apps_disabled_apps() {
+  $enabled = array();
+
+  foreach (entity_load('paddle_app') as $id => $app) {
+    if (!$app->status) {
+      $enabled[$id] = $app;
+    }
+  }
+
+  return $enabled;
+}
+
+/**
+ * Get apps, filtered with a callback.
+ *
+ * @param callable $filter
+ *   Callable to use for filtering apps.
+ *
+ * @return array
+ *   A list of apps.
+ */
+function paddle_apps_apps($filter = NULL) {
+  // Get all App entities.
+  $apps = entity_load('paddle_app');
+
+  if ($filter) {
+    return array_filter($apps, $filter);
+  }
+  else {
+    return $apps;
+  }
+}
+
+/**
+ * Searches for apps.
+ *
+ * @param array $filters
+ *   List of filters to apply (optional). Possible filters:
+ *     - "status": TRUE for enabled, FALSE for disabled.
+ *     - "level": Array containing level constants from the App class.
+ *     - "third_party": TRUE to only show apps with a third party subscription.
+ *     - "vendor": Array containing vendor strings.
+ *
+ * @return array
+ *   Array of app info arrays, to maintain compatibility with existing code.
+ */
+function paddle_apps_search_apps($filters = array()) {
+  // Create a new search query for the apps index.
+  $index = search_api_index_load("paddle_apps");
+  $query = new SearchApiQuery($index);
+
+  // Sort the apps by name.
+  $query->sort('name');
+
+  if (!empty($filters)) {
+    // Filter using an AND relation between the individual filters/conditions.
+    // Filters using arrays will use an OR relation inside them.
+    $filter = $query->createFilter('AND');
+
+    // Filter by app status (enabled/disabled).
+    if (isset($filters['status'])) {
+      $filter->condition('status', (int) $filters['status']);
+    }
+
+    // Filter by app level. This filter can have multiple values, so we use an
+    // or filter.
+    if (isset($filters['level'])) {
+      $level_filter = $query->createFilter('OR');
+      foreach ($filters['level'] as $level) {
+        $level_filter->condition('level', $level);
+      }
+      $filter->filter($level_filter);
+    }
+
+    // Filter out any apps that do not require a third party service.
+    if (isset($filters['third_party']) && $filters['third_party'] === TRUE) {
+      $filter->condition('thirdPartyService', 1);
+    }
+
+    // Filter by vendor. This filter can have multiple values, so we use an or
+    // filter.
+    if (isset($filters['vendor'])) {
+      $vendor_filter = $query->createFilter('OR');
+      foreach ($filters['vendor'] as $vendor) {
+        $vendor_filter->condition('vendor', $vendor);
+      }
+      $filter->filter($vendor_filter);
+    }
+
+    // Add all filters to the query.
+    $query->filter($filter);
+  }
+
+  // Execute the query.
+  $data = $query->execute();
+  $apps = $data['results'];
+
+  // Load the app entity objects with the ids so we can get the machine names.
+  $apps = entity_load_multiple_by_name('paddle_app', array_keys($apps));
+
+  // Return all search results data, including the app info arrays.
+  $data['apps'] = $apps;
+
+  return $data;
+}
+
+/**
+ * Check if an app is currently active.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ *
+ * @return bool
+ *   If the app is active or not.
+ */
+function paddle_apps_app_is_active(Drupal\paddle_apps\App $app) {
+  return module_exists($app->machineName);
+}
+
+/**
+ * Check if an activation of the app is pending.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ *
+ * @return bool
+ *   If activation of the app is pending or not.
+ */
+function paddle_apps_app_activation_is_pending(Drupal\paddle_apps\App $app) {
+  $command_exists = paddle_apps_queue_contains_command_targeting_app($app, 'activate');
+  return $command_exists;
+}
+
+/**
+ * Check if deactivation of the app is pending.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ *
+ * @return bool
+ *   If deactivation of the app is pending or not.
+ */
+function paddle_apps_app_deactivation_is_pending(Drupal\paddle_apps\App $app) {
+  $command_exists = paddle_apps_queue_contains_command_targeting_app($app, 'deactivate');
+  return $command_exists;
+}
+
+/**
+ * Callback for an app configure page.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ *
+ * @return array
+ *   The form.
+ */
+function paddle_apps_paddlet_configure(Drupal\paddle_apps\App $app) {
+  $page = array();
+
+  $config_form_callback = paddle_apps_paddlet_configure_callback($app);
+
+  $page['config'] = drupal_get_form($config_form_callback);
+
+  return $page;
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Adds an after build callback to the app configuration pages.
+ */
+function paddle_apps_form_alter(&$form, &$form_state) {
+  $app = menu_get_object('paddle_apps_app', 3);
+
+  if ($app && paddle_apps_paddlet_configure_callback($app) == $form['#form_id']) {
+    if (module_exists('paddle_contextual_toolbar')) {
+      $form['#after_build'][] = 'paddle_apps_configure_add_contextual_actions';
+    }
+  }
+
+  return $form;
+}
+
+/**
+ * After-build function of the settings form.
+ */
+function paddle_apps_configure_add_contextual_actions($form, &$form_state) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+  paddle_contextual_toolbar_add_js('click_delegator');
+  drupal_add_js(drupal_get_path('module', 'paddle_core') . '/js/cancel.js');
+
+  $actions = paddle_contextual_toolbar_actions();
+
+  $actions[] = array(
+    'action' => l(t('Back'), 'admin/paddlet_store', array('attributes' => array('class' => array('ui-icon', 'fa-arrow-left')))),
+    'class' => array('cancel', 'cancel-js'),
+    'weight' => -10,
+  );
+
+  // Add a save button to the contextual toolbar, if there is one in the form.
+  if (isset($form['actions']['submit'])) {
+    $actions[] = array(
+      'action' => l(t('Save'), '', array(
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-check'),
+          'data-paddle-contextual-toolbar-click' => $form['actions']['submit']['#id'],
+        ),
+        'html' => TRUE,
+        'external' => TRUE,
+      )),
+      'class' => array('save'),
+      'weight' => 0,
+    );
+  }
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Get the function to build an app's configure form.
+ *
+ * @param Drupal\paddle_apps\App $app
+ *   The app.
+ *
+ * @return string|null
+ *   The name of the function, or NULL if the app does not have a configuration
+ *   page.
+ */
+function paddle_apps_paddlet_configure_callback(Drupal\paddle_apps\App $app) {
+  if (!empty($app->configureForm) &&
+    module_exists($app->machineName) &&
+    function_exists($app->configureForm)
+  ) {
+    return $app->configureForm;
+  }
+}
+
+/**
+ * Get the app store.
+ *
+ * @return \Drupal\paddle_apps\AppStore
+ *   The app store.
+ */
+function paddle_apps_store() {
+  $store =& drupal_static(__FUNCTION__);
+
+  if (!$store) {
+    $subscription_type = variable_get('paddle_store_subscription_type', 'pro');
+    $policy = \Drupal\paddle_subscription\Subscription\PolicyFactory::createAppPolicy($subscription_type);
+
+    $store = new \Drupal\paddle_apps\AppStore($policy, new \Drupal\paddle_apps\DefaultAppRepository());
+  }
+
+  return $store;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_apps_entity_info() {
+  if (!class_exists('Drupal\\paddle_apps\\AppEntityController')) {
+    // Don't return entity info if controller class can not be found. Because,
+    // for example, the X Autoload module is not yet installed.
+    return array();
+  }
+
+  $return = array();
+
+  $return['paddle_app'] = array(
+    'label' => t('Paddle app'),
+    'entity class' => 'PaddleApps',
+    'controller class' => 'Drupal\\paddle_apps\\AppEntityController',
+    'module' => 'paddle_apps',
+    'fieldable' => FALSE,
+    'entity keys' => array(
+      'id' => 'id',
+      'label' => 'name',
+    ),
+    // Enable Entity Cache to cache App entities because reading App
+    // information from the file system, .info files, is a slow operation.
+    'field cache' => FALSE,
+    'entity cache' => TRUE,
+  );
+
+  return $return;
+}
+
+/**
+ * Implements hook_entity_property_info().
+ */
+function paddle_apps_entity_property_info() {
+  $info['paddle_app'] = array(
+    'properties' => array(
+      'id' => array(
+        'type' => 'integer',
+        'label' => t('ID (hashed machine name)'),
+      ),
+      'machineName' => array(
+        'type' => 'string',
+        'label' => t('Machine name'),
+      ),
+      'name' => array(
+        'type' => 'string',
+        'label' => t('Name'),
+      ),
+      'status' => array(
+        'type' => 'boolean',
+        'label' => t('Status'),
+      ),
+      'level' => array(
+        'type' => 'string',
+        'label' => t('Level'),
+      ),
+      'thirdPartyService' => array(
+        'type' => 'boolean',
+        'label' => t('Third-party service'),
+      ),
+      'vendor' => array(
+        'type' => 'string',
+        'label' => t('Vendor'),
+      ),
+    ),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_modules_disabled().
+ *
+ * Performs an entity_save on app modules that got disabled, to ensure
+ * the search_api search index gets updated.
+ */
+function paddle_apps_modules_disabled($modules) {
+  $index_apps = FALSE;
+
+  foreach ($modules as $module_name) {
+    $app = paddle_apps_app_load_by_machine_name($module_name, TRUE);
+
+    // Not every disabled module is an app.
+    if ($app) {
+      $index_apps = TRUE;
+      entity_save('paddle_app', $app);
+    }
+
+    // Restore Drupal core page caching when AuthCache is disabled.
+    if ($module_name == 'authcache') {
+      variable_set('cache', 1);
+    }
+  }
+
+  if ($index_apps) {
+    // Search API cron will re-index the apps whose status was changed so
+    // the changes are visible on the paddle store overview page filters.
+    search_api_cron();
+  }
+}
+
+/**
+ * Implements hook_modules_enabled().
+ *
+ * Performs an entity_save on app modules that got enabled, to ensure
+ * the search_api search index gets updated.
+ *
+ * Also rebuild the node access of modules which contain a
+ * hook_node_grants() function. Besides that we need to set the flag
+ * of node_access_needs_rebuild() manually on FALSE, since this is called
+ * in the enabling of our Paddlet and we need to overwrite the flag set in
+ * node_modules_enabled().
+ *
+ * @see node_modules_enabled()
+ */
+function paddle_apps_modules_enabled($modules) {
+  $index_apps = FALSE;
+
+  foreach ($modules as $module_name) {
+    $app = paddle_apps_app_load_by_machine_name($module_name, TRUE);
+
+    // Not every enabled module is an app.
+    if ($app) {
+      $index_apps = TRUE;
+      entity_save('paddle_app', $app);
+    }
+
+    if (function_exists("$module_name" . '_node_grants')) {
+      // First remove the default table row which gives
+      // all published nodes public access.
+      db_delete('node_access')->execute();
+
+      $sandbox['nodes'] = node_load_multiple(FALSE);
+      paddle_apps_rebuild_node_access_batch($sandbox);
+      node_access_needs_rebuild(FALSE);
+    }
+
+    // Set the authcache roles.
+    if ($module_name == 'authcache') {
+      variable_set('cache', 0);
+
+      $authcache_roles = array(
+        DRUPAL_ANONYMOUS_RID => DRUPAL_ANONYMOUS_RID,
+      );
+
+      variable_set('authcache_roles', $authcache_roles);
+      authcache_flush_caches();
+    }
+  }
+
+  if ($index_apps) {
+    // Search API cron will re-index the apps whose status was changed so
+    // the changes are visible on the paddle store overview page filters.
+    search_api_cron();
+  }
+}
+
+/**
+ * Gets an App entity by its machine name.
+ *
+ * @param string $name
+ *   Machine name of the app.
+ * @param bool $reset
+ *   Whether to reset the static caches of the app entities.
+ *
+ * @return \Drupal\paddle_apps\App|null
+ *   The app, or null if no app can be found with the specified name.
+ */
+function paddle_apps_app_load_by_machine_name($name, $reset = FALSE) {
+  $id = \Drupal\paddle_apps\App::idFromMachineName($name);
+  $apps = entity_load('paddle_app', array($id), array(), $reset);
+
+  if (!empty($apps) && !empty($apps[$id])) {
+    $app = $apps[$id];
+    if (!empty($app->machineName) && $app->machineName == $name) {
+      return $app;
+    }
+  }
+
+  return NULL;
+}
+
+/**
+ * Get the detailed description of an app.
+ *
+ * @param mixed $app
+ *   The machine name of the app or the an associative array containing the app
+ *   information.
+ *
+ * @return string
+ *   The content of the detailed description file.
+ */
+function paddle_apps_get_detailed_description($app) {
+  if (is_string($app)) {
+    /* @var Drupal\paddle_apps\App $app */
+    $app = paddle_apps_app_load($app);
+  }
+
+  if (path_is_admin(current_path())) {
+    if (module_exists('paddle_i18n')) {
+      $language = admin_language_retrieve();
+      if (empty($language->language)) {
+        $language = language_default();
+      }
+    }
+    else {
+      $language = language_default();
+    }
+  }
+
+  // Get the descriptions for all apps from the local cache. The reason for the
+  // hash, see below.
+  // @see https://drupal.psu.edu/blog/post/implementing-drupalstatic-function-dynamic-variables
+  $function_id = drupal_hash_base64(__FUNCTION__ . $language->language);
+  $detailed_descriptions = &drupal_static($function_id);
+
+  $module_name = $app->machineName;
+  // Check if the description is present in the static cache.
+  if (empty($detailed_descriptions[$module_name])) {
+    // Try to get it from Drupal cache.
+    if ($cache = cache_get($function_id)) {
+      $detailed_descriptions = $cache->data;
+    }
+  }
+
+  // If after hitting the cache and still not finding the description, add it.
+  if (empty($detailed_descriptions[$module_name])) {
+    $detailed_descriptions = paddle_apps_build_detailed_description($module_name, $language, $detailed_descriptions, $function_id);
+  }
+
+  return $detailed_descriptions[$module_name];
+}
+
+/**
+ * Build the detailed description for a paddlet.
+ *
+ * @param string $module_name
+ *   The module name of the paddlet.
+ * @param object $language
+ *   The language we're using.
+ * @param array $detailed_descriptions
+ *   The existing detailed descriptions which we're going to add the new one to.
+ * @param string $function_id
+ *   The hashed cache string.
+ *
+ * @return array
+ */
+function paddle_apps_build_detailed_description($module_name, $language, $detailed_descriptions, $function_id) {
+  $detailed_description_path = drupal_get_path('module', $module_name) . '/apps/detailed_description.' . $language->language . '.html';
+
+  if (file_exists($detailed_description_path)) {
+    $detailed_descriptions[$module_name] = check_markup(file_get_contents($detailed_description_path), 'full_html');
+
+    // Cache the description to decrease the number of times we access to
+    // the file system.
+    cache_set($function_id, $detailed_descriptions, 'cache', CACHE_TEMPORARY);
+  }
+  else {
+    $detailed_descriptions[$module_name] = '';
+  }
+
+  return $detailed_descriptions;
+}
+
+/**
+ * Implements hook_search_api_item_type_info_alter().
+ */
+function paddle_apps_search_api_item_type_info_alter(array &$infos) {
+  if (!empty($infos['paddle_app'])) {
+    $infos['paddle_app']['datasource controller'] = 'PaddleAppSearchApiEntityDataSourceController';
+  }
+}
+
+/**
+ * Executed before adding permissions in the hook_enable of modules.
+ *
+ * Rebuild the content type list to make Drupal aware of the new type.
+ * Otherwise the granting of permissions will fail.
+ * We need to clear the node types cache which is used by
+ * user_role_grant_permissions. Otherwise our new content type is not yet
+ * known.
+ *
+ * @param string $module
+ *    The module which you prepare.
+ */
+function paddle_apps_prepare_module_for_permissions($module) {
+  drupal_load('module', $module);
+  features_include_defaults(NULL, TRUE);
+  features_revert_module($module);
+  node_type_cache_reset();
+  drupal_static_reset();
+  _node_types_build(TRUE);
+}
+
+/**
+ * Replaces core page caching with Authcache through the settings.
+ *
+ * @deprecated Do not use this.
+ */
+function paddle_apps_enable_authcache() {
+  if (module_exists('authcache')) {
+    $authcache_roles = array(
+      DRUPAL_ANONYMOUS_RID => DRUPAL_ANONYMOUS_RID,
+    );
+
+    variable_set('authcache_roles', $authcache_roles);
+  }
+}
+
+/**
+ * Updates the panelizer settings of existing nodes.
+ *
+ * @param string $content_type
+ *   The content type whose nodes need to be updated.
+ *
+ * @throws \DrupalUpdateException
+ */
+function paddle_apps_update_panelizer_default_settings_batch($content_type) {
+  $limit = 5;
+  $entities = paddle_core_get_entity_revisions('node', array($content_type));
+  $sandbox['entities'] = $entities;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      return count($sandbox['entities']);
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+      return array_slice($sandbox['entities'], $offset, $limit);
+    },
+    // Single item update callback.
+    function ($entity, &$sandbox) {
+      try {
+        paddle_core_update_panelizer_entity('node', $entity);
+        return TRUE;
+      } catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "{$item->type} {$item->nid} rev {$item->vid} lang {$item->language}";
+      $action = $updated ? "has been updated" : "could NOT be updated";
+      return $id_string . " " . $action . ".";
+    }
+  );
+}
+
+/**
+ * Rebuilds the node access table.
+ *
+ * This function has to be called when a paddlet is enabled
+ * which contains a hook_node_grants() function.
+ * This will update all the nodes with the default
+ * grants. We took the existing code from
+ * _node_access_rebuild_batch_operation() and
+ * refactored it so it works in the back-end.
+ *
+ * @param array $sandbox
+ *   The sandbox element of the batch.
+ *
+ * @throws \DrupalUpdateException
+ *
+ * @see _node_access_rebuild_batch_operation()
+ */
+function paddle_apps_rebuild_node_access_batch(array $sandbox) {
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      return count($sandbox['nodes']);
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      return array_slice($sandbox['nodes'], $offset, $limit);
+    },
+    // Single item update callback.
+    function ($node, &$sandbox) {
+      try {
+        node_access_acquire_grants($node);
+
+        return TRUE;
+      } catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "Node {$item->nid} lang {$item->language}";
+      $action = $updated ? "has been updated" : "could NOT be updated";
+
+      return $id_string . " " . $action . ".";
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_apps_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'modules_enabled') {
+    // Move the paddle_apps implementation to the end of the list. module_implements()
+    // iterates through $implementations with a foreach loop which PHP iterates
+    // in the order that the items were added, so to move an item to the end of
+    // the array, we remove it and then add it.
+    // @see paddle_apps_modules_enabled()
+    $implementation = $implementations['paddle_apps'];
+    unset($implementations['paddle_apps']);
+    $implementations['paddle_apps'] = $implementation;
+  }
+}
+
+/**
+ * Implements hook_i18n_string_info().
+ */
+function paddle_apps_i18n_string_info() {
+  $groups['paddle_apps'] = array(
+    'title' => t('Paddle apps'),
+    'description' => t('Translatable paddle apps names and descriptions.'),
+    'format' => FALSE,
+    'list' => TRUE,
+  );
+  return $groups;
+}
+
+/**
+ * Removes fields bases and instances from all content types.
+ *
+ * @param string $field_name
+ *   The name of the field.
+ */
+function paddle_apps_remove_field($field_name) {
+  foreach (node_type_get_types() as $type) {
+    $instance = field_read_instance('node', $field_name, $type->type);
+
+    if ($instance != FALSE) {
+      field_delete_instance($instance);
+    }
+  }
+  field_delete_field($field_name);
+}
+
+/**
+ * Retrieve the display from a node to prepare it for altering.
+ *
+ * @param object $node
+ *   The node which we want to retrieve the display from.
+ *
+ * @return bool|\panels_display
+ *   Return the display of the node if there is a handler, else return FALSE.
+ */
+function paddle_apps_retrieve_node_display_for_pane_altering(&$node) {
+  $display = FALSE;
+  // Include panels plugins helpers.
+  ctools_include('plugins', 'panels');
+
+  // Retrieve the handler to properly clone the panelizer entity.
+  $handler = panelizer_entity_plugin_get_handler('node');
+  // For extra safety, return if no panelizer handler is found.
+  if ($handler) {
+    // Clone the panelizer object to avoid messing with the defaults.
+    $node->panelizer['page_manager'] = $handler->clone_panelizer($node->panelizer['page_manager'], $node);
+    // Mark the display as modified. This is done also in
+    // paddle_landing_page_node_update(), but doing it here also doesn't hurt.
+    $node->panelizer['page_manager']->display_is_modified = TRUE;
+
+    // Retrieve the current display.
+    /* @var panels_display $display */
+    $display = $node->panelizer['page_manager']->display;
+  }
+
+  return $display;
+}

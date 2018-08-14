@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuDisplay404HandlingTest.
+ */
+
+/**
+ * Tests for the 404 handling.
+ */
+class PaddleMenuDisplay404HandlingTest extends PaddleMenuDisplayTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => '404 handling',
+      'description' => 'Tests how the Paddle menu display handles 404.',
+      'group' => 'Paddle Menu Display',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array('paddle_menu_display'));
+  }
+
+  /**
+   * Tests the 404 handling.
+   */
+  public function test404Handling() {
+    // Go on a 404 path. If the module doesn't handle it well all menu items
+    // will be displayed and all will have classes "active-trail". If the two
+    // first level menu items have the class we know 404 is not handled well.
+    $this->drupalGet('node/404');
+    $menu_leaves = $this->xpath(self::MENU_DISPLAY_BLOCK_XPATH_QUERY . '/li[contains(@class, "active-trail")]');
+    $this->assertEqual(count($menu_leaves), 0, 'When on 404 the menu display behaves correctly.');
+  }
+
+}

@@ -1,0 +1,10 @@
+name = Paddle VUB Tags
+description = Manage tags added to VUB news items
+core = 7.x
+package = Paddle
+version = 7.x-1.0
+dependencies[] = i18n_taxonomy
+dependencies[] = taxonomy
+features[features_api][] = api:2
+features[field_base][] = field_vub_tags
+features[field_instance][] = node-news_item-field_vub_tags

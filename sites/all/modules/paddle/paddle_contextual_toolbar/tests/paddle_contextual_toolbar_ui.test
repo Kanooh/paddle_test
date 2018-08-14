@@ -1,0 +1,188 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleContextualToolbarUITest.
+ */
+
+/**
+ * UI tests for the Paddle Contextual Toolbar module.
+ */
+class PaddleContextualToolbarUITest extends DrupalWebTestCase {
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'minimal';
+
+  /**
+   * Class name of the group separator.
+   *
+   * We use this when evaluating the items after they've been
+   * grouped to make sure that there's a separator between each
+   * group.
+   */
+  const GROUP_SEPARATOR = 'paddle-contextual-toolbar-separator';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'UI tests',
+      'description' => 'Test the user interface components.',
+      'group' => 'Paddle Contextual Toolbar',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    // Additionally enable paddle_contextual_toolbar and test module.
+    parent::setUp(array('paddle_contextual_toolbar', 'paddle_contextual_toolbar_test'));
+
+    $admin_user = $this->drupalCreateUser(array(
+        'view the administration theme',
+        'test paddle_contextual_toolbar',
+      )
+    );
+    $this->drupalLogin($admin_user);
+  }
+
+  /**
+   * Tests the contextual toolbar.
+   */
+  public function testContextualToolbar() {
+    // Basic rendering test.
+    $this->drupalGet('admin/config/development/test-contextual-toolbar');
+    $this->assertTrue($this->xpath('//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]'), 'The contextual toolbar is shown on the test page.');
+    $this->assertTrue($this->xpath('//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]//ul[@id="contextual-actions-list"]'), 'The contextual toolbar is shown on the test page with the right id for the ul.');
+    $this->assertTrue($this->xpath('//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]//ul//li[contains(normalize-space(@class), "save")]'), 'The save class is set on the button in the contextual toolbar on the test page.');
+    $this->assertTrue($this->xpath('//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]//ul//li[contains(normalize-space(@class), "save")]//a[@data-paddle-contextual-toolbar-click="edit-submit"]'), 'The save button is shown in the contextual toolbar on the test page.');
+    $this->assertTrue($this->xpath('//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]//ul//li[contains(normalize-space(@class), "add")]'), 'The add class is set on the button in the contextual toolbar on the test page.');
+    $this->assertTrue($this->xpath('//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]//ul//li[contains(normalize-space(@class), "add")]//a[@href=:create_url]', array(':create_url' => url('admin/structure/menu/add'))), 'The create button is shown in the contextual toolbar on the test page.');
+
+    // Grouping logic tests.
+    $action_a = array(
+      'action' => l(t('Action A'), '<front>'),
+      'class' => array('action-a'),
+      'weight' => 20,
+    );
+    $action_b = array(
+      'action' => l(t('Action B'), '<front>'),
+      'class' => array('action-b'),
+      'weight' => 10,
+    );
+    $action_c = array(
+      'action' => l(t('Action C'), '<front>'),
+      'class' => array('action-c'),
+      'weight' => 15,
+    );
+
+    // First create a toolbar with no defined groups,
+    // and the actions have no group attributes.
+    // Verify that these buttons are sorted correctly.
+    $actions = array(
+      'a' => $action_a,
+      'b' => $action_b,
+      'c' => $action_c,
+    );
+    $groups = paddle_contextual_toolbar_groups();
+    $items = paddle_contextual_toolbar_grouped_items($groups, $actions);
+    $expected_items = array($action_b, $action_c, $action_a);
+    $this->assertContextualToolbarItemGrouping($items, $expected_items);
+
+    // Now create a group A and a group B with different weights.
+    // By default we also have a default group with a weight of 0.
+    $groups['a'] = array('weight' => -5);
+    $groups['b'] = array('weight' => 5);
+    paddle_contextual_toolbar_groups($groups);
+
+    // Add the actions to these groups and check their sorting.
+    // We don't add C to a group to make sure it gets added
+    // to the default group, between group A and group B.
+    // Also create a new action D with a lower weight than A,
+    // and put it in the default group as well.
+    $action_a['group'] = 'a';
+    $action_b['group'] = 'b';
+
+    $action_d = array(
+      'action' => l(t('Action D'), '<front>'),
+      'class' => array('action-d'),
+      'weight' => 5,
+    );
+
+    $actions = array(
+      'a' => $action_a,
+      'b' => $action_b,
+      'c' => $action_c,
+      'd' => $action_d,
+    );
+
+    $items = paddle_contextual_toolbar_grouped_items($groups, $actions);
+
+    // Verify that the new actions are sorted by their group's weight,
+    // and then by their own weight.
+    // Also make sure that there are separators between the three groups.
+    $this->assertContextualToolbarItemGrouping($items, array(
+      $action_a,
+      $this::GROUP_SEPARATOR,
+      $action_d,
+      $action_c,
+      $this::GROUP_SEPARATOR,
+      $action_b,
+    ));
+  }
+
+  /**
+   * Verifies the sorting of contextual toolbar items.
+   *
+   * @param array $items
+   *   Array containing the final action items and separators,
+   *   returned by paddle_contextual_toolbar_grouped_items().
+   * @param array $intended
+   *   Array containing the original action arrays in the
+   *   intended order, or a class name to identify them.
+   *   Each item in the array represents one single item.
+   *   If an item has multiple classes, use an array instead of a string.
+   *   For example:
+   *   array('class-a', $this::GROUP_SEPARATOR, array('class-b', 'class-c'));
+   */
+  public function assertContextualToolbarItemGrouping($items, $intended) {
+    // Verify that both arrays have the same length.
+    $this->assertEqual(count($items), count($intended), 'Actual actions list and intended actions list have the same length.');
+
+    // Loop over the intended actions array.
+    // We will use the item's class name(s) to identify them and check that they
+    // are in the correct order.
+    foreach ($intended as $index => $intended_item) {
+      // First figure out the class name(s) of the item.
+      // If the item is an array with a class attribute, use that.
+      // Otherwise the item itself is a(n array of) class name(s).
+      $intended_class = is_array($intended_item) && isset($intended_item['class']) ? $intended_item['class'] : $intended_item;
+
+      // Class names should always be in an array to make comparing them easier.
+      $intended_class = is_array($intended_class) ? $intended_class : array($intended_class);
+
+      // Now get the corresponding item's class names from the actual contextual
+      // toolbar array.
+      $actual_class = isset($items[$index]['class']) ? $items[$index]['class'] : array();
+
+      // Get a diff between both items' class names.
+      $classes_diff = array_diff($intended_class, $actual_class);
+      $classes_same = empty($classes_diff);
+
+      // Sort the class arrays before outputting them in the message.
+      // Otherwise it might confuse some people that "class-a class-b" is equal
+      // to "class-b class-a".
+      asort($intended_class);
+      asort($actual_class);
+
+      $message = format_string('Expected item with class "%intended", found item with class "%actual".', array(
+        '%intended' => implode(' ', $intended_class),
+        '%actual' => implode(' ', $actual_class),
+      ));
+      $this->assertTrue($classes_same, $message);
+    }
+  }
+}

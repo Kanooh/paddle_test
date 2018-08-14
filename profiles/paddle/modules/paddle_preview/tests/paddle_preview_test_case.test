@@ -1,0 +1,50 @@
+<?php
+
+/**
+ * @file
+ * Base class for the Paddle Preview automated tests.
+ */
+
+class PaddlePreviewTestCase extends PaddleWebTestCase {
+  protected $privilegedUser;
+
+  protected $unPrivilegedUser;
+
+  protected $contentType;
+
+  /**
+   * XPath query to find the toolbar.
+   */
+  const TOOLBAR_XPATH_QUERY = '//div[@id="paddle-preview-toolbar"]//div[@id="paddle-preview-toolbar-content"]';
+
+  /**
+   * XPath query to find the theme switcher.
+   */
+  const THEME_SWITCHER_XPATH_QUERY = '//div[@id="paddle-preview-toolbar-theme-switcher"]';
+
+  /**
+   * Creates a custom theme.
+   *
+   * @param string $name
+   *   Machine name of the new theme.
+   * @param string $human_name
+   *   Human-friendly name of the theme.
+   *
+   * @return object
+   *   The new theme.
+   */
+  protected function createCustomTheme($name, $human_name) {
+    $paddle_theme = paddle_themer_load('paddle_test_theme');
+
+    $theme = (object) array(
+      'name' => $name,
+      'human_name' => $human_name,
+      'theme' => 'paddle_theme',
+      'style' => $paddle_theme->style,
+      'changed' => time(),
+    );
+
+    drupal_write_record('paddle_themer_theme', $theme);
+    return $theme;
+  }
+}

@@ -1,0 +1,182 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleContentManagerDiscoverySearchTabTest.
+ */
+
+/**
+ * Tests the export of Scald atoms on the Media Library page.
+ */
+class PaddleMediaLibraryExportTest extends PaddleWebTestCase {
+
+  /**
+   * Provides the necessary test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Export',
+      'description' => 'Tests the CSV and XLS export on the Media Library page.',
+      'group' => 'Paddle Scald',
+    );
+  }
+
+  /**
+   * Tests the CSV and XLS export on the Media Library page.
+   */
+  public function testExport() {
+    // Create 2 terms - one for each core vocabularies.
+    $term_names = array();
+    foreach (array(1, 2) as $vid) {
+      $options = array(
+        'vid' => $vid,
+        'name' => $this->randomName(),
+        'description' => $this->randomString(),
+        'parent' => 0,
+      );
+      $term_names[] = $options['name'];
+      $term = (object) $options;
+      taxonomy_term_save($term);
+    }
+
+    // Login so we have access to the Media Library page.
+    $this->drupalLogin($this->editor);
+
+    // Verify that the export links are present on the search content page.
+    $this->drupalGet('admin/content_manager/assets');
+    $this->assertLinkByHref('admin/content_manager/assets/export/csv', 0, 'CSV export link present.');
+    $this->assertLinkByHref('admin/content_manager/assets/export/xls', 0, 'XLS export link present.');
+
+    // Verify that the exposed filter values are passed to the export link.
+    // Any query parameter passed to the CM view url should also be
+    // present in the export link.
+    $query = array(
+      'search_api_views_fulltext' => $this->randomName(),
+      'type' => 'file',
+      'tags' => $term_names[0],
+      'general_tags' => $term_names[1],
+    );
+
+    $this->drupalGet('admin/content_manager/assets', array('query' => $query));
+
+    $csv_href = url('admin/content_manager/assets/export/csv', array('query' => $query));
+    $this->assertLinkByHref($csv_href, 0, 'CSV export link contains exposed filter parameters.');
+
+    $xls_href = url('admin/content_manager/assets/export/xls', array('query' => $query));
+    $this->assertLinkByHref($xls_href, 0, 'CSV export link contains exposed filter parameters.');
+
+    // Verify that the exported fields are in the correct order.
+    $export_fields = array(
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'type',
+      ),
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'atom_file_path',
+      ),
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'title',
+      ),
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'field_scald_alt_tag',
+      ),
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'field_scald_description',
+      ),
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'field_paddle_tags',
+      ),
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'field_paddle_general_tags',
+      ),
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'video_thumbnail',
+      ),
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'paddle_scald_video_subtitles',
+      ),
+      array(
+        'table' => 'search_api_index_paddle_atoms',
+        'field' => 'publisher',
+      ),
+    );
+
+    // Retrieve the fields in the CSV export display,
+    // and assert their order with the array above.
+    $fields = $this->getFieldsInViewDisplay('media_library', 'paddle_scald_media_library_csv_export');
+    $this->assertFieldsPresenceAndOrder($fields, $export_fields, '"@table.@field" present and in correct order in CSV export.');
+
+    // Retrieve the fields in the XLS export display, and assert their order
+    // with the array above.
+    $fields = $this->getFieldsInViewDisplay('media_library', 'paddle_scald_media_library_xls_export');
+    $this->assertFieldsPresenceAndOrder($fields, $export_fields, '"@table.@field" present and in correct order in XLS export.');
+  }
+
+  /**
+   * Get an array with field names for a certain display in a view.
+   *
+   * @param string $view_name
+   *   The name of the view.
+   * @param string $display_id
+   *   The name of the display inside the view.
+   *
+   * @return array
+   *   An array with all field information, but without the corresponding keys.
+   */
+  protected function getFieldsInViewDisplay($view_name, $display_id) {
+    // Load the view.
+    $view = views_get_view($view_name);
+
+    // Make sure the display exists.
+    if (!isset($view->display[$display_id])) {
+      $this->fail(format_string('Display @display_id present in view @view_name.', array(
+        '@display_id' => $display_id,
+        '@view_name' => $view_name,
+      )));
+      return array();
+    }
+
+    // Get the display's fields.
+    $fields = $view->display['default']->display_options['fields'];
+    if (isset($view->display[$display_id]->display_options['fields'])) {
+      $fields = $view->display[$display_id]->display_options['fields'];
+    }
+    $fields = array_values($fields);
+    return $fields;
+  }
+
+  /**
+   * Assert the order and presence of fields in 2 arrays.
+   *
+   * @param array $fields
+   *   An array with field information, preferably
+   *   generated by the getFieldsInViewDisplay() method.
+   * @param array $assert_fields
+   *   An array with the required fields' information array.
+   *   The information array only needs to contain the
+   *   "table" and "field" keys.
+   * @param string $message
+   *   The message to display along with the assertion.
+   */
+  protected function assertFieldsPresenceAndOrder($fields, $assert_fields, $message) {
+    foreach ($assert_fields as $position => $assert_field_info) {
+      $field_info = isset($fields[$position]) ? $fields[$position] : array('table' => '', 'field' => '');
+
+      $formatted_message = format_string($message, array(
+        '@field' => $assert_field_info['field'],
+        '@table' => $assert_field_info['table'],
+      ));
+
+      $check = ($field_info['table'] == $assert_field_info['table'] && $field_info['field'] == $assert_field_info['field']);
+      $this->assertTrue($check, $formatted_message);
+    }
+  }
+}

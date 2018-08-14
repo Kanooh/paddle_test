@@ -1,0 +1,21 @@
+<?php
+/**
+ * @file
+ * Module providing test functionality for Paddle Editorial Notes.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_editorial_notes_test_menu() {
+  $items = array();
+
+  $items['admin/config/development/testing/paddle_editorial_notes/%node/add'] = array(
+    'title' => 'Add editorial note',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_editorial_notes_note_form', 5),
+    'access arguments' => array('administer nodes'),
+  );
+
+  return $items;
+}

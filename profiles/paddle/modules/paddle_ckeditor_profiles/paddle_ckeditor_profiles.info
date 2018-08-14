@@ -1,0 +1,19 @@
+name = Paddle CKEditor profiles
+description = CKEditor profiles for the Paddle distribution.
+core = 7.x
+package = Paddle
+php = 5.2.4
+version = 7.x-1.0
+
+dependencies[] = ckeditor
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = paddle_text_formats
+dependencies[] = paddle_themer
+dependencies[] = strongarm
+dependencies[] = text
+dependencies[] = views
+
+features[ckeditor_profile][] = Full_HTML
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2

@@ -1,0 +1,5 @@
+name = Paddle Apps Glue
+description = Connects Paddle Apps with each other.
+core = 7.x
+
+dependencies[] = features

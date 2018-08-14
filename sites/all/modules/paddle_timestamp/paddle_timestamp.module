@@ -1,0 +1,414 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Timestamp feature.
+ */
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_timestamp_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_timestamp_configuration_form',
+  );
+}
+
+/**
+ * Paddle Timestamp configuration form callback.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_timestamp_configuration_form($form) {
+  $default_values = array();
+  $options = node_type_get_names();
+
+  foreach ($options as $type => $name) {
+    $default_values[$type] = variable_get("paddle_timestamp_$type", 0) ? $type : 0;
+  }
+
+  $form['paddle_timestamp_content_types'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Available for the following content types:'),
+    '#options' => $options,
+    '#default_value' => $default_values,
+  );
+
+  $form['save'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#attributes' => array(
+      'class' => array('hidden'),
+    ),
+  );
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_timestamp_contextual_actions_configuration_form';
+  }
+
+  return $form;
+}
+
+/**
+ * Submit handler for the Paddle Timestamp configuration form.
+ */
+function paddle_timestamp_configuration_form_submit($form, $form_state) {
+  $types = node_type_get_names();
+
+  // Save the content type settings.
+  foreach ($types as $type => $name) {
+    $value = $form_state['values']['paddle_timestamp_content_types'][$type] ? 1 : 0;
+    variable_set('paddle_timestamp_' . $type, $value);
+
+    // Only do the update when the content type is ticked off
+    // on the paddlet configuration page.
+    if ($value == 1) {
+      // Retrieve all the published nodes of this type.
+      $query = db_select('node', 'n');
+      $query->join('node_revision', 'nv', 'nv.nid = n.nid AND nv.vid = n.vid');
+      $query->fields('n', array('nid', 'title', 'type', 'vid', 'status'))
+        ->fields('nv', array('timestamp'))
+        ->condition('n.type', $type, '=')
+        ->condition('n.status', '1', '=');
+      $results = $query->execute();
+
+      if (!empty($results)) {
+        foreach ($results as $result) {
+          // Make sure the node has no timestamp in db.
+          $query = db_select('field_data_field_paddle_timestamp', 't');
+          $query->fields('t', array('entity_id', 'entity_id'))
+            ->condition('t.entity_id', $result->nid, '=')
+            ->condition('t.revision_id', $result->vid, '=');
+          $has_timestamp = $query->execute()->fetchAssoc();
+          if (empty($has_timestamp)) {
+            $data = array(
+              'entity_type' => 'node',
+              'bundle' => $type,
+              'deleted' => 0,
+              'entity_id' => $result->nid,
+              'revision_id' => $result->vid,
+              'language' => 'und',
+              'delta' => 0,
+              'field_paddle_timestamp_value' => $result->timestamp,
+            );
+            drupal_write_record('field_data_field_paddle_timestamp', $data);
+          }
+        }
+      }
+    }
+  }
+  drupal_set_message(t('Your configuration has been saved.'));
+}
+
+/**
+ * After-build function of the Paddle Timestamp configuration form.
+ *
+ * @param array $form
+ *   Form render array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_timestamp_contextual_actions_configuration_form($form) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-save',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function paddle_timestamp_node_type_insert($info) {
+  variable_set('paddle_timestamp' . $info->type, 0);
+
+  paddle_timestamp_create_timestamp_fields_instances($info);
+}
+
+/**
+ * Creates the field instance for a content type.
+ *
+ * @param object $type
+ *   The content type.
+ */
+function paddle_timestamp_create_timestamp_fields_instances($type) {
+  if (!field_read_instance('node', 'field_paddle_timestamp', $type->type)) {
+    $field_instance_timestamp = array(
+      'bundle' => $type->type,
+      'deleted' => 0,
+      'description' => '',
+      'display' => array(
+        'default' => array(
+          'label' => 'inline',
+          'module' => 'date',
+          'settings' => array(
+            'format_type' => 'paddle_core_date_short',
+            'fromto' => 'both',
+            'multiple_from' => '',
+            'multiple_number' => '',
+            'multiple_to' => '',
+            'show_remaining_days' => 0,
+          ),
+          'type' => 'date_default',
+          'weight' => 11,
+        ),
+        'diff_standard' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => 'node',
+      'field_name' => 'field_paddle_timestamp',
+      'label' => t('Published on'),
+      'required' => 0,
+      'settings' => array(
+        'default_value' => 'now',
+        'default_value2' => 'same',
+        'default_value_code' => '',
+        'default_value_code2' => '',
+        'field_instance_sync' => 0,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'date',
+        'settings' => array(
+          'increment' => 1,
+          'input_format' => 'd/m/Y - H:i:s',
+          'input_format_custom' => '',
+          'label_position' => 'above',
+          'no_fieldset' => 0,
+          'text_parts' => array(),
+          'year_range' => '-8:+3',
+        ),
+        'type' => 'date_popup',
+        'weight' => 1,
+      ),
+    );
+
+    field_create_instance($field_instance_timestamp);
+  }
+
+  if (!field_read_instance('node', 'field_paddle_overwrite_timestamp', $type->type)) {
+    $field_instance_overwrite_timestamp = array(
+      'bundle' => $type->type,
+      'default_value' => array(
+        0 => array(
+          'value' => 1,
+        ),
+      ),
+      'deleted' => 0,
+      'description' => '',
+      'display' => array(
+        'default' => array(
+          'label' => 'above',
+          'module' => 'list',
+          'settings' => array(),
+          'type' => 'list_default',
+          'weight' => 12,
+        ),
+        'diff_standard' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => 'node',
+      'field_name' => 'field_paddle_overwrite_timestamp',
+      'label' => 'Generate timestamp automatically',
+      'required' => 0,
+      'settings' => array(
+        'field_instance_sync' => 0,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'options',
+        'settings' => array(
+          'display_label' => 1,
+        ),
+        'type' => 'options_onoff',
+        'weight' => 2,
+      ),
+    );
+    field_create_instance($field_instance_overwrite_timestamp);
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * We want to hide the Enable Timestamp checkbox when the content type
+ * is not checked in the Timestamp configuration form.
+ */
+function paddle_timestamp_form_node_form_alter(&$form, &$form_state) {
+  $type = $form['#node']->type;
+  $timestamp_visibility = variable_get('paddle_timestamp_' . $type, 0);
+
+  if ($timestamp_visibility == 0) {
+    $form['field_paddle_overwrite_timestamp']['#access'] = 0;
+    $form['field_paddle_timestamp']['#access'] = 0;
+  }
+
+  // Hide the timestamp field when the checkbox is checked.
+  $form['field_paddle_timestamp']['#states'] = array(
+    'visible' => array(
+      ':input[name="field_paddle_overwrite_timestamp[und]"]' => array('checked' => FALSE),
+    ),
+  );
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function paddle_timestamp_preprocess_node(&$variables) {
+  if (!paddle_timestamp_should_field_be_shown($variables['node'])) {
+    unset($variables['content']['field_paddle_timestamp']);
+  }
+}
+
+/**
+ * Decide whether the timestamp field should be shown or not.
+ *
+ * @param object $node
+ *   Node object.
+ *
+ * @return bool
+ *   Whether the field should be shown or not.
+ */
+function paddle_timestamp_should_field_be_shown($node) {
+  $show_on_node_type = variable_get('paddle_timestamp_' . $node->type, 0);
+
+  $enable_timestamp_fields_on_node = field_get_items('node', $node, 'field_paddle_timestamp');
+  $show_on_node = $enable_timestamp_fields_on_node[0]['value'];
+
+  return $show_on_node_type && $show_on_node;
+}
+
+
+/**
+ * Decide whether the timestamp field should be automatically generated or not.
+ *
+ * @param object $node
+ *   Node object.
+ *
+ * @return bool
+ *   Whether the field should be generated or not.
+ */
+function paddle_timestamp_generated_automatically($node) {
+  $checkbox = field_get_items('node', $node, 'field_paddle_overwrite_timestamp');
+  $checkbox_value = $checkbox[0]['value'];
+
+  return $checkbox_value;
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_timestamp_paddle_content_manager_additional_fields() {
+  return array(
+    'field_paddle_overwrite_timestamp',
+    'field_paddle_timestamp',
+  );
+}
+
+/**
+ * Implements hook_workbench_moderation_transition().
+ */
+function paddle_timestamp_workbench_moderation_transition($node, $previous_state, $new_state) {
+  $node_wrapper = entity_metadata_wrapper('node', $node);
+  // We only need to add a timestamp when the node has been published
+  // and the checkbox has been checked.
+  if ($node_wrapper->field_paddle_overwrite_timestamp->value() && $new_state == 'published') {
+    $node_wrapper->field_paddle_timestamp->set($node->workbench_moderation['current']->stamp);
+    // We need to save this change without calling node_save().
+    field_attach_presave('node', $node);
+    field_attach_update('node', $node);
+    entity_get_controller('node')->resetCache(array($node->nid));
+  }
+}
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function paddle_timestamp_preprocess_page(&$variables) {
+  if (isset($variables['node']) && ($node = $variables['node'])) {
+    if (paddle_timestamp_should_field_be_shown($node)) {
+      $display = field_get_display(field_read_instance('node', 'field_paddle_timestamp', $node->type), 'default', $node);
+      $timestamp = field_view_field('node', $node, 'field_paddle_timestamp', $display);
+      if (!paddle_timestamp_generated_automatically($node)) {
+        $variables['page']['content'][$node->type . '_timestamp'] = $timestamp;
+      }
+      else {
+        // We need to retrieve the node publishing date.
+        $timestamp['#object']->field_paddle_timestamp[LANGUAGE_NONE][0]['value'] = $node->revision_timestamp;
+        $variables['page']['content'][$node->type . '_timestamp'] = array($timestamp);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_search_publication_date_alter().
+ */
+function paddle_timestamp_paddle_search_publication_date_alter(&$publication_date, $node) {
+  if (paddle_timestamp_should_field_be_shown($node)) {
+    $node_wrapper = entity_metadata_wrapper('node', $node);
+    $publication_date = $node_wrapper->field_paddle_timestamp->value();
+  }
+}

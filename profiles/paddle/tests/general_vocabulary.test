@@ -1,0 +1,64 @@
+<?php
+/**
+ * @file
+ * Tests for the behavior of the general vocabulary in the taxonomy manager.
+ */
+
+/**
+ * Test class for the general vocabulary.
+ */
+class GeneralVocabularyTestCase extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'General vocabulary tests',
+      'description' => 'Tests if the general vocabulary works properly.',
+      'group' => 'Paddle - Taxonomy',
+    );
+  }
+
+  /**
+   * Tests the general vocabulary.
+   */
+  public function testGeneralVocabulary() {
+    // Log in as chief editor.
+    $this->drupalLogin($this->chiefEditor);
+
+    $parent_name = $this->randomName();
+    // Create terms and check if they are shown on the overview of the general
+    // vocabulary.
+    $this->drupalGet('admin/structure/taxonomy_manager/nojs/paddle_general/add');
+    $edit = array(
+      'name' => $parent_name,
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+    $url_term_1 = url('admin/structure/taxonomy_manager/nojs/paddle_general/1/edit');
+    $this->assertTrue($this->xpath('//a[@href="' . $url_term_1 . '"]'), 'The newly created term was found on the general vocabulary overview page.');
+
+    $child_name = $this->randomName();
+    $this->drupalGet('admin/structure/taxonomy_manager/nojs/paddle_general/add');
+    $edit = array(
+      'name' => $child_name,
+      'parent' => 1,
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+
+    // Load the vocabulary so we know the vid.
+    $vocabulary = taxonomy_vocabulary_machine_name_load('paddle_general');
+    $url_term_2 = url('admin/structure/taxonomy_manager/get_subterm/' . $vocabulary->vid . '/1');
+    $this->assertTrue($this->xpath('//a[@href="' . $url_term_2 . '"]'), 'The newly created child term causes its parent to get an expandable link.');
+
+    // Check if we can select the terms from the general vocabulary in the node
+    // edit screen.
+    $node = $this->drupalCreateUiNode('basic_page');
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertTrue($this->xpath('//div[contains(@class,"form-item-field-paddle-general-tags-und")]'), 'The div containing the general term is shown on the node edit screen.');
+    $this->assertTrue($this->xpath('//input[@id="edit-field-paddle-general-tags-und-0-1-1"]'), 'The checkbox for the first term of the general vocabulary is shown on the node edit screen.');
+    $this->assertTrue($this->xpath('//input[@id="edit-field-paddle-general-tags-und-0-1-1-children-2-2"]'), 'The checkbox for the second term of the general vocabulary is shown on the node edit screen.');
+    $this->assertTrue($this->xpath('//div[@class="no-term-reference-tree-button"]'), 'The minimize button for the second level terms of the general vocabulary is shown on the node edit screen.');
+  }
+
+}

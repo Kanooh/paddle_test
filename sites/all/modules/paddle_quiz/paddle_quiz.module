@@ -1,0 +1,428 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Quiz module.
+ */
+
+/**
+ * URL of the page with all the quizzes.
+ */
+define('PADDLE_QUIZ_OVERVIEW_URL', 'admin/paddlet_store/app/paddle_quiz/configure');
+
+/**
+ * Include hooks and functions related to the apps module.
+ */
+require_once 'paddle_quiz.app.inc';
+
+include_once 'paddle_quiz.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_quiz_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' && $plugin == 'content_types') {
+    return 'plugins/' . $plugin;
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_quiz_menu() {
+  return array(
+    'admin/content/paddle_quiz/add' => array(
+      'title' => 'Create quiz',
+      'description' => 'Create a new quiz.',
+      'page callback' => 'paddle_quiz_add_page',
+      'access arguments' => array('manage paddle quizzes'),
+      'file' => 'paddle_quiz.pages.inc',
+    ),
+    'admin/content/paddle_quiz/%paddle_quiz/edit' => array(
+      'title' => 'Edit quiz',
+      'description' => 'Edit a quiz',
+      'page callback' => 'paddle_quiz_edit_page',
+      'page arguments' => array(3, 5),
+      'access arguments' => array('manage paddle quizzes'),
+      'file' => 'paddle_quiz.pages.inc',
+    ),
+    'admin/content/paddle_quiz/%paddle_quiz/delete/%ctools_js' => array(
+      'title' => 'Delete quiz',
+      'description' => 'Delete a quiz',
+      'page callback' => 'paddle_quiz_delete_page',
+      'page arguments' => array(3, 5),
+      'access arguments' => array('manage paddle quizzes'),
+      'file' => 'paddle_quiz.pages.inc',
+    ),
+    'admin/content/paddle_quiz/%paddle_quiz/export/%ctools_js' => array(
+      'title' => 'Export quiz results',
+      'description' => 'Exports all participation results of a quiz',
+      'page callback' => 'paddle_quiz_export_page',
+      'page arguments' => array(3, 5),
+      'access arguments' => array('manage paddle quizzes'),
+      'file' => 'paddle_quiz.pages.inc',
+    ),
+    'admin/structure/paddle_quiz' => array(
+      'title' => 'Quizzes',
+      'description' => 'Configure quiz entity settings.',
+      'page callback' => 'paddle_quiz_entity_settings_page',
+      'access arguments' => array('administer paddle quizzes'),
+      'file' => 'paddle_quiz.pages.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_quiz_entity_info() {
+  return array(
+    'paddle_quiz' => array(
+      'label' => t('Quiz'),
+      'base table' => 'paddle_quiz',
+      'access callback' => 'paddle_quiz_access',
+      'label callback' => 'entity_class_label',
+      'entity class' => 'QuizEntity',
+      'controller class' => 'EntityAPIController',
+      'views controller class' => 'EntityDefaultViewsController',
+      'fieldable' => TRUE,
+      'entity keys' => array(
+        'id' => 'qid',
+        'label' => 'title',
+      ),
+      'bundles' => array(
+        'paddle_quiz' => array(
+          'label' => t('Quiz'),
+          'admin' => array(
+            'path' => 'admin/structure/paddle_quiz',
+            'access arguments' => array('administer paddle quizzes'),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_quiz_permission() {
+  return array(
+    'administer paddle quizzes' => array(
+      'title' => t('Administer quizzes'),
+    ),
+    'manage paddle quizzes' => array(
+      'title' => t('Manage quizzes'),
+    ),
+  );
+}
+
+/**
+ * Provides an access callback for the quiz entity type.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ * @param object $quiz
+ *   The quiz entity.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ * @param string $entity_type
+ *   The entity type of the entity to check for.
+ *
+ * @return bool
+ *   Whether access is allowed or not.
+ */
+function paddle_quiz_access($op, $quiz, $account = NULL, $entity_type = NULL) {
+  if (empty($account)) {
+    global $user;
+    $account = $user;
+  }
+
+  switch ($op) {
+    case 'view':
+      return TRUE;
+
+    case 'create':
+    case 'edit':
+    case 'delete':
+      return user_access('manage paddle quizzes', $account);
+
+    default:
+      return FALSE;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_quiz_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_quiz_table_list' => array(
+      'render element' => 'element',
+    ),
+    'paddle_quiz_field_multiple_value_form' => array(
+      'render element' => 'element',
+    ),
+    'paddle_quiz_placeholder' => array(
+      'variables' => array(
+        'message' => '',
+      ),
+    ),
+  );
+}
+
+/**
+ * Loads a paddle_quiz object from the database.
+ *
+ * @param int $qid
+ *   Id of the quiz to load.
+ * @param bool $reset
+ *   Whether or not to reset the internal paddle_quiz_load cache.
+ *
+ * @return QuizEntity
+ *   Fully loaded QuizEntity object.
+ */
+function paddle_quiz_load($qid, $reset = FALSE) {
+  $quizzes = paddle_quiz_load_multiple(array($qid), $reset);
+  return $quizzes ? reset($quizzes) : FALSE;
+}
+
+/**
+ * Loads multiple paddle_quiz objects from the database.
+ *
+ * @param int[] $qids
+ *   Ids of the quizzes to load.
+ *
+ * @return QuizEntity[]
+ *   Fully loaded QuizEntity objects, keyed by their qid.
+ */
+function paddle_quiz_load_multiple($qids, $reset = FALSE) {
+  $entities = entity_load('paddle_quiz', $qids, array(), $reset);
+  field_attach_load('paddle_quiz', $entities);
+  return $entities;
+}
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_quiz_paddle_content_region_content_type_info() {
+  return 'quiz_page';
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_quiz_paddle_content_manager_additional_fields() {
+  return array(
+    'field_paddle_quiz_reference',
+  );
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function paddle_quiz_field_widget_form_alter(&$element, &$form_state, $context) {
+  // Only alter the widget for the paddle quiz reference field.
+  if ($context['field']['field_name'] != 'field_paddle_quiz_reference') {
+    return;
+  }
+
+  // Check that the field is showing the quizzes as radio buttons / checkboxes.
+  if ($context['instance']['widget']['type'] == 'options_buttons') {
+    if (empty($element['#options'])) {
+      // Add an empty text to the description if there are no available quizzes.
+      $element['#description'] = t('There are no quizzes available to select.');
+    }
+    else {
+      // Loop over all quizzes and indicate which ones are unpublished.
+      $qids = array_keys($element['#options']);
+      $quizzes = paddle_quiz_load_multiple($qids);
+      foreach ($element['#options'] as $qid => $label) {
+        if ($quizzes[$qid]->status == 0) {
+          $element['#options'][$qid] = $label . ' (unpublished)';
+        }
+      }
+    }
+  }
+
+  // Add a link to the configuration page to the field description if the user
+  // can manage quizzes.
+  if (user_access('manage paddle quizzes')) {
+    $element['#description'] .= empty($element['description']) ? '' : ' ';
+    $element['#description'] .= l(t('You can manage your quizzes here.'), PADDLE_QUIZ_OVERVIEW_URL);
+  }
+  // Otherwise add a message telling the user that they can ask their chief
+  // editor or site manager to add more quizzes.
+  else {
+    $element['#description'] .= empty($element['description']) ? '' : ' ';
+    $element['#description'] .= t('You can ask your chief editor or site manager to add more quizzes.');
+  }
+}
+
+/**
+ * Returns HTML for an individual form element.
+ *
+ * Copied and adjusted from theme_field_multiple_value_form().
+ *
+ * Combine multiple values into a table WITHOUT drag-n-drop reordering.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - element: A render element representing the form element.
+ *
+ * @ingroup themeable
+ */
+function theme_paddle_quiz_field_multiple_value_form($variables) {
+  $element = $variables['element'];
+  $output = '';
+
+  if ($element['#cardinality'] > 1 || $element['#cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
+    $table_id = drupal_html_id($element['#field_name'] . '_values');
+
+    $rows = array();
+
+    $items = array();
+    foreach (element_children($element) as $key) {
+      if ($key === 'add_more') {
+        $add_more_button = &$element[$key];
+      }
+      else {
+        $items[] = &$element[$key];
+      }
+    }
+
+    // Add the items as table rows.
+    foreach ($items as $key => $item) {
+      unset($item['_weight']);
+
+      $cells = array(
+        drupal_render($item),
+      );
+      $rows[] = array(
+        'data' => $cells,
+      );
+    }
+
+    $markup = '<div class="form-item">';
+    $markup .= theme('table', array(
+      'rows' => $rows,
+      'attributes' => array(
+        'id' => $table_id,
+        'class' => array('paddle-quiz-multiple-value-form'),
+      ),
+    ));
+    $markup .= $element['#description'] ? '<div class="description">' . $element['#description'] . '</div>' : '';
+    $markup .= '<div class="clearfix">' . drupal_render($add_more_button) . '</div>';
+    $markup .= '</div>';
+
+    $output = array(
+      '#type' => 'markup',
+      '#markup' => $markup,
+    );
+
+    if (!empty($element['#fieldset'])) {
+      $output = array(
+        '#type' => 'fieldset',
+        '#title' => isset($element['#title']) ? $element['#title'] : '',
+        'markup' => $output,
+      );
+    }
+
+    $output = drupal_render($output);
+  }
+  else {
+    foreach (element_children($element) as $key) {
+      $output .= drupal_render($element[$key]);
+    }
+  }
+
+  return $output;
+}
+
+/**
+ * Implements hook_libraries_info().
+ */
+function paddle_quiz_libraries_info() {
+  return array(
+    'phpexcel' => array(
+      'name' => 'phpexcel',
+      'vendor url' => 'http://phpexcel.codeplex.com/',
+      'download url' => 'https://github.com/PHPOffice/PHPExcel',
+      'version arguments' => array(
+        'file' => 'changelog.txt',
+        'pattern' => "/(\d{4}-\d{2}-\d{2}\s+\(v([0-9\.]+)|@version\s+([0-9\.]+))/",
+        'lines' => 300,
+      ),
+      'path' => 'Classes',
+      'files' => array(
+        'php' => array(
+          'PHPExcel.php',
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Theme function for the quiz placeholder message.
+ *
+ * @param array $vars
+ *   Variables array, must contain a value with the key "message".
+ *
+ * @return string
+ *   HTML to display.
+ */
+function theme_paddle_quiz_placeholder($vars) {
+  $placeholder = array(
+    '#type' => 'markup',
+    '#prefix' => '<p class="quiz-placeholder"><strong>',
+    '#suffix' => '</strong></p>',
+    '#markup' => $vars['message'],
+  );
+  return drupal_render($placeholder);
+}
+
+/**
+ * Implements hook_cron().
+ */
+function paddle_quiz_cron() {
+  module_load_include('inc', 'paddle_quiz', 'paddle_quiz.export');
+  paddle_quiz_export_process_pending();
+  paddle_quiz_export_remove_expired();
+}
+
+/**
+ * Implements hook_mail().
+ */
+function paddle_quiz_mail($key, &$message, $params) {
+  if ($key == 'export') {
+    $export = $params['export'];
+    $file = file_load($export['fid']);
+    $quiz = paddle_quiz_load($export['qid']);
+
+    $t_options = array('context' => 'paddle_quiz:export');
+    $message['subject'] = t('Quiz results export ready.', array(), $t_options);
+    $message['body'][] = t('The results of the quiz @quiz have been exported and can be downloaded from @url', array(
+      '@quiz' => $quiz->title,
+      '@url' => file_create_url($file->uri),
+    ), $t_options);
+    $message['body'][] = t('The download will be available for 5 days.');
+  }
+}
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function paddle_quiz_preprocess_node(&$variables) {
+  // Make sure that the comments are not rendered directly below the body.
+  if (
+      $variables['type'] == 'quiz_page' &&
+      module_exists('paddle_comment') &&
+      variable_get('comment_' . $variables['type'], COMMENT_NODE_HIDDEN) != COMMENT_NODE_HIDDEN &&
+      !empty($variables['content']['comments'])
+  ) {
+    unset($variables['content']['comments']);
+    unset($variables['content']['links']['comment']);
+  }
+}

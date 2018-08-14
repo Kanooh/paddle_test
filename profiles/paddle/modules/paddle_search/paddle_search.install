@@ -1,0 +1,29 @@
+<?php
+/**
+ * @file
+ * Contains install, uninstall, update and schema hooks for Paddle Search.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_search_enable() {
+  // Clear list of Search API alter callbacks before any other code within this
+  // same request calls the list, so it gets rebuilt and the alter callbacks
+  // provided by this module are known.
+  drupal_static_reset('search_api_get_alter_callbacks');
+
+  // Flush the entity caches, allowing the search index to be altered.
+  entity_flush_caches();
+}
+
+/**
+ * Revert paddle_search and update the node index.
+ */
+function paddle_search_update_7000() {
+  drupal_static_reset('search_api_get_alter_callbacks');
+  features_revert_module('paddle_search');
+
+  $index = search_api_index_load('node_index');
+  $index->reindex();
+}

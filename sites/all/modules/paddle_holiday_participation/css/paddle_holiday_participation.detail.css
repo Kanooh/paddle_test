@@ -1,0 +1,264 @@
+/**
+ * @file
+ * Holiday Participation Paddlet styling of the detail page.
+ */
+
+.offer-address-wrapper .offer-image img {
+    padding-left: 5px;
+}
+
+.offer-section .offer-image-label, .offer-section-right .offer-image-label, .offer-section-label, .offer-address, .offer-website, .offer-image {
+    padding-bottom: 10px;
+}
+
+/* for views in general */
+.view-id-holiday_participation_filter_pages .hp-categories-links .hp-category-links {
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+    min-height: 45px;
+    padding: 10px;
+    font-size: 14px;
+    display: block;
+}
+
+.view-id-holiday_participation_filter_pages .hp-offer-display-switcher {
+    float: right;
+}
+
+.view-id-holiday_participation_filter_pages .hp-offer-display-switcher a {
+    text-decoration: none;
+    text-transform: uppercase;
+    padding: 2px 10px;
+    margin-left: 10px;
+
+}
+
+.view-id-holiday_participation_filter_pages .hp-offer-display-switcher a.active {
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
+.view-id-holiday_participation_filter_pages .view-footer {
+    float: left;
+    width: 100%;
+    padding: 15px 0px;
+}
+
+.view-id-holiday_participation_filter_pages .view-header {
+    float: left;
+    width: 100%;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters {
+    float: left;
+    width: 100%;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters .hp_options {
+    margin-left: 15px;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters .col-md-12 {
+    float: left;
+    width: 100%;
+    padding: 15px 0;
+}
+
+.view-id-holiday_participation_filter_pages .form-item-capacity-range {
+    width: 93%;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters .search-button-daytrips .form-submit {
+    width: 100%;
+    border: 1px solid;
+    margin-top: 0px;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters .search-button {
+    position: relative;
+    min-height: 155px;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters .search-button .search-button-wrapper {
+    position: absolute;
+    bottom: 0px;
+    width: 100%;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters .search-button .search-button-wrapper .form-submit {
+    width: 100%;
+    border: 1px solid;
+    margin-top: 0px;
+}
+
+.view-id-holiday_participation_filter_pages .views-exposed-form .views-exposed-widget {
+    width: 23%;
+    margin: 15px;
+}
+
+.view-id-holiday_participation_filter_pages .views-exposed-form .views-widget-filter-field_geofield_distance {
+    float: left;
+    width: 100%;
+}
+
+input#edit-field-geofield-distance-origin {
+    background-position-x: 99%;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row {
+    float: left;
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province {
+    height: 210px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province img {
+    width: 210px;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .view-field-hp-left-wrapper {
+    padding: 10px;
+    flex-basis: 50%;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .col-md-3 {
+    margin-left: 0px;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list {
+    position: absolute;
+    bottom: 10px;
+    float: left;
+    width: 50%;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .hp-featured-image {
+    position: absolute;
+    right: 0;
+    top: 0;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul {
+    list-style: none;
+    margin: 0px;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters .hp-filters-label {
+    text-decoration: none;
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters .bef-select-as-checkboxes .option {
+    text-decoration: none;
+    font-weight: normal;
+    text-transform: capitalize;
+    padding-bottom: 10px;
+}
+
+.view-id-holiday_participation_filter_pages .view-filters select {
+    border: none;
+    width: 100%;
+    height: 40px;
+}
+
+.view-id-holiday_participation_filter_pages .item-list .pager {
+    text-align: center;
+    padding: 15px 0px;
+}
+
+.view-id-holiday_participation_filter_pages .item-list .pager .pager-current {
+    padding: 2px 5px;
+    background-color: #FFE002;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-title {
+    margin-top: 10px;
+}
+
+/* Icons for facilities */
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .province-name {
+    background: url("../assets/views_icons/addressmarker.png") no-repeat top left;
+    padding-left: 25px;
+    float: left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul li {
+    margin: 0px;
+    padding: 0px
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_icon {
+    width: 35px;
+    height: 25px;
+    float: left;
+    margin: 1px 1px;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_internet_connection {
+    background: url("../assets/views_icons/internet.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_bikes_available {
+    background: url("../assets/views_icons/fietsverhuur.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_parking {
+    background: url("../assets/views_icons/parking.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_extra_baby_bed_possible {
+    background: url("../assets/views_icons/kinderbed.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_extra_baby_chair_possible {
+    background: url("../assets/views_icons/kinderstoel.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_indoor_playground {
+    background: url("../assets/views_icons/binnenspeeltuin.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_outdoor_playground {
+    background: url("../assets/views_icons/buitenspeeltuin.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_television {
+    background: url("../assets/views_icons/televisie.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_restaurant_snackbar {
+    background: url("../assets/views_icons/restaurant_snackbar.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_picknick_possible {
+    background: url("../assets/views_icons/picknick_possible.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_tearoom_bar {
+    background: url("../assets/views_icons/cafetaria_bar.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_shop {
+    background: url("../assets/views_icons/supermarkt.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_swimming {
+    background: url("../assets/views_icons/zwembad.png") no-repeat top left;
+}
+
+.view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .item-list ul .hp_pets_allowed {
+    background: url("../assets/views_icons/hond.png") no-repeat top left;
+}
+
+.form-item-field-geofield-distance-origin, .form-type-geofield-proximity {
+    width: 100%;
+    padding-top: 5px;
+}

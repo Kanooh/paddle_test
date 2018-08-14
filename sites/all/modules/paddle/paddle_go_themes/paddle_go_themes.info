@@ -1,0 +1,9 @@
+name = Paddle GO themes
+description = Paddle Themes for the government schools.
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = paddle_themer
+features[ctools][] = paddle_themer:default_paddle_themer:1
+features[features_api][] = api:2
+features[paddle_themer_theme][] = go_theme

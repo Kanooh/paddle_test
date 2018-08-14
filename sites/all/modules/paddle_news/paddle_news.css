@@ -1,0 +1,212 @@
+img.news-item-featured-image.full-width {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 1em;
+}
+
+img.news-item-featured-image.half-width {
+    max-width: 50%;
+    height: auto;
+}
+
+img.news-item-featured-image.float-right {
+    float: right;
+    margin: 0 0 10px 10px;
+}
+
+img.news-item-featured-image.float-left {
+    float: left;
+    margin-right: 1.6em;
+}
+
+.region-content .news-item-info {
+    list-style: none;
+    margin: 0;
+    padding: 15px;
+}
+
+ul.news-item-info li {
+    font-size: 18px;
+    font-weight: bold;
+    color: #fff;
+    margin: 0;
+}
+
+.news-item-info .fa {
+    margin-right: 5px;
+}
+
+.pane-news-info-banner .pane-content ul li i.fa {
+    font-weight: 100;
+}
+
+/**
+ * Listings.
+ */
+.view-id-paddle_panes_listing.paddle-landing-page-news-short,
+.view-id-paddle_panes_listing.paddle-landing-page-news-extended,
+.view-id-paddle_panes_listing.paddle-landing-page-news-detailed {
+    margin: -21px -15px -14px;
+}
+
+.view-id-paddle_panes_listing.paddle-landing-page-news-short .views-row,
+.view-id-paddle_panes_listing.paddle-landing-page-news-extended .views-row,
+.view-id-paddle_panes_listing.paddle-landing-page-news-detailed .views-row {
+    margin-bottom: 0;
+}
+
+.list-news-item {
+    border: 0;
+    border-bottom-width: 1px;
+    border-style: solid;
+    border-color: #ebebeb;
+}
+
+.list-news-item a {
+    padding: 7px 15px;
+    overflow: hidden;
+    position: relative;
+    display: table-row;
+    vertical-align: middle;
+}
+
+.list-news-item a:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    text-decoration: none !important;
+}
+
+.panel-pane .pane-section-body .list-news-item a {
+    display: block;
+    font-size: .9em;
+    word-wrap: break-word;
+}
+
+.list-news-item-detailed .thumbnail {
+    display: inline-block;
+    vertical-align: middle;
+    min-width: 90px;
+    height: 90px;
+    width: 10%;
+    margin-right: 15px;
+}
+
+.list-news-item img {
+    width: 44px;
+    border-radius: 23px;
+}
+
+.list-news-item .date {
+    overflow: hidden;
+}
+
+.list-news-item-detailed .thumbnail {
+    min-width: 90px;
+    height: 90px;
+    float: left;
+}
+
+.list-news-item-detailed img {
+    width: 90px;
+    border-radius: 45px;
+}
+
+.list-news-item-extended .info {
+  float: left;
+  width: 70%;
+}
+.list-news-item-extended .thumbnail {
+  min-width: 60px;
+  height: 60px;
+  float: left;
+}
+
+.list-news-item-extended img {
+  border-radius: 45px;
+}
+
+/**
+ * Overview page.
+ */
+.view-id-news_overview .view-content {
+    overflow: hidden;
+}
+
+.view-news-overview .news-item .pane-section-top,
+.pane-top-news .pane-section-top {
+    padding: 0;
+}
+
+.news-overview-item-body {
+    display: inline;
+}
+
+.pane-top-news .pane-section-bottom {
+    bottom: 0;
+    padding-bottom: 10px;
+    padding-top: 10px;
+    position: absolute;
+    right: 10px;
+}
+
+.pane-top-news .pane-section-body {
+    position: relative;
+    padding: 0;
+}
+
+.pane-top-news .no-image .pane-section-body {
+    padding-top: 15px;
+    padding-left: 15px;
+    padding-bottom: 15px;
+}
+
+.pane-top-news .news-overview-item-image img {
+    height: inherit;
+    width: inherit;
+}
+
+.pane-top-news .news-overview-item-image {
+    float: left;
+    padding-right: 20px;
+    padding-bottom: 0px;
+}
+
+.pane-top-news .news-overview-item-title {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.pane-top-news .news-overview-item-date {
+    padding: 0px;
+}
+
+.news-overview-item-date {
+    padding: 15px;
+}
+
+.view-news-overview ul.pager {
+    text-align: center;
+}
+
+.view-news-overview ul.pager li {
+    display: inline-block;
+    height: 23px;
+}
+
+.view-news-overview ul.pager li a {
+    background: none;
+    float: left;
+    height: auto;
+    margin-top: 4px;
+    width: auto;
+}
+
+.pane-news-info-banner .pane-content ul li {
+    display: inline-block;
+}
+
+/* the calendar icon needs some margin and is too clunky and badly positioned */
+.fa-calendar-o {
+  position: relative;
+  top: -1px;
+  font-size: 0.9em;
+}

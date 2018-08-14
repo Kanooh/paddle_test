@@ -1,0 +1,612 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle News module.
+ */
+
+include_once 'paddle_news.features.inc';
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors_alter().
+ */
+function paddle_news_paddle_color_palettes_color_selectors_alter(&$data, $theme) {
+  $data[0]['color'][] = '.list-news-item .title';
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_news_paddle_content_manager_additional_fields() {
+  return array(
+    'field_paddle_news_image_position',
+  );
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields_groups_alter().
+ */
+function paddle_news_paddle_content_manager_additional_fields_groups_alter(&$field_groups, $context) {
+  if ($context->data->type == 'news_item') {
+    $field_groups = array(
+      'news lead image' => array(
+        'label' => t('Featured image'),
+        'weight' => 1,
+        'fields' => array(
+          'field_paddle_news_image_position',
+          'field_paddle_featured_image',
+        ),
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function paddle_news_field_formatter_info() {
+  return array(
+    'paddle_news_featured_image' => array(
+      'label' => t('News item featured image'),
+      'field types' => array('paddle_scald_atom'),
+    ),
+    'paddle_news_featured_image_overview' => array(
+      'label' => t('News overview item featured image'),
+      'field types' => array('paddle_scald_atom'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function paddle_news_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  foreach ($items as $count => $item) {
+    // For now, we can use the same markup as generated for the images in the
+    // CKEditor. However we will probably want to customize this to use image
+    // styles.
+    $atom = scald_atom_load($item['sid']);
+    $attributes = array('class' => array('news-item-featured-image'));
+
+    // Add CSS classes that reflect the chosen image position, but only on the
+    // news item's detail page. (Makes no sense to float it differently in
+    // listings.)
+    if ($display['type'] == 'paddle_news_featured_image') {
+      $image_position = '';
+      if (isset($entity->field_paddle_news_image_position[LANGUAGE_NONE][$count]['value'])) {
+        $image_position = $entity->field_paddle_news_image_position[LANGUAGE_NONE][$count]['value'];
+      }
+
+      switch ($image_position) {
+        case 'full_top':
+          $attributes['class'][] = 'full-width';
+          break;
+
+        case 'half_right':
+          $attributes['class'][] = 'half-width';
+          $attributes['class'][] = 'float-right';
+          break;
+
+        case 'half_left':
+        default:
+          $attributes['class'][] = 'half-width';
+          $attributes['class'][] = 'float-left';
+      }
+    }
+
+    // Determine the image style, if any.
+    $image_style = !empty($item['style']) ? $item['style'] : NULL;
+    // Render the image markup.
+    $element[$count]['#markup'] = theme('paddle_scald_render_atom', array(
+      'atom' => $atom,
+      'image_style' => $image_style,
+      'attributes' => $attributes,
+    ));
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_news_form_news_item_node_form_alter(&$form, &$form_state, $form_id) {
+  // Remove 'N/A' as an image position option without having to make the field
+  // mandatory. We can't make it mandatory because it would show up in the 'Add
+  // new content' modal.
+  unset($form['field_paddle_news_image_position'][LANGUAGE_NONE]['#options']['_none']);
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_news_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_news_paddle_content_region_content_type_info() {
+  return 'news_item';
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors().
+ */
+function paddle_news_paddle_color_palettes_color_selectors() {
+  return array(
+    array(
+      'background-color' => array(
+        '.pane-news-info-banner .pane-content',
+      ),
+    ),
+    array(),
+    array(),
+    array(),
+    array(),
+    array(),
+    array(),
+  );
+}
+
+/**
+ * Checks if a node is a translation of the paddle news overview page.
+ *
+ * @param int $nid
+ *   The nid to check the translations for.
+ *
+ * @return bool
+ *   True if the $nid corresponds to a translation node, false otherwise.
+ */
+function paddle_news_get_translation_nids($nid) {
+  $translations = translation_node_get_translations(variable_get('paddle_news_overview_page_nid', 0));
+
+  foreach ($translations as $translation) {
+    if ($translation->nid == $nid) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_paddle_core_additional_panes().
+ */
+function paddle_news_paddle_core_additional_panes($context, $region) {
+  $panes = array();
+
+  $object = menu_get_object('node');
+  if (!empty($object) && paddle_news_get_translation_nids($object->nid) && $context == 'overview_page_view' && $region == 'main') {
+    // Show the top news only if we are on the first page of the view.
+    // Determine by checking the URL query.
+    $url_query = drupal_get_query_parameters();
+    if (!isset($url_query['page'])) {
+      $pane = panels_new_pane('top_news', 'top_news', TRUE);
+      // Add a title to the pane.
+      $pane->configuration['override_title'] = TRUE;
+      $pane->configuration['override_title_text'] = '';
+      $panes[] = array(
+        'pane' => $pane,
+        'weight' => 1,
+      );
+    }
+
+    $pane = panels_new_pane('views_panes', 'news_overview-panel_pane_1', TRUE);
+    // Add a title to the pane.
+    $pane->configuration['override_title'] = TRUE;
+    $pane->configuration['override_title_text'] = '';
+    $panes[] = array(
+      'pane' => $pane,
+      'weight' => 2,
+    );
+  }
+
+  return $panes;
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ */
+function paddle_news_entity_info_alter(&$entity_info) {
+  $entity_info['node']['view modes']['news_short'] = array(
+    'label' => t('News short'),
+    'custom settings' => TRUE,
+  );
+  $entity_info['node']['view modes']['news_extended'] = array(
+    'label' => t('News extended'),
+    'custom settings' => TRUE,
+  );
+  $entity_info['node']['view modes']['news_detailed'] = array(
+    'label' => t('News detailed'),
+    'custom settings' => TRUE,
+  );
+}
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function paddle_news_preprocess_node(&$vars) {
+  // Preprocess the 'news_short' view mode.
+  if ($vars['view_mode'] == 'news_short') {
+    $vars['theme_hook_suggestions'][] = 'node__' . $vars['type'] . '__news_short';
+    $vars['output'] = theme('paddle_news_item', array('node' => $vars['node']));
+  }
+
+  // Preprocess the 'news_extended' view mode.
+  elseif ($vars['view_mode'] == 'news_extended') {
+    $field_paddle_news_image = field_get_items('node', $vars['node'], 'field_paddle_featured_image');
+    if (!empty($field_paddle_news_image)) {
+      $vars['theme_hook_suggestions'][] = 'node__' . $vars['type'] . '__news_extended';
+      $sid = $field_paddle_news_image[0]['sid'];
+      $atom = scald_atom_load($sid);
+
+      $image = '';
+      $vars['extra_class'] = '';
+      if ($atom) {
+        $alt = field_get_items('scald_atom', $atom, 'field_scald_alt_tag');
+        $alt = !empty($alt) ? $alt[0]['value'] : '';
+
+        $image = theme('image_style', array(
+          'style_name' => 'paddle_listing_thumbnail',
+          'path' => $atom->file_source,
+          'alt' => $alt,
+        ));
+
+        $vars['extra_class'] = 'has-image';
+      }
+
+      $vars['output'] = theme('paddle_news_item', array(
+        'image' => $image,
+        'node' => $vars['node'],
+      ));
+    }
+    // If the news item doesn't have an image, fall back to the 'news_short'
+    // view mode.
+    else {
+      $vars['theme_hook_suggestions'][] = 'node__' . $vars['type'] . '__news_short';
+      $vars['output'] = theme('paddle_news_item', array('node' => $vars['node']));
+    }
+  }
+  // Preprocess the 'news_detailed' view mode.
+  elseif ($vars['view_mode'] == 'news_detailed') {
+    $vars['theme_hook_suggestions'][] = 'node__' . $vars['type'] . '__news_detailed';
+    $image = '';
+    $vars['extra_class'] = '';
+
+    $field_paddle_news_image = field_get_items('node', $vars['node'], 'field_paddle_featured_image');
+    if (!empty($field_paddle_news_image)) {
+      $sid = $field_paddle_news_image[0]['sid'];
+      $atom = scald_atom_load($sid);
+
+      if ($atom) {
+        $alt = field_get_items('scald_atom', $atom, 'field_scald_alt_tag');
+        $alt = !empty($alt) ? $alt[0]['value'] : '';
+
+        $image = theme('image_style', array(
+          'style_name' => 'paddle_news_thumbnail',
+          'path' => $atom->file_source,
+          'alt' => $alt,
+        ));
+
+        $vars['extra_class'] = 'has-image';
+      }
+    }
+
+    $text = '';
+    $field_body = field_get_items('node', $vars['node'], 'body');
+    if (!empty($field_body)) {
+      $field = field_view_field('node', $vars['node'], 'body', array(
+        'type' => 'smart_trim_format',
+        'module' => 'smart_trim',
+        'label' => 'hidden',
+        'settings' => array(
+          'more_link' => 0,
+          'summary_handler' => 'full',
+          'trim_length' => 200,
+          'trim_link' => 0,
+          'trim_options' => array(
+            'text' => 'text',
+          ),
+          'trim_suffix' => '...',
+          'trim_type' => 'chars',
+        ),
+      ));
+      $text = strip_tags(render($field));
+    }
+
+    $vars['output'] = theme('paddle_news_item', array(
+      'text' => $text,
+      'image' => $image,
+      'node' => $vars['node'],
+      'view' => 'detailed',
+    ));
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_news_theme($existing, $type, $theme, $path) {
+  return array(
+    'node__news_item__news_short' => array(
+      'render element' => 'elements',
+      'path' => drupal_get_path('module', 'paddle_news') . '/theme',
+      'template' => 'node--news_item--news_short',
+    ),
+    'node__news_item__news_extended' => array(
+      'render element' => 'elements',
+      'path' => drupal_get_path('module', 'paddle_news') . '/theme',
+      'template' => 'node--news_item--news_extended',
+    ),
+    'node__news_item__news_detailed' => array(
+      'render element' => 'elements',
+      'path' => drupal_get_path('module', 'paddle_news') . '/theme',
+      'template' => 'node--news_item--news_detailed',
+    ),
+    'paddle_news_top_news' => array(
+      'render element' => 'elements',
+      'path' => drupal_get_path('module', 'paddle_news') . '/theme',
+      'template' => 'paddle_news_top_news',
+    ),
+    'paddle_news_item' => array(
+      'variables' => array(
+        'text' => NULL,
+        'image' => NULL,
+        'node' => NULL,
+        'view' => NULL,
+      ),
+    ),
+    'paddle_news_item_info' => array(
+      'variables' => array(
+        'date' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * Theme function for a news item.
+ */
+function theme_paddle_news_item($variables) {
+  // @todo In phase 2 the categories need to be added here.
+  $node = $variables['node'];
+
+  // We have to use <span>, as <a> cannot contain any block elements according
+  // to the HTML spec.
+  $html = '';
+  if (!empty($variables['image'])) {
+    $html .= '<span class="thumbnail">' . $variables['image'] . '</span>';
+  }
+  $html .= '<span class="info">';
+
+  if ($variables['view'] == 'detailed') {
+    $html .= '<span class="title">' . check_plain($node->title) . '</span><br />';
+    $html .= '<span class="date">' . format_date($node->created, 'paddle_core_date_medium');
+
+    if (!empty($variables['text'])) {
+      $html .= ' - </span><span class="summary">' . $variables['text'] . '</span>';
+    }
+    else {
+      $html .= '</span>';
+    }
+  }
+  else {
+    $html .= '<span class="title">' . check_plain($node->title) . '</span><br />';
+    $html .= '<span class="date">' . format_date($node->created, 'paddle_core_date_medium') . '</span>';
+  }
+
+  $html .= '</span>';
+
+  return l($html, 'node/' . $node->nid, array('html' => TRUE));
+}
+
+/**
+ * Preprocess function for theme_paddle_news_item_info().
+ *
+ * @param array $variables
+ *   An associative array containing the variables to preprocess:
+ *   - 'date': The date of the news item.
+ */
+function template_preprocess_paddle_news_item_info(&$variables) {
+  // Turn the UNIX timestamp into a human readable string.
+  $variables['date'] = format_date($variables['date'], 'paddle_core_date_medium');
+}
+
+/**
+ * Theme function for news item info block.
+ *
+ * @param array $variables
+ *   An associative array with the following keys:
+ *   - 'date': the date the news was released.
+ *
+ * @return string
+ *   The rendered HTML.
+ */
+function theme_paddle_news_item_info($variables) {
+  $items = array(
+    array(
+      'data' => '<i class="fa fa-calendar-o"></i><span>' . $variables['date'] . '</span>',
+      'class' => array('news-item-date'),
+    ),
+  );
+
+  $html = theme('item_list', array(
+    'items' => $items,
+    'attributes' => array(
+      'class' => array('news-item-info'),
+    ),
+  ));
+
+  return $html;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_news_form_paddle_panes_listing_content_type_edit_form_alter(&$form, &$form_state) {
+  // Get the default value for the view modes.
+  $conf = $form_state['conf'];
+  $default_value = isset($conf['view_mode']) ? $conf['view_mode'] : 'listing_title';
+
+  // Make sure the new view modes are only enabled when the content type filter
+  // is set to "News item". Note that at first sight we could use the
+  // "unchecked" state to deselect the radio buttons when they're disabled, but
+  // this tends to mess up the default value.
+  $dynamic_states = array(
+    'enabled' => array(
+      ':input[name="content_types[news_item]"]' => array('checked' => TRUE),
+    ),
+  );
+
+  // Make sure the view modes are disabled when any other content type than
+  // news item is selected.
+  foreach (node_type_get_types() as $node_type_name => $node_type) {
+    if ($node_type_name == 'news_item' || !isset($form['pane_settings']['section_body']['filters']['content_types']['#options'][$node_type_name])) {
+      continue;
+    }
+    $dynamic_states['enabled'][':input[name="content_types[' . $node_type_name . ']"]'] = array('checked' => FALSE);
+  }
+
+  // Add the news views to the list of possible view modes. Add a tip for the
+  // "short news overview" radio button first.
+  $tip = theme('html_tag', array(
+    'element' => array(
+      '#tag' => 'span',
+      '#attributes' => array(
+        'class' => 'inline-tip',
+      ),
+      '#value' => ' (' . t('title + date') . ')',
+    ),
+  ));
+
+  $form['pane_settings']['section_body']['display_settings']['view_mode']['news_short'] = array(
+    '#type' => 'radio',
+    '#title' => t('Short news view'),
+    '#return_value' => 'news_short',
+    '#parents' => array('view_mode'),
+    '#states' => $dynamic_states,
+    '#default_value' => $default_value,
+    '#attributes' => array(
+      'name' => 'view_mode',
+    ),
+    '#suffix' => $tip,
+  );
+
+  // Add a tip for the "extended news overview" radio button.
+  $tip = theme('html_tag', array(
+    'element' => array(
+      '#tag' => 'span',
+      '#attributes' => array(
+        'class' => 'inline-tip',
+      ),
+      '#value' => ' (' . t('title + date + image') . ')',
+    ),
+  ));
+
+  $form['pane_settings']['section_body']['display_settings']['view_mode']['news_extended'] = array(
+    '#type' => 'radio',
+    '#title' => t('Extended news view'),
+    '#return_value' => 'news_extended',
+    '#parents' => array('view_mode'),
+    '#states' => $dynamic_states,
+    '#default_value' => $default_value,
+    '#attributes' => array(
+      'name' => 'view_mode',
+    ),
+    '#suffix' => $tip,
+  );
+
+  // Add a tip for the "Detailed news overview" radio button.
+  $tip = theme('html_tag', array(
+    'element' => array(
+      '#tag' => 'span',
+      '#attributes' => array(
+        'class' => 'inline-tip',
+      ),
+      '#value' => ' (' . t('title + date + image + summary or up to 200 characters of the body') . ')',
+    ),
+  ));
+
+  $form['pane_settings']['section_body']['display_settings']['view_mode']['news_detailed'] = array(
+    '#type' => 'radio',
+    '#title' => t('Detailed news view'),
+    '#return_value' => 'news_detailed',
+    '#parents' => array('view_mode'),
+    '#states' => $dynamic_states,
+    '#default_value' => $default_value,
+    '#attributes' => array(
+      'name' => 'view_mode',
+    ),
+    '#suffix' => $tip,
+  );
+}
+
+/**
+ * Implements hook_views_pre_view().
+ */
+function paddle_news_views_pre_view(&$view, &$display_id, &$args) {
+  $node = menu_get_object('node');
+
+  if (
+    !empty($node)
+    && $view->name == 'news_overview'
+    && $view->display_handler->plugin_name == 'panel_pane') {
+    $args[] = $node->language;
+  }
+}
+
+/**
+ * Implements hook_process_views_view_rss().
+ */
+function paddle_news_process_views_view_rss(&$variables) {
+  // Again, the namespaces are converted to string in the default preprocess
+  // function, so we need to add our namespace and re-process all of them.
+  $namespaces = $variables['view']->style_plugin->namespaces;
+
+  $namespaces['xmlns:media'] = 'http://search.yahoo.com/mrss/';
+  $variables['namespaces'] = drupal_attributes($namespaces);
+}
+
+/**
+ * Implements hook_default_page_manager_handlers_alter().
+ */
+function paddle_news_default_page_manager_handlers_alter(&$export) {
+  $item = menu_get_item();
+
+  // Add the extra panes to the news item node edit form.
+  if (!empty($export['node_edit_panel_context']) && !empty($item['page_arguments'][0]->type) && $item['page_arguments'][0]->type == 'news_item') {
+    $panes_to_insert = array();
+
+    // Shortcut to the left column.
+    $left_column = &$export['node_edit_panel_context']->conf['display']->panels['left'];
+
+    // Find the additional fields panes. We want to show it together with
+    // the other node specific panes.
+    if ($key = array_search('new-f14a7a22-a05e-ae44-c122-e71a20f44d45', $left_column)) {
+      unset($left_column[$key]);
+      // Reset the keys to have a proper count again.
+      $left_column = array_values($left_column);
+      // Show it before the others.
+      array_unshift($panes_to_insert, 'new-f14a7a22-a05e-ae44-c122-e71a20f44d45');
+    }
+
+    // Find the body pane key in the left column.
+    if ($key = array_search('new-bcec2608-deb8-49ee-86ec-8ea34723fcce', $left_column)) {
+      array_unshift($panes_to_insert, 'new-bcec2608-deb8-49ee-86ec-8ea34723fcce');
+      // Insert the new panes after the body.
+      array_splice($left_column, $key, 1, $panes_to_insert);
+    }
+    else {
+      // For some impossible reason we didn't find the body pane. Just
+      // append to the end of the page.
+      $left_column = array_merge($left_column, $panes_to_insert);
+    }
+  }
+}

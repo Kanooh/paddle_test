@@ -1,0 +1,247 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleLandingPageAdminUiTest.
+ */
+
+/**
+ * Admin tests for the Paddle Landing Page module.
+ */
+class PaddleLandingPageAdminUiTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Paddle Landing Page Admin UI',
+      'description' => 'Test creating and editing of landing pages through the user interface.',
+      'group' => 'Paddle Landing Page',
+    );
+  }
+
+  /**
+   * Test editing the page information through the user interface.
+   */
+  public function testEditPageInformation() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a landing page for testing.
+    $node = $this->createLandingPage();
+
+    // Create a basic page that is linked in the main menu so we can test if a
+    // message is shown in the interface if the landing page is saved with a
+    // conflicting URL alias.
+    $page_conflict_alias = $this->drupalCreateUiNode('basic_page', array(
+      // The Paddle Path By Menu module allows to resolve paths that match menu
+      // link titles. It is possible this automatically generated path conflicts
+      // with a URL alias of another node. In that case a message is shown to
+      // the user informing about the conflict. Note that the title of the node
+      // is different from the URL alias, so we can create a landing page with
+      // a conflicting URL alias later on.
+      'title' => 'conflicting alias',
+      'path[pathauto]' => FALSE,
+      'path[alias]' => $this->randomName(),
+    ));
+    $this->createUiMenuItem(array(
+      'link_title' => 'conflicting-alias',
+      'internal_link' => 'node/' . $page_conflict_alias->nid,
+    ));
+
+    // Create a basic page that has a known URL alias so we can test if a
+    // message is shown in the interface if the landing page is saved with a
+    // conflicting menu link.
+    $page_conflict_menu_link = $this->drupalCreateUiNode('basic_page', array(
+      'title' => 'conflicting menu link',
+      'path[pathauto]' => FALSE,
+      'path[alias]' => 'conflicting-menu-link',
+    ));
+
+    // Test for unchecked show boxes.
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $edit = array(
+      'field_show_title[und]' => FALSE,
+      'field_show_body[und]' => FALSE,
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+    $this->assertFalse($this->xpath('//h1[@class="landing-page-title-view"]'), 'When the "Show title" checkbox is not checked the node title is not shown on the backend node view page.');
+    $this->assertFalse($this->xpath('//div[@class="landing-page-body-view"]'), 'When the "Show body" checkbox is not checked the node body is not shown on the backend node view page.');
+
+    // Test for checked show boxes.
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $edit = array(
+      'body[und][0][value]' => $this->randomString(),
+      'field_show_title[und]' => 'checked',
+      'field_show_body[und]' => 'checked',
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+    $this->assertTrue($this->xpath('//h1[@class="landing-page-title-view"]'), 'When the "Show title" checkbox is checked the node title is shown on the backend node view page.');
+    $this->assertTrue($this->xpath('//div[@class="landing-page-body-view"]'), 'When the "Show body" checkbox is checked the node body is shown on the backend node view page.');
+
+    // Test for XSS violation.
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $edit = array(
+      'field_show_title[und]' => 'checked',
+      'field_show_body[und]' => 'checked',
+      'body[und][0][value]' => '<>&',
+      'title' => '<>&',
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+    $xpath_title = $this->xpath('//h1[@class="landing-page-title-view"]');
+    $xpath_body = $this->xpath('//div[@class="landing-page-body-view"]//p');
+    $this->assertEqual((string) $xpath_title[0], '<>&', 'Tag elements are shown correctly for the title.');
+    $this->assertEqual((string) $xpath_body[0], '<>&', 'Tag elements are shown correctly for the body.');
+
+    // Check that the warnings about conflicting URL aliases are not shown.
+    $this->assertNoRaw(t('The URL alias of this page conflicts with the following page: <em>"!page"</em>. Please choose a different URL alias before publishing the page to avoid problems.', array(
+      '!page' => l($page_conflict_alias->title, 'node/' . $page_conflict_alias->nid))), 'The message about a conflicting URL alias is not shown when there is no conflict.');
+    $this->assertNoRaw(t('The menu title of this page conflicts with the following page: <em>"!page"</em>. Please choose a different menu title before publishing the page to avoid problems.', array(
+      '!page' => l($page_conflict_menu_link->title, 'node/' . $page_conflict_menu_link->nid))), 'The message about a conflicting URL alias is not shown when there is no conflict.');
+
+    $language_list = language_list();
+
+    // Save the landing page with a URL alias that conflicts with a path that is
+    // automatically generated by Paddle Path By Menu, and with a menu item that
+    // conflicts with an existing URL alias, and check if messages are shown to
+    // warn the user about these conflicts.
+    $edit = array(
+      'path[alias]' => 'conflicting-alias',
+    );
+    $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+    $edit = array(
+      'link_title' => 'conflicting-menu-link',
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/node/' . $node->nid .  '/add_menu_link', $edit, t('Add menu link'));
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+    // Get a version of the link that is themed by the Paddle Admin Theme so we
+    // get the surrounding span elements.
+    $link_options = array(
+      'text' => 'conflicting alias',
+      'path' => 'node/' . $page_conflict_alias->nid,
+      'options' => array(
+        'attributes' => array(),
+        'html' => FALSE,
+        'language' => $language_list[$page_conflict_alias->language],
+      ),
+    );
+
+    // We need to load the admin theme, as we call its theme function directly.
+    require_once drupal_get_path('theme', 'paddle_admin_theme') . '/template.php';
+    $link = paddle_admin_theme_link($link_options);
+    $this->assertRaw(t('The URL alias of this page conflicts with the following page: <em>"!page"</em>. Please choose a different URL alias before publishing the page to avoid problems.', array(
+      '!page' => $link)), 'The message about a conflicting URL alias is shown when there is a conflict between the used alias and an existing URL alias.');
+
+    $link_options['text'] = 'conflicting menu link';
+    $link_options['path'] = 'node/' . $page_conflict_menu_link->nid;
+    $link_options['options']['language'] = $language_list[$page_conflict_menu_link->language];
+    $link = paddle_admin_theme_link($link_options);
+    $this->assertRaw(t('The menu title of this page conflicts with the following page: <em>"!page"</em>. Please choose a different menu title before publishing the page to avoid problems.', array(
+      '!page' => $link)), 'The message about a conflicting menu link is shown when there is a conflict between the used menu link and an existing URL alias.');
+  }
+
+  /**
+   * Tests the show next level menu display checkbox for landing pages.
+   */
+  public function testShowNextLevel() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Run the tests with "show menu items +1 level" checked in the themer.
+    // Create a landing page for testing.
+    $node = $this->createLandingPage();
+    // Create a menu link for the landing page.
+    $menu_item = $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node->nid,
+    ));
+    $show_level_below = field_get_items('node', $node, 'field_paddle_show_next_level');
+    $this->assertEqual($show_level_below[0]['value'], '1', 'The show level below checkbox is set to TRUE.');
+
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    // Check if the show_level_below checkbox is present.
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a landing page.');
+    $this->assertFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is checked by default.');
+    $this->drupalPost(NULL, array(), t('Save'));
+    $this->moderateNode($node, 'Publish');
+
+    // Create a second node for testing purposes.
+    $node2 = $this->createLandingPage();
+    $this->moderateNode($node2, 'Publish');
+
+    // Create a menu link for the landing page.
+    $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node2->nid,
+      'navigation' => 'main_menu_nl:' . $menu_item['mlid'],
+    ));
+
+    // Check if the menu + 1 is shown on the page.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('menu-display-current-level-plus-one', 'The level below plus one is shown on the landing page.');
+
+    // Uncheck the checkbox for the level plus one and test that the menu is no
+    // longer shown.
+    $this->drupalPost('node/' . $node->nid . '/edit', array('field_paddle_show_next_level[und]' => FALSE), t('Save'));
+    $this->moderateNode($node, 'Publish');
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertNoRaw('menu-display-current-level-plus-one', 'The level below plus one is not shown on the landing page.');
+
+    // Run the tests without "show menu items +1 level" checked in the themer.
+    // Disable the show level below globally.
+    $theme = paddle_themer_enabled_theme();
+    $theme->style['show_level_below_landing_page']['show_level_below_landing_page'] = 0;
+    paddle_themer_save_theme($theme);
+
+    // Create a landing page for testing.
+    $node = $this->createLandingPage();
+    $menu_item = $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node->nid,
+    ));
+
+    // Check that the newly created landing page has the correct default value
+    // for the show_level_below field.
+    $show_level_below = field_get_items('node', $node, 'field_paddle_show_next_level');
+    $this->assertEqual($show_level_below[0]['value'], '0', 'The show level below checkbox is set to FALSE.');
+
+    // Check if the show_level_below checkbox is present.
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a landing page.');
+    $this->assertNoFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is not checked by default.');
+    $this->drupalPost(NULL, array(), t('Save'));
+    $this->moderateNode($node, 'Publish');
+
+    // Create a second node for testing purposes.
+    $node2 = $this->createLandingPage();
+    $this->moderateNode($node2, 'Publish');
+
+    // Create a menu link for the landing page.
+    $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node2->nid,
+      'navigation' => 'main_menu_nl:' . $menu_item['mlid'],
+    ));
+
+    // Check that the menu is not present on the page.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertNoRaw('menu-display-current-level-plus-one', 'The level below plus one is not shown on the landing page.');
+
+    // Toggle the checkbox for the level plus one and check that the menu is now
+    // shown.
+    $this->drupalPost('node/' . $node->nid . '/edit', array('field_paddle_show_next_level[und]' => TRUE), t('Save'));
+    $this->moderateNode($node, 'Publish');
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('menu-display-current-level-plus-one', 'The level below plus one is shown on the landing page.');
+  }
+
+}

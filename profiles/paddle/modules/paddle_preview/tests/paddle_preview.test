@@ -1,0 +1,97 @@
+<?php
+/**
+ * @file
+ * Tests for the Paddle Preview module.
+ */
+
+class PaddlePreviewTest extends PaddlePreviewTestCase {
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Tests',
+      'description' => 'Test the functions of the Paddle Preview module.',
+      'group' => 'Paddle Preview',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setup(array('paddle_preview'));
+    $this->unPrivilegedUser = $this->drupalCreateUser(array('access content'));
+  }
+
+  /**
+   * Assert that the preview toolbar is present.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   */
+  public function assertToolbarPresent($message) {
+    $this->assertTrue($this->xpath(parent::TOOLBAR_XPATH_QUERY), $message);
+    $this->assertTrue($this->xpath('//body[contains(normalize-space(@class), "paddle-preview-enabled")]'), 'The preview class has been found on the body.');
+  }
+
+  /**
+   * Assert that the preview toolbar is not present.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   */
+  public function assertToolbarNotPresent($message) {
+    $this->assertFalse($this->xpath(parent::TOOLBAR_XPATH_QUERY), $message);
+    $this->assertFalse($this->xpath('//body[contains(normalize-space(@class), "paddle-preview-enabled")]'), 'The preview class has not been found on the body.');
+  }
+
+  /**
+   * Test if assigned permissions influence the presence of the toolbar.
+   */
+  public function testPermissionInfluencesPresence() {
+    $this->drupalGet('<front>');
+    $this->assertToolbarNotPresent('The toolbar is not shown to an anonymous user without the permission "use paddle preview".');
+
+    $this->drupalLogin($this->unPrivilegedUser);
+    $this->drupalGet('<front>');
+    $this->assertToolbarNotPresent('The toolbar is not shown to a user without the permission "use paddle preview".');
+    $this->drupalLogout();
+
+    $this->drupalLogin($this->chiefEditor);
+    $this->drupalGet('<front>');
+    $this->assertToolbarPresent('The toolbar is shown to a user with the permission "use paddle preview".');
+    $this->drupalLogout();
+  }
+
+  /**
+   * Test if the preview toolbar is not present on admin pages.
+   */
+  public function testPresenceOnAdminPages() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $this->drupalGet('admin/content');
+    $this->assertToolbarNotPresent('The toolbar is not shown on admin pages.');
+
+    $this->drupalCreateUiNode('basic_page');
+
+    $this->drupalGet('node/1/edit');
+    $this->assertToolbarNotPresent('The toolbar is not shown on pages for editing content if the administration theme is not used there.');
+
+    $this->drupalGet('node/1/edit');
+    $this->assertToolbarNotPresent('The toolbar is not shown on pages for editing content if the administration theme is used there.');
+  }
+
+  /**
+   * Test if the link to /admin is present in the toolbar.
+   */
+  public function testAdminHomeLink() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $this->drupalGet('<front>');
+
+    $admin_url = url('admin');
+
+    $this->assertTrue($this->xpath(parent::TOOLBAR_XPATH_QUERY . '/div[@id="paddle-preview-toolbar-admin-home"]/a[@href="' . $admin_url . '"]'), 'A link to the admin ');
+  }
+}

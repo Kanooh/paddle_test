@@ -1,0 +1,1444 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations for the Reference Tracker module.
+ */
+
+/**
+ * Defined the default batch process limit.
+ */
+define('REFERENCE_TRACKER_DEFAULT_BATCH_PROCESS_LIMIT', 50);
+
+/**
+ * Track only the latest revision of Workbench moderation moderated node.
+ */
+define('REFERENCE_TRACKER_WORKBENCH_MODERATION_TRACK_CURRENT', 0);
+
+/**
+ * Track only the published revision of Workbench moderation moderated node.
+ */
+define('REFERENCE_TRACKER_WORKBENCH_MODERATION_TRACK_PUBLISHED', 1);
+
+/**
+ * Track published and draft revisions of Workbench moderation moderated node.
+ */
+define('REFERENCE_TRACKER_WORKBENCH_MODERATION_TRACK_BOTH', 2);
+
+/**
+ * Implements hook_menu().
+ */
+function reference_tracker_menu() {
+  $items = array();
+
+  $items['admin/config/content/reference-tracker'] = array(
+    'title' => 'Reference Tracker',
+    'description' => 'Configuration options for the Reference Tracker module.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('reference_tracker_settings_form'),
+    'access arguments' => array('administer reference tracker'),
+    'file' => 'reference_tracker.admin.inc',
+  );
+
+  $items['admin/config/content/reference-tracker/settings'] = array(
+    'title' => 'Settings',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+
+  $items['admin/config/content/reference-tracker/rebuild'] = array(
+    'title' => 'Rebuild',
+    'description' => 'Manually rebuild the Reference Tracker table.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('reference_tracker_rebuild_form'),
+    'access arguments' => array('administer reference tracker'),
+    'file' => 'reference_tracker.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -9,
+  );
+
+  $items['admin/config/content/reference-tracker/clear'] = array(
+    'title' => 'Clear',
+    'description' => 'Manually clear the Reference Tracker table.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('reference_tracker_clear_form'),
+    'access arguments' => array('administer reference tracker'),
+    'file' => 'reference_tracker.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -8,
+  );
+
+  $items['node/%node/references'] = array(
+    'title' => 'References',
+    'description' => 'Lists all the references of the current node.',
+    'page callback' => 'reference_tracker_node_inbound_references_page',
+    'page arguments' => array(1),
+    'access arguments' => array('access reference tracker information'),
+    'file' => 'reference_tracker.pages.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function reference_tracker_permission() {
+  return array(
+    'administer reference tracker' => array(
+      'title' => t('Administer Reference Tracker'),
+      'description' => t('Perform administration tasks for Reference Tracker.'),
+    ),
+    'access reference tracker information' => array(
+      'title' => t('Access Reference Tracker information'),
+      'description' => t('Access Reference Tracker information pages.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_entity_insert().
+ */
+function reference_tracker_entity_insert($entity, $type) {
+  reference_tracker_parse_entity($type, $entity);
+}
+
+/**
+ * Implements hook_entity_update().
+ */
+function reference_tracker_entity_update($entity, $type) {
+  reference_tracker_parse_entity($type, $entity);
+}
+
+/**
+ * Implements hook_entity_delete().
+ */
+function reference_tracker_entity_delete($entity, $type) {
+  list($entity_id) = entity_extract_ids($type, $entity);
+  reference_tracker_clear($type, $entity_id);
+}
+
+/**
+ * Parses an entity for outbound references.
+ *
+ * @param string $entity_type
+ *   The entity type, e.g. node, of the entity.
+ * @param object $entity
+ *   The entity object.
+ * @param bool $save
+ *   (optional) TRUE if the parsed results need to be stored to the database,
+ *   FALSE if not. By default, TRUE is assumed.
+ * @param bool $bypass_skip
+ *   (optional) TRUE if for whatever reason this entity needs to be parsed,
+ *   while it's configured to be skipped. By default, FALSE is assumed.
+ *
+ * @return array
+ *   Associative multidimensional array in the following structure:
+ *   array(
+ *     field name => array(
+ *       language => array(
+ *         referenced entity_type => array(
+ *           referenced entity id,
+ *           referenced entity id,
+ *           ...
+ *         ),
+ *         ...
+ *       ),
+ *       ...
+ *     ),
+ *     ...
+ *   );
+ *   If no references were found, an empty array is returned.
+ */
+function reference_tracker_parse_entity($entity_type, $entity, $save = TRUE, $bypass_skip = FALSE) {
+  $references = array();
+
+  // Check if this is an enabled entity (unless skipping this check is
+  // requested).
+  if (!$bypass_skip) {
+    $enabled_entity_types = reference_tracker_enabled_entity_types();
+    if (!in_array($entity_type, $enabled_entity_types)) {
+      return $references;
+    }
+  }
+
+  // Allow other modules to decide whether this entity may be parsed or not.
+  foreach (module_implements('reference_tracker_parse_entity') as $module) {
+    $function = $module . '_reference_tracker_parse_entity';
+    $result = $function($entity_type, $entity, $save);
+    if ($result === FALSE) {
+      return $references;
+    }
+  }
+
+  // Get all fields for this entity.
+  list($entity_id,, $bundle) = entity_extract_ids($entity_type, $entity);
+  $field_instances = field_info_instances($entity_type, $bundle);
+  // Context array which is sent to each field being parsed.
+  $context = array(
+    'entity_type' => $entity_type,
+    'entity' => $entity,
+  );
+  // Each field is parsed individually.
+  foreach ($field_instances as $field_name => $field_instance) {
+    if (!empty($entity->{$field_name})) {
+      $field_context = $context;
+      $field_context['field_instance_id'] = $field_instance['id'];
+      $results = reference_tracker_parse_field($field_name, $entity->{$field_name}, $field_context);
+      if (!empty($results)) {
+        $references[$field_instance['id']] = $results;
+      }
+    }
+  }
+
+  // Remove duplicate references.
+  $references = _reference_tracker_array_unique_recursive($references);
+  // Allow other modules to alter the results for a parsed entity.
+  drupal_alter('reference_tracker_entity_references', $references, $context);
+
+  // Save the parsed results to the database, unless requested otherwise.
+  if ($save) {
+    reference_tracker_save($entity_type, $entity_id, $references);
+  }
+
+  return $references;
+}
+
+/**
+ * Parses a field for outbound references.
+ *
+ * @param string $field_name
+ *   Name of the field being parsed.
+ * @param array $field_value
+ *   Field value being parsed (structure is an associative array keyed by
+ *   language and as value an array of multiple field items).
+ * @param array $context
+ *   Associative array containing the 'entity_type' and 'entity' the given
+ *   field belongs too, as well as it's instance identifier
+ *   ('field_instance_id').
+ *
+ * @return array
+ *   Associative multidimensional array in the following structure:
+ *   array(
+ *     language => array(
+ *       referenced entity_type => array(
+ *         referenced entity id,
+ *         referenced entity id,
+ *         ...
+ *       ),
+ *       ...
+ *     ),
+ *     ...
+ *   );
+ *   If no references were found, an empty array is returned.
+ */
+function reference_tracker_parse_field($field_name, $field_value, $context) {
+  $references = array();
+
+  // Retrieve the parse info for this field.
+  $field_type_parse_info = reference_tracker_field_parse_info($field_name);
+  // If we have no information for this field type, it's probably not supported,
+  // thus we skip it.
+  if (empty($field_type_parse_info)) {
+    return $references;
+  }
+
+  // A field may have multiple parsers. These are processed sequentially.
+  foreach ($field_type_parse_info as $value_key => $field_value_parse_info) {
+    // Each parser operates on a specific value type.
+    $value_parse_info = reference_tracker_value_type_parse_info($field_value_parse_info['value_type']);
+    if (!empty($value_parse_info['parser_callback'])) {
+      // Each value parser receives a context array.
+      $value_parser_context = $context;
+      $value_parser_context['field_name'] = $field_name;
+      $value_parser_context['value_key'] = $value_key;
+      $value_parser_context += $field_value_parse_info;
+
+      // Loop over all parser functions to get all references.
+      foreach ($value_parse_info['parser_callback'] as $key => $callback) {
+        if (function_exists($callback)) {
+          // Each field item is parsed individually.
+          foreach ($field_value as $language => $values) {
+            foreach ($values as $value) {
+              if (!empty($value[$value_key])) {
+                // Value is parsed by the parser callback.
+                $parser_result = $callback($value[$value_key], $value_parser_context);
+                if (!empty($parser_result)) {
+                  if (!isset($references[$language])) {
+                    $references[$language] = array();
+                  }
+                  $references[$language] = array_merge_recursive($references[$language], $parser_result);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Remove duplicate values.
+  $references = _reference_tracker_array_unique_recursive($references);
+  // Allow other modules to alter the results for a parsed field.
+  $context['field_value'] = $field_value;
+  drupal_alter('reference_tracker_parse_field', $references, $context);
+
+  return $references;
+}
+
+/**
+ * Returns the reference tracker field type parse info.
+ *
+ * @return array
+ *   Returns the field type parse info as an associative array in the
+ *   following structure:
+ *   array(
+ *     field type (eg. entityreference) => array(
+ *       value key (eg. target_id) => array(
+ *         value_type => type (eg. entity_id),
+ *         (optional) reference_entity_type => entity type (eg. node),
+ *         (optional) reference_entity_type_callback => a function,
+ *       ),
+ *       ...
+ *     ),
+ *     ...
+ *   )
+ *   An empty array is returned when no field type parse info is defined.
+ */
+function reference_tracker_field_types_parse_info() {
+  $field_type_parse_info = &drupal_static(__FUNCTION__);
+
+  if (empty($field_type_parse_info) && $cache = cache_get(__FUNCTION__)) {
+    $field_type_parse_info = $cache->data;
+  }
+  else {
+    $field_type_parse_info = module_invoke_all('reference_tracker_field_types_parse_info');
+    // Allow other modules to alter the field types parse info.
+    drupal_alter('reference_tracker_field_types_parse_info', $field_type_parse_info);
+    cache_set(__FUNCTION__, $field_type_parse_info);
+  }
+
+  return $field_type_parse_info;
+}
+
+/**
+ * Implements hook_reference_tracker_field_types_parse_info().
+ */
+function reference_tracker_reference_tracker_field_types_parse_info() {
+  $field_type_parse_info = array();
+
+  $field_type_parse_info['entityreference'] = array(
+    'target_id' => array(
+      'value_type' => 'entity_id',
+      'reference_entity_type_callback' => 'reference_tracker_entityreference_entity_type_callback',
+    ),
+  );
+
+  $field_type_parse_info['field_collection'] = array(
+    'value' => array(
+      'value_type' => 'entity_id',
+      'reference_entity_type' => 'field_collection_item',
+    ),
+  );
+
+  $field_type_parse_info['file'] = array(
+    'fid' => array(
+      'value_type' => 'entity_id',
+      'reference_entity_type' => 'file',
+    ),
+  );
+
+  $field_type_parse_info['node_reference'] = array(
+    'nid' => array(
+      'value_type' => 'entity_id',
+      'reference_entity_type' => 'node',
+    ),
+  );
+
+  $field_type_parse_info['paragraphs'] = array(
+    'value' => array(
+      'value_type' => 'entity_id',
+      'reference_entity_type' => 'paragraphs_item',
+    ),
+  );
+
+  $field_type_parse_info['taxonomy_term_reference'] = array(
+    'tid' => array(
+      'value_type' => 'entity_id',
+      'reference_entity_type' => 'taxonomy_term',
+    ),
+  );
+
+  $field_type_parse_info['text_long'] = array(
+    'value' => array(
+      'value_type' => 'text',
+    ),
+  );
+
+  $field_type_parse_info['text_with_summary'] = array(
+    'value' => array(
+      'value_type' => 'text',
+    ),
+    'summary' => array(
+      'value_type' => 'text',
+    ),
+  );
+
+  $field_type_parse_info['user_reference'] = array(
+    'uid' => array(
+      'value_type' => 'entity_id',
+      'reference_entity_type' => 'user',
+    ),
+  );
+
+  return $field_type_parse_info;
+}
+
+/**
+ * Returns the parse info for a given field.
+ *
+ * @param string $field_name
+ *   The name of field.
+ *
+ * @return array
+ *   An associative array, keyed by the value keys and for each an associative
+ *   array with the following key/value pairs:
+ *     - value_type: type of the value
+ *     - (optional) entity_type: entity type of the reference
+ *     - (optional) entity_type_callback: callback to retrieve the entity type
+ *       of the reference
+ *   An empty array is returned if no parse info could be found for the given
+ *   field.
+ */
+function reference_tracker_field_parse_info($field_name) {
+  $field_parse_info = array();
+
+  $field_info = field_info_field($field_name);
+  $field_types_parse_info = reference_tracker_field_types_parse_info();
+
+  if (!empty($field_types_parse_info[$field_info['type']])) {
+    $field_parse_info = $field_types_parse_info[$field_info['type']];
+  }
+
+  return $field_parse_info;
+}
+
+/**
+ * Returns the reference tracker value type parse info.
+ *
+ * @return array
+ *   Returns the value type parse info as an associative array in the
+ *   following structure:
+ *   array(
+ *     value type (eg. entity_id) => array(
+ *       parser_callback => array containing parser functions
+ *     ),
+ *     ...
+ *   )
+ *   An empty array is returned when no value type parse info is defined.
+ */
+function reference_tracker_value_types_parse_info() {
+  $value_types_parse_info = &drupal_static(__FUNCTION__);
+
+  if (empty($value_types_parse_info) && $cache = cache_get(__FUNCTION__)) {
+    $value_types_parse_info = $cache->data;
+  }
+  else {
+    $value_types_parse_info = module_invoke_all('reference_tracker_value_types_parse_info');
+    // Allow other modules to alter the field type parse info.
+    drupal_alter('reference_tracker_value_types_parse_info', $value_types_parse_info);
+    cache_set(__FUNCTION__, $value_types_parse_info);
+  }
+
+  return $value_types_parse_info;
+}
+
+/**
+ * Implements hook_reference_tracker_value_types_parse_info().
+ */
+function reference_tracker_reference_tracker_value_types_parse_info() {
+  $value_types_parse_info = array();
+
+  $value_types_parse_info['text'] = array(
+    'parser_callback' => array('reference_tracker_text_value_parser'),
+  );
+
+  $value_types_parse_info['entity_id'] = array(
+    'parser_callback' => array('reference_tracker_entity_id_value_parser'),
+  );
+
+  return $value_types_parse_info;
+}
+
+/**
+ * Returns the parse info for a given value type.
+ *
+ * @param string $value_type
+ *   The type of the value (eg. entity_id).
+ *
+ * @return array
+ *   An associative array with the following key/value pairs:
+ *     - parser_callback: array containing names of functions to parse the value
+ *   An empty array is returned if no parse info could be found for the given
+ *   value type.
+ */
+function reference_tracker_value_type_parse_info($value_type) {
+  $value_types_parse_info = reference_tracker_value_types_parse_info();
+  return !empty($value_types_parse_info[$value_type]) ? $value_types_parse_info[$value_type] : array();
+}
+
+/**
+ * Value parser for text values.
+ *
+ * @param string $value
+ *   Text value to parse.
+ * @param array $context
+ *   Associative array with various information (entity_type, entity,
+ *   field_name, etc).
+ *
+ * @return array
+ *   Associative array in the following structure:
+ *   array(
+ *     entity_type (eg. node) => array(
+ *       reference entity id,
+ *       reference entity id,
+ *       ...
+ *     ),
+ *     ...
+ *   ),
+ *   An empty array is returned when no references could be found.
+ */
+function reference_tracker_text_value_parser($value, $context) {
+  // Entity path parts (eg. node, taxonomy/term, etc) are predefined.
+  $entity_path_parts = reference_tracker_entity_path_parts();
+  // Collect all URL's containing entity path parts.
+  $matches = array();
+  $pattern = '~href="*.*?(' . str_replace('/', '\/', implode('|', $entity_path_parts)) . ')\/(\d*)\/*.*?"~i';
+  preg_match_all($pattern, $value, $matches, PREG_PATTERN_ORDER + PREG_OFFSET_CAPTURE);
+
+  // Collect all references from the URL's.
+  $references = array();
+  foreach ($matches[0] as $key => $match) {
+    $url = str_replace(array('href=', '"'), '', $match[0]);
+    if (_reference_tracker_is_local_path($url)) {
+      if ($entity_type = array_search($matches[1][$key][0], $entity_path_parts)) {
+        $entity_id = $matches[2][$key][0];
+        $references[$entity_type][] = $entity_id;
+      }
+    }
+  }
+
+  // Make sure the collected entities do exist.
+  foreach ($references as $entity_type => $entity_ids) {
+    $query = new EntityFieldQuery();
+    $results = $query->entityCondition('entity_type', $entity_type)
+                     ->entityCondition('entity_id', $entity_ids, 'IN')
+                     ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT')
+                     ->execute();
+    if (!empty($results[$entity_type])) {
+      $references[$entity_type] = array_keys($results[$entity_type]);
+    }
+    else {
+      unset($references[$entity_type]);
+    }
+  }
+
+  return $references;
+}
+
+/**
+ * Returns the entity path parts the text value parser will look for.
+ *
+ * @return array
+ *   An associative array keyed by the entity type and as value the entity path.
+ *   An empty array is returned if no entity path parts are defined.
+ */
+function reference_tracker_entity_path_parts() {
+  $entity_path_parts = &drupal_static(__FUNCTION__);
+
+  if (empty($entity_path_parts) && $cache = cache_get(__FUNCTION__)) {
+    $entity_path_parts = $cache->data;
+  }
+  else {
+    $entity_path_parts = module_invoke_all('reference_tracker_entity_path_parts');
+    // Allow other modules to alter the defined entity path parts.
+    drupal_alter('reference_tracker_entity_path_parts', $entity_path_parts);
+    cache_set(__FUNCTION__, $entity_path_parts);
+  }
+
+  return $entity_path_parts;
+}
+
+/**
+ * Implements hook_reference_tracker_entity_path_parts().
+ */
+function reference_tracker_reference_tracker_entity_path_parts() {
+  // By default, support for node (node/%nid), taxonomy term
+  // (taxonomy/term/%tid) and user (user/%uid) paths is provided.
+  $entity_path_parts = array(
+    'node' => 'node',
+    'taxonomy_term' => 'taxonomy/term',
+    'user' => 'user',
+  );
+
+  return $entity_path_parts;
+}
+
+/**
+ * Value parser for entity id's.
+ *
+ * @param int $value
+ *   The entity id.
+ * @param array $context
+ *   Associative array with various information (entity_type, entity,
+ *   field_name, etc).
+ *
+ * @return array
+ *   Associative array in the following structure:
+ *   array(
+ *     entity_type (eg. node) => array(
+ *       reference entity id,
+ *     ),
+ *   ),
+ *   An empty array is returned when no references could be found.
+ */
+function reference_tracker_entity_id_value_parser($value, $context) {
+  // For this kind of a value, we need to know the entity type that is being
+  // referenced. This is done through a predefined entity type in the
+  // field parse info or a callback function which resolves to the entity
+  // type.
+  $entity_type = NULL;
+  if (!empty($context['reference_entity_type'])) {
+    $entity_type = $context['reference_entity_type'];
+  }
+  elseif (!empty($context['reference_entity_type_callback'])) {
+    $entity_type = $context['reference_entity_type_callback']($context);
+  }
+
+  return !empty($entity_type) ? array($entity_type => array($value)) : array();
+}
+
+/**
+ * Entity type resolver for entityreference fields.
+ *
+ * @param array $context
+ *   Associative array with various information (entity_type, entity,
+ *   field_name, etc).
+ *
+ * @return mixed
+ *   The entity type referenced by this field, or NULL if an entity type
+ *   couldn't be resolved.
+ */
+function reference_tracker_entityreference_entity_type_callback($context) {
+  $field_info = field_info_field($context['field_name']);
+  return !empty($field_info['settings']['target_type']) ? $field_info['settings']['target_type'] : NULL;
+}
+
+/**
+ * Returns the entity types which may be parsed.
+ *
+ * @param bool $rebuild
+ *   (optional) If set to TRUE, the enabled entity types will be rebuilt (
+ *   and not fetched from the cache).
+ *
+ * @return array
+ *   Array of entity types which may be parsed. Empty array if there are no
+ *   entity types which may be parsed.
+ */
+function reference_tracker_enabled_entity_types($rebuild = FALSE) {
+  $enabled_entity_types = &drupal_static(__FUNCTION__);
+
+  if (!$rebuild && empty($enabled_entity_types) && $cache = cache_get(__FUNCTION__)) {
+    $enabled_entity_types = $cache->data;
+  }
+  else {
+    // Figure out what the enabled entity types are.
+    $entity_info = entity_get_info();
+    $disabled_entity_types = variable_get('reference_tracker_disabled_entity_types', array());
+    $enabled_entity_types = array_diff(array_keys($entity_info), $disabled_entity_types);
+
+    // Make sure each enabled entity type exists, is fieldable and has a base
+    // table.
+    foreach ($enabled_entity_types as $key => $entity_type) {
+      if (!reference_tracker_is_valid_entity_type($entity_type)) {
+        unset($enabled_entity_types[$key]);
+      }
+    }
+    $enabled_entity_types = array_values($enabled_entity_types);
+
+    // Delete entries from the Reference Tracker table for disabled entity
+    // types.
+    reference_tracker_clear(array_diff(array_keys($entity_info), $enabled_entity_types));
+
+    cache_set(__FUNCTION__, $enabled_entity_types);
+  }
+
+  return $enabled_entity_types;
+}
+
+/**
+ * Check whether a given entity type is valid for parsing.
+ *
+ * @param string $entity_type
+ *   The entity type to check.
+ *
+ * @return bool
+ *   TRUE if the entity type is parseable, FALSE if not.
+ */
+function reference_tracker_is_valid_entity_type($entity_type) {
+  $entity_info = entity_get_info($entity_type);
+  if (!empty($entity_info['fieldable']) && !empty($entity_info['base table'])) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Saves parsed data to the database.
+ *
+ * @param string $entity_type
+ *   The entity type, e.g. node, of the entity.
+ * @param int $entity_id
+ *   The identifier of entity.
+ * @param array $references
+ *   Parsed entity results generated by reference_tracker_parse_entity().
+ */
+function reference_tracker_save($entity_type, $entity_id, $references) {
+  $values = array();
+
+  // Remove any parsed data for the given entity from the database.
+  db_delete('reference_tracker')
+    ->condition('entity_type', $entity_type)
+    ->condition('entity_id', $entity_id)
+    ->execute();
+
+  // Normalize the parsed data into table rows.
+  foreach ($references as $field_instance_id => $field_data) {
+    foreach ($field_data as $language => $field_references) {
+      foreach ($field_references as $reference_entity_type => $reference_entity_ids) {
+        foreach ($reference_entity_ids as $reference_entity_id) {
+          $values[] = array(
+            'entity_type' => $entity_type,
+            'entity_id' => $entity_id,
+            'field_instance_id' => $field_instance_id,
+            'language' => $language,
+            'reference_entity_type' => $reference_entity_type,
+            'reference_entity_id' => $reference_entity_id,
+          );
+        }
+      }
+    }
+  }
+
+  // Save the results to the database.
+  if (!empty($values)) {
+    $fields = array(
+      'entity_type',
+      'entity_id',
+      'field_instance_id',
+      'language',
+      'reference_entity_type',
+      'reference_entity_id',
+    );
+    $insert = db_insert('reference_tracker')
+                ->fields($fields);
+    foreach ($values as $value) {
+      $insert->values($value);
+    }
+    $insert->execute();
+  }
+}
+
+/**
+ * Normalizes data parsed by Reference Tracker to an easy to use structure.
+ *
+ * @param array $references
+ *   Parsed entity results generated by reference_tracker_parse_entity().
+ *
+ * @return array
+ *   Associative array, keyed by the entity type (eg. node) and an array
+ *   with one or more entity id's as value.
+ */
+function reference_tracker_normalize_parsed_data($references) {
+  $normalized = array();
+
+  foreach ($references as $field_data) {
+    foreach ($field_data as $field_references) {
+      foreach ($field_references as $reference_entity_type => $reference_entity_ids) {
+        foreach ($reference_entity_ids as $reference_entity_id) {
+          $normalized[$reference_entity_type][] = $reference_entity_id;
+        }
+      }
+    }
+  }
+
+  return _reference_tracker_array_unique_recursive($normalized);
+}
+
+/**
+ * Clears the Reference Tracker table for one or more entity types.
+ *
+ * @param mixed $entity_types
+ *   An entity type (string) or multiple entity types (array of strings) for
+ *   which the Reference Tracker table needs to be cleared.
+ *
+ * @return int
+ *   The amount of entries that were deleted from the Reference Tracker table.
+ */
+function reference_tracker_clear($entity_types = NULL, $entity_ids = NULL) {
+  // For performance reasons, we are using the TRUNCATE command if a full
+  // table clear is requested.
+  if (empty($entity_types) && empty($entity_ids)) {
+    $count = db_query('SELECT COUNT(*) FROM {reference_tracker}')->fetchField();
+    db_truncate('reference_tracker')
+      ->execute();
+  }
+  else {
+    $query = db_delete('reference_tracker');
+
+    if (!empty($entity_types)) {
+      if (!is_array($entity_types)) {
+        $entity_types = array($entity_types);
+      }
+      $query->condition('entity_type', $entity_types, 'IN');
+    }
+
+    if (!empty($entity_ids)) {
+      if (!is_array($entity_ids)) {
+        $entity_ids = array($entity_ids);
+      }
+      $query->condition('entity_id', $entity_ids, 'IN');
+    }
+
+    $count = $query->execute();
+  }
+
+  return $count;
+}
+
+/**
+ * Batch callback.
+ *
+ * This clears the Reference Tracker table for a specific entity type.
+ *
+ * @param string $entity_type
+ *   The entity type to rebuild.
+ * @param array $context
+ *   Batch API contextual information.
+ */
+function reference_tracker_rebuild_batch_clear($entity_type, &$context) {
+  $context['sandbox']['count'] = 0;
+  $count = reference_tracker_clear($entity_type);
+  $entity_info = entity_get_info($entity_type);
+  if (!empty($entity_info['label'])) {
+    $context['message'] = format_plural($count, 'Cleared @count %label entry from the Reference Tracker table.', 'Cleared @count %label entries from the Reference Tracker table.', array('%label' => $entity_info['label']));
+  }
+  $context['finished'] = 1;
+}
+
+/**
+ * Batch worker callback for rebuilding the Reference Tracker table.
+ *
+ * @param string $entity_type
+ *   The entity type to rebuild.
+ * @param int $batch_process_limit
+ *   Amount of entities to be parsed per process.
+ * @param array $context
+ *   Batch API contextual information.
+ */
+function reference_tracker_rebuild_batch_worker($entity_type, $batch_process_limit, &$context) {
+  // Initialize the sandbox on first run.
+  if (empty($context['sandbox'])) {
+    $context['sandbox']['count'] = 0;
+  }
+
+  $query = new EntityFieldQuery();
+  $results = $query->entityCondition('entity_type', $entity_type)
+                   ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT')
+                   ->range($context['sandbox']['count'], $batch_process_limit)
+                   ->execute();
+  if (isset($results[$entity_type])) {
+    $entities = entity_load($entity_type, array_keys($results[$entity_type]));
+    foreach ($entities as $entity) {
+      reference_tracker_parse_entity($entity_type, $entity);
+    }
+  }
+
+  if (empty($results[$entity_type]) || count($results[$entity_type]) < $batch_process_limit) {
+    $context['finished'] = 1;
+  }
+  else {
+    $context['sandbox']['count'] += count($results[$entity_type]);
+    $context['finished'] = 0;
+    $entity_info = entity_get_info($entity_type);
+    $context['message'] = t("Processed !count entities of type !entity_type...", array('!count' => $context['sandbox']['count'], '!entity_type' => $entity_info['label']));
+  }
+}
+
+/**
+ * Batch finish callback for rebuilding the Reference Tracker table.
+ */
+function reference_tracker_rebuild_batch_finish() {
+  drupal_set_message(t('Finished rebuilding the Reference Tracker table.'), 'status');
+}
+
+/**
+ * Implements hook_reference_tracker_parse_entity().
+ *
+ * By default, nodes moderated Workbench Moderation are parsed using their
+ * latest (draft) revision. It may be desirable to have the live (published)
+ * version parsed instead. This feature can be switched on/off (via the admin
+ * interface).
+ */
+function reference_tracker_reference_tracker_parse_entity($entity_type, $entity, $save) {
+  if ($entity_type === 'node' && module_exists('workbench_moderation')) {
+    list(, $revision_id, $bundle) = entity_extract_ids($entity_type, $entity);
+    if (workbench_moderation_node_type_moderated($bundle)) {
+      $to_track = variable_get('reference_tracker_workbench_moderation_track_revision', REFERENCE_TRACKER_WORKBENCH_MODERATION_TRACK_CURRENT);
+      if ($to_track == REFERENCE_TRACKER_WORKBENCH_MODERATION_TRACK_BOTH) {
+        return TRUE;
+      }
+
+      $version = ($to_track == REFERENCE_TRACKER_WORKBENCH_MODERATION_TRACK_PUBLISHED) ? 'published' : 'current';
+      if (!empty($entity->workbench_moderation[$version]->vid) && $revision_id != $entity->workbench_moderation[$version]->vid) {
+        return FALSE;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_reference_tracker_entity_references_alter().
+ *
+ * Field collections and paragraphs are assumed to not be stand-alone entities,
+ * but should always have a host entity. It's desirable to consider outbound
+ * references made by a field collection or paragraph, as outbound referenced
+ * made by the host entity. This feature can be switched on/off (via the admin
+ * interface).
+ */
+function reference_tracker_reference_tracker_entity_references_alter(&$references, $context) {
+  if (module_exists('field_collection') && variable_get('reference_tracker_field_collection_use_host')) {
+    foreach ($references as $items) {
+      foreach ($items as $language => $field_references) {
+        if (!empty($field_references['field_collection_item'])) {
+          foreach ($field_references['field_collection_item'] as $field_collection_item_id) {
+            $field_collection_item = field_collection_item_load($field_collection_item_id);
+            if ($field_collection_item) {
+              $field_collection_item_references = reference_tracker_parse_entity('field_collection_item', $field_collection_item, FALSE, TRUE);
+              // Field collections field values are always saved under the
+              // LANGUAGE_NONE language. We change this manually to the language
+              // of the field collection reference field.
+              if ($language !== LANGUAGE_NONE) {
+                foreach ($field_collection_item_references as $field_collection_item_field_instance_id => $field_collection_item_items) {
+                  if (!empty($field_collection_item_references[$field_collection_item_field_instance_id][LANGUAGE_NONE])) {
+                    $field_collection_item_references[$field_collection_item_field_instance_id][$language] = $field_collection_item_references[$field_collection_item_field_instance_id][LANGUAGE_NONE];
+                    unset($field_collection_item_references[$field_collection_item_field_instance_id][LANGUAGE_NONE]);
+                  }
+                }
+              }
+
+              // Merge the field collection item references with the host
+              // entity's references. Can't use array_merge_recursive here,
+              // since we are dealing with numeric  array keys.
+              foreach ($field_collection_item_references as $field_collection_item_field_instance_id => $field_collection_item_items) {
+                foreach ($field_collection_item_items as $field_collection_item_language => $field_collection_item_entity_types) {
+                  foreach ($field_collection_item_entity_types as $field_collection_item_entity_type => $field_collection_item_entity_ids) {
+                    foreach ($field_collection_item_entity_ids as $field_collection_item_entity_id) {
+                      $references[$field_collection_item_field_instance_id][$field_collection_item_language][$field_collection_item_entity_type][] = $field_collection_item_entity_id;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Remove duplicate references.
+    $references = _reference_tracker_array_unique_recursive($references);
+  }
+
+  if (module_exists('paragraphs') && variable_get('reference_tracker_paragraphs_use_host')) {
+    foreach ($references as $items) {
+      foreach ($items as $language => $field_references) {
+        if (!empty($field_references['paragraphs_item'])) {
+          foreach ($field_references['paragraphs_item'] as $paragraphs_item_id) {
+            $paragraphs_item = paragraphs_item_load($paragraphs_item_id);
+            if ($paragraphs_item) {
+              $paragraphs_item_references = reference_tracker_parse_entity('paragraphs_item', $paragraphs_item, FALSE, TRUE);
+              // Paragraphs field values are always saved under the
+              // LANGUAGE_NONE language. We change this manually to the language
+              // of the paragraphs reference field.
+              if ($language !== LANGUAGE_NONE) {
+                foreach ($paragraphs_item_references as $paragraphs_item_field_instance_id => $paragraphs_item_items) {
+                  if (!empty($paragraphs_item_references[$paragraphs_item_field_instance_id][LANGUAGE_NONE])) {
+                    $paragraphs_item_references[$paragraphs_item_field_instance_id][$language] = $paragraphs_item_references[$paragraphs_item_field_instance_id][LANGUAGE_NONE];
+                    unset($paragraphs_item_references[$paragraphs_item_field_instance_id][LANGUAGE_NONE]);
+                  }
+                }
+              }
+
+              // Merge the paragraphs item references with the host entity's
+              // references. Can't use array_merge_recursive here, since we are
+              // dealing with numeric  array keys.
+              foreach ($paragraphs_item_references as $paragraphs_item_field_instance_id => $paragraphs_item_items) {
+                foreach ($paragraphs_item_items as $paragraphs_item_language => $paragraphs_item_entity_types) {
+                  foreach ($paragraphs_item_entity_types as $paragraphs_item_entity_type => $paragraphs_item_entity_ids) {
+                    foreach ($paragraphs_item_entity_ids as $paragraphs_item_entity_id) {
+                      $references[$paragraphs_item_field_instance_id][$paragraphs_item_language][$paragraphs_item_entity_type][] = $paragraphs_item_entity_id;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Remove duplicate references.
+    $references = _reference_tracker_array_unique_recursive($references);
+  }
+
+  if (
+    $context['entity_type'] == 'node' &&
+    empty($context['entity']->reference_tracking_workbench_moderation_process) &&
+    module_exists('workbench_moderation') &&
+    variable_get('reference_tracker_workbench_moderation_track_revision') == REFERENCE_TRACKER_WORKBENCH_MODERATION_TRACK_BOTH
+  ) {
+    list(, $revision_id, $bundle) = entity_extract_ids($context['entity_type'], $context['entity']);
+    if (workbench_moderation_node_type_moderated($bundle)) {
+      // Reload the node to have all the updated revisions information.
+      // This is needed because this function will be called before having
+      // fresh caches for the node. For example, after unpublishing a revision,
+      // some node revisions might be cached with references to a published
+      // revision, causing inactive references to be added.
+      // @todo evaluate using workbench_moderation_node_data()
+      $node = node_load($context['entity']->nid, NULL, TRUE);
+      $current = workbench_moderation_node_current_load($node);
+      $published = workbench_moderation_node_live_load($node);
+
+      // If the revision marked as 'current' is not the one that was just
+      // parsed, extract the references from it.
+      if ($revision_id !== $current->vid) {
+        // Avoid recursion from calling reference_tracker_parse_entity() inside
+        // the drupal_alter() implemented by it.
+        $current->reference_tracking_workbench_moderation_process = TRUE;
+        $references = _reference_tracker_merge_references($references, reference_tracker_parse_entity('node', $current, FALSE));
+      }
+
+      // If there is a published revision and it isn't the current one parsed,
+      // extract the references from it.
+      if ($published && $published->vid != $revision_id) {
+        // Avoid recursion as stated above1.
+        $published->reference_tracking_workbench_moderation_process = TRUE;
+        $references = _reference_tracker_merge_references($references, reference_tracker_parse_entity('node', $published, FALSE));
+      }
+
+      // Remove duplicate references.
+      $references = _reference_tracker_array_unique_recursive($references);
+    }
+  }
+}
+
+/**
+ * Returns outbound references of the given entity.
+ *
+ * @param string $entity_type
+ *   The entity type of the entity making the reference.
+ * @param int $entity_id
+ *   The entity identifier of the entity making the reference.
+ * @param int $field_instance_id
+ *   (optional) One or more (array) field instance identifiers of the field
+ *   where the reference takes place.
+ * @param string $language
+ *   (optional) One or more (array) languages of the field value the reference
+ *   takes place.
+ * @param string $reference_entity_type
+ *   (optional) One or more (array) entity type of the referenced entities.
+ *
+ * @return array
+ *   Outbound references for the given entity, as an associative array
+ *   keyed by entity type and one or more entity id's as values.
+ *   Empty array if no outbound references were found.
+ */
+function reference_tracker_get_outbound_references($entity_type, $entity_id, $field_instance_id = NULL, $language = NULL, $reference_entity_type = NULL) {
+  $query = db_select('reference_tracker', 'rt')
+             ->fields('rt', array('reference_entity_type', 'reference_entity_id'))
+             ->condition('entity_type', $entity_type)
+             ->condition('entity_id', $entity_id);
+
+  foreach (array('field_instance_id', 'language', 'reference_entity_type') as $param) {
+    if (${$param} !== NULL) {
+      if (!is_array(${$param})) {
+        ${$param} = array(${$param});
+      }
+      $query->condition($param, ${$param}, 'IN');
+    }
+  }
+
+  $results = $query->distinct()
+                   ->execute()
+                   ->fetchAll();
+
+  $outbound_references = array();
+  foreach ($results as $result) {
+    $outbound_references[$result->reference_entity_type][] = $result->reference_entity_id;
+  }
+
+  return $outbound_references;
+}
+
+/**
+ * Returns inbound references of the given entity.
+ *
+ * @param string $entity_type
+ *   The entity type of the entity referenced to.
+ * @param int $entity_id
+ *   The entity identifier of the entity referenced to.
+ * @param int $field_instance_id
+ *   (optional) One or more (array) field instance identifiers of the field
+ *   used to reference the given entity.
+ * @param string $language
+ *   (optional) One or more (array) languages of the field value used to
+ *   reference the given entity.
+ * @param string $referencing_entity_type
+ *   (optional) One or more (array) entity types of the entities referencing
+ *   the given entity.
+ *
+ * @return array
+ *   Inbound references for the given entity, as an associative array
+ *   keyed by entity type and one or more entity id's as values.
+ *   Empty array if no inbound references were found.
+ */
+function reference_tracker_get_inbound_references($entity_type, $entity_id, $field_instance_id = NULL, $language = NULL, $referencing_entity_type = NULL) {
+  $query = db_select('reference_tracker', 'rt')
+             ->fields('rt', array('entity_type', 'entity_id'))
+             ->condition('reference_entity_type', $entity_type)
+             ->condition('reference_entity_id', $entity_id);
+
+  foreach (array('field_instance_id', 'language', 'referencing_entity_type') as $param) {
+    if (${$param} !== NULL) {
+      if (!is_array(${$param})) {
+        ${$param} = array(${$param});
+      }
+
+      $field = $param === 'referencing_entity_type' ? 'entity_type' : $param;
+      $query->condition($field, ${$param}, 'IN');
+    }
+  }
+
+  $results = $query->distinct()
+                   ->execute()
+                   ->fetchAll();
+
+  $inbound_references = array();
+  foreach ($results as $result) {
+    $inbound_references[$result->entity_type][] = $result->entity_id;
+  }
+
+  return $inbound_references;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function reference_tracker_block_info() {
+  $blocks = array();
+
+  $blocks['reference_tracker_inbound'] = array(
+    'info' => t('References to this entity'),
+    'cache' => DRUPAL_NO_CACHE,
+  );
+
+  $blocks['reference_tracker_outbound'] = array(
+    'info' => t('References made from this entity'),
+    'cache' => DRUPAL_NO_CACHE,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function reference_tracker_block_view($delta) {
+  $block = array();
+
+  if ($delta === 'reference_tracker_inbound' || $delta === 'reference_tracker_outbound') {
+    // Get the current entity and check if it's Reference Tracker enabled.
+    $entity_type = NULL;
+    $entity = NULL;
+    $enabled_entity_types = reference_tracker_enabled_entity_types();
+    foreach ($enabled_entity_types as $entity_type) {
+      if ($entity = menu_get_object($entity_type)) {
+        break;
+      }
+    }
+    // Only continue if we found a valid entity.
+    if ($entity_type && $entity) {
+      // Get the in- or outbound references.
+      $entity_id = entity_id($entity_type, $entity);
+      $references = $delta === 'reference_tracker_inbound' ? reference_tracker_get_inbound_references($entity_type, $entity_id) : reference_tracker_get_outbound_references($entity_type, $entity_id);
+      // Created a normalized array, listing each reference link by entity type
+      // and bundle.
+      $normalized = array();
+      foreach ($references as $reference_entity_type => $reference_entity_ids) {
+        $entity_info = entity_get_info($reference_entity_type);
+        $bundles = field_info_bundles($reference_entity_type);
+        $entities = entity_load($reference_entity_type, $reference_entity_ids);
+        foreach ($entities as $reference_entity) {
+          $reference_label = entity_label($reference_entity_type, $reference_entity);
+          list(,, $bundle) = entity_extract_ids($reference_entity_type, $reference_entity);
+          $reference_uri = entity_uri($reference_entity_type, $reference_entity);
+          if (!isset($reference_uri['options'])) {
+            $reference_uri['options'] = array();
+          }
+          $normalized[$entity_info['label']][$bundles[$bundle]['label']][$reference_label] = l($reference_label, $reference_uri['path'], $reference_uri['options']);
+        }
+      }
+      // Sort the normalized array.
+      _reference_tracker_array_ksort_recursive($normalized);
+      // Display the collected references in a nested item list.
+      $items = array();
+      foreach ($normalized as $entity_type => $bundles) {
+        $item = array(
+          'data' => $entity_type,
+          'children' => array(),
+        );
+        foreach ($bundles as $bundle => $links) {
+          $item['children'][] = array(
+            'data' => $bundle,
+            'children' => $links,
+          );
+        }
+        $items[] = $item;
+      }
+      $block['subject'] = $delta === 'reference_tracker_inbound' ? t('References to this entity') : t('References made from this entity');
+      $block['content'] = array(
+        '#theme' => 'item_list',
+        '#items' => $items,
+      );
+    }
+  }
+
+  return $block;
+}
+
+/**
+ * Helper function to recursively removes duplicate values from an array.
+ *
+ * This function is not really an array_unique() implementation. We want to
+ * keep all keys and only remove "leaf" duplicates. Let's say there are
+ * references for two entity of different type but same id in the same field.
+ * We don't want to lose tracking of one entity type (which is the key).
+ *
+ * @param array $array
+ *   The input array.
+ *
+ * @return array
+ *   A multidimensional array with only unique values.
+ *
+ * @see http://php.net/manual/en/function.array-unique.php#97285
+ */
+function _reference_tracker_array_unique_recursive($array) {
+  $result = array();
+
+  // array_unique() doesn't work on nested arrays. Search for any of those and
+  // remove them.
+  $to_keep = array();
+  foreach ($array as $key => $value) {
+    if (is_array($value)) {
+      $to_keep[$key] = $value;
+      // Use key as value to maintain original order.
+      $result[$key] = $key;
+    }
+    else {
+      $result[$key] = $value;
+    }
+  }
+
+  // Make all the values unique.
+  $result = array_unique($result);
+
+  // Make all nested array unique and put them back in the resulting array.
+  foreach ($to_keep as $key => $value) {
+    $result[$key] = _reference_tracker_array_unique_recursive($value);
+  }
+
+  return $result;
+}
+
+/**
+ * Determines whether a given URL points to an internal or an external source.
+ *
+ * Credit where credit's due. Most part of this code is taken from the
+ * very nice Pathologic module.
+ *
+ * @param string $url
+ *   The URL to check.
+ *
+ * @return bool
+ *   TRUE if the URL points to an internal source, FALSE if not.
+ *
+ * @see https://www.drupal.org/project/pathologic
+ */
+function _reference_tracker_is_local_path($url) {
+  $settings = &drupal_static(__FUNCTION__);
+
+  if ($settings === NULL) {
+    // Get the base URL and explode it into component parts. We add these parts
+    // to the exploded local paths settings later.
+    global $base_url;
+    $base_url_parts = parse_url($base_url . '/');
+    // Parse extra configured local paths.
+    $local_paths_setting = variable_get('reference_tracker_local_paths', '');
+    $settings['exploded_local_paths'] = array();
+    if ($local_paths_setting !== '') {
+      // Build an array of the exploded local paths.
+      // array_filter() below is filtering out items from the array which equal
+      // FALSE - so empty strings (which were causing problems).
+      // @see http://drupal.org/node/1727492
+      $local_paths = array_filter(array_map('trim', explode("\n", $local_paths_setting)));
+      foreach ($local_paths as $local) {
+        $parts = parse_url($local);
+        // Okay, what the hellish "if" statement is doing below is checking to
+        // make sure we aren't about to add a path to our array of exploded
+        // local paths which matches the current "local" path. We consider it
+        // not a match, if…
+        // @todo: This is pretty horrible. Can this be simplified?
+        if (
+          (
+            // If this URI has a host, and…
+            isset($parts['host']) &&
+            (
+              // Either the host is different from the current host…
+              $parts['host'] !== $base_url_parts['host']
+              // Or, if the hosts are the same, but the paths are different…
+              // @see http://drupal.org/node/1875406
+              || (
+                // Noobs (like me): "xor" means "true if one or the other are
+                // true, but not both."
+                (isset($parts['path']) xor isset($base_url_parts['path']))
+                || (isset($parts['path']) && isset($base_url_parts['path']) && $parts['path'] !== $base_url_parts['path'])
+              )
+            )
+          ) ||
+          // Or…
+          (
+            // The URI doesn't have a host…
+            !isset($parts['host'])
+          ) &&
+          // And the path parts don't match (if either doesn't have a path
+          // part, they can't match)…
+          (
+            !isset($parts['path']) ||
+            !isset($base_url_parts['path']) ||
+            $parts['path'] !== $base_url_parts['path']
+          )
+        ) {
+          // Add it to the list.
+          $settings['exploded_local_paths'][] = $parts;
+        }
+      }
+    }
+    // Now add local paths based on "this" server URL.
+    $settings['exploded_local_paths'][] = array('path' => $base_url_parts['path']);
+    $settings['exploded_local_paths'][] = array('path' => $base_url_parts['path'], 'host' => $base_url_parts['host']);
+  }
+
+  // Parse the given URL.
+  $parts = parse_url($url);
+  // Bail out if the URL parsing failed.
+  if ($parts === FALSE) {
+    return FALSE;
+  }
+  // Cycle through local paths and find one with a host and a path that matches;
+  // or just a host if that's all we have; or just a starting path if that's
+  // what we have.
+  foreach ($settings['exploded_local_paths'] as $exploded) {
+    // If a path is available in both…
+    if (isset($exploded['path']) && isset($parts['path'])
+      // And the paths match…
+      && strpos($parts['path'], $exploded['path']) === 0
+      // And either they have the same host, or both have no host…
+      && (
+        (isset($exploded['host']) && isset($parts['host']) && $exploded['host'] === $parts['host'])
+        || (!isset($exploded['host']) && !isset($parts['host']))
+      )
+    ) {
+      // Remove the shared path from the path. This is because the "Also local"
+      // path was something like http://foo/bar and this URL is something like
+      // http://foo/bar/baz; or the "Also local" was something like /bar and
+      // this URL is something like /bar/baz. And we only care about the /baz
+      // part.
+      return TRUE;
+    }
+    // Okay, we didn't match on path alone, or host and path together. Can we
+    // match on just host? Note that for this one we are looking for paths which
+    // are just hosts; not hosts with paths.
+    elseif ((isset($parts['host']) && !isset($exploded['path']) && isset($exploded['host']) && $exploded['host'] === $parts['host'])) {
+      return TRUE;
+    }
+    // Is this is a root-relative url (no host) that didn't match above?
+    // Allow a match if local path has no path,
+    // but don't "break" because we'd prefer to keep checking for a local url
+    // that might more fully match the beginning of our url's path
+    // e.g.: if our url is /foo/bar we'll mark this as a match for
+    // http://example.com but want to keep searching and would prefer a match
+    // to http://example.com/foo if that's configured as a local path.
+    elseif (!isset($parts['host']) && (!isset($exploded['path']) || $exploded['path'] == '/')) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Helper function to recursively ksort an array.
+ *
+ * @param array $array
+ *   An array.
+ *
+ * @return array
+ *   The same array, but recursively sorted by key.
+ *
+ * @see http://stackoverflow.com/a/4501406
+ */
+function _reference_tracker_array_ksort_recursive(&$array) {
+  foreach ($array as &$value) {
+    if (is_array($value)) {
+      _reference_tracker_array_ksort_recursive($value);
+    }
+  }
+
+  return ksort($array);
+}
+
+/**
+ * Merges two or more reference arrays recursively.
+ *
+ * The field instance keys are integers and they need to be treated as strings.
+ *
+ * @param array $array1
+ *   Initial array to merge.
+ *
+ * @return mixed
+ *   An array of values resulted from merging the arguments together.
+ */
+function _reference_tracker_merge_references($array1) {
+  $arrays = func_get_args();
+  array_shift($arrays);
+
+  foreach ($arrays as $array) {
+    foreach ($array as $field_instance_id => $field_data) {
+      $array1 += array($field_instance_id => array());
+      $array1[$field_instance_id] = array_merge_recursive($array1[$field_instance_id], $array[$field_instance_id]);
+    }
+  }
+
+  return $array1;
+}

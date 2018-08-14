@@ -1,0 +1,88 @@
+/**
+ * @file
+ * Incoming RSS paddlet styling.
+ */
+
+.pane-incoming-rss {
+  .views-row {
+    margin-bottom: 0;
+  }
+
+  .views-row-last {
+    > .entity {
+      margin-bottom: 0;
+    }
+  }
+
+  // Entity styling.
+  .entity-paddle-incoming-rss-feed-item {
+    > h2 {
+      margin: 0;
+
+      > a {
+        text-decoration: none;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+
+  // View modes styles.
+  .paddle-incoming-rss-feed-item {
+    // Title view mode.
+    &--title {
+      > h2 {
+        font-size: 15px;
+
+        > a {
+          font-weight: 400;
+        }
+      }
+    }
+
+    // Magazine view mode.
+    &--magazine {
+      margin-bottom: 30px;
+
+      > h2 {
+        font-size: 20px;
+
+        > a {
+          font-size: inherit;
+        }
+      }
+
+      .field-name-field-feed-item-description {
+        p {
+          &:first-child {
+            margin-top: 0;
+          }
+        }
+      }
+    }
+  }
+
+  .entity-property-thumbnail {
+    float: left;
+    margin: 0 10px 5px 0;
+
+    img {
+      display: block;
+      margin: 0;
+      max-width: 130px;
+      height: auto;
+      max-height: 100px;
+    }
+  }
+
+  .entity-property-created {
+    float: left;
+
+    &:after {
+      content: "\0000a0-\0000a0";
+      display: inline-block;
+    }
+  }
+}

@@ -1,0 +1,96 @@
+.paddle-preview-enabled {
+  margin-top: 25px;
+}
+
+#paddle-preview-toolbar {
+  position: fixed;
+  top: 0;
+  border-bottom: 1px solid #cecece;
+  background-color: #f0f0f0;
+  width: 100%;
+  text-align: center;
+  height: 26px;
+  font-family: 'Source Sans Pro',Helvetica,Arial,sans-serif;
+  font-size: 85%;
+  color: #000000;
+  z-index: 1;
+}
+
+#paddle-preview-toolbar a {
+  color: #000000;
+  text-decoration: none;
+}
+
+#paddle-preview-toolbar-content {
+  margin: 0 auto;
+  max-width: 1040px;
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+  margin-top: 2px;
+}
+
+#paddle-preview-toolbar-admin-home {
+  float: left;
+}
+
+#paddle-preview-toolbar-admin-home a,
+#paddle-preview-toolbar-previous-theme a,
+#paddle-preview-toolbar-next-theme a {
+  color: #000000;
+  display: inline-block;
+  outline: none;
+}
+#paddle-preview-toolbar-admin-home a:before {
+  font-family: icomoon;
+  speak: none;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  content: "\e600";
+  margin-right: 5px;
+  display: inline-block;
+  vertical-align: middle;
+}
+#paddle-preview-toolbar-theme-switcher,
+#paddle-preview-toolbar-theme-switcher > div {
+  display: inline-block;
+  vertical-align: middle;
+}
+#paddle-preview-toolbar-close-btn {
+  margin: 0 10px 0 auto;
+}
+
+#paddle-preview-toolbar-user {
+  float: right;
+}
+#paddle-preview-toolbar-user:after {
+  content: "\f007";
+  font-family: FontAwesome;
+  margin-left: 5px;
+}
+#paddle-preview-toolbar-previous-theme a,
+#paddle-preview-toolbar-next-theme a {
+  font-size: 1.4em;
+}
+#paddle-preview-toolbar-previous-theme a {
+  margin-right: 24px;
+}
+#paddle-preview-toolbar-next-theme a {
+  margin-left: 24px;
+}
+#paddle-preview-toolbar-close-btn a:before,
+#paddle-preview-toolbar-close-btn a.close:before {
+  content: "\f044";
+  font-family: FontAwesome;
+  font-style: normal;
+  display: inline-block;
+  margin-left: 5px;
+  margin-right: 2px;
+}
+
+#paddle-preview-toolbar-close-btn a.close:before {
+  content: "\f057";
+}

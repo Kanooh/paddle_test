@@ -1,0 +1,127 @@
+<?php
+
+/**
+ * @file
+ * Tests for the Paddle profile.
+ */
+
+/**
+ * Class for Paddle installation profile tests.
+ */
+class PaddleProfileWebTestCase extends DrupalWebTestCase {
+
+  protected $profile = 'paddle';
+
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Installation Profile',
+      'description' => 'Test the Paddle installation profile.',
+      'group' => 'Paddle',
+    );
+  }
+
+  /**
+   * Tests if modules are enabled by default.
+   */
+  public function testModulesEnabled() {
+    $module_list = array(
+      'ctools',
+      'entity',
+      'features',
+      'file',
+      'i18n',
+      'i18n_menu',
+      'i18n_string',
+      'i18n_translation',
+      'image',
+      'jquery_colorpicker',
+      'libraries',
+      'locale',
+      'paddle_content_manager',
+      'paddle_contextual_toolbar',
+      'paddle_menu_manager',
+      'paddle_style',
+      'paddle_themer',
+      'panels',
+      'scheduler',
+      'scheduler_workbench',
+      'uuid',
+      'variable',
+      'views',
+      'views_bulk_operations',
+      'workbench_moderation',
+    );
+
+    foreach ($module_list as $module) {
+      $this->assertTrue(module_exists($module), format_string('The module @module exists.', array('@module' => $module)));
+    }
+  }
+
+  /**
+   * Test if menus were created.
+   */
+  public function testMenusExist() {
+    $menu_names = array('main_menu', 'footer_menu', 'top_menu');
+    $language_list = language_list('enabled');
+
+    // Iterate through the menus, determine if they exists.
+    foreach ($language_list[1] as $langcode => $language) {
+      foreach ($menu_names as $name) {
+        $menu = menu_load($name . '_' . $langcode);
+        $this->assertTrue($menu, 'A menu was created with the respective name for an enabled language.');
+      }
+    }
+  }
+
+  /**
+   * Tests if the correct theme settings are applied.
+   */
+  public function testThemes() {
+    $themes = list_themes();
+
+    $vo_standard = paddle_themer_load('vo_standard');
+    $vo_standard_non_branded = paddle_themer_load('vo_standard_non_branded');
+
+    if (isset($themes['paddle_theme_branded'])) {
+      $this->assertEqual($themes['paddle_theme_branded']->status, 1, 'The Paddle branded frontend theme is enabled when it is available.');
+      $this->assertEqual($themes['paddle_theme']->status, 1, 'The Paddle non-branded frontend theme is also enabled when its branded variation is available.');
+      $this->assertEqual(variable_get('theme_default'), 'paddle_theme_branded', 'The Paddle branded frontend theme is the default theme when it is available.');
+      $this->assertEqual(variable_get('paddle_theme'), 'vo_standard', 'The vo_standard Paddle theme is activated when the Paddle branded frontend theme is available.');
+
+      $this->assertFalse(isset($vo_standard->disabled), 'The vo_standard Paddle theme is enabled when the Paddle branded frontend theme is available.');
+      $this->assertTrue($vo_standard_non_branded->disabled, 'The vo_standard_non_branded Paddle theme is disabled when the Paddle branded frontend theme is available.');
+    }
+    else {
+      $this->assertEqual($themes['paddle_theme']->status, 1, 'The Paddle non-branded frontend theme is enabled when its branded variation is not available.');
+      $this->assertEqual(variable_get('theme_default'), 'paddle_theme', 'The Paddle non-branded frontend theme is the default theme when its branded variation is not available.');
+      $this->assertEqual(variable_get('paddle_theme'), 'vo_standard_non_branded', 'The vo_standard_non_branded Paddle theme is activated when the Paddle branded frontend theme is not available.');
+
+      $this->assertFalse(isset($vo_standard_non_branded->disabled), 'The vo_standard_non_branded Paddle theme is enabled when the Paddle branded frontend theme is not available.');
+      $this->assertTrue($vo_standard->disabled, 'The vo_standard Paddle theme is enabled when the Paddle branded frontend theme is not available.');
+    }
+
+    // Check that the admin theme is used.
+    $this->assertEqual(variable_get('admin_theme'), 'paddle_admin_theme', 'The admin theme is used for the administration section.');
+  }
+
+  /**
+   * Tests if the correct settings are applied for the ife module.
+   */
+  public function testIfeEnabledOnLoginForm() {
+    // Cannot use ife_load_form_ids() because this uses static caching.
+    $result = db_select('ife')
+      ->fields('ife', array(
+        'status',
+        'display'))
+      ->condition('form_id', 'user_login', '=')
+      ->execute();
+
+    $user_login_settings = $result->fetchAssoc();
+
+    $this->assertEqual($user_login_settings['status'], 1, 'The IFE setting for user login form is enabled.');
+    $this->assertEqual($user_login_settings['display'], 2, 'The IFE setting for display on the user login form is set to "Remove all messages".');
+  }
+}

@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the paddle_vo_additional_themes feature.
+ */
+
+include_once 'paddle_vo_additional_themes.features.inc';

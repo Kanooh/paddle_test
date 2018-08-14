@@ -1,0 +1,39 @@
+/**
+* @file
+* Base styling for page wide content.
+*
+*/
+@import 'variables';
+
+.page-wide {
+  .landing-page-body {
+    padding-left: 25px;
+  }
+}
+
+.col-xs-12 {
+  .page-wide-container-max-width {
+    max-width: 1200px;
+    margin-right: auto;
+    margin-left: auto;
+  }
+}
+
+.page-wide-container {
+  &.background-image {
+    margin: 0 20px;
+  }
+}
+
+.block-culturefeed-agenda {
+  @media screen and (min-width: $screen-sm-min) {
+    margin-top: 15px;
+  }
+  @media screen and (min-width: $screen-md-min) and (max-width: $page-width) {
+    margin-right: 30px;
+  }
+}
+
+footer .paddingizer.rich_footer {
+  padding-top: 30px;
+}

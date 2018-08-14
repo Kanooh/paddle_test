@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, enable, update and schema hooks for the Carousel app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_carousel_enable() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  ctools_modules_enabled(array('paddle_carousel'));
+
+  // Make sure all editors can use the carousel pane.
+  $permissions = array(
+    'edit carousel content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}

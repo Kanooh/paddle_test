@@ -1,0 +1,117 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Outgoing RSS app.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_outgoing_rss_schema() {
+  return array(
+    'paddle_outgoing_rss_feed' => array(
+      'description' => 'Base table for the Paddle Outgoing RSS entities.',
+      'fields' => array(
+        'fid' => array(
+          'description' => 'The primary identifier for an Outgoing RSS feed entity.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'title' => array(
+          'description' => 'The title of this Outgoing RSS feed, always treated as non-markup plain text.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'path' => array(
+          'description' => 'The path on which this Outgoing RSS feed will be displayed.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'content_types' => array(
+          'description' => 'A field containing serialized array with the content types which will be in this RSS feed.',
+          'type' => 'blob',
+          'not null' => TRUE,
+          'size' => 'big',
+          'serialize' => TRUE,
+        ),
+        'image_style' => array(
+          'description' => 'A field containing the image style which the node images will be cropped to.',
+          'type' => 'varchar',
+          'length' => 255,
+          'default' => '',
+        ),
+        'tags' => array(
+          'description' => 'A field containing serialized array with the tags for this RSS feed.',
+          'type' => 'blob',
+          'not null' => TRUE,
+          'size' => 'big',
+          'serialize' => TRUE,
+        ),
+        'terms' => array(
+          'description' => 'A field containing serialized array with the terms for this RSS feed.',
+          'type' => 'blob',
+          'not null' => TRUE,
+          'size' => 'big',
+          'serialize' => TRUE,
+        ),
+      ),
+      'unique keys' => array(
+        'fid' => array('fid'),
+      ),
+      'primary key' => array('fid'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_outgoing_rss_enable() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_outgoing_rss'));
+
+  $permissions = array(
+    'edit outgoing_rss_feeds_list content in landing pages',
+  );
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Give permissions to users to manage Outgoing RSS feeds.
+  $permissions = array(
+    'manage paddle outgoing rss feeds',
+  );
+
+  foreach (array('Chief Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Set some default pathauto patterns.
+  variable_set('pathauto_paddle_outgoing_rss_pattern', '[paddle_outgoing_rss_feed:title]/rss.xml');
+  variable_set('pathauto_paddle_outgoing_rss_paddle_outgoing_rss_feed_pattern', '[paddle_outgoing_rss_feed:title]/rss.xml');
+}
+
+/**
+ * Adds the image style field.
+ */
+function paddle_outgoing_rss_update_7000() {
+  $image_style = array(
+    'description' => 'A field containing the image style which the node images will be cropped to.',
+    'type' => 'varchar',
+    'length' => 255,
+    'default' => '',
+  );
+
+  if (!db_field_exists('paddle_outgoing_rss_feed', 'image_style')) {
+    db_add_field('paddle_outgoing_rss_feed', 'image_style', $image_style);
+  }
+}

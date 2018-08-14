@@ -1,0 +1,77 @@
+/**
+* @file
+* VO theme styling.
+*/
+
+body {
+  font-family: "FlandersArtSans-Light", "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+  background-color: #F9F9F9;
+}
+
+strong {
+  font-family: "FlandersArtSans-Medium", "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+}
+
+#logo img {
+  margin-top: 21px;
+}
+
+.content-background-canvas {
+  background-image: url(../patterns/vo_background.png);
+  background-attachment: scroll;
+  background-repeat: repeat;
+  background-position: center center;
+}
+
+.landing-page-body {
+  margin-bottom: 30px;
+  padding: 21px 15px 14px 15px;
+  border: 1px solid #ebebeb;
+  border-bottom: 0;
+  box-shadow: 0 5px 5px -4px #b5b5b5;
+  background-color: #ffffff;
+  word-wrap: break-word;
+}
+
+.region-content .landing-page-body p {
+  font-size: 15px;
+  line-height: 1.5em;
+}
+
+.region-content .landing-page-body p:last-child {
+  margin-bottom: 0;
+}
+
+#block-paddle-menu-display-first-level .level-1 > .menu-item,
+#block-paddle-menu-display-first-level .level-1 > .menu-item:hover,
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a {
+  border-top: none;
+}
+
+#fake-menu-bg {
+  min-height: 41px;
+}
+
+.form-submit {
+  font-family: "FlandersArtSans-Bold", "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+}
+
+form[id*="search-api-page"] .form-type-textfield .form-text {
+  border: 1px solid;
+}
+
+.content-wrapper .pane-free-content .pane-content .pane-section-body a,
+.pane-content .pane-section-body .node .field-name-body a,
+.region-content .field-name-body a {
+  color: #2892be;
+  text-decoration: underline;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1.pane-free-content .pane-content .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-content .pane-section-body .node .field-name-body a{
+  color: #000000;
+}
+
+.list-news-item .info .title {
+  color: #5E5E5E;
+}

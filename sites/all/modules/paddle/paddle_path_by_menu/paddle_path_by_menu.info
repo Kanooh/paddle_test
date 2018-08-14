@@ -1,0 +1,15 @@
+name = Paddle Path by Menu
+description = Provides additional paths to content according to their place in menus.
+core = 7.x
+package = Paddle
+
+test_dependencies[] = i18n
+test_dependencies[] = variable
+
+files[] = tests/paddle_path_by_menu.test
+files[] = tests/paddle_path_by_menu_unit.test
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_path_by_menu"
+datestamp = "1455512497"

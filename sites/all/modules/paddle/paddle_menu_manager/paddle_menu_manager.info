@@ -1,0 +1,29 @@
+name = Paddle Menu Manager
+description = contains paddle_menu_manager code
+core = 7.x
+package = Paddle
+
+files[] = paddle_menu_manager.i18n.inc
+files[] = tests/paddle_menu_manager_menu_form.test
+files[] = tests/paddle_menu_manager_menu_item_form.test
+files[] = tests/paddle_menu_manager_overview.test
+files[] = tests/paddle_menu_manager_pages.test
+files[] = tests/paddle_menu_manager_save_menu_item_across_menus.test
+files[] = tests/paddle_menu_manager_test_case.test
+files[] = tests/paddle_menu_manager_translation_sets.test
+files[] = tests/paddle_menu_manager_unit.test
+files[] = tests/paddle_menu_manager_internal_link_autocomplete.test
+files[] = tests/paddle_menu_manager_big_menus.test
+
+dependencies[] = ctools
+dependencies[] = i18n
+dependencies[] = i18n_menu
+dependencies[] = i18n_translation
+dependencies[] = paddle_landing_page
+dependencies[] = uuid
+dependencies[] = menu_block
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_menu_manager"
+datestamp = "1455508466"

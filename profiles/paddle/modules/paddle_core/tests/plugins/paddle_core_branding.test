@@ -1,0 +1,131 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCorePaddleStylePluginBrandingTest.
+ */
+
+/**
+ * Tests the Branding plugin.
+ */
+class PaddleCorePaddleStylePluginBrandingTest extends PaddleStylePluginTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'testing';
+
+  /**
+   * Stores an instance of the Branding plugin.
+   *
+   * @var object PaddleStyleBrandingPlugin
+   */
+  public $instance;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Branding',
+      'description' => 'Test the Branding Paddle Style plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array('ctools', 'paddle_style', 'paddle_core'));
+
+    // Create an instance of the Branding plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_branding');
+    $this->instance = new $plugin['handler']['class']();
+  }
+
+  /**
+   * Tests the form() method of the Branding plugin without parameters.
+   */
+  public function testBrandingFormWithoutSettings() {
+    $form_elements = $this->instance->form();
+
+    // Test if the default elements are being returned.
+    $this->assertTrue($form_elements, 'The form call to the Branding plugin returns standard elements when no settings given.');
+  }
+
+  /**
+   * Tests the form() method of the Branding plugin with a $values array.
+   */
+  public function testBrandingFormWithDefaults() {
+    // Values array to give to the form function.
+    $path_to_test_files = dirname(__FILE__) . '/test_images/';
+    $values = array(
+      'logo' => $path_to_test_files . 'test_logo.png',
+      'vo_branding' => 'vo_branding',
+    );
+    $form_elements = $this->instance->form(array(), $values);
+
+    // Check if the default values are set correctly.
+    $this->assertTrue($form_elements['logo']['#default_value'] == $values['logo'], 'Default value is set properly for the branding logo.');
+    $this->assertTrue($form_elements['vo_branding']['#default_value'] == $values['vo_branding'], 'Default value is set properly for the branding elements.');
+  }
+
+  /**
+   * Tests that an uploaded file is marked as permanent and owned by the plugin.
+   */
+  public function testFileUpload() {
+    // Populate the array of test images.
+    $this->testImages = $this->drupalGetTestFiles('image');
+
+    $image = $this->randomImage();
+    $values = array('values' => array('logo' => $image->fid));
+    $this->instance->submit($values);
+
+    $this->assertFilePermanent($image->fid);
+    $this->assertFileUsage($image->fid, 'paddle_core', 'logo');
+  }
+
+  /**
+   * Tests the onClone() and onDelete() methods.
+   */
+  public function testCloneAndDelete() {
+    // Populate the array of test images.
+    $this->testImages = $this->drupalGetTestFiles('image');
+
+    $image = $this->randomImage();
+    $values = array('values' => array('logo' => $image->fid));
+    $this->instance->submit($values);
+
+    // Check if the file exists.
+    $this->assertFilePermanent($image->fid);
+    $this->assertFileUsage($image->fid, 'paddle_core', 'logo');
+
+    // Check the correct usage of the file.
+    $references = file_usage_list($image);
+    $this->assertEqual(1, $references['paddle_core']['logo'][1]);
+
+    // Clone the settings and check that the usage has been updated.
+    $this->instance->onClone(array('logo' => $image->fid));
+    $references = file_usage_list($image);
+    $this->assertEqual(2, $references['paddle_core']['logo'][1]);
+
+    // Delete one setting and check that the usage has been updated.
+    $this->instance->onDelete(array('logo' => $image->fid));
+    $references = file_usage_list($image);
+    $this->assertEqual(1, $references['paddle_core']['logo'][1]);
+
+    // Check if the file still exists.
+    $this->assertFilePermanent($image->fid);
+    $this->assertFileUsage($image->fid, 'paddle_core', 'logo');
+
+    // Remove the last usage of the file and check that the file does not exist
+    // anymore.
+    $this->instance->onDelete(array('logo' => $image->fid));
+    $references = file_usage_list($image);
+    $this->assertTrue(empty($references));
+    $this->assertFalse(file_load($image->fid));
+  }
+
+}

@@ -1,0 +1,398 @@
+/**
+* @file
+* Styling for search form and results.
+*
+*/
+@import "variables/*";
+@import "abstractions/*";
+
+#block-search-api-page-search {
+  clear: both;
+  // Use padding instead of margin to avoid margin collapsing issues
+  // when the language swicher is present but the top links menu is not.
+  padding-top: 15px;
+}
+
+form[id*="search-api-page"] {
+  position: relative;
+  width: 100%;
+
+  &> div {
+    @include flexbox();
+    @include justify-content(space-between);
+  }
+
+  .form-type-textfield {
+    width: 100%;
+  }
+
+  .form-text {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    height: 40px;
+    margin: 0;
+    padding: 0 10px;
+    border: 0;
+    font-size: 1.1em;
+    line-height: 1.4em;
+    font-family: inherit;
+    text-indent: 0;
+    color: $c-black;
+    box-shadow: none;
+
+    @include placeholder($c-silver-chalice-alt);
+
+    &:focus {
+      outline: thin dotted;
+      outline-offset: -2px;
+      -webkit-box-shadow: none;
+      -moz-box-shadow: none;
+      box-shadow: none;
+    }
+  }
+
+  .form-submit {
+    border: none;
+    color: $c-white;
+    font-size: 1em;
+    padding: 0 12px;
+    height: 40px;
+    line-height: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 0;
+    text-transform: uppercase;
+  }
+}
+
+#search-api-page-search-form {
+  .form-text {
+    border: 1px solid $c-silver;
+  }
+}
+
+ul.pager {
+  padding: 15px;
+}
+
+.item-list .pager .pager-item {
+  padding: 0;
+}
+
+.page-search .region-content {
+  margin-top: 23px;
+}
+
+.search-api-page-results .item-list {
+  padding: 10px 0;
+  margin-bottom: 20px;
+}
+
+.search-api-page-results .pager-wrapper.last .item-list {
+  border-bottom: none;
+}
+
+.item-list .pager {
+  margin: 0;
+  text-align: left;
+}
+
+#search-api-page-search-form {
+  margin-bottom: 10px;
+}
+
+.item-list .pager li {
+  padding: 0;
+  margin: 0 8px 0 0;
+}
+
+.page-search .item-list .pager li.last {
+  margin: 0;
+}
+
+.search-api-page-results .pager-current {
+  font-weight: normal;
+}
+
+.hidden-text span {
+  left: 0;
+  overflow: hidden;
+  position: absolute;
+  top: -10000px;
+}
+
+.pager .pager-next a,
+.pager .pager-first a,
+.pager .pager-previous a,
+.pager .pager-last a {
+  width: 17px;
+  height: 17px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.pager .pager-first a {
+  background: $c-white url(../images/pager-first.png) center center no-repeat;
+}
+
+.pager .pager-previous a {
+  background: $c-white url(../images/pager-prev.png) center center no-repeat;
+}
+
+.pager .pager-next a {
+  background: $c-white url(../images/pager-next.png) center center no-repeat;
+}
+
+.pager .pager-last a {
+  background: $c-white url(../images/pager-last.png) center center no-repeat;
+}
+
+.region-content .search-results {
+  margin: 0 0 23px 0;
+}
+
+ol.search-results > li:before,
+ol.search-results > li:after {
+  content: "";
+  margin: 0;
+}
+
+.search-result h2 a {
+  text-decoration: none;
+}
+
+.search-result {
+  padding-top: 18px;
+  margin-top: 23px;
+  clear: both;
+
+  .featured-image {
+    float: left;
+    margin-right: 15px;
+    margin-top: 20px;
+  }
+}
+
+// Move margins from image container to element for search results on map pages
+// so empty containers can be shown as big as if there was an image within it.
+.node-type-paddle-maps-page .search-result {
+  .featured-image {
+    margin-right: 0;
+    margin-top: 0;
+
+    img {
+      margin-right: 15px;
+      // Decrease margin top because there are no hX tags here.
+      margin-top: 5px;
+    }
+  }
+}
+
+.search-result:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+
+.search-result .search-read-more a {
+  color: $c-gray;
+  text-decoration: none;
+}
+
+.search-api-page-results h3 a,
+.search-api-page-results h3 a:hover {
+  font-size: 18px;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.pane-facetapi {
+  .pane-title {
+    padding: 15px;
+    font-size: 18px;
+    font-weight: bold;
+    color: $c-white;
+  }
+
+  .pane-content {
+    font-size: .93em;
+  }
+
+  ul {
+    margin: 0;
+
+    ul {
+      margin: 0 0 0 15px;
+    }
+
+    li {
+      margin: 0;
+      list-style: none;
+    }
+  }
+
+  a {
+    text-decoration: none;
+  }
+}
+
+// To increase specificity, prepend the item type.
+ul.search-api-sorts {
+  @include clearfix;
+  margin: 0 0 15px;
+  padding: 0;
+  text-align: right;
+
+  > li {
+    display: inline-block;
+    margin: 0 0 0 .5em;
+  }
+
+  .sort-item {
+    text-decoration: none;
+
+    &.active-sort {
+      text-decoration: underline;
+    }
+
+    > img {
+      display: inline-block;
+      margin-left: 3px;
+    }
+  }
+}
+
+.mobile-search-btn {
+  display: none;
+  float: right;
+  width: 60px;
+  height: 60px;
+  margin-left: 2px;
+  font-size: 24px;
+  line-height: 60px;
+  text-align: center;
+  color: $c-dove-gray;
+  background-color: $c-white;
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+/* making search box responsive */
+@media (max-width: $screen-xs-max) {
+  .mobile-search-btn {
+    display: block;
+  }
+
+  .search-pop-up{
+    display: none;
+  }
+
+  .region-service-links-wrapper {
+    // We need to remove the relative positioning added by the grid system
+    // to position the search block.
+    position: static;
+  }
+
+  #block-search-api-page-search {
+    visibility: hidden;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 100;
+    width: 100%;
+    padding-top: 10px;
+    opacity: 0;
+    @include transition(opacity .3s, visibility 0s .3s);
+
+    > .content {
+      padding: 0 4.20248%;
+    }
+
+    &.is-open {
+      visibility: visible;
+      opacity: 1;
+      @include transition(opacity .3s, visibility 0s 0s);
+    }
+  }
+}
+
+@media (min-width: $screen-sm-min) {
+  #block-search-api-page-search {
+    background-color: transparent;
+  }
+}
+
+// Move the search button under the search input for small screens.
+@media (max-width: $screen-sm-max) {
+  form[id*="search-api-page"] {
+    > div {
+      display: table;
+      width: 100%;
+    }
+
+    .form-type-textfield {
+      display: table-row-group;
+    }
+
+    .form-submit-container {
+      display: table-footer-group;
+    }
+
+    .form-submit {
+      width: 100%;
+      max-width: none;
+      margin-top: 5px;
+      margin-bottom: 10px;
+    }
+  }
+}
+
+@media (min-width: $screen-md-min) {
+  form[id*="search-api-page"] {
+    @include clearfix;
+
+    .form-submit-container {
+      float: right;
+      margin-left: 10px;
+    }
+
+    .form-type-textfield {
+      overflow-x: hidden;
+      margin-right: 0;
+      padding: 0;
+    }
+  }
+}
+
+.search-pop-up {
+  float: right;
+  padding: 25px 0 0 6px;
+  color:rgba(255,255,255,0.9);
+}
+
+@media (min-width: $screen-md-min) {
+  #search-box-holder {
+    float: right;
+    width: 93%;
+  }
+}
+
+@media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) {
+  #search-box-holder {
+    float: left;
+    width: 93%;
+  }
+
+  #block-paddle-menu-display-top-menu {
+    float: left;
+    width: 93%;
+  }
+}
+
+li.search-result {
+  min-height: 90px;
+}
+
+.search-snippet-publication-date {
+  text-transform: uppercase;
+  color: $c-gray;
+}

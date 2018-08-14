@@ -1,0 +1,235 @@
+# $Id$
+#
+# Dutch translation of Drupal (general)
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  paddle_menu_display.admin.inc: n/a
+#  paddle_menu_display.module: n/a
+#  paddle_menu_display.info: n/a
+#  includes/menu_display_generation.inc: n/a
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2012-09-28 12:14+0200\n"
+"PO-Revision-Date: 2012-09-28 12:14+0200\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Dutch <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n!=1);\n"
+
+#: paddle_menu_display.admin.inc:5;53
+msgid "Title"
+msgstr "Titel"
+
+#: paddle_menu_display.admin.inc:5
+msgid "Operations"
+msgstr "Handelingen"
+
+#: paddle_menu_display.admin.inc:9
+msgid "edit menu display"
+msgstr "bewerk menuweergave"
+
+#: paddle_menu_display.admin.inc:10
+msgid "delete menu display"
+msgstr "verwijder menuweergave"
+
+#: paddle_menu_display.admin.inc:54
+msgid "This name will apear in the list of the menu displays. It will be also used as title of the block generated for this menu."
+msgstr "Deze naam zal getoond worden in de lijst van menuweergaves. Deze zal ook gebruikt worden als title van de blok die voor deze menu gegenereerd is"
+
+#: paddle_menu_display.admin.inc:61
+msgid "Description"
+msgstr "Beschrijving"
+
+#: paddle_menu_display.admin.inc:63
+msgid "Short description which will appear in the list of the menu displays."
+msgstr "Korte beschrijving die getoond zal worden in de lijst van menuweergaves"
+
+#: paddle_menu_display.admin.inc:68
+msgid "Menus"
+msgstr "Menu's"
+
+#: paddle_menu_display.admin.inc:71
+msgid "Select the menu of which you want the menu display."
+msgstr "Selecteer het menu waarvan u de menuweergave wil gebruiken"
+
+#: paddle_menu_display.admin.inc:78
+msgid "Root item"
+msgstr "Hoofditem"
+
+#: paddle_menu_display.admin.inc:79
+msgid "The menu item from which the rendering will be reconed. If you leave it blank it will use the current path as root."
+msgstr ""
+
+#: paddle_menu_display.admin.inc:86
+msgid "From level"
+msgstr "Van niveau"
+
+#: paddle_menu_display.admin.inc:89
+msgid "From which level of the menu the rendering should start."
+msgstr "Op welk niveau van het menu moet het beginnen weergeven"
+
+#: paddle_menu_display.admin.inc:95
+msgid "To level"
+msgstr "naar niveau"
+
+#: paddle_menu_display.admin.inc:98
+msgid "On which level of the menu the rendering should end. Select 0 to render to maximum depth."
+msgstr "Op welk niveau van het menu moet de weergave eindigen. Kies 0 om voor de volledige diepte te tonen"
+
+#: paddle_menu_display.admin.inc:104
+msgid "Add active class"
+msgstr "Actieve class toevoegen"
+
+#: paddle_menu_display.admin.inc:106
+msgid "Check to have class \"active\" on the <em>li</em> of the active menu item."
+msgstr "Aanvinken om klasse \"actief\" op het <em>li</em> van de actieve menu-item te hebben"
+
+#: paddle_menu_display.admin.inc:112
+msgid "Add first/last classes"
+msgstr "eerste/laatste class toevoegen"
+
+#: paddle_menu_display.admin.inc:114
+msgid "Check to have classes \"first\" and \"last\" on the <em>li</em> of the first and last menu items accordingly."
+msgstr "Aanvinken om klassen \"first\" and \"last\" respectievelijk op de <em>li</em> van het eerste en laatste menu item te hebben"
+
+#: paddle_menu_display.admin.inc:120
+msgid "Add odd/even class"
+msgstr "Een even/oneven klasse toevoegen"
+
+#: paddle_menu_display.admin.inc:122
+msgid "Check to have class \"odd\" and \"even\" on the <em>li</em> of the menu."
+msgstr "Aanvinken om klasse \ "oneven \" en \ "even \" op de <em> li </em> van het menu te hebben."
+
+#: paddle_menu_display.admin.inc:128
+msgid "Add active trail class"
+msgstr "Actieve trail/pad klasse toevoegen"
+
+#: paddle_menu_display.admin.inc:130
+msgid "Check to have class \"active_trail\"on the <em>li</em> of the menu."
+msgstr "Aanvinken om klasse \"active_trail\" op de <em>li</em> van het menu te hebben."
+
+#: paddle_menu_display.admin.inc:136
+msgid "Class of <em>ul</em>"
+msgstr "Klasse van <em>ul</em>"
+
+#: paddle_menu_display.admin.inc:137
+msgid "An additional class to add to each <em>ul</em>."
+msgstr "Een extra klasse toevoegen aan elke <em>ul</em>."
+
+#: paddle_menu_display.admin.inc:144
+msgid "Class of <em>li</em>"
+msgstr "Klasse van <em>li</em>"
+
+#: paddle_menu_display.admin.inc:145
+msgid "An additional class to add to each <em>li</em>."
+msgstr "een extra klasse toevoegen op elke <em>li</em>."
+
+#: paddle_menu_display.admin.inc:152
+msgid "Class of <em>a</em>"
+msgstr "Klasse van <em>a</em>"
+
+#: paddle_menu_display.admin.inc:153
+msgid "An additional class to add to each <em>a</em>."
+msgstr "een extra klasse toevoegen op elke <em>a</em>."
+
+#: paddle_menu_display.admin.inc:159
+msgid "Root items for nodes"
+msgstr "Hoofditem voor nodes"
+
+#: paddle_menu_display.admin.inc:170
+msgid "The root item for this content type."
+msgstr "Het hoofditem voor dit inhoudstype"
+
+#: paddle_menu_display.admin.inc:208
+msgid "Save"
+msgstr "Opslaan"
+
+#: paddle_menu_display.admin.inc:214
+msgid "Cancel"
+msgstr "Annuleren"
+
+#: paddle_menu_display.admin.inc:287
+msgid "This action cannot be undone."
+msgstr "Deze actie kan niet ongedaan worden gemaakt."
+
+#: paddle_menu_display.admin.inc:289
+msgid "Are you sure you want to delete the custom menu display %title?"
+msgstr "Bent u zeker dat je deze aangepaste menuweergave %title wilt verwijderen"
+
+#: paddle_menu_display.admin.inc:289
+msgid "Delete"
+msgstr "Verwijderen"
+
+#: paddle_menu_display.admin.inc:300
+msgid "The custom menu display %title has been deleted."
+msgstr "De aangepaste menuweergave %title is verwijderd"
+
+#: paddle_menu_display.admin.inc:301
+msgid "paddle_menu_display"
+msgstr ""
+
+#: paddle_menu_display.admin.inc:301
+msgid "Deleted custom menu %title and all its menu links."
+msgstr "Het menu %title en alle bijbehorende links zijn verwijderd"
+
+#: paddle_menu_display.module:20
+msgid "Menu displays"
+msgstr "Menu weergaves"
+
+#: paddle_menu_display.module:22
+msgid "Manage menu displays."
+msgstr "Beheer van menu weergaves"
+
+#: paddle_menu_display.module:28
+msgid "Edit menu display"
+msgstr "Menuweergave Bewerken"
+
+#: paddle_menu_display.module:30
+msgid "Edit menu display."
+msgstr "Menuweergave Bewerken"
+
+#: paddle_menu_display.module:39
+msgid "Delete menu display"
+msgstr "Menuweergave verwijderen"
+
+#: paddle_menu_display.module:41
+msgid "Delete menu display."
+msgstr "Menuweergave verwijderen"
+
+#: paddle_menu_display.module:48
+msgid "Add menu display"
+msgstr "Menuweergave toevoegen"
+
+#: paddle_menu_display.module:65
+msgid "Administer menu displays"
+msgstr "Beheer van menuweergaves"
+
+#: paddle_menu_display.module:76
+msgid "You can enable the newly-created block for this menu display on the <a href=\"@blocks\">Blocks administration page</a>."
+msgstr "Je kan de pas aangemaakte blok voor deze menu weergave aanzetten op de <a href=\"@blocks\">Blokken beheerpagina</a>."
+
+#: paddle_menu_display.module:79
+msgid "Each menu display has a corresponding block that is managed on the <a href=\"@blocks\">Blocks administration page</a>."
+msgstr "Elke menuweergave heeft een overeenkomstige block die beheerd word op de <a href=\"@blocks\">Blokken beheerpagina</a>."
+
+#: paddle_menu_display.info:0
+msgid "Custom Menu Display"
+msgstr "Aangepaste menuweergave"
+
+#: paddle_menu_display.info:0
+msgid "Custom Menu Display."
+msgstr ""Aangepaste menuweergave"
+
+#: paddle_menu_display.info:0
+msgid "ESN"
+msgstr "ESN"
+
+#: includes/menu_display_generation.inc:37
+msgid "Error - no such menu!"
+msgstr "Foutmelding - Zo'n menu niet gevonden"
+

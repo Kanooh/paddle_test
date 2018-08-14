@@ -1,0 +1,88 @@
+<?php
+
+/**
+ * @file
+ * Contains tests for the dashboard concerning scheduled nodes.
+ */
+
+/**
+ * Tests the dashboard with scheduled nodes.
+ */
+class PaddleDashboardScheduledNodesTestCase extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Scheduled nodes test',
+      'description' => 'Tests the dashboard with scheduled nodes.',
+      'group' => 'Paddle Dashboard',
+    );
+  }
+
+  /**
+   * Tests if new drafts of published nodes are displayed on the dashboard.
+   */
+  public function testScheduledNodes() {
+    // Log in as Chief Editor.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create 2 nodes with a publication and depublication date.
+    $node_1 = $this->drupalCreateScheduledUiNode('basic_page', array(), array(
+        'publish_on' => strtotime('+1 day'),
+        'unpublish_on' => strtotime('+2 day'),
+    ));
+    $this->moderateNode($node_1, 'Scheduled');
+
+    $node_2 = $this->drupalCreateScheduledUiNode('basic_page', array(), array(
+        'publish_on' => strtotime('+1 day'),
+        'unpublish_on' => strtotime('+2 day'),
+    ));
+    $this->moderateNode($node_2, 'Scheduled');
+
+    $this->drupalGet('admin/dashboard');
+    // Verify they are shown in the correct order in scheduled for publication
+    // block.
+    $this->assertTrue($this->getItemFromDashboard('view-display-id-panel_pane_planned_publications', 'views-row-1', check_plain($node_2->title)), 'The row of the latest updated node was found first in the dashboard view.');
+    $this->assertTrue($this->getItemFromDashboard('view-display-id-panel_pane_planned_publications', 'views-row-2', check_plain($node_1->title)), 'The row of the first updated node was found second in the dashboard view.');
+
+    // Edit the first created node and verify that it then shows up as first in
+    // the dashboard view.
+    $this->drupalPost('node/' . $node_1->nid . '/edit', array(), t('Save'));
+    $this->drupalGet('admin/dashboard');
+    // Verify they are shown in the correct order in scheduled for publication
+    // block.
+    $this->assertTrue($this->getItemFromDashboard('view-display-id-panel_pane_planned_publications', 'views-row-1', check_plain($node_1->title)), 'The row of the latest updated node was found first in the dashboard view.');
+    $this->assertTrue($this->getItemFromDashboard('view-display-id-panel_pane_planned_publications', 'views-row-2', check_plain($node_2->title)), 'The row of the second updated node was found second in the dashboard view.');
+
+  }
+
+  /**
+   * Constructs a XPath query to find an item on the dashboard.
+   *
+   * @param string $class_display
+   *   The class for display on the dashboard.
+   * @param string $class_row
+   *   The class for the row containing the item.
+   * @param string $title
+   *   The title of the item.
+   */
+  public function getItemFromDashboard($class_display, $class_row, $title) {
+    $args = array(
+      ':class_display' => $class_display,
+      ':class_row' => $class_row,
+      ':title' => $title,
+    );
+
+    $parts = array(
+      '//div[contains(@class, :class_display)]',
+      '//div[contains(@class, :class_row)]',
+      '//span[@title=:title]',
+    );
+
+    $query = implode('', $parts);
+
+    return $this->buildXPathQuery($query, $args);
+  }
+}

@@ -1,0 +1,79 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle reCAPTCHA app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_recaptcha_enable() {
+  module_load_include('inc', 'captcha');
+
+  // Add the administer reCAPTCHA permission for site managers.
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, array('administer recaptcha', 'administer CAPTCHA settings'));
+
+  // No need to fill in the CAPTCHA when you're authenticated.
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('skip CAPTCHA'));
+
+  $re_captcha_type = 'recaptcha/reCAPTCHA';
+  // Sets the reCAPTCHA challenge as the default challenge for forms.
+  variable_set('captcha_default_challenge', $re_captcha_type);
+  // Turns off the ugly standard layout with a description.
+  variable_set('captcha_add_captcha_description', FALSE);
+
+  $form_IDs = array();
+
+  if (module_exists('paddle_formbuilder')) {
+    $form_IDs = paddle_recaptcha_retrieve_all_existing_webform_form_ids();
+  }
+
+  if (module_exists('paddle_simple_contact')) {
+    $form_IDs[] = PADDLE_RECAPTCHA_SIMPLE_CONTACT_FORM_ID;
+  }
+
+  if (!empty($form_IDs)) {
+    foreach ($form_IDs as $form_ID) {
+      captcha_set_form_id_setting($form_ID, 'default');
+    }
+  }
+
+  // Turn off captcha on the user forms.
+  $user_forms = array(
+    'user_pass',
+    'user_login',
+    'user_login_block',
+    'user_register_form',
+  );
+
+  foreach ($user_forms as $user_form) {
+    captcha_set_form_id_setting($user_form, 'none');
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_recaptcha_disable() {
+  module_disable(array('recaptcha', 'captcha'), FALSE);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_recaptcha_uninstall() {
+  variable_set('recaptcha_site_key', '');
+  variable_set('recaptcha_secret_key', '');
+}
+
+/**
+ * Adds the ReCaptcha to the simple contact page if it is enabled.
+ */
+function paddle_recaptcha_update_7001() {
+  if (module_exists('paddle_simple_contact')) {
+    module_load_include('inc', 'captcha');
+    captcha_set_form_id_setting(PADDLE_RECAPTCHA_SIMPLE_CONTACT_FORM_ID, 'default');
+  }
+}

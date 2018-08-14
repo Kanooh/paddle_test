@@ -1,0 +1,260 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleModeratedContentTestCase.
+ *
+ * @see PaddleScheduledContentTestCase
+ */
+
+/**
+ * Tests moderated content in the dashboard and on the content search page.
+ */
+class PaddleModeratedContentTestCase extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Display moderated content',
+      'description' => 'Tests display of moderated content in the dashboard and on the content search page.',
+      'group' => 'Paddle - Workflow',
+    );
+  }
+
+  /**
+   * Tests if moderated content is shown correctly in the dashboard.
+   */
+  public function testModeratedNodesDashboard() {
+    // Array with all possible dashboard views and who can access them.
+    $views = array(
+      'my_concepts' => array('editor', 'chief_editor'),
+      'all_to_check' => array('editor', 'chief_editor'),
+      'mine_to_check' => array('editor'),
+      'mine_in_review' => array('chief_editor'),
+      'all_in_review' => array('chief_editor'),
+      'all_published' => array('editor', 'chief_editor'),
+      'all_unpublished' => array('chief_editor'),
+      'planned_publications' => array('editor', 'chief_editor'),
+      'planned_unpublications' => array('chief_editor'),
+    );
+
+    // Log in as editor.
+    $this->drupalLogin($this->editor);
+
+    // Check if the correct views are shown for an editor on the dashboard.
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      if (in_array('editor', $values)) {
+        $this->assertTrue($this->xpath($this->dashboardListXPathQuery($state)), $state . ' view is shown in the dashboard for an editor.');
+      }
+      else {
+        $this->assertFalse($this->xpath($this->dashboardListXPathQuery($state)), $state . ' view is not shown in the dashboard for an editor.');
+      }
+    }
+
+    // Create a new draft of a basic page.
+    $node = $this->drupalCreateUiNode('basic_page');
+
+    // The basic page now appears on the dashboard, in the list of drafts.
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      if ($state == 'my_concepts') {
+        $this->assertNodePresentInDashboardList($state, $node);
+      }
+      else {
+        $this->assertNodeNotPresentInDashboardList($state, $node);
+      }
+    }
+
+    // Login as chief editor.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Check if the correct views are shown for a chief editor on the dashboard.
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      if (in_array('chief_editor', $values)) {
+        $this->assertTrue($this->xpath($this->dashboardListXPathQuery($state)), $state . ' view is shown in the dashboard for a chief editor.');
+      }
+      else {
+        $this->assertFalse($this->xpath($this->dashboardListXPathQuery($state)), $state . ' view is not shown in the dashboard for a chief editor.');
+      }
+    }
+
+    // The basic page doesn't show in the my_concepts view because this user
+    // hasn't created the node.
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      $this->assertNodeNotPresentInDashboardList($state, $node);
+    }
+    // Moderate the node to to_check and assign the editor.
+    $this->moderateNode($node, 'To editor', $this->editor->uid);
+
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      if ($state == 'all_to_check') {
+        $this->assertNodePresentInDashboardList($state, $node);
+      }
+      else {
+        $this->assertNodeNotPresentInDashboardList($state, $node);
+      }
+    }
+
+    // Log in as editor and check that the node is assigned properly.
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      if ($state == 'all_to_check' || $state == 'mine_to_check') {
+        $this->assertNodePresentInDashboardList($state, $node);
+      }
+      else {
+        $this->assertNodeNotPresentInDashboardList($state, $node);
+      }
+    }
+
+    // Login as chief editor.
+    $this->drupalLogin($this->chiefEditor);
+    // Moderate the node to in_review and assign the editor.
+    $this->moderateNode($node, 'To chief editor', $this->chiefEditor->uid);
+
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      if ($state == 'all_in_review' || $state == 'mine_in_review') {
+        $this->assertNodePresentInDashboardList($state, $node);
+      }
+      else {
+        $this->assertNodeNotPresentInDashboardList($state, $node);
+      }
+    }
+
+    // Log in as editor and check that the node is not shown on the dashboard.
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      $this->assertNodeNotPresentInDashboardList($state, $node);
+    }
+
+    // Login as chief editor.
+    $this->drupalLogin($this->chiefEditor);
+    // Moderate the node to published and assign the editor.
+    $this->moderateNode($node, 'Publish');
+
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      if ($state == 'all_published') {
+        $this->assertNodePresentInDashboardList($state, $node);
+      }
+      else {
+        $this->assertNodeNotPresentInDashboardList($state, $node);
+      }
+    }
+
+    // Log in as editor and check that the node not is shown on the dashboard.
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      if ($state == 'all_published') {
+        $this->assertNodePresentInDashboardList($state, $node);
+      }
+      else {
+        $this->assertNodeNotPresentInDashboardList($state, $node);
+      }
+    }
+
+    // Login as chief editor.
+    $this->drupalLogin($this->chiefEditor);
+    // Moderate the node to offline and assign the editor.
+    $this->moderateNode($node, 'Offline');
+
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      if ($state == 'all_unpublished') {
+        $this->assertNodePresentInDashboardList($state, $node);
+      }
+      else {
+        $this->assertNodeNotPresentInDashboardList($state, $node);
+      }
+    }
+
+    // Log in as editor and check that the node not is shown on the dashboard.
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin');
+    foreach ($views as $state => $values) {
+      $this->assertNodeNotPresentInDashboardList($state, $node);
+    }
+  }
+
+  /**
+   * Tests the content discovery with all its states.
+   */
+  public function testContentDiscovery() {
+    // An array containing the moderation states.
+    $moderation_states = array(
+      'draft' => 'Concept',
+      'to_check' => 'To editor',
+      'needs_review' => 'To chief editor',
+      'published' => 'Publish',
+      'offline' => 'Offline',
+    );
+
+    // Login as editor.
+    $this->drupalLogin($this->editor);
+
+    // Create a new draft of a basic page.
+    $node = $this->drupalCreateUiNode('basic_page');
+
+    // Check if the correct views are shown for an editor.
+    foreach ($moderation_states as $moderation_state => $button) {
+      $this->drupalGet('admin/content_manager/list/search');
+      $this->assertResponse(200, 'The content manager is shown for an editor.');
+      $this->assertNodePresentInContentManager($node);
+
+      if ($moderation_state != $node->workbench_moderation['current']->state) {
+        // Moderate the node to the next step.
+        $this->moderateNode($node, $button, NULL, $this->editor);
+
+        // The query is run to get the correct VID because
+        // workbench_moderation_node_current_load doesn't take the correct vid.
+        $query = db_select('workbench_moderation_node_history', 'w')
+          ->fields('w')
+          ->condition('nid', $node->nid, '=');
+        $results = $query->execute()->fetchAll();
+
+        // Get the last revision of the node and load the node.
+        $node = end($results);
+        $node = node_load($node->nid, $node->vid);
+      }
+    }
+
+    // Login as chief editor.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a new draft of a basic page.
+    $node_chief = $this->drupalCreateUiNode('basic_page');
+
+    // Check if the correct views are shown for a chief editor.
+    foreach ($moderation_states as $moderation_state => $button) {
+      $this->drupalGet('admin/content_manager/list/search');
+      $this->assertResponse(200, 'The content manager is shown for an editor.');
+      $this->assertNodePresentInContentManager($node);
+
+      if ($moderation_state != $node_chief->workbench_moderation['current']->state) {
+        // Moderate the node to the next step.
+        $this->moderateNode($node_chief, $button, NULL, $this->chiefEditor);
+
+        // The query is run to get the correct VID because
+        // workbench_moderation_node_current_load doesn't take the correct vid.
+        $query = db_select('workbench_moderation_node_history', 'w')
+          ->fields('w')
+          ->condition('nid', $node_chief->nid, '=');
+        $results = $query->execute()->fetchAll();
+
+        // Get the last revision of the node and load the node.
+        $node_chief = end($results);
+        $node_chief = node_load($node_chief->nid, $node_chief->vid);
+      }
+    }
+  }
+
+}

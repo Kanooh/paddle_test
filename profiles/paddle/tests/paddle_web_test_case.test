@@ -1,0 +1,1118 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleWebTestCase.
+ */
+
+/**
+ * Base class for the automated tests of the Paddle distribution.
+ */
+abstract class PaddleWebTestCase extends DrupalWebTestCase {
+  /**
+   * Characters with special meaning in HTML/Xpath/regex.
+   *
+   * We use this to ensure that special characters are handled appropriate
+   * everywhere and do not get randomly failing tests.
+   */
+  const POTENTIAL_HTML_UNSAFE_SEQUENCE = ' &$1\\\1>< ';
+
+  /**
+   * @todo Document these constants.
+   */
+  const LINK_VIEW = 1;
+  const LINK_ADMIN_VIEW = 2;
+
+  /**
+   * All links.
+   *
+   * Equals  LINK_VIEW | LINK_EDIT.
+   */
+  const LINK_ALL = 3;
+
+  /**
+   * The installation profile to use during testing.
+   *
+   * @var string $profile
+   */
+  protected $profile = 'paddle';
+
+  /**
+   * A user with the 'Chief editor' role.
+   *
+   * @var object $chiefEditor
+   */
+  protected $chiefEditor;
+
+  /**
+   * A user with the 'Editor' role.
+   *
+   * @var object $editor
+   */
+  protected $editor;
+
+  /**
+   * A user with the 'Site manager' role.
+   *
+   * @var object $siteManager
+   */
+  protected $siteManager;
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp($enable_modules = array()) {
+    global $user, $language, $language_url, $conf;
+
+    // Create the database prefix for this test.
+    $this->prepareDatabasePrefix();
+
+    // Prepare the environment for running tests.
+    $this->prepareEnvironment();
+    if (!$this->setupEnvironment) {
+      return FALSE;
+    }
+
+    // Backup some configuration keys related to cache settings, otherwise the
+    // test code will use the default database cache.
+    $conf_keys_to_preserve = array(
+      'cache_backends',
+      'cache_default_class',
+      'cache_class_cache_form',
+      'memcache_key_prefix',
+      'memcache_servers',
+    );
+    $backup_conf = array_intersect_key($conf, array_flip($conf_keys_to_preserve));
+
+    // Reset all statics and variables to perform tests in a clean environment.
+    $conf = array();
+    drupal_static_reset();
+
+    // Restore the backupped keys.
+    $conf += $backup_conf;
+
+    // Change the database prefix.
+    // All static variables need to be reset before the database prefix is
+    // changed, since DrupalCacheArray implementations attempt to
+    // write back to persistent caches when they are destructed.
+    $this->changeDatabasePrefix();
+    if (!$this->setupDatabasePrefix) {
+      return FALSE;
+    }
+
+    // Preset the 'install_profile' system variable, so the first call into
+    // system_rebuild_module_data() (in drupal_install_system()) will register
+    // the test's profile as a module. Without this, the installation profile of
+    // the parent site (executing the test) is registered, and the test
+    // profile's hook_install() and other hook implementations are never invoked.
+    $conf['install_profile'] = $this->profile;
+
+    // Perform the actual Drupal installation.
+    include_once DRUPAL_ROOT . '/includes/install.inc';
+    drupal_install_system();
+
+    $this->preloadRegistry();
+
+    // Set path variables.
+    variable_set('file_public_path', $this->public_files_directory);
+    variable_set('file_private_path', $this->private_files_directory);
+    variable_set('file_temporary_path', $this->temp_files_directory);
+
+    // Set the 'simpletest_parent_profile' variable to add the parent profile's
+    // search path to the child site's search paths.
+    // @see drupal_system_listing()
+    // @todo This may need to be primed like 'install_profile' above.
+    variable_set('simpletest_parent_profile', $this->originalProfile);
+
+    // Include the testing profile.
+    variable_set('install_profile', $this->profile);
+    $profile_details = install_profile_info($this->profile, 'en');
+
+    // Install the modules specified by the testing profile.
+    module_enable($profile_details['dependencies']);
+
+    // Run the profile tasks.
+    $install_profile_module_exists = db_query("SELECT 1 FROM {system} WHERE type = 'module' AND name = :name", array(
+      ':name' => $this->profile,
+    ))->fetchField();
+    if ($install_profile_module_exists) {
+      module_enable(array($this->profile), FALSE);
+    }
+
+    // Install modules needed for this test. This could have been passed in as
+    // either a single array argument or a variable number of string arguments.
+    // @todo Remove this compatibility layer in Drupal 8, and only accept
+    // $modules as a single array argument.
+    $modules = func_get_args();
+    if (isset($modules[0]) && is_array($modules[0])) {
+      $modules = $modules[0];
+    }
+    if ($modules) {
+      $success = module_enable($modules, TRUE);
+      $this->assertTrue($success, t('Enabled modules: %modules', array('%modules' => implode(', ', $modules))));
+    }
+
+    // Reset/rebuild all data structures after enabling the modules.
+    $this->resetAll();
+
+    // Run cron once in that environment, as install.php does at the end of
+    // the installation process.
+    drupal_cron_run();
+
+    // Clear HTMLPurifier cache, otherwise, the hooks specified in scald are not being picked up.
+    cache_clear_all("htmlpurifier:*", 'cache', TRUE);
+
+    // Ensure that the session is not written to the new environment and replace
+    // the global $user session with uid 1 from the new test site.
+    drupal_save_session(FALSE);
+    // Login as uid 1.
+    $user = user_load(1);
+
+    // Restore necessary variables.
+    variable_set('install_task', 'done');
+    variable_set('clean_url', $this->originalCleanUrl);
+    variable_set('site_mail', 'simpletest@example.com');
+    variable_set('date_default_timezone', date_default_timezone_get());
+
+    // Set up English language.
+    unset($conf['language_default']);
+    $language_url = $language = language_default();
+
+    // Use the test mail class instead of the default mail handler class.
+    variable_set('mail_system', array('default-system' => 'PaddleTestingMailSystem'));
+
+    drupal_set_time_limit($this->timeLimit);
+    $this->setup = TRUE;
+
+    // Disable Paddle maintenance mode. Consistent with post_install_simple.sh.
+    variable_set('paddle_maintenance_mode', 0);
+
+    // Create a user with the role 'Chief editor'.
+    $this->chiefEditor = $this->drupalCreateUser();
+    $chief_editor_role = user_role_load_by_name('Chief Editor');
+    $this->chiefEditor->roles[$chief_editor_role->rid] = $chief_editor_role->rid;
+    user_save($this->chiefEditor);
+
+    // Create a user with the role 'Editor'.
+    $this->editor = $this->drupalCreateUser();
+    $editor_role = user_role_load_by_name('Editor');
+    $this->editor->roles[$editor_role->rid] = $editor_role->rid;
+    user_save($this->editor);
+
+    // Create a user with the role 'Site manager'.
+    $this->siteManager = $this->drupalCreateUser();
+    $site_manager_role = user_role_load_by_name('Site Manager');
+    $this->siteManager->roles[$site_manager_role->rid] = $site_manager_role->rid;
+    user_save($this->siteManager);
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::drupalLogin().
+   *
+   * Log in a user with the internal browser.
+   *
+   * This is a variant of the standard drupalLogin() method that checks if the
+   * body class "logged-in" is present instead of a "Log out" link to determine
+   * whether a user has been logged in successfully.
+   *
+   * @param object $account
+   *   The user account to log in.
+   */
+  protected function drupalLogin(stdClass $account) {
+    if ($this->loggedInUser) {
+      $this->drupalLogout();
+    }
+
+    $edit = array(
+      'name' => $account->name,
+      'pass' => $account->pass_raw,
+    );
+    $this->drupalPost('user', $edit, t('Log in'));
+
+    // If the "logged-in" class is present in the body element, it is almost
+    // certainly because the login was successful.
+    $elements = $this->xpath('//body[contains(concat(" ", normalize-space(@class), " "), " logged-in ")]');
+    $pass = $this->assertTrue(count($elements), t('User %name successfully logged in.', array('%name' => $account->name)));
+
+    if ($pass) {
+      $this->loggedInUser = $account;
+    }
+  }
+
+  /**
+   * Generates a XPath query to target a specific list on the dashboard.
+   *
+   * @param string $list_id
+   *   The id of a list on the dashboard.
+   *
+   * @return string
+   *   A XPath query.
+   */
+  public function dashboardListXPathQuery($list_id) {
+    $list_id = drupal_html_class($list_id);
+    return '//div[contains(@class,"panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-' . $list_id . '")]';
+  }
+
+  /**
+   * Asserts that a node is present in a specific dashboard list.
+   *
+   * @param string $list_id
+   *   The id of a list on the dashboard.
+   * @param object $node
+   *   The node to check for.
+   * @param int $links
+   *   A bitmask specifying which links should be present. Use a combination of
+   *   one of the LINK_ class constants. Defaults to all links.
+   */
+  public function assertNodePresentInDashboardList($list_id, $node, $links = self::LINK_ALL) {
+    $elements = $this->xpathNodeInDashboardList($list_id, $node);
+
+    $args = array(
+      '@node-title' => $node->title,
+      '@list-id' => $list_id,
+    );
+    if ($this->assertTrue($elements, t('Node "@node-title" appears in the "@list-id" list on the dashboard.', $args))) {
+
+      $element = $elements[0];
+
+      $view_url = url('node/' . $node->nid);
+      $query = $this->buildXPathQuery('//span[contains(@class, "view-node")]//a[starts-with(@href, :url)]', array(':url' => $view_url));
+      $view_link = $element->xpath($query);
+
+      if ($links & self::LINK_VIEW) {
+        $this->assertTrue($view_link, t('There is a link to view the node "@node-title".', $args));
+      }
+      else {
+        $this->assertTrue($view_link, t('There is no link to view the node "@node-title".', $args));
+      }
+
+      $admin_view_url = url("admin/content_manager/node/{$node->nid}/view");
+      $query = $this->buildXPathQuery('//span[contains(@class, "admin-view-link")]//a[starts-with(@href, :url)]', array(':url' => $admin_view_url));
+      $admin_view_link = $element->xpath($query);
+      if ($links & self::LINK_ADMIN_VIEW) {
+        $this->assertTrue($admin_view_link, t('There is a link to admin view the node "@node-title".', $args));
+      }
+      else {
+        $this->assertTrue($admin_view_link, t('There is no link to admin view the node "@node-title".', $args));
+      }
+    }
+  }
+
+  /**
+   * Asserts that a node is absent in a specific dashboard list.
+   *
+   * @param string $list_id
+   *   The id of a list on the dashboard.
+   * @param object $node
+   *   The node to check for.
+   */
+  public function assertNodeNotPresentInDashboardList($list_id, $node) {
+    $elements = $this->xpathNodeInDashboardList($list_id, $node);
+
+    $args = array(
+      '@node-title' => $node->title,
+      '@list-id' => $list_id,
+    );
+    $this->assertFalse($elements, t('Node "@node-title" does not appear in the "@list-id" list on the dashboard.', $args));
+  }
+
+  /**
+   * Generates a XPath query to find a node in a dashboard list.
+   *
+   * @param string $list_id
+   *   The id of a list on the dashboard.
+   * @param object $node
+   *   The node to check for.
+   *
+   * @return array
+   *   An array of SimpleXML elements.
+   */
+  public function xpathNodeInDashboardList($list_id, $node) {
+    $query_parts = array(
+      $this->dashboardListXPathQuery($list_id),
+      '//div[contains(@class, "views-row")]',
+      '/div[contains(@class, "views-field")]//span[@class="title" and @title=:title][normalize-space(text())=normalize-space(:title)]',
+      // We go up one level again, so we have the full div surrounding the node
+      // to allow further checks on other content.
+      '/..',
+    );
+    $query = implode('', $query_parts);
+    $arguments = array(
+      ':title' => $node->title,
+    );
+
+    return $this->xpath($query, $arguments);
+  }
+
+  /**
+   * Creates a node through the user interface.
+   *
+   * @param string $type
+   *   The node type of the node that should be created.
+   * @param array $edit
+   *   Field data in an associative array, as in drupalPost(). If omitted a
+   *   random title will be used, with some special characters thrown in.
+   *
+   * @return object
+   *   The fully populated node object, or FALSE if the node could not be
+   *   created.
+   */
+  public function drupalCreateUiNode($type, $edit = array()) {
+    // Default to a random title with some special characters that help in
+    // detecting malformed HTML and XSS vulnerabilities.
+    if (!isset($edit['title'])) {
+      $edit['title'] = $this->randomString();
+    }
+
+    // Create the node using the usual modal path without 'ajax' param as we no
+    // longer have access to "node/add".
+    $this->drupalPost('admin/content_manager/nojs/' . $type . '/add', array('title' => $edit['title']), t('Save'));
+    $this->assertResponse(200, format_string('Logged in user %name is allowed to edit node of type %type.', array('%name' => $this->loggedInUser->name, '%type' => $type)));
+
+    // Attempt to find the node that has just been created.
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', $type)
+      ->propertyCondition('title', $edit['title'])
+      ->range(0, 1);
+    $result = $query->execute();
+
+    $node = FALSE;
+    if (!empty($result['node'])) {
+      $node = reset($result['node']);
+      $node = node_load($node->nid);
+
+      // Reset the statically cached path alias.
+      drupal_clear_path_cache('node/' . $node->nid);
+    }
+    $this->assertTrue($node, format_string('The node with title %title has been found in the database.', array('%title' => $edit['title'])));
+
+    if (count($edit) > 1) {
+      // Since we create the node with title only a bit further up we need to
+      // fill in the other fields now.
+      $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+      $node = node_load($node->nid, NULL, TRUE);
+    }
+
+    // Redirect to admin node view as it happens using the ajax node create if
+    // there are no errors.
+    if (!$this->xpath('//div[@id="messages"]/div[contains(@class,"error")]')) {
+      $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+    }
+
+    return $node;
+  }
+
+  /**
+   * Creates a scheduled node through the user interface.
+   *
+   * This method works around the problem that publication and unpublication
+   * dates cannot be set in the past through the user interface (as this will
+   * cause form validation errors) by updating them directly in the database.
+   *
+   * @param string $type
+   *   The node type of the node that should be created.
+   * @param array $edit
+   *   Field data in an associative array, as in drupalPost(). If omitted a
+   *   random title will be used, with some special characters thrown in. If the
+   *   scheduling options are set here they will be overridden by the options
+   *   set in the $options parameter.
+   * @param array $options
+   *   An associative array containing scheduling options to apply to the node.
+   *   Supported keys are 'publish_on' and 'unpublish_on', and the value is a
+   *   UNIX timestamp. Defaults to no scheduling options.
+   *
+   * @return object
+   *   The fully populated node object, or FALSE if the node could not be
+   *   created.
+   */
+  public function drupalCreateScheduledUiNode($type, $edit = array(), $options = array()) {
+    // To avoid validation errors we will initially provide safe values and
+    // correct them afterwards.
+    foreach (array('publish_on', 'unpublish_on') as $delta => $key) {
+      if (!empty($options[$key])) {
+        // Use the delta to determine the date offset, so that an unpublication
+        // date is always after a publication date.
+        $edit[$key . '[date]'] = format_date(strtotime('+' . $delta + 1 . ' day'), 'custom', variable_get('scheduler_date_only_format'));
+      }
+    }
+    $node = $this->drupalCreateUiNode($type, $edit);
+
+    // Correct the (un)publication date in the database.
+    if (!empty($options)) {
+      db_update('scheduler')->fields($options)
+        ->condition('nid', $node->nid)
+        ->execute();
+      // Reload the node with the updated scheduling dates.
+      // Do not load from cache because we just fiddled with the data directly.
+      $do_not_load_from_cache = TRUE;
+      $node = node_load($node->nid, NULL, $do_not_load_from_cache);
+    }
+    return $node;
+  }
+
+  /**
+   * Creates a term for testing.
+   *
+   * @param string $vocabulary_machine_name
+   *   The machine name of the vocabulary in which to create a term. Paddle
+   *   currently has the 'paddle_tags' and 'paddle_general' vocabularies.
+   * @param array $options
+   *   Optional fields to set when saving the term. See taxonomy_term_save().
+   *
+   * @return object
+   *   The generated term.
+   *
+   * @see taxonomy_term_save()
+   */
+  protected function drupalCreateTerm($vocabulary_machine_name, $options = array()) {
+    $vocabulary_names = taxonomy_vocabulary_get_names();
+
+    // Provide default parameters.
+    $options += array(
+      'vid' => $vocabulary_names[$vocabulary_machine_name]->vid,
+      'name' => $this->randomName(),
+      'description' => $this->randomString(),
+      'parent' => 0,
+    );
+
+    $term = (object) $options;
+    taxonomy_term_save($term);
+
+    return $term;
+  }
+
+  /**
+   * Page callback to perform a workbench moderation state transition.
+   *
+   * @todo Update documentation. This is not a page callback.
+   *
+   * @param object $node
+   *   The node to perform the moderation on.
+   * @param string $new_state
+   *   The state to transition towards. Can be one of 'To editor',
+   *   'To chief editor', 'Publish', 'Offline', or 'Scheduled'.
+   * @param int $uid
+   *   The uid of the user to assign the node to.
+   * @param object $account
+   *   The account of the user the check the user_access for.
+   */
+  public function moderateNode($node, $new_state, $uid = NULL, $account = NULL) {
+    // An array containing the moderation states.
+    $moderation_states = array(
+      'To editor' => 'to_check',
+      'To chief editor' => 'needs_review',
+      'Publish' => 'published',
+      'Offline' => 'offline',
+      'Unpublish' => 'unpublish',
+      'Scheduled' => 'scheduled',
+    );
+    // An array containing the button labels for the POST request.
+    $button_labels = array(
+      'To editor' => 'To check',
+      'To chief editor' => 'In review',
+      'Publish' => 'Online',
+      'Offline' => 'Offline',
+      'Unpublish' => 'Unpublish',
+      'Scheduled' => 'Scheduled',
+    );
+    // Get the current revision of the node.
+    $node = workbench_moderation_node_current_load($node);
+
+    $path = 'admin/content_manager/node/' . $node->nid . '/view';
+
+    if (user_access('edit content in state ' . $node->workbench_moderation['current']->state, $account) && user_access('moderate content from ' . $node->workbench_moderation['current']->state . ' to ' . $moderation_states[$new_state], $account)) {
+      if (!empty($uid) && ($new_state == 'To editor' || $new_state == 'To chief editor')) {
+        // Check if we can assign it to an editor or chief editor.
+        $assign_to = user_load($uid);
+        // Do not give the name as parameter. This will generate an extra span
+        // in the line which we don't wand.
+        $this->drupalPost($path, array(), t('Assign to') . ' ' . $assign_to->name);
+      }
+      else {
+        $this->drupalPost($path, array(), $button_labels[$new_state]);
+      }
+
+      // If we're moderating an unpublished revision and there is an existing
+      // published revision, make sure that the published revision is live.
+      // This is normally delegated to drupal_register_shutdown_function() but
+      // we can't use this as it would only get called when the test ends.
+      // @see workbench_moderation_moderate()
+      // @see workbench_moderation_store()
+      if (!empty($node->workbench_moderation['published'])) {
+        $live_revision = workbench_moderation_node_live_load($node);
+        // Make sure we're published.
+        $live_revision->status = 1;
+        // Don't create a new revision.
+        $live_revision->revision = 0;
+        // Prevent another moderation record from being written.
+        $live_revision->workbench_moderation['updating_live_revision'] = TRUE;
+
+        // Reset flag from taxonomy_field_update() so that {taxonomy_index}
+        // values aren't written twice.
+        $taxonomy_index_flag = &drupal_static('taxonomy_field_update', array());
+        unset($taxonomy_index_flag[$node->nid]);
+
+        // Save the node.
+        node_save($live_revision);
+      }
+    }
+  }
+
+  /**
+   * Creates a Paddle theme for testing.
+   *
+   * @see PaddleThemerTestCase::createPaddleTheme()
+   *
+   * @param array $options
+   *   An optional associative array containing settings for the theme to be
+   *   created. Random values will be used for missing settings. Possible keys:
+   *   - 'name': a machine name for the theme.
+   *   - 'human_name': a human readable name for the theme.
+   *   - 'style': a style set to use in the theme.
+   *   - 'theme': the Drupal theme this Paddle theme is built upon. Defaults to
+   *     Paddle Theme.
+   *
+   * @return string
+   *   The machine name of the generated theme.
+   */
+  protected function createPaddleTheme($options = array()) {
+    // Generate a random theme name.
+    $name = isset($options['name']) ? $options['name'] : $this->randomName();
+    $human_name = isset($options['human_name']) ? $options['human_name'] : $this->randomString();
+    $style = isset($options['style']) ? $options['style'] : $this->randomStyleSet();
+    $theme = isset($options['theme']) ? $options['theme'] : variable_get('theme_default', 'paddle_theme');
+
+    // Insert the theme into the database.
+    db_insert('paddle_themer_theme')
+      ->fields(array(
+        'name' => $name,
+        'human_name' => $human_name,
+        'theme' => $theme,
+        'style' => serialize($style),
+        'changed' => REQUEST_TIME,
+      ))
+      ->execute();
+
+    return $name;
+  }
+
+  /**
+   * Creates a node of type basic page.
+   *
+   * The node is being created through the UI, so all modifications
+   * made on the UI layer are taken into account.
+   *
+   * @return object
+   *   The node that has been created.
+   */
+  protected function createBasicPage($submit = NULL) {
+    // We prepend the randomly generated title with potentially HTML / Xpath /
+    // regex unsafe characters.
+    $data = array('title' => self::POTENTIAL_HTML_UNSAFE_SEQUENCE . $this->randomString());
+
+    // Create a new page.
+    $this->drupalCreateUiNode('basic_page', $data);
+
+    $node = $this->drupalGetNodeByTitle($data['title']);
+
+    return $node;
+  }
+
+  /**
+   * Create a landing page.
+   *
+   * @param array $edit
+   *   Optional associative array containing settings for the landing page node
+   *   edit form.
+   * @param string $layout
+   *   Optional layout to use for the landing page.
+   *
+   * @return object
+   *   The landing page node that was created.
+   */
+  protected function createLandingPage($edit = array(), $layout = NULL) {
+    // Provide default options.
+    $edit += array(
+      'title' => $this->randomString(),
+    );
+
+    $layout = $layout ?: $this->randomLandingPageLayoutName();
+
+    $this->drupalPost('admin/content_manager/nojs/landing_page/add', $edit, t('Save'), array('query' => array('layout' => check_plain($layout))));
+
+    return $this->drupalGetNodeByTitle($edit['title']);
+  }
+
+  /**
+   * Creates a new menu link item through the Paddle Menu Manager interface.
+   *
+   * @todo The lookup of the generated menu item only works if it has a unique
+   *   title. Make this more robust.
+   *
+   * @param array $edit
+   *   An optional array containing input for the form fields detailing the menu
+   *   link item to create. If omitted a link to the front page with a random
+   *   title will be created.
+   * @param string $menu_name
+   *   Optional machine name of the menu for which to create the menu item. If
+   *   omitted the Dutch main menu will be used.
+   *
+   * @return array
+   *   The generated menu link.
+   */
+  public function createUiMenuItem($edit = array(), $menu_name = NULL) {
+    // Provide defaults for missing parameters.
+    $menu_name = $menu_name ?: 'main_menu_nl';
+    $edit += array(
+      'link_title' => $this->randomString(),
+      'navigation' => $menu_name . ':0',
+      'content_button' => 'internal',
+      'internal_link' => '<front>',
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu_name . '/add', $edit, t('Save'));
+
+    // Return the mlid of the menu item we just created.
+    $mlid = db_select('menu_links', 'ml')
+      ->condition('ml.link_title', $edit['link_title'])
+      ->fields('ml', array('mlid'))
+      ->range(0, 1)
+      ->execute()
+      ->fetchField();
+
+    return menu_link_load($mlid);
+  }
+
+  /**
+   * Creates a random style set.
+   *
+   * @see PaddleThemerTestCase::randomStyle()
+   *
+   * @todo Make this return random styles from all supported plugins, instead of
+   *   a hardcoded array.
+   *
+   * @return array
+   *   A style set.
+   */
+  protected function randomStyleSet() {
+    $machine_name = $this->randomName();
+    // Generate a style set.
+    $style = array(
+      $machine_name => array(
+        'h1' => array(
+          array(
+            'plugin' => 'background',
+            'value' => array(
+              'background_color' => '345c4d',
+              'background_transparent' => 0,
+            ),
+          ),
+          array(
+            'plugin' => 'font',
+            'value' => array(
+              'font_family' => 'Arial, Helvetica, sans-serif',
+              'font_size' => '14px',
+              'font_style' => array(
+                'bold' => 'bold',
+                'italic' => 'italic',
+                'underline' => 0,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return $style;
+  }
+
+  /**
+   * Performs a xpath search for a node.
+   *
+   * @param object $node
+   *   The node to search.
+   * @param string $status
+   *   The status of the node.
+   *
+   * @return array
+   *   An array of table row elements, each as a SimpleXML element.
+   */
+  protected function xpathNodeInContentManager($node, $status = NULL) {
+    $args = array(
+      ':node-title' => trim($node->title),
+      ':node-state' => $status,
+      ':href' => url('admin/content_manager/node/' . $node->nid . '/view'),
+    );
+
+    $parts = array(
+      '//tr',
+      '/td[contains(@class, "views-field-title")]',
+      '/a[@href=:href]',
+      '/span[normalize-space(text())=:node-title]',
+      '/../../..',
+    );
+
+    if (!empty($status)) {
+      $parts[] = '/td[contains(@class, "views-field-state")][normalize-space(text())=normalize-space(:node-state)]';
+      $parts[] = '/..';
+    }
+
+    $query = implode('', $parts);
+    $query = $this->buildXPathQuery($query, $args);
+
+    $node_rows = $this->xpath($query);
+
+    return $node_rows;
+  }
+
+  /**
+   * Asserts that a node is present on the content manager.
+   *
+   * @todo Accept $group parameters.
+   *
+   * @param object $node
+   *   The node to check.
+   * @param array $query
+   *   Query string to append to the URL.
+   * @param string $message
+   *   Message to show along with the assertion.
+   * @param string $status
+   *   The status of the node.
+   */
+  protected function assertNodePresentInContentManager($node, $query = array(), $message = NULL, $status = NULL) {
+    $options = array();
+    if (!empty($query)) {
+      $options['query'] = $query;
+    }
+
+    $this->drupalGet('admin/content_manager/list/search', $options);
+
+    $node_rows = $this->xpathNodeInContentManager($node, $status);
+
+    $args = array(
+      '@title' => $node->title,
+    );
+
+    if (NULL === $message) {
+      $message = t('The node "@title" appears once in the content manager.', $args);
+    }
+    $this->assertEqual(count($node_rows), 1, $message);
+  }
+
+  /**
+   * Asserts that a node is not present on a specific content discovery tab.
+   *
+   * @todo Accept $group parameters.
+   *
+   * @param object $node
+   *   The node to check.
+   * @param array $query
+   *   Query string to append to the URL.
+   * @param string $message
+   *   Message to show along with the assertion.
+   */
+  protected function assertNodeNotPresentInContentManager($node, $query = array(), $message = NULL) {
+    $options = array();
+    if (!empty($query)) {
+      $options['query'] = $query;
+    }
+
+    $this->drupalGet('admin/content_manager/list/search', $options);
+
+    $node_rows = $this->xpathNodeInContentManager($node);
+
+    $args = array(
+      '@title' => $node->title,
+    );
+
+    if (NULL === $message) {
+      $message = t('The node "@title" does not appear in the content manager.', $args);
+    }
+
+    $this->assertEqual(count($node_rows), 0, $message);
+  }
+
+  /**
+   * Returns the current publication status of a node.
+   *
+   * @param int $nid
+   *   The nid of the node to check.
+   *
+   * @return bool
+   *   TRUE if the node is published, FALSE if not.
+   */
+  protected function getPublicationStatus($nid) {
+    return db_select('node', 'n')
+      ->fields('n', array('status'))
+      ->condition('nid', $nid)
+      ->execute()
+      ->fetchColumn();
+  }
+
+  /**
+   * Check to see if a node has the expected publication status.
+   *
+   * @param int $nid
+   *   The nid of the node to check.
+   * @param bool $status
+   *   The expected publication status.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertPublicationStatus($nid, $status, $message = '', $group = 'Other') {
+    return $this->assertEqual($this->getPublicationStatus($nid), $status, $message ? $message : format_string('The publication status has been set to %status.', array('%status' => $status)), $group);
+  }
+
+  /**
+   * Returns the current moderation state of a node.
+   *
+   * @param int $nid
+   *   The nid of the node to check.
+   *
+   * @return string
+   *   The current moderation state of the node.
+   */
+  protected function getModerationState($nid) {
+    return db_select('workbench_moderation_node_history', 'h')
+      ->fields('h', array('state'))
+      ->condition('nid', $nid)
+      ->range(0, 1)
+      ->orderBy('hid', 'DESC')
+      ->execute()
+      ->fetchColumn();
+  }
+
+  /**
+   * Check to see if a node has the right moderation state.
+   *
+   * @param int $nid
+   *   The nid of the node to check.
+   * @param string $state
+   *   The moderation state to check.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertModerationState($nid, $state, $message = '', $group = 'Other') {
+    return $this->assertEqual($this->getModerationState($nid), $state, $message ? $message : format_string('The moderation state has been set to %state.', array('%state' => $state)), $group);
+  }
+
+  /**
+   * Check if a certain field is present in the node summary pane.
+   *
+   * @param string $label
+   *   The node summary label to check, without trailing double colon.
+   * @param string $value
+   *   The node summary value to check.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertNodeSummaryField($label, $value, $message = '', $group = 'Other') {
+    $elements = $this->xpath('//div[@id="node-metadata"]//li');
+    $match = FALSE;
+    foreach ($elements as $element) {
+      if (property_exists($element, 'span') && count($element->span) == 2 && (string) $element->span[0] == $label . ':' && (string) $element->span[1] == $value) {
+        $match = TRUE;
+        break;
+      }
+    }
+    return $this->assertTrue($match, $message ? $message : format_string('A node summary with label %label and value %value has been found.', array('%label' => $label, '%value' => $value)), $group);
+  }
+
+  /**
+   * Returns a random layout that can be used for landing pages.
+   *
+   * @return string
+   *   A random layout name.
+   */
+  protected function randomLandingPageLayoutName() {
+    ctools_include('common', 'panels');
+    $allowed_layouts = panels_common_get_allowed_layouts('panelizer_node:landing_page');
+    $key = array_rand($allowed_layouts);
+    return 'node:landing_page:' . $key;
+  }
+
+  /**
+   * Generates a random string of ASCII characters of codes 32 to 126.
+   *
+   * Like DrupalWebTestCase::randomString(), but inserts some special characters
+   * to help in discovering potential security issues and malformed HTML.
+   *
+   * @param int $length
+   *   Length of random string to generate.
+   *
+   * @return string
+   *   Randomly generated string.
+   *
+   * @see DrupalWebTestCase::randomString()
+   */
+  public static function randomString($length = 12) {
+    $str = '><"\'&';
+    for ($i = 0; $i < $length - 5; $i++) {
+      $str .= chr(mt_rand(32, 126));
+    }
+    return $str;
+  }
+
+  /**
+   * Follows a link in the Paddle backend by name.
+   *
+   * Will click the first link found with this link text by default, or a later
+   * one if an index is given. Match is case sensitive with normalized space.
+   * The label is translated label. There is an assert for successful click.
+   *
+   * The Paddle Admin Theme surrounds the text of the links with a span so this
+   * method takes that into account.
+   *
+   * @param string $label
+   *   Text between the anchor tags.
+   * @param int $index
+   *   Link position counting from zero.
+   *
+   * @return bool
+   *   Page on success, or FALSE on failure.
+   *
+   * @see DrupalWebTestCase::clickLink()
+   */
+  protected function clickAdminLink($label, $index = 0) {
+    $url_before = $this->getUrl();
+    $urls = $this->xpath('//a/span[normalize-space(text())=:label]/..', array(':label' => $label));
+
+    if (isset($urls[$index])) {
+      $url_target = $this->getAbsoluteUrl($urls[$index]['href']);
+    }
+
+    $args = array(
+      '%label' => $label,
+      '@url_target' => isset($url_target) ? $url_target : '?',
+      '@url_before' => $url_before,
+    );
+    $this->assertTrue(isset($url_target), t('Clicked link %label (@url_target) on @url_before', $args), t('Browser'));
+
+    if (isset($url_target)) {
+      return $this->drupalGet($url_target);
+    }
+    return FALSE;
+  }
+
+  /**
+   * Adds a pane to a panelized node.
+   *
+   * @param object $pane
+   *   The pane to add to the node.
+   * @param object $node
+   *   The panelized node to add the pane to.
+   * @param string $location
+   *   The name of the location in the layout where the pane should be placed.
+   *   Defaults to a random location.
+   */
+  protected function addPaneToNode($pane, $node, $location = NULL) {
+    $display = &$node->panelizer['page_manager']->display;
+
+    // Default to a random location.
+    $location = $location ?: $this->getRandomPaneLocation($display->layout);
+
+    $display->add_pane($pane, $location);
+    $node->panelizer['page_manager']->display_is_modified = TRUE;
+    node_save($node);
+  }
+
+  /**
+   * Returns a random location in the given Panels layout.
+   *
+   * @param string $layout_name
+   *   The name of the Panels layout.
+   *
+   * @return string
+   *   A random location in the layout.
+   */
+  protected function getRandomPaneLocation($layout_name) {
+    $layout = panels_get_layout($layout_name);
+    $locations = array_keys($layout['regions']);
+
+    return $locations[array_rand($locations)];
+  }
+
+  /**
+   * Navigate to a specific content discovery tab.
+   *
+   * @param string $tab
+   *   The identifier of the tab.
+   * @param array $query
+   *   An optional query to add to the URL.
+   */
+  protected function getContentDiscoveryTab($tab, $query) {
+    $options = array();
+    if (!empty($query)) {
+      $options['query'] = $query;
+    }
+
+    $this->drupalGet('admin/content_manager/list/' . $tab, $options);
+  }
+
+  /**
+   * Follows a contextual toolbar link by name.
+   *
+   * Copied and adjusted from DrupalWebTestCase::clickLink.
+   *
+   * Will click the first link found with this link text by default, or a later
+   * one if an index is given. Match is case sensitive with normalized space.
+   * The label is translated label. There is an assert for successful click.
+   *
+   * @param string $label
+   *   Text between the anchor tags.
+   * @param int $index
+   *   Link position counting from zero.
+   *
+   * @return bool
+   *   Page on success, or FALSE on failure.
+   */
+  protected function clickContextualToolbarLink($label, $index = 0) {
+    $url_before = $this->getUrl();
+
+    // Links in the contextual toolbar have their text inside a <span>.
+    $urls = $this->xpath('//ul[@id="contextual-actions-list"]//span[normalize-space(text())=:label]/..', array(':label' => $label));
+
+    if (isset($urls[$index])) {
+      $url_target = $this->getAbsoluteUrl($urls[$index]['href']);
+    }
+
+    $options = array(
+      '%label' => $label,
+      '@url_target' => $url_target,
+      '@url_before' => $url_before,
+    );
+    $this->assertTrue(isset($urls[$index]), t('Clicked contextual toolbar link %label (@url_target) from @url_before', $options), t('Browser'));
+
+    if (isset($url_target)) {
+      return $this->drupalGet($url_target);
+    }
+    return FALSE;
+  }
+
+  /**
+   * Enable a paddlet.
+   */
+  protected function installPaddlet($paddle_name) {
+    if (module_exists($paddle_name)) {
+      // Nothing left to do if the app is already enabled.
+      return;
+    }
+
+    module_enable(array($paddle_name));
+    drupal_flush_all_caches();
+  }
+}

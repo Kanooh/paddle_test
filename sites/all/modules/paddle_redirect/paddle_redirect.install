@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Redirect app.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_redirect_install() {
+  variable_set('redirect_auto_redirect', FALSE);
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_redirect_enable() {
+  // Make sure the site managers and chief editors can manage redirects on
+  // Paddle websites.
+  foreach (array('Chief Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array('administer redirects'));
+  }
+}

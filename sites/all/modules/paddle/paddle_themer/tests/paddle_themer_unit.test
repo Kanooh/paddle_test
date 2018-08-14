@@ -1,0 +1,205 @@
+<?php
+
+/**
+ * @file
+ * Tests for the Paddle Themer module.
+ */
+
+/**
+ * Unit tests for Paddle Themer.
+ */
+class PaddleThemerUnitTest extends PaddleThemerTestCase {
+
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Unit tests',
+      'description' => 'Test the functions of the Paddle Themer module.',
+      'group' => 'Paddle Themer',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array('paddle_themer_test'));
+  }
+
+  /**
+   * Test the paddle_themer_load() function.
+   */
+  public function testPaddleThemerLoad() {
+    // Create a Paddle Theme with 'random' settings.
+    $style = $this->randomStyleSettings();
+    $theme_name = $this->createPaddleTheme(array('style' => $style));
+
+    // Call the function that is being tested.
+    $theme = paddle_themer_load($theme_name);
+    $this->assertTrue(is_object($theme), 'The wrapper gives back the theme object.');
+
+    // Check that the loaded settings match the original settings.
+    foreach ($style as $machine_name => $settings) {
+      $this->assertTrue(array_key_exists($machine_name, $theme->style), 'The machine name of the plugin instance exists in the original array which is saved in the database.');
+      foreach ($settings as $property => $value) {
+        $this->assertTrue($value === $theme->style[$machine_name][$property], 'The property - value pairs are the same in the object as in the defined style array.');
+      }
+    }
+  }
+
+  /**
+   * Test the paddle_themer_render_css() function.
+   */
+  public function testPaddleThemerRenderCSS() {
+    // Define a style settings array to test the render function with.
+    $style = array(
+      'h1_background' => array(
+        'background_color' => '345c4d',
+        'color_enabled' => 1,
+      ),
+      'header_font' => array(
+        'font_family' => 'Arial, Helvetica, sans-serif',
+        'font_size' => '14px',
+        'font_style' => array(
+          'bold' => 'bold',
+          'italic' => 'italic',
+          'underline' => 0,
+        ),
+      ),
+    );
+
+    // Create a Paddle theme with the style set.
+    $theme_name = $this->createPaddleTheme(array('style' => $style));
+
+    // Call the needed function.
+    $css = paddle_themer_render_css($theme_name);
+
+    $this->assertTrue($css, 'The custom css has been generated.');
+
+    // Process the background colour value.
+    $rgb = array();
+    for ($i = 0; $i < 6; $i = $i + 2) {
+      $rgb[] = hexdec(substr('345c4d', $i, 2));
+    }
+    $background_color = 'rgba(' . implode(', ', $rgb) . ', 1)';
+    $this->assertTrue(strstr($css, 'background-color: ' . $background_color), 'The css for the background color is found in the css string.');
+    $this->assertTrue(strstr($css, 'font-size: 14px'), 'The css for the font size is found in the css string.');
+    $this->assertTrue(strstr($css, 'font-family: Arial, Helvetica, sans-serif'), 'The css for the font family is found in the css string.');
+    $this->assertTrue(strstr($css, 'font-weight: bold'), 'The css for the font weight is found in the css string.');
+    $this->assertTrue(strstr($css, 'font-style: italic'), 'The css for the font style is found in the css string.');
+    $this->assertFalse(strstr($css, 'text-decoration: underline'), 'The css for the font style is found in the css string.');
+  }
+
+  /**
+   * Test the paddle_themer_clone_theme() function.
+   */
+  public function testPaddleThemerCloneTheme() {
+    // Create a theme.
+    $original = $this->createPaddleTheme();
+
+    $time = REQUEST_TIME;
+
+    // Clone the theme.
+    $human_name = $this->randomString();
+    $machine_name = $this->randomName();
+    $clone = paddle_themer_clone_theme($original, $human_name, $machine_name);
+
+    // Check that the returned object is equal to a freshly loaded object.
+    $loaded_clone = paddle_themer_load($machine_name);
+    $this->assertEqual($clone, $loaded_clone, 'The cloned theme exists in the database.');
+
+    // Check that the returned object differs from the original object, but has
+    // identical styling and the same base theme.
+    $original_theme = paddle_themer_load($original);
+
+    $this->assertEqual($machine_name, $clone->name, 'The cloned theme has the passed machine name.');
+    $this->assert(is_numeric($clone->id), 'The cloned theme has a numeric ID.');
+    $this->assertEqual($human_name, $clone->human_name, 'The cloned theme has the passed human name');
+
+    $this->assertNotEqual($original_theme->name, $clone->name, 'The cloned theme and the original theme have a different machine name.');
+    $this->assertNotEqual($original_theme->human_name, $clone->human_name, 'The cloned theme and the original theme have a different human readable name.');
+    $this->assertNotEqual($original_theme->id, $clone->id, 'The cloned theme and the original theme have a different id.');
+    $this->assertEqual($original_theme->theme, $clone->theme, 'The cloned theme and the original theme have the same base theme.');
+    $this->assertEqual($original_theme->style, $clone->style, 'The cloned theme and the original theme have the same styling.');
+
+    $this->assertTrue($clone->changed, 'The changed date of the cloned theme is set.');
+    $this->assertTrue($clone->changed >= $time, 'The changed date of the cloned theme is equal to or bigger than the date when the test started running.');
+  }
+
+  /**
+   * Tests if style set info is returned correctly.
+   */
+  public function testStyleSetInfo() {
+    $themes = list_themes(TRUE);
+
+    $style_sets = paddle_themer_style_sets($themes['paddle_themer_test_theme']);
+
+    $expected_style_sets = paddle_themer_test_theme_paddle_themer_style_set() + paddle_themer_test_paddle_themer_style_set();
+
+    $this->assertEqual($expected_style_sets, $style_sets);
+  }
+
+  /**
+   * Tests if subthemes inherit style sets from their base theme.
+   *
+   * When base themes lack their own implementation of
+   * hook_paddle_themer_style_set(), Paddle Themer is supposed to traverse up
+   * through the base themes until it finds a base theme containing a
+   * hook_paddle_themer_style_set() implementation.
+   */
+  public function testThemeInheritsStyleSets() {
+    $themes = list_themes(TRUE);
+
+    $theme_style_sets = paddle_themer_style_sets($themes['paddle_themer_test_theme']);
+    $sub_theme_style_sets = paddle_themer_style_sets($themes['paddle_themer_test_sub_theme']);
+
+    $this->assertEqual($theme_style_sets, $sub_theme_style_sets, 'For a sub theme that lacks a hook_paddle_themer_style_set() implementation, the hook implementation in the base theme is called.');
+  }
+
+  /**
+   * Tests if style edit wizard form attachments are returned correctly.
+   */
+  public function testStyleEditWizardFormAttachments() {
+    $themes = list_themes(TRUE);
+
+    $attachments = paddle_themer_styles_edit_wizard_form_attachments($themes['paddle_themer_test_theme']);
+    $expected_attachments = paddle_themer_test_theme_paddle_themer_styles_edit_wizard_form_attachments();
+
+    $this->assertEqual($expected_attachments, $attachments);
+  }
+
+  /**
+   * Tests inheritance of style edit wizard form attachments from base theme.
+   */
+  public function testThemeInheritsStyleEditWizardFormAttachments() {
+    $themes = list_themes(TRUE);
+
+    $theme_attachments = paddle_themer_styles_edit_wizard_form_attachments($themes['paddle_themer_test_theme']);
+    $sub_theme_attachments = paddle_themer_styles_edit_wizard_form_attachments($themes['paddle_themer_test_sub_theme']);
+
+    $this->assertEqual($theme_attachments, $sub_theme_attachments);
+  }
+
+  /**
+   * Tests if a sub theme can override the theme settings of the parent theme.
+   *
+   * When a sub theme provides its own style sets and plugin instances, it
+   * should override those of the parent theme.
+   */
+  public function testThemeOverrides() {
+    $themes = list_themes(TRUE);
+
+    $theme_style_sets = paddle_themer_style_sets($themes['paddle_themer_test_theme']);
+    $overridden_theme_style_sets = paddle_themer_style_sets($themes['paddle_themer_test_overridden_theme']);
+
+    $this->assertNotEqual($theme_style_sets, $overridden_theme_style_sets, 'A subtheme can override the style sets of the parent theme.');
+
+    $theme_plugin_instances = paddle_themer_get_plugin_instances($themes['paddle_themer_test_theme']);
+    $overridden_theme_plugin_instances = paddle_themer_get_plugin_instances($themes['paddle_themer_test_overridden_theme']);
+
+    $this->assertNotEqual($theme_plugin_instances, $overridden_theme_plugin_instances, 'A subtheme can override the plugin instances of the parent theme.');
+  }
+
+}

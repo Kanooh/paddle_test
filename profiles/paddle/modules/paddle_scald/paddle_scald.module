@@ -1,0 +1,2365 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Scald feature.
+ */
+
+include_once 'paddle_scald.features.inc';
+
+/**
+ * The default number of items to show per library page.
+ */
+const PADDLE_SCALD_LIBRARY_DEFAULT_ITEMS_PER_PAGE = 24;
+
+/**
+ * The element ID to use for the pager.
+ *
+ * We are displaying the pager inside a form which makes it impossible to use
+ * Drupal's magic pager ID assignment: in case the form is rebuilt the pager
+ * would be rendered twice causing the ID to diverge.
+ * Currently we are not showing the Scald library on any pages that have a
+ * second pager. If this ever changes in the future this hardcoded ID should be
+ * addressed.
+ */
+const PADDLE_SCALD_PAGER_ELEMENT = 0;
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_scald_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/" . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_scald_menu() {
+  return array(
+    'admin/content_manager/assets/%ctools_js/library' => array(
+      'title' => 'Media library',
+      'page callback' => 'paddle_scald_media_library',
+      'page arguments' => array(3),
+      'access arguments' => array('access scald library'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/paddle_scald/%ctools_js/library/items' => array(
+      'page callback' => 'paddle_scald_media_library_show_more',
+      'page arguments' => array(2),
+      'access arguments' => array('view any atom'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/paddle_scald/%ctools_js/add/asset' => array(
+      'title' => 'Add new media',
+      'page callback' => 'paddle_scald_asset_add',
+      'page arguments' => array(2),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/paddle_scald/%ctools_js/add/%scald_type' => array(
+      'title' => 'Add new media',
+      'page callback' => 'paddle_scald_atom_add_page',
+      'page arguments' => array(2, 4),
+      'access callback' => 'scald_atom_add_access',
+      'access arguments' => array(4),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/paddle_scald/%ctools_js/edit/%scald_atom' => array(
+      'title' => 'Edit media',
+      'page callback' => 'paddle_scald_atom_edit_page',
+      'page arguments' => array(2, 4),
+      'access callback' => 'scald_action_permitted',
+      'access arguments' => array(4, 'edit'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/paddle_scald/%ctools_js/delete/%scald_atom' => array(
+      'title' => 'Delete media',
+      'page callback' => 'paddle_scald_atom_delete_page',
+      'page arguments' => array(2, 4),
+      'access callback' => 'scald_action_permitted',
+      'access arguments' => array(4, 'delete'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/paddle_scald/%ctools_js/insert/%scald_atom' => array(
+      'title' => 'Insert atom',
+      'page callback' => 'paddle_scald_atom_insert_page',
+      'page arguments' => array(2, 4),
+      'access arguments' => array('insert any atom'),
+      'type' => MENU_CALLBACK,
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function paddle_scald_menu_alter(&$items) {
+  // Disable a range of routes of the Scald module for all users except Scald
+  // administrators.
+  $routes = array(
+    'atom/%scald_atom',
+    'atom/%scald_atom/delete',
+    'atom/%scald_atom/edit',
+    'atom/add',
+    'atom/add/%scald_type',
+  );
+  foreach ($routes as $route) {
+    $items[$route]['access callback'] = 'user_access';
+    $items[$route]['access arguments'] = array('administer scald');
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_scald_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_scald_atom_element' => array(
+      'render element' => 'element',
+    ),
+    'paddle_scald_library_atom' => array(
+      'variables' => array(
+        'id' => array(),
+        'modal' => NULL,
+        'library_state' => array(),
+      ),
+    ),
+    'paddle_scald_library_item' => array(
+      'variables' => array(
+        'informations' => array(),
+        'image' => NULL,
+      ),
+    ),
+    'paddle_scald_atom_element_preview' => array(
+      'variables' => array(
+        'informations' => array(),
+        'image' => NULL,
+      ),
+    ),
+    'paddle_scald_render_atom' => array(
+      'variables' => array(
+        'atom' => NULL,
+        'attributes' => array(),
+        'image_style' => NULL,
+      ),
+    ),
+    'paddle_scald_library_show_more' => array(
+      'render element' => 'element',
+      'variables' => array(
+        'library_state' => array(),
+      ),
+    ),
+    'paddle_scald_draggable_atoms' => array(
+      'render element' => 'element',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_library_alter().
+ */
+function paddle_scald_library_alter(&$libraries, $module) {
+  // Remove the custom modal style of the Scald DnD module, so the upload modals
+  // look the same as the Paddle modals.
+  if ($module == 'dnd') {
+    foreach ($libraries['ctools.modal']['js'] as $index => $js) {
+      $type = isset($js['type']) ? $js['type'] : 'file';
+
+      if ($type == 'setting' && isset($js['data']['custom-style'])) {
+        unset($libraries['ctools.modal']['js'][$index]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_scald_form_alter(&$form, &$form_state, $form_id) {
+  // Only alter specific scald upload modal forms.
+  $scald_modal_forms = array(
+    'scald_atom_add_form_source',
+    'scald_atom_add_form_add',
+    'scald_atom_add_form_options',
+  );
+  if (!in_array($form_id, $scald_modal_forms)) {
+    return;
+  }
+
+  // Put the GET params in the #action so that the Scald library will close.
+  if (!empty($form_state['form_info']['path']) && ($form_id == 'scald_atom_add_form_add' || $form_id == 'scald_atom_add_form_source')) {
+    $step = str_replace('scald_atom_add_form_', '', $form_id);
+    $action = str_replace('%step', $step, $form_state['form_info']['path']);
+    $form['#action'] = url($action, array('query' => drupal_get_query_parameters()));
+  }
+
+  // Use radios instead of select in the source form.
+  if ($form_id == 'scald_atom_add_form_source') {
+    $form['source']['#type'] = 'radios';
+    unset($form['source']['#description']);
+    $form['source']['#title_display'] = 'invisible';
+    $form['source']['#required'] = TRUE;
+  }
+
+  // Sticky buttons.
+  $form['buttons']['#attributes']['class'][] = 'form-buttons';
+
+  // Form body.
+  $form['ctools_trail']['#prefix'] = '<div class="form-body">';
+  $form['buttons']['#prefix'] = '</div>';
+
+  // Make the file / identifier fields required, as they are necessary to create
+  // an atom and otherwise we get an error in the second step.
+  if (isset($form['file'])) {
+    $form['file']['#required'] = TRUE;
+  }
+  if (isset($form['identifier'])) {
+    $form['identifier']['#required'] = TRUE;
+  }
+
+  // Add a data attribute for locating the form in our tests. The HTML id
+  // of the form is not convenient for that purpose, because it changes after
+  // ajax submissions.
+  $form['#attributes']['data-form-id'] = $form_id;
+
+  if (!empty($form_state['scald']['atoms'])) {
+    foreach (array_keys($form_state['scald']['atoms']) as $delta) {
+      // Limit the title field to 128 characters and set a description.
+      if (!empty($form['atom' . $delta]) && !empty($form['atom' . $delta]['title'])) {
+        $form['atom' . $delta]['title']['#maxlength'] = 128;
+        $form['atom' . $delta]['title']['#description'] = t('You can only fill out 128 characters for the title.');
+      }
+
+      // For now we hide the caption field if it is there.
+      if ($form_id == 'scald_atom_add_form_options' && isset($form['atom' . $delta]['field_scald_caption'])) {
+        $form['atom' . $delta]['field_scald_caption']['#access'] = FALSE;
+      }
+    }
+  }
+
+  if ($form_id == 'scald_atom_add_form_add' && $form_state['scald']['source'] != 'paddle_scald_youtube') {
+    // IE fails submitting the whole form if the submit is called with jQuery
+    // submit() callback directly on the form.
+    // Specify a submit element by using a class on the next button.
+    // @see Drupal.plupload.uploadCompleteCallback
+    $form['file']['#submit_element'] = "#{$form['#id']} input.plupload-autosubmit";
+    $form['buttons']['next']['#attributes']['class'][] = 'plupload-autosubmit';
+
+    // We enable autosubmit for the form so we don't want the "Continue"
+    // button to be enabled.
+    $form['buttons']['next']['#attributes']['class'][] = 'hidden';
+    $form['buttons']['next']['#attributes']['disabled'] = 'disabled';
+  }
+}
+
+/**
+ * Implements hook_scald_contexts().
+ */
+function paddle_scald_scald_contexts() {
+  return array(
+    'paddle_library_item' => array(
+      'title' => t('Paddle library item'),
+      'description' => t('Library item for the Paddle media library.'),
+      'render_language' => 'XHTML',
+      'parseable' => FALSE,
+      'formats' => array(
+        'image' => array('jpeg', 'png', 'passthrough'),
+        'audio' => array('wav', 'ogg', 'mp3', 'passthrough'),
+      ),
+    ),
+    'paddle_atom_field_preview' => array(
+      'title' => t('Paddle atom field preview'),
+      'description' => t('Preview for the paddle atom field.'),
+      'render_language' => 'XHTML',
+      'parseable' => FALSE,
+      'formats' => array(
+        'image' => array('jpeg', 'png', 'passthrough'),
+        'audio' => array('wav', 'ogg', 'mp3', 'passthrough'),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_scald_render().
+ */
+function paddle_scald_scald_render($atom, $context, $options) {
+  if (!empty($atom->rendered->thumbnail_transcoded_url)) {
+    $path = $atom->rendered->thumbnail_transcoded_url;
+  }
+  // Provide default video thumbnail if there is none.
+  elseif ($atom->type == 'video' && empty($atom->scald_thumbnail)) {
+    $path = drupal_get_path('module', 'paddle_scald_video') . '/icons/default-thumbnail.png';
+  }
+  // Image and video thumbnails need to be resized. Other atom types, like file,
+  // can use their thumbnail as-is.
+  elseif ($atom->type == 'image' || $atom->type == 'video') {
+    switch ($context) {
+      case 'paddle_library_item':
+        $path = image_style_url('paddle_scald_library_item', $atom->thumbnail_source);
+        break;
+
+      case 'paddle_atom_field_preview':
+        $image_style = 'paddle_scald_atom_element_preview';
+        if (isset($options['image_style'])) {
+          // Use a specific image style, if any specified.
+          $image_style = $options['image_style'];
+        }
+        $path = image_style_url($image_style, $atom->thumbnail_source);
+        break;
+    }
+  }
+  else {
+    $path = $atom->thumbnail_source;
+  }
+
+  // The alt tag is required, but atoms created within an update path might not
+  // have one yet. Take these into account.
+  $alt = !empty($atom->field_scald_alt_tag[LANGUAGE_NONE][0]['value']) ? $atom->field_scald_alt_tag[LANGUAGE_NONE][0]['value'] : '';
+  $image_options = array(
+    'path' => $path,
+    'alt' => $alt,
+    'attributes' => array('data-atom-id' => $atom->sid),
+  );
+  $image = theme('image', $image_options);
+
+  switch ($context) {
+    case 'paddle_library_item':
+      $render = theme('paddle_scald_library_item', array(
+        'atom' => $atom,
+        'image' => $image,
+      ));
+      break;
+
+    case 'paddle_atom_field_preview':
+      $render = theme('paddle_scald_atom_element_preview', array(
+        'atom' => $atom,
+        'image' => $image,
+      ));
+      break;
+
+    default:
+      $render = theme('sdl_editor_item', array(
+        'informations' => $atom->rendered,
+        'image' => $image,
+      ));
+  }
+
+  return $render;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_scald_permission() {
+  return array(
+    'insert any atom' => array(
+      'title' => t('Insert any atom'),
+    ),
+    'access scald library' => array(
+      'title' => t('Access the scald library'),
+    ),
+  );
+}
+
+/**
+ * Returns HTML for an atom rendered in the "Paddle Library Item" context.
+ */
+function theme_paddle_scald_library_item($variables) {
+  $atom = $variables['atom'];
+  $image = $variables['image'];
+  $informations = $atom->rendered;
+
+  $return = "
+  <div class='image'>{$image}</div>
+  <div class='meta type-" . drupal_strtolower($informations->type) . " clearfix'>
+    <div class='title'>{$informations->title}</div>
+  </div>
+  ";
+
+  return $return;
+}
+
+/**
+ * Returns HTML for an atom rendered in the "Paddle Atom Field Preview" context.
+ */
+function theme_paddle_scald_atom_element_preview($variables) {
+  $atom = $variables['atom'];
+  $image = $variables['image'];
+  $informations = $atom->rendered;
+
+  $return = "
+  <div class='image clearfix'>{$image}</div>
+  <div class='meta type-" . drupal_strtolower($informations->type) . " clearfix'>
+    <div class='title'>{$informations->title}</div>
+  </div>
+  ";
+
+  return $return;
+}
+
+/**
+ * Returns a "Show more" link for the Scald library.
+ *
+ * @param array $variables
+ *   An associative array with the following keys:
+ *   - library_state: The current library state.
+ */
+function theme_paddle_scald_library_show_more($variables) {
+  $page = pager_find_page(PADDLE_SCALD_PAGER_ELEMENT);
+  $render_array = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('show-more')),
+    'show_more' => array(
+      '#theme' => 'link',
+      '#text' => t('Show more'),
+      '#path' => 'admin/paddle_scald/nojs/library/items',
+      '#options' => array(
+        'query' => array('page' => ++$page) + $variables['library_state'],
+        'attributes' => array(
+          'class' => array(
+            'use-ajax',
+            'button',
+          ),
+          'id' => drupal_html_id('paddle-scald-library-show-more'),
+        ),
+        'html' => FALSE,
+      ),
+    ),
+  );
+
+  return render($render_array);
+}
+
+/**
+ * Returns the links for an item in the Scald library.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - 'id': The ID of the atom that is being displayed.
+ *   - 'modal': TRUE if the library is displayed in a modal.
+ *   - 'library_state': The current Scald library state.
+ *
+ * @ingroup themeable
+ */
+function theme_paddle_scald_library_atom($variables) {
+  $elements = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'class' => array('paddle-library-item'),
+      'data-atom-id' => $variables['id'],
+    ),
+  );
+
+  // Render the item.
+  $elements['atom'] = array(
+    '#markup' => scald_render($variables['id'], 'paddle_library_item'),
+  );
+
+  // Only show the "insert" button when the library is loaded in a modal (ie.
+  // with ajax), as you cannot insert an atom from the library page. There's
+  // no field to insert it into, like eg. a CKEditor.
+  $links = array();
+  if ($variables['modal'] && user_access('insert any atom')) {
+    $insert_path = 'admin/paddle_scald/nojs/insert/' . $variables['id'];
+    $elements['insert'] = array(
+      '#markup' => l(t('Insert'), $insert_path, array(
+        'attributes' => array(
+          'class' => array('insert-link', 'use-ajax', 'button'),
+        ),
+        'query' => $variables['library_state'],
+      )),
+    );
+  }
+
+  $ajax_class = $variables['modal'] ? 'use-ajax' : 'ctools-use-modal';
+
+  $edit_path = 'admin/paddle_scald/nojs/edit/' . $variables['id'];
+  $edit_link = l(t('Edit'), $edit_path, array(
+    'attributes' => array(
+      'class' => array(
+        'edit-link',
+        $ajax_class,
+      ),
+    ),
+    'query' => $variables['library_state'],
+  ));
+
+  $delete_path = 'admin/paddle_scald/nojs/delete/' . $variables['id'];
+  $delete_link = l(t('Delete'), $delete_path, array(
+    'attributes' => array(
+      'class' => array(
+        'delete-link',
+        $ajax_class,
+      ),
+    ),
+    'query' => $variables['library_state'],
+  ));
+
+  $elements['secondary'] = array(
+    '#type' => 'item',
+    '#markup' => $edit_link . $delete_link,
+    '#prefix' => '<div class="action-links">',
+    '#suffix' => '</div>',
+    '#attributes' => array('class' => array('atom-secondary-actions')),
+  );
+
+  return render($elements);
+}
+
+/**
+ * Returns HTML for an atom rendered in the front-end.
+ */
+function theme_paddle_scald_render_atom($variables) {
+  $atom = $variables['atom'];
+  $attributes = $variables['attributes'];
+  $image_style = $variables['image_style'];
+
+  // Render only image atoms.
+  if (!$atom || $atom->type != 'image') {
+    return '';
+  }
+
+  $alt = !empty($atom->field_scald_alt_tag[LANGUAGE_NONE][0]['value']) ? $atom->field_scald_alt_tag[LANGUAGE_NONE][0]['value'] : '';
+  $attributes['class'][] = 'atom-id-' . $atom->sid;
+  $image_options = array(
+    'path' => $atom->file_source,
+    'alt' => $alt,
+    'width' => $atom->scald_thumbnail[LANGUAGE_NONE][0]['width'],
+    'height' => $atom->scald_thumbnail[LANGUAGE_NONE][0]['height'],
+    'attributes' => $attributes,
+  );
+
+  if ($image_style) {
+    $image_options['style_name'] = $image_style;
+    $output = theme('image_style', $image_options);
+  }
+  else {
+    $output = theme('image', $image_options);
+  }
+
+  return $output;
+}
+
+/**
+ * Implements hook_element_info().
+ */
+function paddle_scald_element_info() {
+  return array(
+    'paddle_scald_atom' => array(
+      '#input' => TRUE,
+      '#process' => array('paddle_scald_atom_element_process'),
+      '#theme' => array('paddle_scald_atom_element'),
+      '#button_text' => t('Choose...'),
+      '#default_value' => 0,
+      '#allowed_types' => array(),
+      '#element_validate' => array('paddle_scald_atom_validate'),
+      '#cardinality' => 1,
+      '#thumbnails' => TRUE,
+    ),
+  );
+}
+
+/**
+ * Process function for our custom scald atom field.
+ */
+function paddle_scald_atom_element_process($element, &$form_state, $form) {
+  // Make sure Drupal doesn't do any validation on this field, as we validate
+  // everything ourselves. Otherwise a required field might show an error
+  // message twice when it's empty, but only in some cases.
+  unset($element['#needs_validation']);
+
+  // Add the necessary JS to make the CTools modal work.
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  // Add the necessary JS to get the ajax commands for removing and selecting
+  // atoms.
+  drupal_add_js(drupal_get_path('module', 'paddle_scald') . '/paddle_scald.js');
+
+  $atom_ids = $element['#value'];
+
+  // Try to load the atoms. If none exist, use an empty array for the atom ids.
+  $atoms = scald_atom_load_multiple($atom_ids);
+  if ($atoms === FALSE) {
+    $atoms = array();
+  }
+
+  // Remove any atoms that are not of an allowed type.
+  if (!empty($element['#allowed_types'])) {
+    foreach ($atoms as $sid => $atom) {
+      if (!in_array($atom->type, $element['#allowed_types'])) {
+        unset($atoms[$sid]);
+      }
+    }
+  }
+
+  $thumbnails_class = $element['#thumbnails'] == TRUE ? 'thumbnails' : 'no-thumbnails';
+
+  $element['atoms'] = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'id' => $element['#id'] . '-container',
+      'class' => array('paddle-scald-atom-field', $thumbnails_class),
+    ),
+    '#tree' => FALSE,
+  );
+
+  $options = array();
+  if (!empty($element['#default_image_style'])) {
+    // Support a default image style for the thumbnail preview.
+    $options['image_style'] = $element['#default_image_style'];
+  }
+
+  // Generate HTML for all the selected atoms.
+  $items = '<div class="selected-items">';
+  foreach ($atoms as $atom) {
+    $items .= paddle_scald_atom_element_item($atom, $options);
+  }
+  $items .= '</div>';
+
+  // Create the select button.
+  $add_button_class = array(
+    'button',
+    'add-button',
+    'ctools-use-modal',
+    'ctools-modal-medium-modal',
+  );
+  if (!paddle_scald_atom_element_add_button_visible($element, count($atoms))) {
+    $add_button_class[] = 'hidden';
+  }
+  $add_button = l($element['#button_text'], 'admin/content_manager/assets/nojs/library', array(
+    'html' => TRUE,
+    'attributes' => array(
+      'class' => $add_button_class,
+    ),
+    'query' => array(
+      'origin' => $element['#id'],
+      'callback' => 'paddle_scald_atom_element_insert',
+      'allowed_types' => $element['#allowed_types'],
+    ),
+  ));
+
+  $element['atoms']['picker'] = array(
+    '#title' => !empty($element['#title']) ? $element['#title'] : '',
+    '#required' => $element['#required'],
+    '#type' => 'item',
+    '#markup' => $items . $add_button,
+  );
+
+  // Create the hidden atom id field.
+  $element['atoms'][$element['#name']] = array(
+    '#type' => 'hidden',
+    '#default_value' => implode(',', array_keys($atoms)),
+    '#attributes' => array(
+      'id' => $element['#id'],
+      'class' => 'atom-ids',
+      'data-cardinality' => $element['#cardinality'],
+    ),
+  );
+
+  return $element;
+}
+
+/**
+ * Determines the value for a paddle scald atom form element.
+ *
+ * @param array $element
+ *   The form element whose value is being populated.
+ * @param mixed $edit
+ *   The incoming input to populate the form element. If this is FALSE,
+ *   the element's default value should be returned.
+ *
+ * @return array
+ *   The data that will appear in the $element_state['values'] collection
+ *   for this element. Return nothing to use the default.
+ */
+function form_type_paddle_scald_atom_value($element, $edit = FALSE) {
+  // The form element has been edited, and we need to update the atom array with
+  // the new ids. If the $edit variable is empty all atoms have been removed.
+  if ($edit !== FALSE) {
+    return empty($edit) ? array() : explode(',', $edit);
+  }
+
+  // The form element is loaded without a default value. We need to return an
+  // empty array of atom ids.
+  if (!isset($element['#default_value']) || empty($element['#default_value'])) {
+    return array();
+  }
+
+  // The form element is loaded with a default value, and it's an array. This is
+  // the correct way the ids should be stored, so return like it is.
+  if (is_array($element['#default_value'])) {
+    return $element['#default_value'];
+  }
+
+  // The form element is loaded with a default value, but it's a string. This is
+  // the old method of storing a single atom id. We need to update it to an
+  // array to be compatible with the updated form element.
+  return array($element['#default_value']);
+}
+
+/**
+ * Checks if the add button of the atom field should be visible or not.
+ *
+ * @param array $element
+ *   The custom form element.
+ * @param int $atom_count
+ *   Number of selected atoms.
+ *
+ * @return bool
+ *   TRUE if the button should be visible, FALSE otherwise.
+ */
+function paddle_scald_atom_element_add_button_visible($element, $atom_count) {
+  // The button is always visible if we allow unlimited items. Or if the number
+  // of selected atoms is lower then the allowed number, the add button should
+  // be visible as well.
+  if ($element['#cardinality'] == FIELD_CARDINALITY_UNLIMITED || $atom_count < $element['#cardinality']) {
+    return TRUE;
+  }
+
+  // Otherwise the add button should be hidden.
+  return FALSE;
+}
+
+/**
+ * Theme function for the paddle scald atom field.
+ */
+function theme_paddle_scald_atom_element($variables) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  $element = $variables['element'];
+  $output = drupal_render_children($element);
+
+  return $output;
+}
+
+/**
+ * Validates the scald atom field.
+ */
+function paddle_scald_atom_validate($element) {
+  $atom_ids = $element['#value'];
+  if (empty($atom_ids)) {
+    if (empty($element['#required'])) {
+      return;
+    }
+    else {
+      $error = t('!name field is required.', array(
+        '!name' => $element['#title'],
+      ));
+      form_set_error($element['#name'], $error);
+
+      return;
+    }
+  }
+
+  // This check is just here for people trying to circumvent the javascript that
+  // hides the "add" button when the max number of atoms is reached.
+  if (count($atom_ids) > $element['#cardinality'] && $element['#cardinality'] != FIELD_CARDINALITY_UNLIMITED) {
+    $error = t('Please select a maximum of !cardinality assets in !name.', array(
+      '!cardinality' => $element['#cardinality'],
+      '!name' => $element['#title'],
+    ));
+    form_set_error($element['#name'], $error);
+  }
+
+  foreach ($atom_ids as $atom_id) {
+    $atom = scald_atom_load($atom_id);
+
+    // It's possible that one of the selected atoms has been deleted in the
+    // meantime.
+    if (empty($atom)) {
+      $error = t("One of the selected assets in !name doesn't exist anymore.", array(
+        '!name' => $element['#title'],
+      ));
+      form_set_error($element['#name'], $error);
+
+      return;
+    }
+
+    // This check is just here for people trying to add an atom id of a
+    // forbidden type in the hidden value field, or when the configuration of
+    // the field has changed to disallow previously selected atoms.
+    $allowed = $element['#allowed_types'];
+    if (!empty($allowed) && !in_array($atom->type, $allowed)) {
+      $error = t('One of the selected assets in !name is of a type that is not allowed.', array(
+        '!name' => $element['#title'],
+      ));
+      form_set_error($element['#name'], $error);
+
+      return;
+    }
+  }
+}
+
+/**
+ * Render the element for a given Scald atom.
+ *
+ * @param object $atom
+ *   Atom object to show.
+ * @param array $options
+ *   An optional text string or array specifying additional Scald Context-
+ *   specific options that get passed to the Scald Context for rendering.
+ *   Currently supported:
+ *   - image_style: the image style that should be used for rendering.
+ *
+ * @return string
+ *   HTML for the atom form element.
+ */
+function paddle_scald_atom_element_item($atom, $options = array()) {
+  if (empty($atom)) {
+    return '';
+  }
+
+  $atom_html = '<div class="preview">' . scald_render($atom->sid, 'paddle_atom_field_preview', $options) . '</div>';
+
+  // Create the remove button.
+  $remove_button_class = array(
+    'remove-button',
+    'ui-icon',
+    'ui-icon-delete',
+    'ui-icon-hiddentext',
+  );
+  $remove_button = l(t('Remove'), '#', array(
+    'html' => TRUE,
+    'external' => TRUE,
+    'attributes' => array(
+      'class' => $remove_button_class,
+      'onclick' => 'return Drupal.paddle.scald.removeAtomFromFieldHandler(this);',
+    ),
+  ));
+
+  return '<div class="atom-id-' . $atom->sid . '" data-atom-id="' . $atom->sid . '">' . $atom_html . $remove_button . '</div>';
+}
+
+/**
+ * Loads the scald library in modal.
+ */
+function paddle_scald_media_library() {
+  ctools_include('ajax');
+  ctools_include('modal');
+
+  $form_state = array(
+    'ajax' => TRUE,
+  );
+
+  // Specify the necessary commands.
+  drupal_add_js(drupal_get_path('module', 'paddle_scald') . '/paddle_scald.js');
+  $commands = ctools_modal_form_wrapper('paddle_scald_library_form', $form_state);
+
+  // Render all commands and stop.
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * Gets the library state parameters and provides defaults.
+ *
+ * Beware that this is sourced from the URL query parameters and should be
+ * treated with care. Make sure to sanitize this data before using it!
+ *
+ * When we are interacting with the Scald library using modal dialogs we need to
+ * be able to refresh the library on the page while retaining the search query,
+ * type filter etc. This data is passed in the URL as query parameters.
+ *
+ * @param array $form_state
+ *   Optionally the form_state of the library can be provided to extract values.
+ *
+ * @return array
+ *   The current state of certain variables in the library.
+ */
+function paddle_scald_get_library_state(array $form_state = array()) {
+  // Whitelist the supported filter keys.
+  $filter_keys_whitelist = array(
+    'search',
+    'type',
+    'tags',
+    'general_tags',
+  );
+
+  // Whitelist the supported query parameters.
+  $parameter_whitelist = array(
+    'allowed_types',
+    'callback',
+    'filter',
+    'origin',
+    'destination',
+    'search_api_views_fulltext',
+    'type',
+    'tags',
+    'general_tags',
+    'page',
+  );
+
+  // Retrieve library state parameters from the query arguments if they are
+  // being carried over from a previous request.
+  $state = drupal_get_query_parameters();
+  $state['allowed_types'] = isset($state['allowed_types']) ? $state['allowed_types'] : array();
+
+  // Set the search filters.
+  foreach ($filter_keys_whitelist as $filter_key) {
+    if (!empty($form_state['values'][$filter_key])) {
+      $state['filter'][$filter_key] = $form_state['values'][$filter_key];
+    }
+  }
+
+  $state = array_intersect_key($state, array_flip($parameter_whitelist));
+
+  return $state;
+}
+
+/**
+ * Get the Scald atoms to display in the library.
+ *
+ * This will use Search API if available, If Search API is not available, it
+ * falls back to a entity field query with a wildcard match on the atom titles.
+ *
+ * @param array $library_state
+ *   The library state, as generated by paddle_scald_get_library_state().
+ *
+ * @return array
+ *   A list of Scald atom IDs.
+ */
+function paddle_scald_library_get_atoms($library_state) {
+  if (paddle_scald_can_use_search_api()) {
+    return paddle_scald_library_get_atoms_with_search_api($library_state);
+  }
+
+  return paddle_scald_library_get_atoms_with_entity_field_query($library_state);
+}
+
+/**
+ * Commits all newly indexed items on the Solr server manually.
+ *
+ * Solr also does this automatically, but that may take too long when the user
+ * has added/edited/deleted an atom and needs to see the changes in the library
+ * immediately.
+ */
+function paddle_scald_search_api_commit() {
+  $index_id = 'paddle_atoms';
+  $index = search_api_index_load($index_id);
+  $server = search_api_server_load($index->server);
+
+  // There's no reasonable way to access the protected $proxy property of
+  // $server here, so let's built up the object ourselves.
+  // See SearchApiSolrService::ensureProxy().
+  $class = search_api_get_service_info($server->class);
+  if ($class && class_exists($class['class'])) {
+    if (empty($server->options)) {
+      // We always have to provide the options.
+      $server->options = array();
+    }
+    // @codingStandardsIgnoreStart
+    /** @var SearchApiSolrService $proxy */
+    // @codingStandardsIgnoreEnd
+    $proxy = new $class['class']($server);
+    $wait_searcher = TRUE;
+    $proxy->getSolrConnection()->commit($wait_searcher);
+  }
+
+  // Reload the current solr proxy.
+  $server = search_api_server_load($index->server, TRUE);
+}
+
+/**
+ * Check if the Search API integration can be used.
+ *
+ * @return bool
+ *   True if it can be used, false if not.
+ */
+function paddle_scald_can_use_search_api() {
+  if (!module_exists('paddle_search')) {
+    return FALSE;
+  }
+
+  $index_id = 'paddle_atoms';
+  $index = search_api_index_load($index_id);
+  $server = search_api_server_load($index->server);
+
+  return 1 == $server->enabled;
+}
+
+/**
+ * Get the Scald atoms to display in the library, by using an EntityFieldQuery.
+ *
+ * The 'search' parameter will only search on titles.
+ *
+ * @param array $library_state
+ *   The library state, as generated by paddle_scald_get_library_state().
+ *
+ * @return array
+ *   A list of Scald atom IDs.
+ */
+function paddle_scald_library_get_atoms_with_entity_field_query($library_state) {
+  $efq = new EntityFieldQuery();
+  $efq->entityCondition('entity_type', 'scald_atom');
+  $efq->propertyOrderBy('created', 'DESC');
+  // When on the same timestamp, like the atoms that already existed before we
+  // kept track of the created timestamp, sort on entity id, like we did
+  // before.
+  $efq->entityOrderBy('entity_id', 'DESC');
+
+  // Filter by type, or by allowed types.
+  $filter_types = array();
+  if (isset($library_state['filter']['type'])) {
+    $filter_types = array($library_state['filter']['type']);
+  }
+  elseif (isset($library_state['allowed_types'])) {
+    $filter_types = $library_state['allowed_types'];
+  }
+  if (!empty($filter_types)) {
+    $efq->propertyCondition('type', $filter_types, 'IN');
+  }
+
+  // Filter by title only.
+  if (!empty($library_state['filter']['search'])) {
+    $efq->propertyCondition('title', '%' . $library_state['filter']['search'] . '%', 'LIKE');
+  }
+
+  $efq->pager(variable_get('paddle_scald_library_items_per_page', PADDLE_SCALD_LIBRARY_DEFAULT_ITEMS_PER_PAGE), PADDLE_SCALD_PAGER_ELEMENT);
+  $results = $efq->execute();
+
+  // Compose and return result.
+  $sids = !empty($results['scald_atom']) ? array_keys($results['scald_atom']) : array();
+
+  return $sids;
+}
+
+/**
+ * Retreives the necessary atoms for the library from the solr index.
+ *
+ * @param array $library_state
+ *   Current state of the scald library.
+ *
+ * @return array
+ *   List of atom ids.
+ */
+function paddle_scald_library_get_atoms_with_search_api($library_state) {
+  $index_id = 'paddle_atoms';
+  $query = search_api_query($index_id);
+
+  if (!empty($library_state['filter']['search'])) {
+    $query->keys($library_state['filter']['search']);
+  }
+
+  // Filter by type, or by allowed types.
+  $filter_types = array();
+  if (isset($library_state['filter']['type'])) {
+    $filter_types = array($library_state['filter']['type']);
+  }
+  elseif (isset($library_state['allowed_types'])) {
+    $filter_types = $library_state['allowed_types'];
+  }
+
+  if (!empty($filter_types)) {
+    $type_filter = $query->createFilter('OR');
+    foreach ($filter_types as $type) {
+      $type_filter->condition('type', $type);
+    }
+
+    $query->filter($type_filter);
+  }
+
+  // Filter by terms.
+  $term_filters = array(
+    'tags' => 'paddle_tags',
+    'general_tags' => 'paddle_general',
+  );
+  foreach ($term_filters as $element_name => $vocabulary) {
+    if (!empty($library_state['filter'][$element_name])) {
+      $names = drupal_explode_tags($library_state['filter'][$element_name]);
+      $terms = paddle_scald_get_terms_from_names($names, $vocabulary);
+      if ($terms) {
+        $filter = $query->createFilter('OR');
+        foreach ($terms as $term) {
+          $filter->condition('field_paddle_' . $element_name, $term->tid);
+        }
+        $query->filter($filter);
+      }
+    }
+  }
+
+  // Initialize the pager. See EntityFieldQuery::initializePager().
+  $page = pager_find_page(PADDLE_SCALD_PAGER_ELEMENT);
+  $limit = variable_get('paddle_scald_library_items_per_page', PADDLE_SCALD_LIBRARY_DEFAULT_ITEMS_PER_PAGE);
+  $offset = $page * $limit;
+
+  $query
+    ->range($offset, $limit)
+    ->sort('created', 'DESC')
+    // When on the same timestamp, like the atoms that already existed before
+    // we kept track of the created timestamp, sort on entity id, like we did
+    // before.
+    ->sort('search_api_id', 'DESC');
+  $results = $query->execute();
+
+  $total = $results['result count'];
+  pager_default_initialize($total, $limit, PADDLE_SCALD_PAGER_ELEMENT);
+
+  $sids = array_keys($results['results']);
+
+  return $sids;
+}
+
+/**
+ * Form for the scald library modal.
+ */
+function paddle_scald_library_form($form, &$form_state, $library_state = '') {
+  $atom_types = scald_types();
+  $library_state = empty($library_state) ? paddle_scald_get_library_state($form_state) : $library_state;
+  $allowed_types = $library_state['allowed_types'];
+
+  // Add CSS classes to aid in theming.
+  $form_class = 'paddle-scald-library-modal-form';
+  $form['#attributes']['class'][] = $form_class;
+  $form['#attributes']['class'][] = 'paddle-scald-library-form';
+
+  // Add the custom autocomplete behaviour to allow choosing values
+  // using the enter key.
+  $form['#attached']['js'][] = array(
+    'data' => drupal_get_path('module', 'paddle_core') . '/js/autocomplete_keyboard_select.js',
+    'type' => 'file',
+  );
+
+  // Start constructing the form.
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+
+  // Add the custom filters.
+  $form['body']['filter'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('library-filter')),
+  );
+  $form['body']['filter']['search'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Search'),
+    '#default_value' => isset($library_state['filter']['search']) ? $library_state['filter']['search'] : '',
+  );
+
+  // Add a dropdown to filter on atom type.
+  $filter_types = array();
+  foreach ($atom_types as $atom_type) {
+    if (empty($allowed_types) || in_array($atom_type->type, $allowed_types)) {
+      $atom_type_name = scald_type_property_translate($atom_type, 'title');
+      $filter_types[$atom_type->type] = check_plain($atom_type_name);
+    }
+  }
+
+  $form['body']['filter']['tags'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Tags'),
+    '#size' => 60,
+    '#autocomplete_path' => 'taxonomy/autocomplete/field_paddle_tags',
+    '#vocabulary' => 'paddle_tags',
+    '#element_validate' => array('paddle_scald_term_autocomplete_validate'),
+  );
+
+  $form['body']['filter']['general_tags'] = array(
+    '#type' => 'textfield',
+    '#title' => t('General vocabulary'),
+    '#size' => 60,
+    '#autocomplete_path' => 'taxonomy/autocomplete/field_paddle_general_tags',
+    '#vocabulary' => 'paddle_general',
+    '#element_validate' => array('paddle_scald_term_autocomplete_validate'),
+  );
+
+  $form['body']['filter']['type'] = array(
+    '#type' => 'select',
+    '#title' => t('Type'),
+    '#options' => $filter_types,
+    '#empty_option' => t('Any'),
+    '#empty_value' => 0,
+    '#default_value' => isset($library_state['filter']['type']) ? $library_state['filter']['type'] : 0,
+  );
+
+  // Don't show the atom type dropdown if there is only one atom type.
+  if (count($filter_types) == 1) {
+    $form['body']['filter']['type']['#access'] = FALSE;
+    $form['body']['filter']['type']['#value'] = 0;
+  }
+
+  // Add the submit button.
+  $form['body']['filter']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Search'),
+  );
+
+  // Show a reset button for the search if there are search parameters.
+  if (!empty($library_state['filter'])) {
+    $form['body']['filter']['reset'] = array(
+      '#type' => 'submit',
+      '#value' => t('Reset'),
+      '#reset_filter' => FALSE,
+    );
+  }
+
+  // Load the filtered atoms.
+  $atom_ids = paddle_scald_library_get_atoms($library_state);
+
+  $form['body']['atoms'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('paddle-library-items')),
+  );
+
+  // Show the atoms.
+  $atom_count = 0;
+  if ($atoms = scald_atom_load_multiple($atom_ids)) {
+    foreach ($atoms as $atom_id => $atom) {
+      if ($atom) {
+        $atom_count++;
+        $form['body']['atoms'][$atom_id] = array(
+          '#theme' => 'paddle_scald_library_atom',
+          '#id' => $atom_id,
+          '#modal' => TRUE,
+          '#library_state' => $library_state,
+        );
+      }
+    }
+  }
+
+  // Provide empty text.
+  if ($atom_count == 0) {
+    // If a search returned no results, inform the user.
+    if (!empty($library_state['filter'])) {
+      $empty_text = t('No assets found matching your search criteria.');
+    }
+    // If only one atom type is allowed, show a simple sentence.
+    elseif (count($allowed_types) == 1) {
+      $type = reset($allowed_types);
+      $args = array('@type' => scald_type_property_translate($atom_types[$type]));
+      $empty_text = t('No @type has been added to the media library yet.', $args);
+    }
+    // Finally, show a message indicating that the library is empty.
+    else {
+      $empty_text = t('No media have been added to the library yet.');
+    }
+    $form['body']['atoms']['empty_text'] = array(
+      '#markup' => $empty_text,
+      '#prefix' => '<p class="empty-text">',
+      '#suffix' => '</p>',
+    );
+  }
+
+  // Only add the 'Show more' link if we did not yet reach the end yet. Let's
+  // ask the pager if there is a next page.
+  if (theme('pager_next', array(
+    'element' => PADDLE_SCALD_PAGER_ELEMENT,
+    'interval' => 1,
+  ))) {
+    $form['body']['show_more'] = array(
+      '#theme' => 'paddle_scald_library_show_more',
+      '#library_state' => $library_state,
+    );
+  }
+
+  $form['actions'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  // If only one single atom type is allowed in this context, link the add
+  // button directly to the "add form" of this atom type.
+  $possible_types = !empty($allowed_types) ? $allowed_types : array_keys(scald_types());
+  if (count($possible_types) == 1) {
+    $atom_type = $atom_types[$possible_types[0]];
+    $type_name = scald_type_property_translate($atom_type, 'title');
+    $add_text = t('Add new @atom_type', array('@atom_type' => $type_name));
+    $add_path = 'admin/paddle_scald/nojs/add/' . $possible_types[0];
+  }
+  else {
+    $add_text = t('Add new asset');
+    $add_path = 'admin/paddle_scald/nojs/add/asset';
+  }
+
+  $add_class = array('button', 'add-button', 'ctools-modal-medium-modal');
+  $add_class[] = 'use-ajax';
+
+  // Make sure the user can create atoms of this type, and that it's possible
+  // to insert atoms of this type.
+  $access_types = empty($allowed_types) ? array() : $allowed_types;
+  if (paddle_scald_add_button_access($access_types)) {
+    $add_link = l($add_text, $add_path, array(
+      'attributes' => array(
+        'class' => $add_class,
+        'id' => 'add-asset-button',
+      ),
+      'query' => paddle_scald_get_library_state(),
+    ));
+
+    $form['actions']['add'] = array(
+      '#type' => 'item',
+      '#markup' => $add_link,
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * Validates taxonomy term autocomplete fields.
+ *
+ * @see views_handler_filter_term_node_tid::validate_term_strings()
+ */
+function paddle_scald_term_autocomplete_validate($element, &$form_state) {
+  $values = drupal_explode_tags($element['#value']);
+
+  // If no values are provided, the element is valid.
+  if (empty($values)) {
+    return;
+  }
+
+  $tids = array();
+  $names = array();
+  $missing = array();
+  foreach ($values as $value) {
+    $missing[strtolower($value)] = TRUE;
+    $names[] = $value;
+  }
+
+  $vocabulary = isset($element['#vocabulary']) ? $element['#vocabulary'] : NULL;
+  $terms = paddle_scald_get_terms_from_names($names, $vocabulary);
+  foreach ($terms as $term) {
+    unset($missing[strtolower($term->name)]);
+    $tids[] = $term->tid;
+  }
+
+  if ($missing) {
+    form_error($element, format_plural(count($missing), 'Unable to find term: @terms', 'Unable to find terms: @terms', array('@terms' => implode(', ', array_keys($missing)))));
+  }
+}
+
+/**
+ * Submit handler.
+ */
+function paddle_scald_library_form_submit($form, &$form_state) {
+  $triggering_element = $form_state['triggering_element'];
+
+  // Don't set rebuild to TRUE if we want to reset the search form.
+  if (isset($triggering_element['#reset_filter'])) {
+    return;
+  }
+
+  // Search button was clicked, so we want to keep the entered values.
+  $form_state['rebuild'] = TRUE;
+}
+
+/**
+ * AJAX callback to fetch a library page.
+ *
+ * @param bool $js
+ *   Whether or not the callback is called via AJAX.
+ *
+ * @return int
+ *   If the request is no an AJAX one, return access denied.
+ */
+function paddle_scald_media_library_show_more($js) {
+  // This is expected to be called via AJAX.
+  if (!$js) {
+    return MENU_ACCESS_DENIED;
+  }
+
+  ctools_include('ajax');
+  $html = '';
+
+  // Retrieve the requested library page. This is supporting the Drupal pager,
+  // so it will automatically retrieve the page from the query arguments.
+  $library_state = paddle_scald_get_library_state();
+  $atom_ids = paddle_scald_library_get_atoms($library_state);
+
+  // Render the atoms.
+  foreach ($atom_ids as $atom_id) {
+    $html .= theme('paddle_scald_library_atom', array(
+      'id' => $atom_id,
+      'modal' => !empty($library_state['callback']),
+      'library_state' => $library_state,
+    ));
+  }
+
+  // Only add the 'Show more' link if we did not yet reach the end yet. Let's
+  // ask the pager if there is a next page.
+  if (theme('pager_next', array(
+    'element' => PADDLE_SCALD_PAGER_ELEMENT,
+    'interval' => 1,
+  ))) {
+    $html .= theme('paddle_scald_library_show_more', array('library_state' => $library_state));
+  }
+
+  $commands = array();
+
+  // Remove the old 'Show more' link.
+  $commands[] = ajax_command_remove('.show-more');
+
+  // Insert the new HTML.
+  $commands[] = ajax_command_append('.paddle-scald-library-form .paddle-library-items', $html);
+
+  print ajax_render($commands);
+
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * Implements hook_paddle_scald_atom_insert_callbacks().
+ */
+function paddle_scald_paddle_scald_atom_insert_callbacks() {
+  return array(
+    'paddle_scald_atom_element_insert',
+    'paddle_scald_ckeditor_insert',
+  );
+}
+
+/**
+ * Custom callback for inserting an atom into a "paddle scald atom field".
+ */
+function paddle_scald_atom_element_insert($origin, $atom) {
+  $commands = array();
+
+  $commands[] = array(
+    'command' => 'insert_atom_into_field',
+    'field' => $origin,
+    'atom_id' => $atom,
+    'html' => paddle_scald_atom_element_item(scald_atom_load($atom)),
+  );
+
+  return $commands;
+}
+
+/**
+ * Implements hook_ckeditor_plugin().
+ */
+function paddle_scald_ckeditor_plugin() {
+  $plugins = array();
+
+  // Provides a button to insert atoms.
+  $plugins['paddle_scald_atom'] = array(
+    'name' => 'paddle_scald_atom',
+    'desc' => t('Paddle specific scald/ckeditor integration.'),
+    'path' => drupal_get_path('module', 'paddle_scald') . '/ckeditor/paddle_scald_atom/',
+    'buttons' => array(),
+  );
+
+  // Enhanced image properties modal, based on enhanced_image module and
+  // altered. (Mainly to disable editing of options like alt & title on images).
+  $plugins['paddle_scald_image'] = array(
+    'name' => 'paddle_scald_image',
+    'desc' => t('Paddle specific image options.'),
+    'path' => drupal_get_path('module', 'paddle_scald') . '/ckeditor/paddle_scald_image/',
+    'buttons' => array(),
+  );
+
+  return $plugins;
+}
+
+/**
+ * Custom callback for inserting an atom into a CKEditor instance.
+ *
+ * See paddle_scald_paddle_scald_atom_insert_callbacks().
+ */
+function paddle_scald_ckeditor_insert($origin, $atom) {
+  $commands = array();
+  $commands[] = paddle_scald_command_insert_atom_into_ckeditor($origin, $atom);
+
+  return $commands;
+}
+
+/**
+ * Creates a 'insert atom into CKEditor' command.
+ *
+ * This command is implemented by
+ * Drupal.ajax.prototype.commands.insert_atom_into_ckeditor()
+ * defined in paddle_scald.js in the same directory as this file.
+ *
+ * @param string $editor_id
+ *   The id of the CKEditor into which to insert the atom.
+ * @param int $atom_id
+ *   The id of the atom to insert.
+ *
+ * @return array
+ *   An array suitable for use with the ajax_render() function.
+ */
+function paddle_scald_command_insert_atom_into_ckeditor($editor_id, $atom_id) {
+  // In theory we don't know where this command is executed, so make sure we
+  // have the correct javascript file at our disposal.
+  drupal_add_js(drupal_get_path('module', 'paddle_scald') . '/paddle_scald.js');
+  $atom = scald_atom_load($atom_id);
+
+  $html = paddle_scald_atom_ckeditor_html($atom, array(), TRUE);
+
+  $command = array(
+    'command' => 'insert_atom_into_ckeditor',
+    'editor_id' => $editor_id,
+    'html' => $html,
+  );
+
+  return $command;
+}
+
+/**
+ * Renders the HTML for any atom to be used in the CKEditor.
+ *
+ * @param ScaldAtom $atom
+ *   Atom to render as HTML.
+ * @param array $attributes
+ *   Optional array of attributes to add to the element.
+ * @param bool $editor
+ *   Whether or not the HTML will be rendered in the CKEditor.
+ * @param bool $update
+ *   Whether or not we are updating an existing atom's HTML.
+ *
+ * @return string
+ *   The rendered HTML.
+ */
+function paddle_scald_atom_ckeditor_html($atom, $attributes = array(), $editor = FALSE, $update = FALSE) {
+  $html = '';
+
+  if (!isset($atom->type)) {
+    return $html;
+  }
+
+  $html_callback = 'paddle_scald_' . $atom->type . '_ckeditor_html';
+  if (function_exists($html_callback)) {
+    $html = call_user_func($html_callback, $atom, $attributes, $editor, $update);
+  }
+
+  // Allow other modules to alter the html.
+  drupal_alter('paddle_scald_atom_ckeditor_html', $html, $atom, $attributes);
+
+  return $html;
+}
+
+/**
+ * Implements hook_element_info_alter().
+ *
+ * Makes sure atoms in the CKEditor are always in sync with the asset library.
+ */
+function paddle_scald_element_info_alter(&$elements) {
+  array_unshift($elements['text_format']['#pre_render'], 'paddle_scald_text_format_pre_render');
+
+  // Upload and submit directly after user selected files. Finer control may be
+  // provided in the future.
+  $elements['plupload']['#autoupload'] = TRUE;
+  $elements['plupload']['#autosubmit'] = TRUE;
+}
+
+/**
+ * Pre-render callback for the text_format FAPI element.
+ *
+ * See paddle_scald_element_info_alter().
+ */
+function paddle_scald_text_format_pre_render($element) {
+  if (isset($element['#value'])) {
+    $element['#value'] = paddle_scald_update_atoms_in_html($element['#value'], TRUE);
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_filter_info().
+ */
+function paddle_scald_filter_info() {
+  return array(
+    'paddle_scald_filter' => array(
+      'title' => t('Update atoms markup in html.'),
+      'process callback' => '_paddle_scald_atom_filter',
+      'weight' => -50,
+    ),
+  );
+}
+
+/**
+ * Provides a filter to update atom markup in html text.
+ *
+ * See paddle_scald_filter_info().
+ */
+function _paddle_scald_atom_filter($text, $filter, $format, $langcode, $cache, $cache_id) {
+  return paddle_scald_update_atoms_in_html($text);
+}
+
+/**
+ * Replaces all atoms in a provided html string with newly generated ones.
+ *
+ * @param string $html
+ *   HTML string to update.
+ * @param bool $editor
+ *   Whether or not the HTML will be displayed in the CKEditor.
+ *
+ * @return string
+ *   Updated HTML.
+ */
+function paddle_scald_update_atoms_in_html($html, $editor = FALSE) {
+  // If nothing is passed or there are no atoms just return the passed HTML.
+  if (empty($html) || strpos($html, 'atom-id-') === FALSE) {
+    return $html;
+  }
+
+  // Find all HTML elements with a class like atom-id-{id}, and capture the the
+  // HTML (including inner, the HTML attributes of the HTML element itself and
+  // the atom id.
+  $atoms = array();
+  $document = new DOMDocument();
+  // Make sure the encoding is UTF-8 and the HTML juggling we do is not going to
+  // crunch some special characters.
+  $document->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
+  $finder = new DOMXPath($document);
+  $nodes = $finder->query('//*[contains(@class, "atom-id-")]');
+  if ($nodes->length) {
+    foreach ($nodes as $node) {
+      /* @var DOMElement $node */
+      if ($node->hasAttributes()) {
+        foreach ($node->attributes as $attr) {
+          if ($attr->nodeName == 'class') {
+            $class = $attr->nodeValue;
+            $atom_regex = '/atom-id-((?:\d)+)/ix';
+            preg_match($atom_regex, $class, $matches);
+            if (!empty($matches)) {
+              $atoms[] = array($node, $matches[1]);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Loop over all the atoms found and update the HTML generated for this atom
+  // if it is needed.
+  foreach ($atoms as $atom) {
+    list($old_node, $atom_id) = $atom;
+
+    $scald_atom = scald_atom_load($atom_id);
+
+    $attributes = array();
+    foreach ($old_node->attributes as $attribute) {
+      $attributes[$attribute->nodeName] = $attribute->nodeValue;
+    }
+
+    // Generate new html for the atom, but keep the old attributes (unless they
+    // need to be updated with new data).
+    $updated_html = paddle_scald_atom_ckeditor_html($scald_atom, $attributes, $editor, TRUE);
+
+    // If the new html is empty, the atom doesn't exist anymore. Don't replace a
+    // broken atom with an empty string, as this might be confusing for editors.
+    if (!empty($updated_html)) {
+      $updated_doc = new DOMDocument();
+      $updated_doc->loadHTML(mb_convert_encoding($updated_html, 'HTML-ENTITIES', 'UTF-8'));
+
+      $new_node = $document->importNode($updated_doc->documentElement->firstChild->firstChild, TRUE);
+      $old_node->parentNode->replaceChild($new_node, $old_node);
+      $html = $document->saveHTML();
+    }
+  }
+
+  return $html;
+}
+
+/**
+ * Checks whether the current user has access to add an atom.
+ *
+ * This check is meant to figure out if we should show an "add new asset" button
+ * in the library. This button can add different atom types, so if the user can
+ * add ANY atom, or atoms of specific types, he is considered to have access to
+ * the button.
+ *
+ * @param array $types
+ *   Optional, array of atom types to check.
+ *
+ * @return bool
+ *   Whether or not the user has access to add any of the specified atoms.
+ */
+function paddle_scald_add_button_access($types = array(), $user = NULL) {
+  if (empty($user)) {
+    global $user;
+  }
+
+  $types = empty($types) ? array_keys(scald_types()) : $types;
+
+  $add_access = user_access('create atom of any type', $user);
+  if (!$add_access) {
+    foreach ($types as $type) {
+      $add_access = user_access('create atom of ' . $type . ' type', $user);
+      if ($add_access) {
+        break;
+      }
+    }
+  }
+
+  return $add_access;
+}
+
+/**
+ * Add asset page callback.
+ *
+ * This page allows the user to pick the type of asset, before actually adding
+ * one.
+ *
+ * @param bool $show_in_modal
+ *   Whether or not the page should be loaded in a modal.
+ */
+function paddle_scald_asset_add($show_in_modal) {
+  // Our custom add form should always be loaded in modal.
+  if (!$show_in_modal) {
+    return;
+  }
+
+  ctools_include('ajax');
+  ctools_include('modal');
+
+  $library_state = paddle_scald_get_library_state();
+  $allowed_types = $library_state['allowed_types'];
+
+  $asset_types = array();
+  foreach (scald_types() as $atom_type) {
+    $type = $atom_type->type;
+
+    // Make sure the user has permission to add atoms of this type.
+    $any_access = user_access('create atom of any type');
+    $type_access = user_access('create atom of ' . $type . 'type');
+    if (!$any_access && !$type_access) {
+      break;
+    }
+
+    // Make sure the atom type is allowed in this context.
+    if (!in_array($type, $allowed_types) && !empty($allowed_types)) {
+      break;
+    }
+
+    $path = 'admin/paddle_scald/nojs/add/' . $type;
+
+    $type_name = scald_type_property_translate($atom_type, 'title');
+
+    $icon = $type != 'file' ? "file-$type-o" : 'file-text-o';
+    $asset_types[$type] = array(
+      'title' => $type_name,
+      'icon' => $icon,
+      'description' => t('Add new @type', array('@type' => $type_name)),
+      'url' => $path,
+      'url_options' => array(
+        'query' => $library_state,
+      ),
+      'class' => 'create-scald-atom',
+    );
+  }
+
+  // We want this modal to look like the "add pane" modal, but sadly the theming
+  // function is not abstract but specific for "content types". We should
+  // optimize this in the future, maybe move the theme function to somewhere
+  // in core and abstract the css class names.
+  $output = theme('paddle_panels_renderer_content_types_list', array(
+    'content_types' => $asset_types,
+  ));
+  $commands = array(ctools_modal_command_display(t('Add new media'), $output));
+
+  // Render all commands and stop.
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * Atom add page callback.
+ *
+ * Copied from scald.pages.inc and altered to use with the modal library.
+ *
+ * @param bool $js
+ *   Whether or not the page is loaded with js.
+ * @param string $type
+ *   The atom type of the new atom.
+ * @param string $step
+ *   The current step of the multistep form.
+ * @param int $atom_id
+ *   ID of the new or existing atom.
+ */
+function paddle_scald_atom_add_page($js, $type, $step = NULL, $atom_id = NULL) {
+  // The add/edit form should always be loaded in a modal.
+  if (!$js) {
+    return;
+  }
+
+  ctools_include('ajax');
+  ctools_include('modal');
+
+  ctools_include('object-cache');
+  ctools_include('wizard');
+
+  // If we are not currently edit an atom and there is a temporary saved atom,
+  // reopen it.
+  $cache = ctools_object_cache_get('scald_atom', 'edit:-1');
+  if (!$atom_id && $cache && $cache['atoms'][0]->type === $type->type) {
+    $atom_id = -1;
+    $step = 'options';
+  }
+
+  $cache_id = isset($atom_id) ? 'edit:' . $atom_id : 'add';
+
+  // Start by getting the list of all the modules that said they can provide
+  // this atom type.
+  $providers = scald_atom_providers();
+  $sources = $providers[$type->type];
+  $source = key($sources);
+
+  // If there's more than one, provide a choice between them. Otherwise, skip
+  // a step and select the only provider upfront.
+  if (empty($step)) {
+    if (count($sources) < 2) {
+      $step = 'add';
+    }
+    else {
+      $step = 'source';
+    }
+    ctools_object_cache_clear('scald_atom', $cache_id);
+  }
+
+  $form_state = array(
+    'ajax' => TRUE,
+    'scald' => ctools_object_cache_get('scald_atom', $cache_id),
+    'library_state' => paddle_scald_get_library_state(),
+  );
+
+  form_load_include($form_state, 'inc', 'scald', 'includes/scald.pages');
+
+  $form_state['atom'] = isset($form_state['scald']['atoms'][0]) ? $form_state['scald']['atoms'][0] : new stdClass();
+
+  if (empty($form_state['scald'])) {
+    $form_state['scald'] = array(
+      'type' => $type,
+      'source' => isset($source) ? $source : NULL,
+    );
+  }
+
+  $form_state['scald']['step'] = $step;
+
+  // Construct the form page path.
+  $form_path = array();
+  $form_path[] = 'admin/paddle_scald';
+  $form_path[] = ($js ? 'ajax' : 'nojs');
+  $form_path[] = 'add';
+  $form_path[] = $type->type;
+  $form_path[] = '%step';
+  $form_path[] = (empty($atom_id) ? '' : $atom_id);
+  $form_path = implode('/', $form_path);
+
+  $form_info = array(
+    'id' => 'scald-atom-add',
+    'path' => $form_path,
+    'show trail' => TRUE,
+    'show back' => FALSE,
+    'show cancel' => TRUE,
+    'show return' => FALSE,
+    'next callback' => 'scald_atom_add_wizard_next',
+    'finish callback' => 'scald_atom_add_wizard_finish',
+    'cancel callback' => 'scald_atom_add_wizard_cancel',
+    'order' => array(
+      'source' => t('Source'),
+      'add' => t('Add'),
+      'options' => t('Options'),
+    ),
+    'forms' => array(
+      'source' => array(
+        'form id' => 'scald_atom_add_form_source',
+      ),
+      'add' => array(
+        'form id' => 'scald_atom_add_form_add',
+      ),
+      'options' => array(
+        'form id' => 'scald_atom_add_form_options',
+      ),
+    ),
+  );
+
+  // Send this all off to our form. This is like drupal_get_form only wizardy.
+  $form = ctools_wizard_multistep_form($form_info, $step, $form_state);
+
+  if (isset($form['scald_tags'])) {
+    $form['scald_tags']['#access'] = FALSE;
+  }
+
+  if (isset($form['scald_authors'])) {
+    $form['scald_authors']['#access'] = FALSE;
+  }
+
+  $output = drupal_render($form);
+
+  // If there is no form, or the form is completely finished, close the modal
+  // and re-open the library. Otherwise render the form itself in a modal.
+  $commands = array();
+  if ($output === FALSE || !empty($form_state['complete']) || !empty($form_state['cancel'])) {
+    $commands[] = ctools_modal_command_dismiss();
+    $reload_commands = paddle_scald_reload_library_commands($form_state);
+    $commands = array_merge($commands, $reload_commands);
+  }
+  else {
+    $commands = ctools_modal_form_render($form_state, $output);
+  }
+  print ajax_render($commands);
+  drupal_exit();
+}
+
+/**
+ * Atom edit page callback.
+ *
+ * Copied from scald.pages.inc and altered to use with the modal library.
+ *
+ * @param bool $js
+ *   Whether or not the page is loaded with js.
+ * @param ScaldAtom $atom
+ *   The atom object to edit.
+ */
+function paddle_scald_atom_edit_page($js, $atom) {
+  // The edit page is nothing else other than the add page, at the Options step.
+  // We prepare data for this step then send back to the add page. The only
+  // useful information at this step is the atom itself.
+  $scald = array(
+    'atoms' => array($atom),
+  );
+  $types = scald_types();
+  ctools_include('object-cache');
+  ctools_object_cache_set('scald_atom', 'edit:' . $atom->sid, $scald);
+  paddle_scald_atom_add_page($js, $types[$atom->type], 'options', $atom->sid);
+}
+
+/**
+ * Atom delete page callback.
+ *
+ * @param bool $js
+ *   Whether or not the page is loaded with js.
+ * @param ScaldAtom $atom
+ *   The atom object to delete.
+ */
+function paddle_scald_atom_delete_page($js, $atom) {
+  // This page is only supposed to be loaded in a modal.
+  if (!$js) {
+    return;
+  }
+
+  ctools_include('modal');
+  ctools_include('ajax');
+
+  $form_state = array(
+    'ajax' => TRUE,
+    'build_info' => array(
+      'args' => array($atom),
+    ),
+    'library_state' => paddle_scald_get_library_state(),
+  );
+  $commands = ctools_modal_form_wrapper('paddle_scald_atom_delete_confirm', $form_state);
+
+  if ($form_state['executed']) {
+    $commands[] = ctools_modal_command_dismiss();
+    $reload_commands = paddle_scald_reload_library_commands($form_state);
+    $commands = array_merge($commands, $reload_commands);
+  }
+
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * AJAX page callback; Inserts an atom in the page.
+ *
+ * @param bool $js
+ *   Whether or not the page is loaded with js.
+ * @param ScaldAtom $atom
+ *   The atom object to insert.
+ */
+function paddle_scald_atom_insert_page($js, $atom) {
+  // This page is only supposed to be loaded in a modal.
+  if (!$js) {
+    return;
+  }
+
+  ctools_include('modal');
+  ctools_include('ajax');
+
+  $library_state = paddle_scald_get_library_state();
+  $callback = $library_state['callback'];
+  $origin = $library_state['origin'];
+
+  $commands = array();
+  $commands[] = ctools_modal_command_dismiss();
+
+  // Make sure the callback exists and is defined as a valid callback. If it's
+  // not defined as a valid callback, someone might be trying to execute other
+  // functions through the menu link.
+  $valid_callbacks = module_invoke_all('paddle_scald_atom_insert_callbacks');
+  if (function_exists($callback) && in_array($callback, $valid_callbacks)) {
+
+    // Execute the specified callback for additional functionality. (Like
+    // inserting the atom into a field or textarea.) The supplied arguments
+    // are the origin (field id, specified in the url), and the selected atom
+    // id.
+    $additional_commands = call_user_func($callback, $origin, $atom->sid);
+
+    if (is_array($additional_commands)) {
+      $commands = array_merge($commands, $additional_commands);
+    }
+  }
+
+  print ajax_render($commands);
+  ajax_footer();
+  drupal_exit();
+}
+
+/**
+ * Handles the delete of an existing atom.
+ */
+function paddle_scald_atom_delete_confirm($form, &$form_state, $atom) {
+  // Always provide entity id in the same form key as in the entity edit form.
+  $form['sid'] = array('#type' => 'value', '#value' => $atom->sid);
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+
+  $message = t('Are you sure you want to delete %title?', array(
+    '%title' => $atom->title,
+  ));
+  $form['body']['message'] = array(
+    '#type' => 'item',
+    '#markup' => $message,
+  );
+
+  $form['actions'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+  $form['actions']['confirm'] = array(
+    '#type' => 'submit',
+    '#value' => t('Delete'),
+    '#delete' => TRUE,
+  );
+  $form['actions']['cancel'] = array(
+    '#type' => 'submit',
+    '#value' => t('Cancel'),
+    '#delete' => FALSE,
+  );
+
+  return $form;
+}
+
+/**
+ * Execute atom deletion.
+ *
+ * Copied from scald.pages.inc and altered to use with the modal library.
+ */
+function paddle_scald_atom_delete_confirm_submit($form, &$form_state) {
+  if ($form_state['triggering_element']['#delete']) {
+    $atom = scald_atom_load($form_state['values']['sid']);
+    scald_atom_delete($atom->sid);
+    watchdog('scald_atom', '@type: deleted %title.', array(
+      '@type' => $atom->type,
+      '%title' => $atom->title,
+    ));
+    $types = scald_type_get_names();
+    drupal_set_message(t('@type %title has been deleted.', array(
+      '@type' => $types[$atom->type],
+      '%title' => $atom->title,
+    )));
+  }
+}
+
+/**
+ * Processes the search API queue and performs an explicit commit.
+ */
+function paddle_scald_process_queue_and_commit() {
+  if (paddle_scald_can_use_search_api()) {
+    // Search API Solr delays indexing of queued items and a Solr commit to the
+    // PHP shutdown phase with
+    // drupal_register_shutdown_function(). This causes new items not to appear
+    // immediately and a deleted item still to appear once. To prevent this, we
+    // explicitly index the queued items here and commit.
+    _search_api_index_queued_items();
+    paddle_scald_search_api_commit();
+  }
+}
+
+/**
+ * Returns an array of commands to reload the library after an action.
+ *
+ * @param array $form_state
+ *   State of the form.
+ *
+ * @return array
+ *   The AJAX commands.
+ */
+function paddle_scald_reload_library_commands($form_state) {
+  $library_state = $form_state['library_state'];
+  paddle_scald_process_queue_and_commit();
+
+  if (isset($library_state['origin'])) {
+    $commands = array();
+    // Re-open the library modal.
+    $url = url('admin/content_manager/assets/ajax/library', array(
+      'query' => $library_state,
+    ));
+
+    $commands[] = array(
+      'command' => 'ctools_modal_open',
+      'url' => $url,
+      'modal_type' => 'medium-modal',
+    );
+  }
+  else {
+    // If we had a destination parameter in the URL redirect to it.
+    if (empty($form_state['cancel']) && isset($library_state['destination']) && drupal_valid_path($library_state['destination'])) {
+      $commands[] = ctools_ajax_command_redirect($library_state['destination']);
+    }
+    else {
+      // Otherwise reload the page.
+      $commands[] = ctools_ajax_command_reload();
+    }
+  }
+
+  return $commands;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_scald_form_scald_atom_add_form_options_alter(&$form, &$form_state) {
+  foreach (array_keys($form_state['scald']['atoms']) as $delta) {
+    // Remove the "AtomN : " form the fieldset title.
+    if (!empty($form['atom' . $delta]['#title'])) {
+      $title = $form['atom' . $delta]['#title'];
+      $title = explode(':', $title);
+      $form['atom' . $delta]['#title'] = trim($title[1]);
+    }
+
+    if (!empty($form['atom' . $delta]['scald_thumbnail'])) {
+      // Set the weight of the thumbnail so it shows as first.
+      $form['atom' . $delta]['scald_thumbnail']['#weight'] = -15;
+    }
+
+    $form['atom' . $delta]['field_paddle_scald_atom_end_date']['#states'] = array(
+      'visible' => array(
+        ':input[name="atom0[field_scald_set_removal_date][und]"]' => array('checked' => TRUE),
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function paddle_scald_field_widget_form_alter(&$element, &$form_state, $context) {
+  global $language;
+
+  // If the atom has no language set, then we use the global language.
+  // This is needed because tags and terms are bound to a language.
+  // For node entities the language is always set, but for atoms is not.
+  // The taxonomy fields need a language to populate its values correctly.
+  if (!empty($element['#entity_type']) && $element['#entity_type'] == 'scald_atom' && !empty($element['#entity'])) {
+    $lang = $element['#entity']->language;
+
+    if ($lang == 'und') {
+      $lang = $language->language;
+    }
+
+    if ($context['instance']['widget']['module'] == 'active_tags') {
+      if (module_exists('paddle_content_manager')) {
+        $element['term_entry']['#autocomplete_path'] = 'paddle_content_manager/taxonomy/autocomplete/' . $element['#field_name'] . '/' . $lang;
+        $element['#element_validate'][] = 'paddle_content_manager_taxonomy_autocomplete_validate';
+      }
+    }
+
+    if ($element['#field_name'] == 'field_paddle_general_tags') {
+      $element['#entity']->language = $lang;
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_views_view().
+ */
+function paddle_scald_preprocess_views_view(&$variables) {
+  $view = $variables['view'];
+  if ($view->name == 'media_library') {
+    $add_text = t('Add new asset');
+    $add_path = 'admin/paddle_scald/nojs/add/asset';
+
+    $classes = array(
+      'ctools-use-modal',
+      'ctools-modal-medium-modal',
+      'ui-icon',
+      'fa-plus',
+    );
+
+    // Make sure the user can create atoms.
+    if (paddle_scald_add_button_access(scald_types())) {
+      ctools_include('ajax');
+      ctools_include('modal');
+      ctools_modal_add_js();
+
+      $add_link = l($add_text, $add_path, array(
+        'attributes' => array(
+          'class' => $classes,
+          'id' => 'add-asset-button',
+        ),
+      ));
+
+      if (!module_exists('paddle_contextual_toolbar')) {
+        $variables['header'] = $add_link;
+      }
+      else {
+        $actions = array();
+        $actions[] = array(
+          'action' => $add_link,
+          'class' => array('add'),
+          'weight' => 0,
+        );
+        paddle_contextual_toolbar_actions($actions);
+      }
+    }
+  }
+}
+
+/**
+ * Convert term names into term ids.
+ *
+ * @param array $names
+ *   An array of taxonomy term names.
+ * @param null|string $vocabulary
+ *   A vocabulary machine name. Leave empty to search in all vocabularies.
+ *
+ * @return array
+ *   An array of taxonomy terms.
+ *
+ * @see views_handler_filter_term_node_tid::validate_term_strings()
+ */
+function paddle_scald_get_terms_from_names(array $names, $vocabulary = NULL) {
+  $query = db_select('taxonomy_term_data', 'td');
+  $query->innerJoin('taxonomy_vocabulary', 'tv', 'td.vid = tv.vid');
+  $query->fields('td');
+  $query->condition('td.name', $names, 'IN');
+  if (isset($vocabulary)) {
+    $query->condition('tv.machine_name', $vocabulary);
+  }
+  $query->addTag('term_access');
+  $result = $query->execute()->fetchAllAssoc('tid');
+
+  return $result;
+}
+
+/**
+ * Helper method to retrieve the taxonomy fields available in atom entities.
+ *
+ * @return array
+ *   A list of fields, keyed by their respective vocabulary machine name.
+ */
+function _paddle_scald_atom_taxonomy_fields() {
+  return array(
+    'paddle_general' => 'field_paddle_general_tags',
+    'paddle_tags' => 'field_paddle_tags',
+  );
+}
+
+/**
+ * Implements hook_query_download_list_pane_sort_alter().
+ */
+function paddle_scald_query_download_list_pane_sort_alter(QueryAlterableInterface $query) {
+  $sort_field = $query->getMetaData('sort_field');
+  $sort_dir = $query->getMetaData('sort_dir');
+
+  /* @var SelectQuery $query */
+  // The base table is added as meta data, but not the table alias.
+  $base_table = $query->getMetaData('base_table');
+  $base_table_alias = FALSE;
+  foreach ($query->getTables() as $data) {
+    if ($data['table'] == $base_table) {
+      $base_table_alias = $data['alias'];
+      break;
+    }
+  }
+
+  // Do not alter the query if, for unknown reasons, the table alias couldn't
+  // be retrieved.
+  if (!$base_table_alias) {
+    return;
+  }
+
+  $query->join('scald_atoms', 'scald_atoms', "scald_atoms.sid = {$base_table_alias}.entity_id");
+  $query->leftJoin('file_managed', 'fm', 'fm.fid = scald_atoms.base_id');
+  $query->orderBy("fm.{$sort_field}", $sort_dir);
+}
+
+/**
+ * Implements hook_feeds_processor_targets_alter().
+ */
+function paddle_scald_feeds_processor_targets_alter(&$targets, $entity_type, $bundle) {
+  if ($entity_type == 'node') {
+    $targets['field_paddle_featured_image'] = array(
+      'name' => t('Featured image'),
+      'description' => t('The featured image field.'),
+      'callback' => 'paddle_scald_set_featured_image',
+    );
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function paddle_scald_cron() {
+  $time_now = time();
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'scald_atom')
+    ->entityCondition('bundle', 'file')
+    ->fieldCondition('field_paddle_scald_atom_end_date', 'value', $time_now, '<=');
+  $result = $query->execute();
+
+  if ($result) {
+    $items_ids = array_keys($result['scald_atom']);
+
+    if (module_exists('paddle_varnish')) {
+      $irrelevant_items = scald_atom_load_multiple($items_ids);
+      foreach ($irrelevant_items as $item) {
+        $file_url = file_create_url($item->file_source);
+        $file_path = parse_url($file_url, PHP_URL_PATH);
+        $file_path = substr($file_path, 1);
+        paddle_varnish_expire_cache(array($file_path));
+      }
+    }
+
+    scald_atom_delete_multiple($items_ids);
+  }
+}
+
+/**
+ * Callback to process the mapping to the featured image field.
+ */
+function paddle_scald_set_featured_image($source, $entity, $target, array $values, $mapping) {
+  if ($mapping['source'] == 'hp_imagesurlmain' && !empty($values[0])) {
+    $file = system_retrieve_file($values[0], NULL, TRUE, FILE_EXISTS_REPLACE);
+
+    if ($file) {
+      // Create a new atom and save it.
+      $atom = new ScaldAtom('image', 'paddle_scald_image', array(
+        'file_source' => $file->uri,
+        'title' => $file->filename,
+        'base_id' => $file->fid,
+      ));
+      scald_atom_save($atom);
+
+      $wrapper = entity_metadata_wrapper('node', $entity);
+      $wrapper->field_paddle_featured_image->set(array('sid' => $atom->sid));
+    }
+  }
+}
+
+/**
+ * Implements hook_date_popup_process_alter().
+ */
+function paddle_scald_date_popup_process_alter(&$element, &$form_state, &$context) {
+  if ($element['#id'] == 'edit-atom0-field-paddle-scald-atom-end-date-und-0-value') {
+    $element['#datepicker_options'] = array('minDate' => "+0D");
+    $element['date'] = date_popup_process_date_part($element);
+  }
+}

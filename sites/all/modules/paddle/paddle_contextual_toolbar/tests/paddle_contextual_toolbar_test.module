@@ -1,0 +1,98 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Contextual Toolbar Test
+ * module.
+ */
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_contextual_toolbar_test_permission() {
+  $return = array();
+
+  $return['test paddle_contextual_toolbar'] = array(
+    'title' => t('Test paddle contextual toolbar'),
+  );
+
+  return $return;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_contextual_toolbar_test_menu() {
+  $items = array();
+
+  // This is used for testing purposes only.
+  $items['admin/config/development/test-contextual-toolbar'] = array(
+    'title' => 'Test Contextual Toolbar',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_contextual_toolbar_test_form'),
+    'access arguments' => array('test paddle_contextual_toolbar'),
+  );
+
+  return $items;
+}
+
+/**
+ * Page callback for the test form.
+ */
+function paddle_contextual_toolbar_test_form($form, &$form_state) {
+  $form['#after_build'] = array(
+    'paddle_contextual_toolbar_test_add_contextual_actions',
+  );
+
+  $form['textfield'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Textfield',
+  );
+
+  $form['actions'] = array(
+    '#type' => 'actions',
+  );
+
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save configuration'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for the test form.
+ */
+function paddle_contextual_toolbar_test_form_submit($form, &$form_state) {
+  drupal_set_message('Test form submitted.');
+}
+
+/**
+ * Callback of the after_build of the paddle_contextual_toolbar_test_form.
+ */
+function paddle_contextual_toolbar_test_add_contextual_actions($form, $form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $actions = array();
+
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array('data-paddle-contextual-toolbar-click' => $form['actions']['submit']['#id']),
+      'html' => TRUE,
+      'external' => TRUE,
+    )),
+    'class' => array('save'),
+    'weight' => 0,
+  );
+
+  $actions[] = array(
+    'action' => l(t('Create Menu'), 'admin/structure/menu/add', array('html' => TRUE)),
+    'class' => array('add'),
+    'weight' => 1,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}

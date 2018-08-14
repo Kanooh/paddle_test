@@ -1,0 +1,72 @@
+<?php
+
+/**
+ * @file
+ * Tests the path alias of a content type.
+ */
+
+/**
+ * Tests the path alias of a content type.
+ */
+class NodePathAliasTestCase extends PaddleWebTestCase {
+
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Node path alias',
+      'description' => 'Tests the path alias of a content type.',
+      'group' => 'Paddle - Content Editing',
+    );
+  }
+
+  /**
+   * Tests the path alias of a content type.
+   */
+  public function testNodePathAlias() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Test with a system path.
+    $edit = array(
+      'title' => $this->randomName(),
+      'path[pathauto]' => FALSE,
+      'path[alias]' => 'node/%',
+    );
+
+    $this->drupalCreateUiNode('basic_page', $edit);
+    $this->assertRaw('The alias is already in use.', 'An error was shown when using a system path as alias.');
+
+    // Test with a non-system path.
+    $edit = array(
+      'title' => $this->randomName(),
+      'path[pathauto]' => FALSE,
+      'path[alias]' => $this->randomName(),
+    );
+
+    $node = $this->drupalCreateUiNode('basic_page', $edit);
+    $this->assertResponse(200, 'A basic page with a random generated path alias has been created.');
+    $this->drupalGet($edit['path[alias]']);
+    $this->assertResponse(200, 'A basic page with a random generated path alias is shown.');
+
+    // Test with an alias that already exists.
+    $edit_new = array(
+      'title' => $this->randomName(),
+      'path[pathauto]' => FALSE,
+      'path[alias]' => $edit['path[alias]'],
+    );
+
+    $this->drupalCreateUiNode('basic_page', $edit_new);
+    $this->assertRaw('The alias is already in use.', 'An error was shown when using a used path as alias.');
+
+    // Test with a node source path.
+    $edit_new = array(
+      'title' => $this->randomName(),
+      'path[pathauto]' => FALSE,
+      'path[alias]' => 'node/1',
+    );
+
+    $this->drupalCreateUiNode('basic_page', $edit_new);
+    $this->assertRaw('The alias is already in use.', 'An error was shown when using a node source path of an existing node.');
+  }
+}

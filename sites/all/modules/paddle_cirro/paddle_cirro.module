@@ -1,0 +1,974 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle CIRRO feature.
+ */
+
+include_once 'paddle_cirro.features.inc';
+
+/**
+ * Implements hook_feeds_plugins().
+ */
+function paddle_cirro_feeds_plugins() {
+  $info = array();
+
+  $info['FeedsCirroResourceFetcher'] = array(
+    'name' => 'Cirro HTTP Fetcher',
+    'description' => 'Download Cirro resources from a URL.',
+    'handler' => array(
+      'parent' => 'FeedsHTTPFetcher',
+      'class' => 'FeedsCirroResourceFetcher',
+      'file' => 'FeedsCirroResourceFetcher.inc',
+      'path' => drupal_get_path('module', 'paddle_cirro') . '/plugins/feeds',
+    ),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function paddle_cirro_cron() {
+  /** @var FeedsSource $src */
+  $src = feeds_source('paddle_cirro_feed');
+
+  // Make sure you don't import deleted CIRRO resources.
+  $src_url = $src->importer()->fetcher->config['auto_scheme'];
+  $config = array('FeedsCirroResourceFetcher' => array('source' => $src_url));
+  $src->addConfig($config);
+  $src->save();
+
+  try {
+    $src->import();
+    $src->schedule();
+  }
+  catch (Exception $e) {
+    return FALSE;
+  }
+  // Prevent notices from being thrown.
+  $src->state(FEEDS_FETCH);
+  $src->state(FEEDS_PROCESS);
+  $src->state(FEEDS_PROCESS_CLEAR);
+}
+
+/**
+ * Implements hook_feeds_presave().
+ */
+function paddle_cirro_feeds_presave(FeedsSource $source, $entity, $item, $entity_id) {
+  if (substr($source->id, 0, 12) === 'paddle_cirro') {
+    /** @var \EntityDrupalWrapper $wrapper */
+    $wrapper = entity_metadata_wrapper('node', $entity);
+
+    _paddle_cirro_clear_reference_field($wrapper, 'field_paddle_cirro_files');
+    // Save the documents if there are any.
+    if (!empty($item['documents'])) {
+      $documents = $item['documents'];
+      $api_url = $source->fetcher_result->getUrl();
+      // Replace the /resources part with /documents/.
+      $document_url = str_replace('/resources', '/documents/', $api_url);
+      foreach ($documents as $document) {
+        $wrapper->field_paddle_cirro_files[] = array(
+          'title' => $document['Value'],
+          'value' => $document_url . $document['Key'],
+        );
+      }
+    }
+
+    _paddle_cirro_clear_reference_field($wrapper, 'field_paddle_cirro_links');
+    // Save the links if there are any.
+    if (!empty($item['links'])) {
+      $links = $item['links'];
+
+      foreach ($links as $link) {
+        $link_field = array();
+
+        if (!empty($link['Url'])) {
+          $link_field['url'] = $link['Url'];
+        }
+
+        if (!empty($link['Name'])) {
+          $link_field['title'] = $link['Name'];
+        }
+
+        if (!empty($link['Description'])) {
+          $link_field['attributes']['title'] = $link['Description'];
+        }
+
+        $wrapper->field_paddle_cirro_links[] = $link_field;
+      }
+    }
+
+    // Clear the relationships in case they might have been removed.
+    _paddle_cirro_clear_reference_field($wrapper, 'field_paddle_cirro_resources');
+
+    if (!empty($item['childresources'])) {
+      $child_resource_nids = array();
+      foreach ($item['childresources'] as $child_resource) {
+        // Check if the item exists with the current GUID and if it exists
+        // immediately retrieve the node ID.
+        $nid = db_query("SELECT entity_id FROM {feeds_item} WHERE entity_type = 'node' AND guid = :guid", array(':guid' => $child_resource['Key']))->fetchField();
+
+        // If the item does not exist, create it.
+        if (empty($nid)) {
+          // Create a minimal node object.
+          $node = entity_create(
+            'node',
+            array(
+              'type' => 'paddle_cirro_page',
+              'title' => $child_resource['Value'],
+              'language' => language_default('language'),
+              'uid' => $source->importer->processor->config['author'],
+              'status' => NODE_NOT_PUBLISHED,
+            )
+          );
+          // Save the node to the database.
+          node_object_prepare($node);
+          $node = node_submit($node);
+          $nid = $node->nid;
+
+          // Link the node to a feeds_item with empty hash so the node gets
+          // updated once we got more details about it from the web service.
+          db_insert('feeds_item')
+            ->fields(array(
+              'entity_type' => 'node',
+              'guid' => $child_resource['Key'],
+              'hash' => '',
+              'entity_id' => $nid,
+              'feed_nid' => $nid,
+              'imported' => 0,
+              'url' => '',
+              'id' => 'paddle_cirro_feed',
+            ))
+            ->execute();
+        }
+
+        $child_resource_nids[] = $nid;
+      }
+      // Add the nodes to the CIRRO Resources.
+      $wrapper->field_paddle_cirro_resources = $child_resource_nids;
+    }
+
+    if (!empty($item['actionstrategies'])) {
+      _paddle_cirro_map_taxonomy_fields($wrapper, $item['actionstrategies'], 'field_paddle_cirro_action_strats', 'paddle_cirro_action_strategies');
+    }
+    if (!empty($item['policythemes'])) {
+      _paddle_cirro_map_taxonomy_fields($wrapper, $item['policythemes'], 'field_paddle_cirro_policy_themes', 'paddle_cirro_policy_themes');
+    }
+    if (!empty($item['settings'])) {
+      _paddle_cirro_map_taxonomy_fields($wrapper, $item['settings'], 'field_paddle_cirro_settings', 'paddle_cirro_settings');
+    }
+  }
+}
+
+/**
+ * Maps the taxonomy fields of the node.
+ *
+ * @param \EntityMetadataWrapper $wrapper
+ *   The node wrapper of the current feed item.
+ * @param array $taxonomy_field_values
+ *   The values of the given taxonomy field.
+ * @param string $field_name
+ *   The name of the taxonomy field.
+ * @param string $taxonomy_voc
+ *   The name of the taxonomy vocabulary which the field belongs to.
+ */
+function _paddle_cirro_map_taxonomy_fields(EntityMetadataWrapper $wrapper, $taxonomy_field_values, $field_name, $taxonomy_voc) {
+  // We would like to start from a clean slate. (In case items would have been
+  // removed from the feed source)
+  _paddle_cirro_clear_reference_field($wrapper, $field_name);
+
+  foreach ($taxonomy_field_values as $taxonomy_field_value) {
+    $taxonomy_field_name = $taxonomy_field_value['Value'];
+
+    // Check if the taxonomy term exists in the vocabulary. If it does not,
+    // create a new term.
+    $term = taxonomy_get_term_by_name($taxonomy_field_name, $taxonomy_voc);
+    if (!empty($term)) {
+      $term = array_shift($term);
+      $tid = $term->tid;
+      // Maps the parent items as well.
+      _paddle_cirro_map_parent_taxonomy_terms($wrapper, $field_name, $tid);
+    }
+    else {
+      $vobj = taxonomy_vocabulary_machine_name_load($taxonomy_voc);
+      $term = new stdClass();
+      $term->name = $taxonomy_field_name;
+      $term->vid = $vobj->vid;
+      taxonomy_term_save($term);
+      $tid = $term->tid;
+    }
+
+    _paddle_cirro_save_taxonomy_field($wrapper, $field_name, $tid);
+  }
+}
+
+/**
+ * Clears the values of a reference field.
+ *
+ * @param $wrapper
+ *   The Entity meta datawrapper of the node which the field belongs to.
+ * @param $field_name
+ *   The name of the reference field.
+ */
+function _paddle_cirro_clear_reference_field($wrapper, $field_name) {
+  $wrapper->{$field_name}->set(array());
+}
+
+/**
+ * Maps the parents of a CIRRO taxonomy term to the node.
+ *
+ * @param \EntityMetadataWrapper $wrapper
+ *   The node wrapper of the current feed item.
+ * @param string $field_name
+ *   The name of the taxonomy field.
+ * @param string $tid
+ *   The Identifier of the CIRRO taxonomy term.
+ */
+function _paddle_cirro_map_parent_taxonomy_terms(EntityMetadataWrapper $wrapper, $field_name, $tid) {
+  $parents = taxonomy_get_parents_all($tid);
+
+  foreach ($parents as $parent) {
+    _paddle_cirro_save_taxonomy_field($wrapper, $field_name, $parent->tid);
+  }
+}
+
+/**
+ * Saves a taxonomy field, but make a check if it does not exist yet.
+ *
+ * @param \EntityMetadataWrapper $wrapper
+ *   The node wrapper of the current feed item.
+ * @param string $field_name
+ *   The name of the taxonomy field.
+ * @param string $tid
+ *   The Identifier of the CIRRO taxonomy term.
+ */
+function _paddle_cirro_save_taxonomy_field(EntityMetadataWrapper $wrapper, $field_name, $tid) {
+  $existing_tids = array();
+  $existing_terms = $wrapper->{$field_name}->value();
+
+  foreach ($existing_terms as $existing_term) {
+    $existing_tids[] = $existing_term->tid;
+  }
+
+  if (!in_array($tid, $existing_tids)) {
+    $wrapper->{$field_name}[] = $tid;
+  }
+}
+
+/**
+ * Implements hook_feeds_after_save().
+ */
+function paddle_cirro_feeds_after_save(FeedsSource $source, $entity, $item, $entity_id) {
+  if ($entity->type == 'paddle_cirro_page') {
+    workbench_moderation_moderate($entity, 'published');
+  }
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_cirro_paddle_content_manager_additional_fields() {
+  $additional_fields = array();
+  $menu_object = menu_get_object();
+
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'paddle_cirro_page') {
+      $additional_fields = array(
+        'field_paddle_cirro_contact_info',
+        'field_paddle_cirro_methodology',
+        'field_paddle_cirro_resources',
+        'field_paddle_cirro_files',
+        'field_paddle_cirro_links',
+        'field_paddle_cirro_action_strats',
+        'field_paddle_cirro_policy_themes',
+        'field_paddle_cirro_settings',
+      );
+    }
+    elseif ($menu_object->type == 'paddle_advanced_search_page') {
+      return array(
+        'field_paddle_cirro_adv_method',
+        'field_paddle_cirro_adv_strats',
+        'field_paddle_cirro_adv_themes',
+        'field_paddle_cirro_adv_settings',
+      );
+    }
+  }
+
+  return $additional_fields;
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields_groups().
+ */
+function paddle_cirro_paddle_content_manager_additional_fields_groups() {
+  $additional_fields_groups = array();
+  $menu_object = menu_get_object();
+
+  if ($menu_object->type == 'paddle_advanced_search_page') {
+    $additional_fields_groups = array();
+    $additional_fields_groups['cirro'] = array(
+      'label' => t('Cirro resource settings'),
+      'weight' => 1,
+      'fields' => array(
+        'field_paddle_cirro_adv_method',
+        'field_paddle_cirro_adv_strats',
+        'field_paddle_cirro_adv_themes',
+        'field_paddle_cirro_adv_settings',
+      ),
+    );
+  }
+
+  return $additional_fields_groups;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_cirro_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_panels_ipe_pane_links_alter().
+ */
+function paddle_cirro_panels_ipe_pane_links_alter(&$links, $context) {
+  if ($pane = $context['pane']) {
+    $types = array(
+      'cirro_resource_type_filter',
+    );
+
+    if (in_array($pane->type, $types)) {
+      unset($links['delete']);
+      unset($links['edit']);
+      unset($links['paddle_style']);
+    }
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_cirro_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_cirro_contact_information' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-cirro-contact-information',
+    ),
+    'paddle_cirro_description' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-cirro-description',
+    ),
+    'paddle_cirro_materials' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-cirro-materials',
+    ),
+    'paddle_cirro_resources' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-cirro-resources',
+    ),
+    'paddle_cirro_terms' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-cirro-terms',
+    ),
+  );
+}
+
+/**
+ * Retrieves the Node Identifiers of the parent entities of a CIRRO resource.
+ *
+ * @param int $child_nid
+ *   The node ID of the child node whose parents we seek.
+ *
+ * @return array
+ *   A list of parent CIRRO resources.
+ */
+function paddle_cirro_get_parent_entity_ids($child_nid) {
+  // Initialize the array.
+  $parent_ids = array();
+
+  // Search for nodes which reference to the child node.
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'paddle_cirro_page')
+    ->fieldCondition('field_paddle_cirro_resources', 'target_id', $child_nid);
+
+  $result = $query->execute();
+
+  // Retrieve the parent IDs if they exist.
+  if (isset($result['node'])) {
+    $parent_ids = array_keys($result['node']);
+  }
+
+  return $parent_ids;
+}
+
+/**
+ * Retrieves the related entities of a CIRRO resource.
+ *
+ * @param int $id
+ *   The node ID of the child node whose relatives we seek.
+ *
+ * @return array
+ *   A list of related entities.
+ */
+function paddle_cirro_get_related_entities($id) {
+  $parent_entity_ids = paddle_cirro_get_parent_entity_ids($id);
+  $related_entities = array();
+
+  if (!empty($parent_entity_ids)) {
+    foreach ($parent_entity_ids as $parent_entity_id) {
+      $parent_entity = node_load($parent_entity_id);
+      $parent_entity_wrapper = entity_metadata_wrapper('node', $parent_entity);
+
+      if (!empty($parent_entity_wrapper->field_paddle_cirro_resources)) {
+        $children = $parent_entity_wrapper->field_paddle_cirro_resources->value();
+
+        if (!empty($children)) {
+          foreach ($children as $child) {
+            // Unpublished nodes should not be shown to anonymous users.
+            // The current node should not be shown as a related node.
+            if (node_access('view', $child) && $child->nid != $id) {
+              $related_entities[$child->nid] = $child;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return $related_entities;
+}
+
+/**
+ * Implements hook_paddle_content_region_extra_content_regions().
+ */
+function paddle_cirro_paddle_content_region_extra_content_regions($content_type) {
+  $regions = array();
+
+  if ($content_type == 'paddle_cirro_page') {
+    $regions = array(
+      '5_b' => t('F'),
+    );
+  }
+
+  return $regions;
+}
+
+/**
+ * Implements hook_preprocess_search_api_page_result().
+ */
+function paddle_cirro_preprocess_search_api_page_result(&$variables) {
+  if (!empty($variables['item'])) {
+    $node_wrapper = entity_metadata_wrapper('node', $variables['item']);
+
+    if (!empty($node_wrapper->field_paddle_cirro_methodology)) {
+      $methodology = $node_wrapper->field_paddle_cirro_methodology->value();
+      if ($methodology === TRUE) {
+        $variables['classes_array'][] = 'paddle-cirro-methodology';
+      }
+      elseif ($methodology === FALSE) {
+        $variables['classes_array'][] = 'paddle-cirro-assistance-tool';
+      }
+    }
+  }
+}
+
+/**
+ * Retrieves the hashed delta for the CIRRO resource type facet.
+ *
+ * @return string|null
+ *   The hashed delta if available, NULL otherwise.
+ */
+function _paddle_cirro_get_cirro_resource_type_facet_hashed_delta() {
+  $facet_name = 'field_paddle_cirro_methodology';
+  $deltas = &drupal_static(__FUNCTION__);
+
+  if (!isset($deltas[$facet_name])) {
+    $deltas = array();
+
+    // Gets delta map from facetapi.
+    $map = facetapi_get_delta_map();
+
+    $facet_delta = facetapi_build_delta('search_api@node_index', 'block', $facet_name);
+    $hashed_delta = array_search($facet_delta, $map);
+    if (FALSE !== $hashed_delta) {
+      $deltas[$facet_name] = $hashed_delta;
+    }
+  }
+
+  return !empty($deltas[$facet_name]) ? $deltas[$facet_name] : NULL;
+}
+
+/**
+ * Implements hook_facetapi_default_facet_settings_alter().
+ *
+ * Provide global settings for the facets declared by this module.
+ */
+function paddle_cirro_facetapi_default_facet_settings_alter(&$export) {
+  ctools_include('export');
+
+  // Alter the methodology facet.
+  $settings = ctools_export_crud_new('facetapi');
+  $settings->name = 'search_api@node_index::field_paddle_cirro_methodology';
+  $settings->searcher = 'search_api@node_index';
+  $settings->realm = '';
+  $settings->facet = 'field_paddle_cirro_methodology';
+  $settings->enabled = 0;
+  $settings->settings = array(
+    'operator' => 'and',
+    'hard_limit' => '50',
+    'dependencies' => array(
+      'bundle' => 'none',
+      'bundle_selected' => array(),
+      'roles' => array(),
+    ),
+    'facet_mincount' => '1',
+    'facet_search_ids' => array(),
+    'facet_missing' => '0',
+    'flatten' => 0,
+    'individual_parent' => 0,
+    'query_type' => 'term',
+    'limit_active_items' => 0,
+    'default_true' => TRUE,
+    'exclude' => 0,
+  );
+
+  $export[$settings->name] = $settings;
+
+  // Now up to our taxonomy facets.
+  foreach (paddle_cirro_get_facets() as $name => $facet) {
+    $settings = ctools_export_crud_new('facetapi');
+    $settings->name = 'search_api@node_index::' . $name;
+    $settings->searcher = 'search_api@node_index';
+    $settings->realm = '';
+    $settings->facet = $name;
+    $settings->enabled = 0;
+    $settings->settings = array(
+      'hard_limit' => -1,
+      'facet_search_ids' => array(
+        'search_api_views:paddle_advanced_search:default' => 'search_api_views:paddle_advanced_search:default',
+      ),
+      'default_true' => 0,
+    );
+
+    $export[$settings->name] = $settings;
+  }
+}
+
+/**
+ * Implements hook_node_submit().
+ */
+function paddle_cirro_node_submit($node, $form, &$form_state) {
+  if (empty($node->panelizer)) {
+    return;
+  }
+
+  if ($node->type == 'paddle_advanced_search_page') {
+    // Retrieve the display.
+    $display = paddle_apps_retrieve_node_display_for_pane_altering($node);
+    // Only continue if there is a display.
+    if (!$display) {
+      return;
+    }
+
+    $layout = panels_get_layout($display->layout);
+
+    // For the Alfa layout, we put panes by default in the left region. For all
+    // the remaining layouts, use the approach as in the change layout modal.
+    if ($layout['name'] == 'paddle_2_col_3_9') {
+      $default_region = 'left';
+    }
+    else {
+      $regions = array_keys(panels_get_regions($layout, $display));
+      $default_region = reset($regions);
+    }
+
+    $cirro_resource_type_filter_value['cirro_resource_type_filter'] = $form_state['values']['field_paddle_cirro_adv_method'][LANGUAGE_NONE][0]['value'];
+    $action_strategies_filter_value['action_strategies_filter'] = $form_state['values']['field_paddle_cirro_adv_strats'][LANGUAGE_NONE][0]['value'];
+    $policy_themes_filter_value['policy_themes_filter'] = $form_state['values']['field_paddle_cirro_adv_themes'][LANGUAGE_NONE][0]['value'];
+    $settings_filter_value['settings_filter'] = $form_state['values']['field_paddle_cirro_adv_settings'][LANGUAGE_NONE][0]['value'];
+
+    // Either display or hide the filters based on the value
+    // of the advanced search page fields.
+    paddle_advanced_search_update_advanced_search_page_pane($node, $cirro_resource_type_filter_value, 'cirro_resource_type_filter', $display, $default_region);
+    paddle_advanced_search_update_advanced_search_page_pane($node, $action_strategies_filter_value, 'action_strategies_filter', $display, $default_region);
+    paddle_advanced_search_update_advanced_search_page_pane($node, $policy_themes_filter_value, 'policy_themes_filter', $display, $default_region);
+    paddle_advanced_search_update_advanced_search_page_pane($node, $settings_filter_value, 'settings_filter', $display, $default_region);
+  }
+}
+
+/**
+ * Implements hook_facetapi_force_delta_mapping().
+ */
+function paddle_cirro_facetapi_force_delta_mapping() {
+  // Retrieve the names of the taxonomy voc facets.
+  $cirro_facets = array_keys(paddle_cirro_get_facets());
+  // Add the methodology facet.
+  $cirro_facets[] = 'field_paddle_cirro_methodology';
+
+  return array(
+    'search_api@node_index' => array(
+      'block' => $cirro_facets,
+    ),
+  );
+}
+
+/**
+ * Implements hook_facetapi_enabled_facets_alter().
+ */
+function paddle_cirro_facetapi_enabled_facets_alter(array &$enabled_facets, $searcher, $realm_name) {
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher) {
+    return;
+  }
+
+  // Gets facet definitions for all enabled facets.
+  $facet_info = facetapi_get_facet_info($searcher);
+
+  // Add our facets to the enabled list.
+  if (isset($facet_info['field_paddle_cirro_methodology'])) {
+    $enabled_facets['field_paddle_cirro_methodology'] = $facet_info['field_paddle_cirro_methodology'];
+  }
+
+  // Now up to our taxonomy facets.
+  foreach (paddle_cirro_get_facets() as $name => $info) {
+    // First, check if the facet is available in the facet definitions, to
+    // avoid any possible error.
+    if (isset($facet_info[$name])) {
+      $enabled_facets[$name] = $facet_info[$name];
+    }
+  }
+}
+
+/**
+ * Retrieve the enabled facets and their info.
+ *
+ * @return array
+ *   The facet info, keyed by machine name.
+ */
+function paddle_cirro_get_facets() {
+  $facets = &drupal_static(__FUNCTION__);
+
+  if (!isset($facets)) {
+    $facets = array();
+
+    $action_strategies_tids = paddle_taxonomy_manager_get_terms_from_vocabulary('paddle_cirro_action_strategies');
+    $policy_themes_tids = paddle_taxonomy_manager_get_terms_from_vocabulary('paddle_cirro_policy_themes');
+    $settings_tids = paddle_taxonomy_manager_get_terms_from_vocabulary('paddle_cirro_settings');
+
+    // Process only if we have some tids.
+    if ($action_strategies_tids) {
+      $name = "paddle_cirro_action_strategies_filter";
+      $facets[$name] = array(
+        'default widget' => 'facetapi_extended_checkbox_links',
+        'label' => t('Action strategies'),
+      );
+    }
+
+    if ($policy_themes_tids) {
+      $name = "paddle_cirro_policy_themes_filter";
+      $facets[$name] = array(
+        'default widget' => 'facetapi_extended_checkbox_links',
+        'label' => t('Policy themes'),
+      );
+    }
+
+    if ($settings_tids) {
+      $name = "paddle_cirro_settings_filter";
+      $facets[$name] = array(
+        'default widget' => 'facetapi_extended_checkbox_links',
+        'label' => t('Settings', array(), array('context' => 'CIRRO')),
+      );
+    }
+  }
+
+  return $facets;
+}
+
+/**
+ * Implements hook_facetapi_facet_info_alter().
+ */
+function paddle_cirro_facetapi_facet_info_alter(array &$facet_info, array $searcher_info) {
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher_info['name']) {
+    return;
+  }
+
+  // Create publication specific facets.
+  foreach (paddle_cirro_get_facets() as $name => $info) {
+    $facet_info[$name] = array(
+      'name' => $name,
+      'label' => $info['label'],
+      'default widget' => $info['default widget'],
+      'alter callbacks' => array(),
+      'default sorts' => array(
+        array('active', SORT_DESC),
+        array('display', SORT_ASC),
+        array('count', SORT_DESC),
+      ),
+    );
+
+    if ($name == 'paddle_cirro_action_strategies_filter') {
+      $facet_info[$name]['field alias'] = 'pas_cirro_action_strategies';
+      $facet_info[$name]['taxonomy vocabulary'] = 'paddle_cirro_action_strategies';
+      $facet_info[$name]['alter callbacks'] = array('paddle_cirro_facet_build_alter_cirro_settings');
+
+      if (!empty($facet_info['field_paddle_cirro_action_strats'])) {
+        $facet_info[$name] = array_merge($facet_info['field_paddle_cirro_action_strats'], $facet_info[$name]);
+      }
+    }
+
+    if ($name == 'paddle_cirro_policy_themes_filter') {
+      $facet_info[$name]['field alias'] = 'pas_cirro_themes';
+      $facet_info[$name]['taxonomy vocabulary'] = 'paddle_cirro_policy_themes';
+
+      if (!empty($facet_info['field_paddle_cirro_policy_themes'])) {
+        $facet_info[$name] = array_merge($facet_info['field_paddle_cirro_policy_themes'], $facet_info[$name]);
+      }
+    }
+
+    if ($name == 'paddle_cirro_settings_filter') {
+      $facet_info[$name]['field alias'] = 'pas_cirro_settings';
+      $facet_info[$name]['taxonomy vocabulary'] = 'paddle_cirro_settings';
+      $facet_info[$name]['alter callbacks'] = array('paddle_cirro_facet_build_alter_cirro_settings');
+
+      if (!empty($facet_info['field_paddle_cirro_settings'])) {
+        $facet_info[$name] = array_merge($facet_info['field_paddle_cirro_settings'], $facet_info[$name]);
+      }
+    }
+  }
+
+  // Make the facet label translatable.
+  $facet_info['field_paddle_cirro_methodology']['label'] = t('CIRRO type');
+}
+
+/**
+ * Alter callback of facet build array.
+ *
+ * Hides terms which the client does not want in its facet list.
+ *
+ * @param array $build
+ *   The prepared build.
+ * @param SearchApiFacetapiAdapter $adapter
+ *   The FacetapiAdapter.
+ * @param array $facet
+ *   The facet configuration.
+ */
+function paddle_cirro_facet_build_alter_cirro_settings(&$build, SearchApiFacetapiAdapter $adapter, $facet) {
+  // Load the terms for the given vocabulary.
+  $vocabulary = taxonomy_vocabulary_machine_name_load($facet['taxonomy vocabulary']);
+  $tree = taxonomy_get_tree($vocabulary->vid);
+
+  // Initialize the allowed terms.
+  $allowed_terms = array();
+
+  foreach ($tree as $term) {
+    if (!in_array($term->name, paddle_cirro_get_disallowed_taxonomy_terms())) {
+      $allowed_terms[$term->tid] = $term->tid;
+    }
+  }
+
+  $build = array_intersect_key($build, $allowed_terms);
+}
+
+/**
+ * Returns the taxonomy terms which are imported but should not be shown.
+ *
+ * @return array
+ *   A list of names of taxonomy terms. (Does not need to be an unique list)
+ */
+function paddle_cirro_get_disallowed_taxonomy_terms() {
+  return array(
+    'Andere',
+    'Niet van toepassing',
+  );
+}
+
+/**
+ * Implements hook_views_default_views_alter().
+ */
+function paddle_cirro_views_default_views_alter(&$views) {
+  if (isset($views['paddle_advanced_search'])) {
+    $handler =& $views['paddle_advanced_search']->display['default']->handler;
+    $fields = array();
+
+    /* Contextual filter: Indexed Node: Action Strategies */
+    $fields[] = array(
+      'id' => 'field_paddle_cirro_action_strats',
+      'vocabulary' => 'paddle_cirro_action_strategies',
+    );
+    /* Contextual filter: Indexed Node: Policy Themes */
+    $fields[] = array(
+      'id' => 'field_paddle_cirro_policy_themes',
+      'vocabulary' => 'paddle_cirro_policy_themes',
+    );
+    /* Contextual filter: Indexed Node: Settings*/
+    $fields[] = array(
+      'id' => 'field_paddle_cirro_settings',
+      'vocabulary' => 'paddle_cirro_settings',
+    );
+
+    foreach ($fields as $field) {
+      $handler->display->display_options['arguments'][$field['id']]['id'] = $field['id'];
+      $handler->display->display_options['arguments'][$field['id']]['table'] = 'search_api_index_node_index';
+      $handler->display->display_options['arguments'][$field['id']]['field'] = $field['id'];
+      $handler->display->display_options['arguments'][$field['id']]['default_argument_type'] = 'fixed';
+      $handler->display->display_options['arguments'][$field['id']]['summary']['format'] = 'default_summary';
+      $handler->display->display_options['arguments'][$field['id']]['specify_validation'] = TRUE;
+      $handler->display->display_options['arguments'][$field['id']]['validate']['type'] = 'taxonomy_term';
+      $handler->display->display_options['arguments'][$field['id']]['validate_options']['vocabularies'] = array(
+        $field['vocabulary'] => $field['vocabulary'],
+      );
+      $handler->display->display_options['arguments'][$field['id']]['validate_options']['type'] = 'tids';
+      $handler->display->display_options['arguments'][$field['id']]['validate']['fail'] = 'empty';
+      $handler->display->display_options['arguments'][$field['id']]['break_phrase'] = 0;
+      $handler->display->display_options['arguments'][$field['id']]['not'] = 0;
+    }
+  }
+}
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function paddle_cirro_update_dependencies() {
+  $dependencies = array();
+
+  // The paddle_cirro_update_7000 function must run after
+  // taxonomy_update_7012. We can only update the nodes AFTER altering
+  // the taxonomy_index table.
+  $dependencies['paddle_cirro'][7000] = array(
+    'taxonomy' => 7012,
+  );
+
+  return $dependencies;
+}
+
+/**
+ * Implements hook_feeds_after_import().
+ */
+function paddle_cirro_feeds_after_import(FeedsSource $source) {
+  if (!empty($source) && $source->id == 'paddle_cirro_feed') {
+    // The skip hash check setting may not create an infinite loop of importing
+    // all nodes. We reset the option after having imported a full batch of
+    // CIRRO pages.
+    $config = array('skip_hash_check' => 0);
+    $source->importer->processor->addConfig($config);
+    $source->importer->save();
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_cirro_form_taxonomy_overview_terms_alter(&$form, &$form_state, $form_id) {
+  // When the hierarchy of CIRRO taxonomy items has been changed all nodes need
+  // to be updated again.
+  if (paddle_cirro_assert_cirro_vocabulary($form)) {
+    $form['#submit'][] = 'paddle_cirro_form_taxonomy_overview_terms_check_hierarchy_change';
+  }
+}
+
+/**
+ * On form submit, checks if the hierarchy of the taxonomy voc has been changed.
+ *
+ * Code inspired by
+ * @see taxonomy_overview_terms_submit
+ */
+function paddle_cirro_form_taxonomy_overview_terms_check_hierarchy_change(&$form, &$form_state) {
+  // First check if the hierarchy of the menu has been changed.
+  $hierarchy_has_changed = FALSE;
+  foreach ($form_state['values'] as $tid => $values) {
+    if (isset($form[$tid]['#term'])) {
+      $term = $form[$tid]['#term'];
+      if ($values['parent'] != $term['parent']) {
+        $hierarchy_has_changed = TRUE;
+        break;
+      }
+    }
+  }
+  // Add the skip hash check flag if the menu hierarchy has been changed.
+  if ($hierarchy_has_changed) {
+    paddle_cirro_trigger_full_node_import();
+  }
+}
+
+/**
+ * Implements hook_taxonomy_term_delete().
+ */
+function paddle_cirro_taxonomy_term_delete($term) {
+  // Only act on CIRRO terms.
+  foreach (paddle_cirro_vocabulary_machine_names() as $cirro_vocabulary_machine_name) {
+    $vocabulary = taxonomy_vocabulary_machine_name_load($cirro_vocabulary_machine_name);
+    if ($term->vid == $vocabulary->vid) {
+      paddle_cirro_trigger_full_node_import();
+      // Triggering a full node import once is enough.
+      return;
+    }
+  }
+}
+
+/**
+ * Assert if the form has an action on a CIRRO vocabulary.
+ *
+ * @param array $form
+ *   The form.
+ *
+ * @return bool
+ *   Whether the form takes an action of a CIRRO voc or not.
+ */
+function paddle_cirro_assert_cirro_vocabulary($form) {
+  if (!empty($form['#vocabulary'])) {
+    $form_vocabulary = $form['#vocabulary']->machine_name;
+
+    if (in_array($form_vocabulary, paddle_cirro_vocabulary_machine_names())) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Flags the Feeds Node Processor to skip the hash check on the next cron run.
+ */
+function paddle_cirro_trigger_full_node_import() {
+  /** @var FeedsSource $src */
+  $src = feeds_source('paddle_cirro_feed');
+  $config = array('skip_hash_check' => 1);
+  $src->importer->processor->addConfig($config);
+  $src->importer->save();
+}
+
+/**
+ * Get a list of the CIRRO specific vocabularies.
+ *
+ * @return string[] Machine names
+ */
+function paddle_cirro_vocabulary_machine_names() {
+  return array(
+    'paddle_cirro_settings',
+    'paddle_cirro_policy_themes',
+    'paddle_cirro_action_strategies',
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_cirro_form_paddle_panes_listing_content_type_edit_form_alter(&$form, &$form_state) {
+  // Get the default value for the view modes.
+  $conf = $form_state['conf'];
+
+  $form['pane_settings']['section_body']['filters']['cirro_type'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Filter by CIRRO type'),
+    '#description' => t('Show only content from CIRRO pages which have the selected CIRRO type. If nothing is selected all CIRRO pages will be shown.'),
+    '#options' => array(
+      'assistance_tool' => t('Assistance tool'),
+      'methodology' => t('Methodology'),
+    ),
+    '#default_value' => isset($conf['cirro_type']) ? $conf['cirro_type'] : array(),
+  );
+}

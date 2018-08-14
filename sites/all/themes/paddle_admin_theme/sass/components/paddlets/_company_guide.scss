@@ -1,0 +1,46 @@
+/**
+ * @file
+ * Company Guide paddlet styling.
+ */
+
+.node-company_page-form {
+  .field-name-field-ous-ou-hours {
+    margin-top: 12px;
+
+    .fieldset-wrapper {
+      @include flexbox();
+    }
+  }
+
+  .field-name-field-ous-opening-hours {
+    td:not(.field-multiple-drag):not(.tabledrag-hide), td > .ajax-new-content {
+      @include flexbox();
+
+      input.form-submit {
+        @include align-self(center);
+        margin-left: 1em;
+      }
+    }
+  }
+
+  .date-combo {
+    margin-bottom: 0;
+
+    & > legend {
+      display: none;
+    }
+  }
+
+  .end-date-wrapper {
+    & > .form-item {
+      @include flexbox();
+      @include align-items(center);
+    }
+  }
+
+  .container-inline-date {
+    .description {
+      display: none;
+    }
+  }
+}

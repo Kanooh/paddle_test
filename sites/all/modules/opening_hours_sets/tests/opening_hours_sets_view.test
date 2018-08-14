@@ -1,0 +1,59 @@
+<?php
+
+/**
+ * @file
+ * Contains OpeningHoursViewTest.
+ */
+
+/**
+ * Test the view of the opening hours sets.
+ */
+class OpeningHoursViewTest extends DrupalWebTestCase {
+  protected $profile = 'minimal';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Opening hours sets view test',
+      'description' => 'Test the view for opening hours sets.',
+      'group' => 'Opening hours sets',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array('opening_hours_sets'));
+    $user = $this->drupalCreateUser(array('manage opening hours sets'));
+    $this->drupalLogin($user);
+  }
+
+  /**
+   * Tests the view for opening hours sets.
+   */
+  public function testView() {
+    $controller = new EntityAPIController('opening_hours_set');
+    $set = $controller->create(array('title' => $this->randomName()));
+    $set->save();
+
+    $view = views_get_view('opening_hours_sets');
+    $view_content = $view->preview('opening_hours_sets_overview_block');
+
+    $xml = new SimpleXMLElement($view_content);
+    $this->assertTrue(!empty($xml->xpath('//tbody//td[contains(@class, "views-field-title") and contains(text(), ' . $set->title . ')]')));
+    $this->assertTrue(!empty($xml->xpath('//tbody//td[contains(@class, "views-field-edit-link")]/a[contains(@href, "admin/content/opening_hours_set/edit/' . $set->ohsid . '")]')));
+    $this->assertTrue(!empty($xml->xpath('//tbody//td[contains(@class, "views-field-delete-link")]/a[contains(@href, "admin/content/opening_hours_set/delete/' . $set->ohsid . '")]')));
+
+    // Test the edit link.
+    $this->drupalPost('admin/content/opening_hours_set/edit/' . $set->ohsid, array('title' => $this->randomName()), t('Save'));
+    $this->assertNoRaw($set->title);
+
+    // Test the delete link.
+    $this->drupalPost('admin/content/opening_hours_set/delete/' . $set->ohsid, array(), t('Delete'));
+    $entities = $controller->load();
+    $this->assertTrue(empty($entities));
+  }
+}

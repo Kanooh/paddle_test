@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Multilingual.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_multilingual_install() {
+  if (is_callable('language_types_set')) {
+    // Update the language types.
+    language_types_set();
+
+    // Set up language negotiation: session, interface language,
+    // default language.
+    $providers = language_negotiation_info();
+    $negotiation = array();
+    foreach (array('locale-session', 'locale-interface', 'language-default') as $provider) {
+      $negotiation[$provider] = $providers[$provider];
+    }
+    language_negotiation_set('language_content', $negotiation);
+  }
+
+  // Allow full_html text format to be translatable to avoid PHP warnings.
+  paddle_multilingual_set_allowed_formats();
+}
+
+/**
+ * Updates the translatable text formats.
+ */
+function paddle_multilingual_update_7001() {
+  paddle_multilingual_set_allowed_formats();
+}
+
+/**
+ * Sets the translatable text formats to include full HTML.
+ */
+function paddle_multilingual_set_allowed_formats() {
+  $allowed_formats = drupal_map_assoc(array('full_html', 'plain_text'));
+  variable_set('i18n_string_allowed_formats', $allowed_formats);
+}

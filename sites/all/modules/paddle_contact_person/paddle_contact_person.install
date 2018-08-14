@@ -1,0 +1,416 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Contact Person app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_contact_person_enable() {
+  // We need to load all files from the dependent modules so hook
+  // implementations can be found, used by field_create_field() invoked
+  // indirectly by this module. Otherwise the addressfield field type and other
+  // new field types are not yet known.
+  module_load_all();
+  drupal_static_reset('module_implements');
+  cache_clear_all('field_info_types:', 'cache_field', TRUE);
+  module_implements('', FALSE, TRUE);
+
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_contact_person');
+
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions(). Otherwise our new content type is not yet
+  // known.
+  node_type_cache_reset();
+
+  // We need to clear the CTools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  ctools_modules_enabled(array('paddle_contact_person'));
+
+  $permissions = array(
+    'create contact_person content',
+    'edit any contact_person content',
+    'delete any contact_person content',
+    'edit contact_person content in landing pages',
+    'administer panelizer node contact_person layout',
+    'administer panelizer node contact_person content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_contact_person_disable() {
+  $permissions = array(
+    'create contact_person content',
+    'edit any contact_person content',
+    'delete any contact_person content',
+    'edit contact_person content in landing pages',
+    'administer panelizer node contact_person layout',
+    'administer panelizer node contact_person content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_revoke_permissions($role->rid, $permissions);
+  }
+  // Remove all of the nodes which are of this module's content type.
+  $results = db_select('node', 'n')
+    ->fields('n', array('nid'))
+    ->condition('type', 'contact_person', '=')
+    ->execute();
+  foreach ($results as $result) {
+    $nids[] = $result->nid;
+  }
+
+  if (!empty($nids)) {
+    node_delete_multiple($nids);
+    drupal_set_message(t('Deleted %count nodes.', array('%count' => count($nids))));
+  }
+
+  // Delete the node type.
+  node_type_delete('contact_person');
+  node_types_rebuild();
+  // Delete all menu items linked to the deleted nodes.
+  menu_rebuild();
+}
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function paddle_contact_person_update_dependencies() {
+  $dependencies = array();
+
+  // Migrate from image field to scald atom field before parsing all the
+  // nodes to update references.
+  $dependencies['paddle'][7108] = array(
+    'paddle_contact_person' => 7002,
+  );
+  // Create the featured image master field instance before syncing it to
+  // Paddle contact person pages.
+  $dependencies['paddle_contact_person'][7003] = array(
+    'paddle_content_manager' => 7000,
+  );
+
+  $dependencies['paddle_contact_person'][7007] = array(
+    'paddle' => 7146,
+  );
+
+  return $dependencies;
+}
+
+/**
+ * Update the contact person pane so the photo separate pane is removed.
+ */
+function paddle_contact_person_update_7001() {
+  db_delete('panels_pane')
+    ->condition('panel', 'nested_top')
+    ->condition('subtype', 'node:field_paddle_cp_photo')
+    ->execute();
+}
+
+/**
+ * Migrate the image field from a file manged field to a Scald atom field.
+ */
+function paddle_contact_person_update_7002(&$sandbox) {
+  // Enable the module defining the scald atom field.
+  module_enable(array('paddle_scald_atom_field'));
+
+  // Get all the nodes which have the field_paddle_cp_photo field.
+  if (!isset($sandbox['nids'])) {
+    $field = field_info_field('field_paddle_cp_photo');
+    if (!empty($field['bundles']['node'])) {
+      $bundles = $field['bundles']['node'];
+      $query = new EntityFieldQuery();
+      $query->entityCondition('entity_type', 'node')->propertyCondition('type', $bundles);
+      $results = $query->execute();
+
+      if (!empty($results['node'])) {
+        $sandbox['#finished'] = 0;
+        $sandbox['nids'] = array_keys($results['node']);
+        $sandbox['field_values'] = array();
+        $sandbox['total'] = count($results['node']);
+        $sandbox['totalSave'] = 0;
+        // Holds the number of processed nodes.
+        $sandbox['count'] = 0;
+        $sandbox['countSave'] = 0;
+        $sandbox['rate'] = 5;
+        // Go to the next step of the update.
+        return;
+      }
+    }
+
+    // Either no node bundles or nodes have been found. Just update the field.
+    _paddle_contact_person_update_recreate_cp_photo_field();
+    $sandbox['#finished'] = 1;
+  }
+  // Save the photo image data.
+  elseif (count($sandbox['nids']) > $sandbox['count']) {
+    // Take part of the nodes to process.
+    $nids = array_slice($sandbox['nids'], $sandbox['count'], $sandbox['rate']);
+    foreach ($nids as $nid) {
+      $node = entity_load_single('node', $nid);
+      $value = field_get_items('node', $node, 'field_paddle_cp_photo');
+      if ($value) {
+        $sandbox['field_values'][$nid] = $value[0];
+      }
+      $sandbox['#finished'] = abs((($sandbox['count'] - 1) / $sandbox['total']) / 2);
+      $sandbox['count']++;
+    }
+  }
+  elseif (is_array($sandbox['nids']) && count($sandbox['nids']) === $sandbox['count']) {
+    $sandbox['nids'] = -1;
+    $sandbox['totalSave'] = count($sandbox['field_values']);
+
+    _paddle_contact_person_update_recreate_cp_photo_field();
+
+    $sandbox['#finished'] = abs(((($sandbox['count']) - 1) / $sandbox['total']) / 2);
+  }
+  // Create an atom for this node and attach it the field.
+  elseif (count($sandbox['field_values']) > $sandbox['countSave']) {
+    $nids = array_slice($sandbox['field_values'], $sandbox['countSave'], $sandbox['rate'], TRUE);
+    foreach ($nids as $nid => $file) {
+      $node = entity_load_single('node', $nid);
+
+      // Create an atom from the file.
+      $options = array(
+        'alt_text' => $file['filename'],
+      );
+      try {
+        $atom_id = paddle_update_create_atom((object) $file, $options);
+        $wrapper = entity_metadata_wrapper('node', $node);
+        $wrapper->field_paddle_cp_photo->set(array('sid' => $atom_id));
+        $wrapper->save();
+      } catch (\Exception $e) {
+        // Nothing we can do.
+      }
+      $sandbox['#finished'] = abs(0.5 + (((($sandbox['countSave']) - 1) / $sandbox['totalSave']) / 2));
+      $sandbox['countSave']++;
+    }
+  }
+  else {
+    $sandbox['#finished'] = 1;
+  }
+}
+
+/**
+ * Helper function to remove the current cp photo field and update it.
+ */
+function _paddle_contact_person_update_recreate_cp_photo_field() {
+  // Delete the CP photo image field.
+  if (field_info_instance('node', 'field_paddle_cp_photo', 'paddle_contact_person')) {
+    field_delete_field('field_paddle_cp_photo');
+    field_info_cache_clear();
+  }
+
+  // Create the new field by reverting the features.
+  features_include_defaults(NULL, TRUE);
+  $revert = array(
+    'paddle_contact_person' => array('field_base', 'field_instance'),
+  );
+  features_revert($revert);
+
+  field_info_cache_clear();
+}
+
+/**
+ * Migrate the contact person photo image field to the featured image field.
+ */
+function paddle_contact_person_update_7003(&$sandbox) {
+  if (field_info_instance('node', 'field_paddle_cp_photo', 'paddle_contact_person')) {
+    // Enable the featured image field.
+    features_revert_module('paddle_contact_person');
+
+    $limit = 5;
+
+    // @codingStandardsIgnoreStart
+    paddle_update_batch_helper(
+      $sandbox,
+      $limit,
+      // Count callback.
+      function (&$sandbox) {
+        // We use db_select instead EntityFieldQuery to get all revisions.
+        return db_select('field_revision_field_paddle_cp_photo')
+          ->countQuery()
+          ->execute()
+          ->fetchField();
+      },
+      // Range retrieval callback.
+      function ($limit, &$sandbox) {
+        $offset = $sandbox['progress'];
+
+        $results = db_select('field_revision_field_paddle_cp_photo', 'frfpcp')
+          ->fields('frfpcp')
+          ->range($offset, $limit)
+          ->execute()
+          ->fetchAllAssoc('revision_id');
+
+        $nodes = array();
+        foreach ($results as $vid => $item) {
+          $nodes[] = node_load($item->entity_id, $vid);
+        }
+
+        return $nodes;
+      },
+      // Single item update callback.
+      function ($node, &$sandbox) {
+        try {
+          $value = field_get_items('node', $node, 'field_paddle_cp_photo');
+          $node->field_paddle_featured_image[LANGUAGE_NONE] = $value;
+          field_attach_presave('node', $node);
+          field_attach_update('node', $node);
+
+          return TRUE;
+        } catch (\Exception $e) {
+          // Nothing we can do.
+          return FALSE;
+        }
+      },
+      // Progress message callback.
+      function ($sandbox) {
+        $item = $sandbox['last_item'];
+        $updated = $sandbox['last_item_update_status'];
+
+        $id_string = "Contact person page {$item->nid} rev {$item->vid} lang {$item->language}";
+        $action = $updated ? "has been updated" : "could NOT be updated";
+        return $id_string . " " . $action . ".";
+      }
+    );
+    // @codingStandardsIgnoreEnd
+
+    // Delete the contact person photo image field that now got redundant.
+    field_delete_field('field_paddle_cp_photo');
+    field_info_cache_clear();
+  }
+}
+
+/**
+ * Grant permissions to edit the panels for the contact person content type.
+ */
+function paddle_contact_person_update_7004() {
+  $permissions = array(
+    'administer panelizer node contact_person layout',
+    'administer panelizer node contact_person content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Add company info collection fields to the contact person content type.
+ */
+function paddle_contact_person_update_7005() {
+  module_enable(array('field_collection'));
+  features_revert_module('paddle_contact_person');
+}
+
+/**
+ * Create OU from the organization_level_1 in the CP and use it as reference.
+ */
+function paddle_contact_person_update_7006(&$sandbox) {
+  if (module_exists('paddle_organizational_unit')) {
+    $entities = paddle_core_get_entity_revisions('node', array('contact_person'));
+    $sandbox['entities'] = $entities;
+    paddle_contact_person_organizational_fields_migration_batch($sandbox);
+  }
+}
+
+/**
+ * Saves all the contact persons to transfer the geofield data.
+ *
+ * @param array $sandbox
+ *   An array holding data for the batch process.
+ */
+function paddle_contact_person_update_7007(&$sandbox) {
+  if (empty(variable_get('geocoder_field_killswitch', 0))) {
+    $limit = 5;
+    $entities = paddle_core_get_entity_revisions('node', array('contact_person'));
+    $sandbox['entities'] = $entities;
+
+    // @codingStandardsIgnoreStart
+    paddle_update_batch_helper(
+      $sandbox,
+      $limit,
+      // Count callback.
+      function (&$sandbox) {
+        return count($sandbox['entities']);
+      },
+      // Range retrieval callback.
+      function ($limit, &$sandbox) {
+        $offset = $sandbox['progress'];
+        return array_slice($sandbox['entities'], $offset, $limit);
+      },
+      // Single item update callback.
+      function ($entity, &$sandbox) {
+        try {
+          time_nanosleep(0, 100);
+          node_save($entity);
+          return TRUE;
+        } catch (\Exception $e) {
+          // Nothing we can do.
+          return FALSE;
+        }
+      },
+      // Progress message callback.
+      function ($sandbox) {
+        $item = $sandbox['last_item'];
+        $updated = $sandbox['last_item_update_status'];
+
+        $id_string = "Contact person {$item->nid} rev {$item->vid} lang {$item->language}";
+        $action = $updated ? "has been saved" : "could NOT be saved";
+        return $id_string . " " . $action . ".";
+      }
+    );
+  }
+}
+
+/**
+ * Enables the views_field_view module.
+ */
+function paddle_contact_person_update_7008() {
+  module_enable(array('views_field_view'));
+}
+
+/**
+ * Added support for Paddle Maps.
+ */
+function paddle_contact_person_update_7009() {
+  if (module_exists('paddle_maps')) {
+    // Get the already indexed content type fields.
+    $paddle_maps_index_contenttype_fields = variable_get('paddle_maps_index_contenttype_fields', '');
+    $new_content_type = array('contact_person' => FALSE);
+
+    // Add the new content type field.
+    if (!empty($paddle_maps_index_contenttype_fields)) {
+      $contenttype_fields_array = unserialize($paddle_maps_index_contenttype_fields);
+      $contenttype_fields_array = array_merge($new_content_type, (array) $contenttype_fields_array);
+    }
+    else {
+      $contenttype_fields_array = $new_content_type;
+    }
+
+    $contenttype_fields = serialize($contenttype_fields_array);
+    variable_set('paddle_maps_index_contenttype_fields', $contenttype_fields);
+
+    // Check for content-type and add the indexfields.
+    paddle_maps_add_index_fields();
+
+    gmap_regenerate_markers();
+    _drupal_flush_css_js();
+    registry_rebuild();
+    drupal_clear_css_cache();
+    drupal_clear_js_cache();
+  }
+}

@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Multilingual module.
+ */
+
+/**
+ * Implements hook_language_types_info_alter().
+ */
+function paddle_multilingual_language_types_info_alter(array &$language_types) {
+  unset($language_types[LANGUAGE_TYPE_CONTENT]['fixed']);
+}

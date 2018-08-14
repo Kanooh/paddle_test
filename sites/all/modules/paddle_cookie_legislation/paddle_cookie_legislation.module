@@ -1,0 +1,63 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle cookie legislation module.
+ */
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_cookie_legislation_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_cookie_legislation_settings_form',
+  );
+}
+
+function paddle_cookie_legislation_settings_form() {
+  module_load_include('inc', 'eu_cookie_compliance', 'eu_cookie_compliance.admin');
+  $popup_settings = eu_cookie_compliance_get_settings();
+  if (user_access('administer EU Cookie Compliance popup')) {
+    $form = eu_cookie_compliance_admin_form(array());
+    $form['eu_cookie_compliance']['popup_position']['#default_value'] = 1;
+
+    // Hide the domain text field.
+    $form['eu_cookie_compliance_domain']['#access'] = FALSE;
+    // Hide the original submit.
+    $form['actions']['#attributes']['class'][] = 'hidden';
+
+    $form['eu_cookie_compliance']['popup_clicking_confirmation']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_position']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_agreed_enabled']['#default_value'] = isset($popup_settings['popup_agreed_enabled']) ? $popup_settings['popup_agreed_enabled'] : 0;
+    $form['eu_cookie_compliance']['popup_agreed_enabled']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_hide_agreed']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_find_more_button_message']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_hide_button_message']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_agreed']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_height']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_width']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_delay']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['domains_option']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['domains_list']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['exclude_paths']['#access'] = FALSE;
+    $form['eu_cookie_compliance']['popup_info']['#format'] = 'full_html';
+  }
+  else {
+    $form['eu_cookie_compliance'] = array(
+      '#type' => 'item',
+      '#markup' => t('You have insufficient access to manage the EU Cookie Compliance popup.'),
+    );
+  }
+  return $form;
+}
+
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function paddle_cookie_legislation_modules_enabled($modules) {
+  // Enable the multilingual variable.
+  if (in_array('paddle_i18n', $modules)) {
+    variable_realm_set('global', 'default', 'variable_realm_list_language', array('eu_cookie_compliance'));
+  }
+}

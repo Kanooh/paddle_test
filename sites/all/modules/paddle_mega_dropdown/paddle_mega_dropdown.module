@@ -1,0 +1,800 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Mega Dropdown App.
+ */
+
+include_once 'paddle_mega_dropdown.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_mega_dropdown_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_mega_dropdown_settings_form',
+  );
+}
+
+/**
+ * Form callback displaying mega dropdown settings.
+ */
+function paddle_mega_dropdown_settings_form() {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $form = array();
+
+  drupal_set_title(t('Configure Mega Dropdown'));
+
+  // Get the main menu in the correct language.
+  $menu = paddle_menu_manager_get_menu('main_menu_en');
+
+  // Get the first level menu items.
+  $links = menu_tree_all_data($menu['menu_name'], NULL, 1);
+
+  // Load all existing Mega Dropdown entities.
+  $mega_dropdowns = paddle_mega_dropdown_load_all();
+  $mlids = array();
+  foreach ($mega_dropdowns as $pmdid => $mega_dropdown) {
+    $mlids[$mega_dropdown->mlid] = $pmdid;
+  }
+
+  // Create a list of main navigation level 1 menu items.
+  $rows = array();
+  foreach ($links as $link) {
+    $mlid = $link['link']['mlid'];
+    $row['data'] = array();
+
+    $row['data'][] = array('data' => $link['link']['link_title']);
+    $options = array(
+      'attributes' => array('class' => array('ui-icon', 'ui-icon-hiddentext')),
+    );
+    if (array_key_exists($link['link']['mlid'], $mlids)) {
+      $options['attributes']['class'][2] = 'ui-icon-edit';
+      $options['attributes']['class'][3] = 'action-edit';
+      $row['data'][] = array(
+        'data' => l(t('Edit'), 'admin/paddle-mega-dropdown/edit/' . $mlids[$mlid], $options),
+      );
+      // If we have menu items without entities we want to insert one empty td
+      // because the "Create entity" link are 3 and edit & delete links are 2.
+      if (count($mlids) < count($links)) {
+        $row['data'][] = array('data' => '');
+      }
+      $options['attributes']['class'][2] = 'ui-icon-delete';
+      $options['attributes']['class'][3] = 'action-delete';
+      $row['data'][] = array(
+        'data' => ctools_modal_text_button(t('delete'), 'admin/paddle-mega-dropdown/nojs/' . $mlids[$mlid] . '/delete', t('Delete this mega dropdown.'), implode(' ', $options['attributes']['class'])),
+      );
+    }
+    else {
+      $options['attributes']['class'][2] = 'ui-icon-add';
+      $options['attributes']['class'][3] = 'action-create';
+      $options['attributes']['class'][4] = 'ctools-modal-wide-modal';
+      $options['attributes']['data-layout'] = 2;
+      $row['data'][] = array(
+        'data' => ctools_modal_text_button(t('Create'), 'admin/paddle-mega-dropdown/nojs/' . $mlid . '/create', t('Create a mega dropdown.'), implode(' ', $options['attributes']['class'])),
+        'colspan' => 3,
+      );
+    }
+
+    $row['class'] = array($mlid);
+    $rows[] = $row;
+  }
+  if (count($rows)) {
+    $header = array(
+      t('Title'),
+      array(
+        'data' => t('Actions'),
+        'colspan' => count($mlids) < count($links) ? '3' : '2',
+        'class' => array('table-actions'),
+      ),
+    );
+    $form['menu_items'] = array(
+      '#markup' => theme('table',
+        array(
+          'header' => $header,
+          'rows' => $rows,
+          'attributes' => array('id' => 'mega-dropdown-configuration'),
+        )
+      ),
+    );
+  }
+  else {
+    $form['empty'] = array('#markup' => t('There are no menu items to create a mega dropdown for yet.'));
+  }
+
+  $form = system_settings_form($form);
+
+  // The save button is not needed (yet) on Mega Dropdown admin overview page.
+  unset($form['actions']['submit']);
+
+  return $form;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_mega_dropdown_entity_info() {
+  $entity_info = array();
+
+  $entity_info['paddle_mega_dropdown'] = array(
+    'label' => t('Paddle Mega Dropdown'),
+    'plural label' => t('Paddle Mega Dropdowns'),
+    'description' => t('A configuration entity used by the Paddle Mega Dropdown module.'),
+    'entity class' => 'Entity',
+    'controller class' => 'EntityAPIController',
+    'base table' => 'paddle_mega_dropdown',
+    'fieldable' => TRUE,
+    'entity keys' => array(
+      'id' => 'pmdid',
+      'language' => 'language',
+    ),
+    'bundles' => array(),
+    'label callback' => 'paddle_mega_dropdown_label',
+    'uri callback' => 'paddle_mega_dropdown_uri',
+    'access callback' => 'paddle_mega_dropdown_access',
+    'module' => 'paddle_mega_dropdown',
+  );
+
+  return $entity_info;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_mega_dropdown_menu() {
+  $items = array();
+
+  $items['admin/paddle-mega-dropdown/%ctools_js/%menu_link/create'] = array(
+    'title callback' => 'Create mega dropdown',
+    'page arguments' => array(2, 3),
+    'page callback' => 'paddle_mega_dropdown_modal_create_mega_dropdown',
+    'access arguments' => array('manage paddle_apps'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/paddle-mega-dropdown/%menu_link/create'] = array(
+    'title callback' => 'Create mega dropdown',
+    'page arguments' => array(2),
+    'page callback' => 'paddle_mega_dropdown_create',
+    'access arguments' => array('manage paddle_apps'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/paddle-mega-dropdown/create/%menu_link/%'] = array(
+    'title' => 'Create mega dropdown',
+    'page callback' => 'paddle_mega_dropdown_create_and_redirect_to_edit_page',
+    'page arguments' => array(3, 4),
+    'access arguments' => array('administer panelizer paddle_mega_dropdown paddle_mega_dropdown content'),
+  );
+
+  $items['admin/paddle-mega-dropdown/%ctools_js/%paddle_mega_dropdown/delete'] = array(
+    'title callback' => 'Delete mega dropdown',
+    'title arguments' => array(5),
+    'page arguments' => array(2, 3),
+    'page callback' => 'paddle_mega_dropdown_modal_mega_dropdown_form',
+    'access arguments' => array('administer panelizer paddle_mega_dropdown paddle_mega_dropdown content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Go to the edit page. Create entity if it doesn't exist yet.
+ *
+ * @param array $menu_link
+ *   Menu link.
+ * @param int $column_count
+ *   Number of columns we want in the Mega Dropdown.
+ */
+function paddle_mega_dropdown_create_and_redirect_to_edit_page($menu_link, $column_count = 2) {
+  // Search for an existing entity.
+  $entity = paddle_mega_dropdown_load_by_mlid($menu_link['mlid']);
+  $mega_dropdown = reset($entity);
+
+  if ($mega_dropdown === FALSE) {
+    // Create the basic entity.
+    $values = array(
+      'mlid' => $menu_link['mlid'],
+      'language' => $GLOBALS['language_content']->language,
+    );
+    $mega_dropdown = entity_create('paddle_mega_dropdown', $values);
+
+    // Set the layout.
+    switch ($column_count) {
+      case 3:
+        $layout = 'paddle_mega_dropdown:paddle_mega_dropdown:paddle_three_column';
+        break;
+
+      case 4:
+        $layout = 'paddle_mega_dropdown:paddle_mega_dropdown:paddle_4_col_full';
+        break;
+
+      default:
+        // Default to a two column layout.
+        $layout = 'paddle_mega_dropdown:paddle_mega_dropdown:paddle_2_col_6_6';
+        break;
+    }
+    // Based on paddle_landing_page_add_edit_form_submit().
+    ctools_include('export');
+    $mega_dropdown->panelizer['page_manager'] = ctools_export_crud_load('panelizer_defaults', $layout);
+    // Make sure a new Panels display is created. This prevents the user from
+    // accidentally overwriting the default presets.
+    // @see PanelizerEntityDefault::hook_entity_insert()
+    $mega_dropdown->panelizer['page_manager']->name = NULL;
+
+    // Save it to the database.
+    $mega_dropdown->save();
+  }
+
+  drupal_goto(_paddle_mega_dropdown_edit_base_path() . '/' . $mega_dropdown->identifier());
+}
+
+/**
+ * Get Mega Dropdown entity by menu link ID.
+ *
+ * @param int $mlid
+ *   The menu link ID.
+ *
+ * @return array
+ *   An array of entity objects indexed by their ids. When no results are
+ *   found, an empty array is returned.
+ */
+function paddle_mega_dropdown_load_by_mlid($mlid) {
+  $query = new EntityFieldQuery();
+
+  $query->entityCondition('entity_type', 'paddle_mega_dropdown')
+    ->propertyCondition('mlid', $mlid)
+    ->propertyCondition('language', $GLOBALS['language_content']->language);
+  $result = $query->execute();
+
+  if (isset($result['paddle_mega_dropdown'])) {
+    $paddle_mega_dropdown_pmdids = array_keys($result['paddle_mega_dropdown']);
+    return entity_load('paddle_mega_dropdown', $paddle_mega_dropdown_pmdids);
+  }
+  else {
+    return array();
+  }
+}
+
+/**
+ * Load all existing config entities from database.
+ *
+ * @return array
+ *   A list of Mega Dropdown entity objects, keyed by their id.
+ */
+function paddle_mega_dropdown_load_all() {
+  $query = new EntityFieldQuery();
+
+  $query->entityCondition('entity_type', 'paddle_mega_dropdown')
+    ->propertyCondition('language', $GLOBALS['language_content']->language);
+  $result = $query->execute();
+
+  if (isset($result['paddle_mega_dropdown'])) {
+    $paddle_mega_dropdown_pmdids = array_keys($result['paddle_mega_dropdown']);
+    return entity_load('paddle_mega_dropdown', $paddle_mega_dropdown_pmdids);
+  }
+  else {
+    return array();
+  }
+};
+
+/**
+ * Access callback for the mega dropdown entity.
+ *
+ * If a user has access to Paddle Apps, we let them configure Paddle Mega
+ * Dropdowns.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ * @param object $paddle_mega_dropdown
+ *   The Paddle Mega Dropdown configuration entity to check for.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ *
+ * @return bool
+ *   Whether access is allowed or not. If the entity type does not specify any
+ *   access information, NULL is returned.
+ *
+ * @see entity_metadata_no_hook_node_access()
+ */
+function paddle_mega_dropdown_access($op, $paddle_mega_dropdown = NULL, $account = NULL) {
+  return user_access('manage paddle_apps', $account);
+}
+
+/**
+ * Implements hook_panelizer_access().
+ *
+ * Allow people that are allowed to edit a mega dropdown also to change its
+ * layout.
+ */
+function paddle_mega_dropdown_panelizer_access($op, $entity_type, $bundle, $view_mode) {
+  if (
+    $op == "layout" &&
+    $entity_type == "paddle_mega_dropdown" &&
+    $bundle == "paddle_mega_dropdown" &&
+    $view_mode == "page_manager"
+  ) {
+    return paddle_mega_dropdown_access($op);
+  }
+}
+
+/**
+ * Loads a paddle_mega_dropdown object from the database.
+ *
+ * @param int $paddle_mega_dropdown_id
+ *   The paddle_mega_dropdown ID.
+ *
+ * @return array|bool
+ *   A fully-populated node object, or FALSE if the node is not found.
+ */
+function paddle_mega_dropdown_load($paddle_mega_dropdown_id = NULL) {
+  return entity_load_single('paddle_mega_dropdown', $paddle_mega_dropdown_id);
+}
+
+/**
+ * Composes the label of a Mega Dropdown.
+ *
+ * @see entity_label()
+ *
+ * @param object $entity
+ *   The entity for which to generate the label.
+ * @param string $entity_type
+ *   The entity type; e.g., 'node' or 'user'.
+ *
+ * @return string|bool
+ *   The entity label or FALSE if not found.
+ */
+function paddle_mega_dropdown_label($entity, $entity_type) {
+  $menu_link = menu_link_load($entity->mlid);
+  if ($menu_link === FALSE) {
+    return FALSE;
+  }
+  else {
+    return t('Mega Dropdown for @menu_item',
+      array(
+        '@menu_item' => $menu_link['link_title'],
+      )
+    );
+  }
+}
+
+/**
+ * Get the Paddle Mega Dropdown path.
+ *
+ * @param object $paddle_mega_dropdown
+ *   The Paddle Mega Dropdown that'll get displayed.
+ *
+ * @return string
+ *   Path to a specific Paddle Mega Dropdown.
+ */
+function paddle_mega_dropdown_uri($paddle_mega_dropdown) {
+  return array(
+    'path' => 'paddle-mega-dropdown/' . $paddle_mega_dropdown->identifier(),
+  );
+}
+
+/**
+ * Form constructor for create a mega dropdown.
+ */
+function paddle_mega_dropdown_create($menu_link) {
+  ctools_include('common', 'panels');
+  ctools_include('display-layout', 'panels');
+  ctools_include('plugins', 'panels');
+  ctools_include('cleanstring');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  // Get the allowed layouts.
+  if ($handler = panelizer_entity_plugin_get_handler('paddle_mega_dropdown')) {
+    $allowed_layouts = $handler->get_default_panelizer_objects('paddle_mega_dropdown.page_manager');
+  }
+
+  // Put them in an item list.
+  $output = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'id' => 'choose-layout',
+    ),
+  );
+
+  // Format the enabled layouts as a collection of links.
+  $layouts = panels_common_get_allowed_layouts('panels_page');
+  foreach ($allowed_layouts as $key => $allowed_layout) {
+    $layout_id = $allowed_layout->display->layout;
+    $layout = $layouts[$layout_id];
+    $options = array(
+      'attributes' => array(
+        'title' => check_plain($allowed_layout->title),
+      ),
+      'html' => TRUE,
+    );
+    $layout_icon = panels_print_layout_icon($layout_id, $layout, $title = strip_tags($layout['title']));
+    // Get the corresponding number for the layout.
+    switch ($layout_id) {
+      case 'paddle_2_col_6_6':
+        $layout_int = 2;
+        break;
+
+      case 'paddle_three_column':
+        $layout_int = 3;
+        break;
+
+      case 'paddle_4_col_full':
+        // Default to a two column layout.
+        $layout_int = 4;
+        break;
+    }
+
+    // Add the link for the layout to the modal.
+    $output[$key] = array(
+      '#markup' => l($layout_icon, 'admin/paddle-mega-dropdown/create/' . $menu_link['mlid'] . '/' . $layout_int, $options),
+      '#prefix' => '<div' . drupal_attributes(array('class' => array('layout-link'))) . '>',
+      '#suffix' => '</div>',
+    );
+  }
+
+  // Add some basic styling.
+  $data = drupal_get_path('module', 'paddle_landing_page') . '/paddle_landing_page.css';
+  $options = array(
+    'group' => CSS_DEFAULT,
+    'every_page' => FALSE,
+    'preprocess' => FALSE,
+  );
+  drupal_add_css($data, $options);
+
+  return render($output);
+}
+
+/**
+ * Form constructor for removing a Mega Dropdown entity.
+ */
+function paddle_mega_dropdown_delete_form($form, &$form_state, $instance) {
+  $form['pmdid'] = array('#type' => 'value', '#value' => $instance->pmdid);
+
+  $label = entity_label('paddle_mega_dropdown', $instance);
+  $confirm_question = t('Are you sure you want to delete %label?', array('%label' => $label));
+  return confirm_form($form, $confirm_question, _paddle_mega_dropdown_admin_overview_path(), t('This action cannot be undone.'));
+}
+
+/**
+ * Form submission handler for paddle_mega_dropdown_delete_form().
+ */
+function paddle_mega_dropdown_delete_form_submit($form, &$form_state) {
+  $form_values = $form_state['values'];
+  $pmdid = $form_values['pmdid'];
+  $mega_dropdown = paddle_mega_dropdown_load($pmdid);
+
+  if ($mega_dropdown !== FALSE) {
+    $mega_dropdown->delete();
+    drupal_set_message(t('The Mega Dropdown you selected has been deleted'));
+  }
+  else {
+    drupal_set_message(t('There was a problem removing the Mega Dropdown you selected.'), 'error');
+  }
+
+  $form_state['redirect'] = _paddle_mega_dropdown_admin_overview_path();
+}
+
+/**
+ * Get the path to the Mega Dropdown admin overview page.
+ * @return string
+ *   The path to the Mega Dropdown admin overview page.
+ */
+function _paddle_mega_dropdown_admin_overview_path() {
+  return 'admin/paddlet_store/app/paddle_mega_dropdown/configure';
+}
+
+/**
+ * Get the base path to the Mega Dropdown admin overview page.
+ *
+ * @return string
+ *   Path.
+ */
+function _paddle_mega_dropdown_edit_base_path() {
+  return 'admin/paddle-mega-dropdown/edit';
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ */
+function paddle_mega_dropdown_paddle_contextual_toolbar_actions_alter(&$actions) {
+  $menu = menu_get_item();
+
+  if ($menu['path'] == _paddle_mega_dropdown_edit_base_path() . '/%') {
+    if (module_exists('paddle_contextual_toolbar')) {
+      // Get the buttons.
+      $actions = array();
+
+      // Add the cancel button.
+      $action_link = l(
+        t('Back'),
+        _paddle_mega_dropdown_admin_overview_path(),
+        array('attributes' => array('class' => array('ui-icon', 'fa-arrow-left')))
+      );
+      $actions[] = array(
+        'action' => $action_link,
+        'class' => array('cancel'),
+        'weight' => 0,
+      );
+
+      // Add the save button.
+      $action_link = l(
+        t('Save'),
+        '',
+        array(
+          'html' => TRUE,
+          'external' => TRUE,
+          'attributes' => array(
+            'class' => array('ui-icon', 'fa-check'),
+            'data-paddle-contextual-toolbar-click' => 'panels-ipe-save',
+          ),
+        )
+      );
+      $actions[] = array(
+        'action' => $action_link,
+        'class' => array('save'),
+        'weight' => 5,
+      );
+
+      // Add the change layout button.
+      $action_link = l(
+        t('Change layout'),
+        'panels/ajax/paddle_mega_dropdown/change_layout/panelizer:paddle_mega_dropdown:' . $menu['page_arguments'][1]->argument . ':page_manager',
+        array(
+          'attributes' => array(
+            'class' => array(
+              'panels-ipe-change-layout',
+              'ctools-use-modal',
+              'ctools-modal-wide-modal',
+              'ui-icon',
+              'fa-retweet',
+            ),
+          ),
+        )
+      );
+      $actions[] = array(
+        'action' => $action_link,
+        'class' => array('change_layout'),
+        'weight' => 10,
+      );
+
+      // Set the buttons.
+      paddle_contextual_toolbar_actions($actions);
+      // Load the click delegator.
+      paddle_contextual_toolbar_add_js('click_delegator');
+    }
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_mega_dropdown_ctools_plugin_directory($module, $plugin) {
+  if (in_array($module, array('panelizer', 'ctools', 'page_manager'))) {
+    return 'plugins/' . $plugin;
+  }
+  if ("$module:$plugin" == 'panels:display_renderers') {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Fetch a single entity plugin.
+ */
+function paddle_mega_dropdown_get_entity_plugin($entity_type) {
+  ctools_include('plugins');
+  return ctools_get_plugins('panelizer', 'entity', $entity_type);
+}
+
+/**
+ * Fetch all entity plugin.
+ */
+function paddle_mega_dropdown_get_entity_plugins() {
+  ctools_include('plugins');
+  return ctools_get_plugins('panelizer', 'entity');
+}
+
+/**
+ * Add a dropdown to the queue for later rendering, or get the full queue.
+ *
+ * @param NULL|object $dropdown
+ *   The dropdown to add to the queue, or NULL if you don't want to add one.
+ *
+ * @return array
+ *   The full queue of dropdowns.
+ */
+function paddle_mega_dropdown_queue_dropdown_for_rendering($dropdown = NULL) {
+  $dropdowns =& drupal_static(__FUNCTION__, array());
+  if ($dropdown) {
+    $dropdowns[] = $dropdown;
+  }
+
+  return $dropdowns;
+}
+
+/**
+ * Implements hook_page_build().
+ */
+function paddle_mega_dropdown_page_build(&$page) {
+  if (variable_get('paddle_menu_style', 'no_dropdown') == 'mega_dropdown') {
+    // Get the dropdowns from the queue which was filled earlier by
+    // paddle_mega_dropdown_paddle_menu_display_menu_items_alter().
+    $mega_dropdowns = paddle_mega_dropdown_queue_dropdown_for_rendering();
+
+    foreach ($mega_dropdowns as $mega_dropdown) {
+      // Get the display from the mega dropdown.
+      $display = $mega_dropdown->panelizer['page_manager']->display;
+
+      if (!empty($display)) {
+        // Place a div around the dropdown with the correct attributes and
+        // append the HTML to the content_top section.
+        $page['content_top']['dropdown_' . $mega_dropdown->mlid] = array(
+          '#type' => 'container',
+          '#attributes' => array(
+            'class' => array('paddle-mega-dropdown'),
+            'data-mlid' => $mega_dropdown->mlid,
+          ),
+          'max-width-wrapper' => array(
+            '#type' => 'container',
+            '#attributes' => array(
+              'class' => array('max-width'),
+            ),
+            'paddingizer-wrapper' => array(
+              '#type' => 'container',
+              '#attributes' => array(
+                'class' => array('paddingizer'),
+              ),
+              'display' => array(
+                '#markup' => panels_render_display($display),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_menu_display_menu_items_alter().
+ */
+function paddle_mega_dropdown_paddle_menu_display_menu_items_alter(&$items, $menu_display) {
+  if (variable_get('paddle_menu_style', 'no_dropdown') == 'mega_dropdown') {
+    // Only act on the first_level menu display used in the frontend.
+    if ($menu_display->name !== 'first_level') {
+      return;
+    }
+
+    // Loop over all menu items in the first_level menu display.
+    foreach (array_keys($items) as $mlid) {
+      // Load the mega dropdown for the menu item.
+      $mega_dropdown = paddle_mega_dropdown_load_by_mlid($mlid);
+
+      if (!empty($mega_dropdown)) {
+        $mega_dropdown = reset($mega_dropdown);
+        // Add the dropdown to the queue for later rendering in
+        // paddle_mega_dropdown_page_build().
+        paddle_mega_dropdown_queue_dropdown_for_rendering($mega_dropdown);
+
+        // Set the data-mlid attribute for the mlid on the li.
+        $items[$mlid]['#attributes']['data-mlid'] = $mlid;
+      }
+    }
+  }
+}
+
+/**
+ * Displays the delete mega dropdown form, in a modal dialog if supported.
+ *
+ * @param bool $js
+ *   If js capable or not.
+ * @param array $mega_dropdown
+ *   The mega dropdown to delete.
+ *
+ * @return array
+ *   Returns a render array in case a modal dialog is not supported.
+ *   Otherwise renders the necessary ajax commands itself and exits.
+ */
+function paddle_mega_dropdown_modal_mega_dropdown_form($js, $mega_dropdown) {
+  // Degrade to no js.
+  if (!$js) {
+    return drupal_get_form('paddle_mega_dropdown_delete_form', $mega_dropdown);
+  }
+  else {
+    ctools_include('modal');
+    ctools_include('ajax');
+
+    $form_state = array(
+      'ajax' => TRUE,
+      'build_info' => array(
+        'args' => array(
+          $mega_dropdown,
+        ),
+      ),
+    );
+
+    // Set up title and form callback according to the action.
+    $callback = 'paddle_mega_dropdown_delete_form';
+    $form_state['title'] = t('Delete @label', array('@label' => paddle_mega_dropdown_label($mega_dropdown, 'paddle_mega_dropdown')));
+
+    $output = ctools_modal_form_wrapper($callback, $form_state);
+
+    if ($form_state['executed']) {
+      $output = array();
+      $output[] = ctools_modal_command_dismiss();
+      $output[] = ctools_ajax_command_reload();
+    }
+
+    print ajax_render($output);
+    ajax_footer();
+    exit;
+  }
+}
+
+/**
+ * Displays the create mega dropdown form, in a modal dialog if supported.
+ *
+ * @param bool $js
+ *   If js capable or not.
+ * @param array $menu_link
+ *   The menu link to create the mega dropdown for.
+ *
+ * @return array
+ *   Returns a render array in case a modal dialog is not supported.
+ *   Otherwise renders the necessary ajax commands itself and exits.
+ */
+function paddle_mega_dropdown_modal_create_mega_dropdown($js, $menu_link) {
+  // Degrade to no js.
+  if (!$js) {
+    return paddle_mega_dropdown_create($menu_link);
+  }
+  else {
+    ctools_include('modal');
+    ctools_include('ajax');
+    $output = paddle_mega_dropdown_create($menu_link);
+    ctools_modal_render(t('Choose layout'), render($output));
+
+    ajax_footer();
+    exit;
+  }
+}
+
+/**
+ * Implements hook_menu_link_delete().
+ */
+function paddle_mega_dropdown_menu_link_delete($link) {
+  $mega_dropdowns = paddle_mega_dropdown_load_by_mlid($link['mlid']);
+  foreach ($mega_dropdowns as $mega_dropdown) {
+    $mega_dropdown->delete();
+  }
+}
+
+/**
+ * Implements hook_paddle_menu_styles().
+ */
+function paddle_mega_dropdown_paddle_menu_styles() {
+  return array(
+    'mega_dropdown' => array(
+      'text' => t('Mega dropdown'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function paddle_mega_dropdown_preprocess_page(&$vars) {
+  if (!path_is_admin($_GET['q']) && variable_get('paddle_menu_style', 'no_dropdown') == 'mega_dropdown') {
+    // Add the Mega Dropdown JS only if we are on the front-end.
+    drupal_add_js(drupal_get_path('module', 'paddle_mega_dropdown') . '/js/paddle_mega_dropdown.js', array(
+     'type' => 'file',
+     'scope' => 'header',
+     'group' => JS_THEME,
+     'every_page' => FALSE,
+    ));
+  }
+}

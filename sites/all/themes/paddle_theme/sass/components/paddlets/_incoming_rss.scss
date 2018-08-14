@@ -1,0 +1,107 @@
+/**
+ * @file
+ * Paddlet styling.
+ */
+
+// --------------------
+// FRONTEND PANE
+// --------------------
+.pane-incoming-rss {
+  .views-row {
+    margin-bottom: 0;
+  }
+
+  .views-row-last {
+    > .entity {
+      margin-bottom: 0;
+    }
+  }
+
+  // Entity styling.
+  .entity-paddle-incoming-rss-feed-item {
+    > h2 {
+      > a {
+        text-decoration: none;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+
+  // View modes styles.
+  .paddle-incoming-rss-feed-item {
+    // Title view mode.
+    &--title {
+      > h2 {
+        margin-bottom: 0;
+        font-size: $font-size-base;
+
+        > a {
+          font-weight: 400;
+        }
+      }
+    }
+
+    // Magazine view mode.
+    &--magazine {
+      margin-bottom: 20px;
+
+      > h2 {
+        font-size: 20px;
+
+        > a {
+          font-size: inherit;
+        }
+      }
+    }
+  }
+
+  .entity-property-thumbnail {
+    float: left;
+    margin: 0 10px 5px 0;
+
+    img {
+      display: block;
+      margin: 0;
+      max-width: 130px;
+      height: auto;
+      max-height: 100px;
+    }
+  }
+
+  .entity-property-created {
+    float: left;
+    line-height: 1.5em;
+
+    &:after {
+      content: "\0000a0-\0000a0";
+      display: inline-block;
+    }
+  }
+
+  // Override styles provided by paddle_theme plugins system.
+  .node-type-basic-page .region-content & {
+    a {
+      &,
+      &:link,
+      &:visited,
+      &:hover,
+      &:active {
+        font-size: inherit;
+      }
+    }
+    h1, h2, h3, h4, h5 {
+      > a {
+        &,
+        &:link,
+        &:visited,
+        &:hover,
+        &:active {
+          font-size: inherit;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+<?php
+
+/**
+ * @file
+ * Hook implementations that allow automatic testing of Paddle Path by Menu.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_path_by_menu_test_menu() {
+  $items = array();
+
+  $items['paddle_path_by_menu_test/%/%'] = array(
+    'title' => 'Paddle Path by Menu test page',
+    'title callback' => 'check_plain',
+    'title arguments' => array(1),
+    'page callback' => 'paddle_path_by_menu_test_page',
+    'page arguments' => array(1, 2),
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Page callback; Outputs test data.
+ */
+function paddle_path_by_menu_test_page($title, $langcode) {
+  $output = array(
+    'langcode' => array(
+      '#type' => 'container',
+      '#attributes' => array('id' => 'langcode'),
+      'langcode' => array(
+        '#markup' => check_plain($langcode),
+      ),
+    ),
+  );
+
+  return render($output);
+}

@@ -1,0 +1,10 @@
+name = Widget Block Page Cache
+description = Provides Widget Block purge integration with the Drupal page cache.
+core = 7.x
+; Module dependencies:
+dependencies[] = widget_block
+
+; Information added by drush on 2014-09-29
+version = "7.x-1.0-rc4"
+project = "widget_block"
+datestamp = "1412006520"

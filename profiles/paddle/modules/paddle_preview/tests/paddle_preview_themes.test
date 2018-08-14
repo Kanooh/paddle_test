@@ -1,0 +1,140 @@
+<?php
+/**
+ * @file
+ * Tests for the Theme Link Paddle Preview module.
+ */
+
+class PaddlePreviewThemesTest extends PaddlePreviewTestCase {
+
+  /**
+   * A test theme.
+   *
+   * @var object
+   */
+  protected $greenTheme;
+
+  /**
+   * Another test theme.
+   *
+   * @var object
+   */
+  protected $redTheme;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Theme and close button tests',
+      'description' => 'Test the theme functions of the Paddle Preview module.',
+      'group' => 'Paddle Preview',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp(array(
+      'paddle_preview_test',
+    ));
+
+    theme_enable(array('paddle_theme'));
+
+    // Create some paddle themes.
+    $this->greenTheme = $this->createCustomTheme($this->randomName(), 'Green');
+    $this->redTheme = $this->createCustomTheme($this->randomName(), 'Red');
+  }
+
+  /**
+   * Test if the previous and next links exist for a given theme.
+   *
+   * @param string $theme
+   *   The theme object.
+   */
+  public function assertPrevNextLinksExist($theme) {
+    $all_preview_themes = paddle_themer_preview_themes($theme);
+    $previous_theme = end($all_preview_themes);
+    $next_theme = reset($all_preview_themes);
+
+    // We actually need to search for the placeholder url because that is where
+    // our front page links to when no front page has been set.
+    // Test if the previous link exists.
+    $prev_theme_url = url('placeholder', array('query' => array('preview_theme' => $previous_theme->name)));
+    $this->assertTrue($this->xpath(parent::TOOLBAR_XPATH_QUERY . parent::THEME_SWITCHER_XPATH_QUERY . '/div[@id="paddle-preview-toolbar-previous-theme"]/a[@href="' . $prev_theme_url . '"]'), 'A link to the previous theme exists.');
+
+    // Test if the next link exists.
+    $next_theme_url = url('placeholder', array('query' => array('preview_theme' => $next_theme->name)));
+    $this->assertTrue($this->xpath(parent::TOOLBAR_XPATH_QUERY . parent::THEME_SWITCHER_XPATH_QUERY . '/div[@id="paddle-preview-toolbar-next-theme"]/a[@href="' . $next_theme_url . '"]'), 'A link to the next theme exists.');
+  }
+
+  /**
+   * Test if the theme links are present in the toolbar.
+   */
+  public function testThemeLinks() {
+    $this->drupalLogin($this->siteManager);
+    module_load_include('inc', 'paddle_themer', 'paddle_themer.preview');
+
+    // Test if the red theme works fine.
+    $red_theme = paddle_themer_load($this->redTheme->name);
+    paddle_themer_active_theme($red_theme);
+    $this->drupalGet('<front>', array('query' => array('preview_theme' => $this->redTheme->name)));
+
+    $this->assertPrevNextLinksExist($red_theme);
+
+    // Test if the green theme works fine.
+    $green_theme = paddle_themer_load($this->greenTheme->name);
+    paddle_themer_active_theme($green_theme);
+    $this->drupalGet('<front>', array('query' => array('preview_theme' => $this->greenTheme->name)));
+
+    $this->assertPrevNextLinksExist($green_theme);
+
+    // Check if the theme name is present.
+    $this->assertText($this->greenTheme->human_name, 'The theme name is present on the page.');
+  }
+
+  /**
+   * Test if the close link is present in the toolbar.
+   */
+  public function testCloseLink() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $this->drupalGet('<front>');
+
+    $close_url = url('admin');
+
+    $this->assertTrue($this->xpath(parent::TOOLBAR_XPATH_QUERY . '//div[@id="paddle-preview-toolbar-close-btn"]/a[@href="' . $close_url . '"]'), 'The close link points to /admin when not on node page and not previewing a theme.');
+
+    // Create a node to test the link to admin/content_manager/node/nid/view.
+    $node = $this->drupalCreateUiNode('basic_page', array(
+      'title' => $this->randomString(),
+    ));
+
+    $this->drupalGet('node/' . $node->nid);
+
+    $close_url = url('admin/content_manager/node/' . $node->nid . '/view');
+
+    $this->assertTrue($this->xpath(parent::TOOLBAR_XPATH_QUERY . '//div[@id="paddle-preview-toolbar-close-btn"]/a[@href="' . $close_url . '"]'), 'The close link points to the backend node view on a node page.');
+
+    // Publish the node so that we can see it as site manager.
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+    $this->drupalPost(NULL, array(), t('Online'));
+    $this->drupalLogout();
+    $this->drupalLogin($this->siteManager);
+
+    // Test node view with theme preview.
+    $red_theme = paddle_themer_load($this->redTheme->name);
+    paddle_themer_active_theme($red_theme);
+    $this->drupalGet('node/' . $node->nid, array('query' => array('preview_theme' => $this->redTheme->name)));
+
+    $close_url = url('admin/themes/' . $this->redTheme->name . '/edit');
+    $this->assertTrue($this->xpath(parent::TOOLBAR_XPATH_QUERY . '//div[@id="paddle-preview-toolbar-close-btn"]/a[@href="' . $close_url . '"]'), 'The close link points to the theme overview on a node page and previewing a theme.');
+
+    // Test the the base theme has no close/edit button, as it cannot be edited.
+    $paddle_theme = paddle_themer_load('paddle_test_theme');
+    $this->drupalGet('<front>', array('query' => array('preview_theme' => $paddle_theme->name)));
+
+    $close_url = url('admin/themes');
+    $this->assertTrue($this->xpath(parent::TOOLBAR_XPATH_QUERY . '//div[@id="paddle-preview-toolbar-close-btn"]/a[@href="' . $close_url . '"]'), 'The close link points to the theme overview for a base theme.');
+  }
+}

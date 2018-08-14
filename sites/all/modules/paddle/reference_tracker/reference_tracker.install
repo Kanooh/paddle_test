@@ -1,0 +1,137 @@
+<?php
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Reference Tracker.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function reference_tracker_install() {
+  // Enable some entity types by default.
+  $entity_info = entity_get_info();
+  $entity_types = array();
+  $types = array(
+    'node',
+    'taxonomy_term',
+    'field_collection_item',
+    'paragraphs_itm',
+  );
+  foreach ($types as $entity_type) {
+    if (!empty($entity_info[$entity_type])) {
+      $entity_types[] = $entity_type;
+    }
+  }
+  variable_set('reference_tracker_enabled_entity_types', $entity_types);
+
+  // By default, references in field collections and paragraphs are treated
+  // as host references.
+  if (module_exists('field_collection')) {
+    variable_set('reference_tracker_field_collection_use_host', 1);
+  }
+  if (module_exists('paragraphs')) {
+    variable_set('reference_tracker_paragraphs_use_host', 1);
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function reference_tracker_uninstall() {
+  // Remove all variables.
+  $variables = db_query("SELECT name FROM {variable} WHERE name LIKE 'reference_tracker_%'")->fetchCol();
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
+}
+
+/**
+ * Implements hook_schema().
+ */
+function reference_tracker_schema() {
+  $schema = array();
+
+  $schema['reference_tracker'] = array(
+    'description' => 'Collects outbound references made by entities.',
+    'fields' => array(
+      'entity_type' => array(
+        'description' => 'Entity type of the parsed entity.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'entity_id' => array(
+        'description' => 'Identifier of the parsed entity.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'field_instance_id' => array(
+        'description' => 'Instance id of the parsed field.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'language' => array(
+        'description' => 'Language code of the reference.',
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+      ),
+      'reference_entity_type' => array(
+        'description' => 'Entity type of referenced entity.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'reference_entity_id' => array(
+        'description' => 'Identifier of the referenced entity.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array(
+      'entity_type',
+      'entity_id',
+      'field_instance_id',
+      'language',
+      'reference_entity_type',
+      'reference_entity_id',
+    ),
+    'indexes' => array(
+      'entity_type_id' => array('entity_type', 'entity_id'),
+      'entity_type_id_language' => array('entity_type', 'entity_id', 'language'),
+      'entity_type_id_field' => array(
+        'entity_type',
+        'entity_id',
+        'field_instance_id',
+      ),
+      'entity_type_id_field_language' => array(
+        'entity_type',
+        'entity_id',
+        'field_instance_id',
+        'language',
+      ),
+      'reference_entity_type_id' => array('reference_entity_type', 'reference_entity_id'),
+      'reference_entity_type_id_language' => array(
+        'reference_entity_type',
+        'reference_entity_id',
+        'language',
+      ),
+      'reference_entity_type_id_field' => array(
+        'reference_entity_type',
+        'reference_entity_id',
+        'field_instance_id',
+      ),
+      'reference_entity_type_id_field_language' => array(
+        'reference_entity_type',
+        'reference_entity_id',
+        'field_instance_id',
+        'language',
+      ),
+    ),
+  );
+
+  return $schema;
+}

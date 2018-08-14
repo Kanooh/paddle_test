@@ -1,0 +1,81 @@
+/**
+ * @file
+ * Paddlet styling.
+ */
+
+.webform-client-form {
+  @extend %paddlet-pane-forms;
+
+  // Due to wrong old style in forms.css, add some margin back between form items.
+  .form-item {
+    margin-bottom: 20px;
+  }
+
+  // Do the same for elements with prefix and/or suffix.
+  .field-prefix,
+  .field-suffix {
+    + .form-text,
+    + select {
+      @extend %inline-form-element;
+    }
+  }
+
+  // Add some spacing for inlined elements.
+  .field-prefix {
+    display: inline-block;
+    margin-right: 3px;
+  }
+
+  .field-suffix {
+    display: inline-block;
+    margin-left: 3px;
+  }
+
+  // The file input submit button is too big.
+  .form-managed-file {
+    .form-submit {
+      height: 24px;
+      padding: 3px 10px;
+    }
+  }
+
+  .form-actions {
+    margin-top: 20px;
+
+    .form-submit {
+      margin-top: 0;
+    }
+  }
+}
+
+// Put inline elements back inline.
+.webform-container-inline {
+  .form-text,
+  select {
+    @extend %inline-form-element;
+  }
+
+  > label {
+    display: inline-block;
+    margin-right: 3px;
+  }
+}
+
+// Fix styling on grids.
+.webform-component-grid {
+  > table {
+    margin-top: 0;
+  }
+}
+
+// Center the icon on calendar components.
+.webform-component-date {
+  .webform-calendar {
+    display: inline-block;
+    vertical-align: middle;
+  }
+}
+
+.webform-component-fieldset {
+  border: 1px solid #a1a1a1;
+}

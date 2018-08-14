@@ -1,0 +1,67 @@
+/*
+  This file can be used to override width settings.
+  This will be useful if the site does not use the same width and breakpoint settings as vlaanderen.be
+
+  We use important, because when using custom breakpoints, this file should not be overridden
+*/
+/* ====== iw-layout breakpoints ======= */
+/* ==================================== */
+/* Set the minimum and maximum width of the global header and footer content
+   This content will be centered inside the global header and footer.
+*/
+.iwgh2, .iwgf2 {
+  min-width: 268px !important;
+}
+
+.iw2-layout.iw2-custom-breakpoint {
+  max-width: 1140px !important;
+  margin: 0 auto !important;
+}
+
+.iwgh2-bar .iw-wrapper {
+  padding: 0 4.20248%;
+}
+
+.iw2-custom-margin {
+  padding: 0 4.20248%;
+}
+
+/* Set the width (in percentage) and minimum width of the GH and GF content for smaller screens (tablets)*/
+/*screens >1024*/
+@media screen and (min-width: 1024px) {
+  .iw-responsive .iw-layout.iw-custom-breakpoint {
+    width: 1140px !important;
+    min-width: 1024px !important;
+  }
+}
+/* Set the width (in percentage) and minimum width of the GH and GF content for smallest screens (phones)*/
+/*mobile*/
+@media screen and (max-device-width: 767px) {
+  .iw-responsive .iw-layout.iw-custom-breakpoint {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+/*1700 bar*/
+/*screens <1024*/
+@media screen and (max-width: 1024px) {
+  .iwgf-infolijnBar.iw-custom-breakpoint .iwgf-bar {
+    padding-left: 0 !important;
+  }
+}
+/*screens <1023*/
+@media screen and (max-width: 1023px) {
+  .iwgf-infolijnBar.iw-custom-breakpoint {
+    right: 9px !important;
+  }
+
+  .iwgf-infolijnBar.iw-custom-breakpoint .iwgf-bar .iwgf-intro {
+    display: none !important;
+  }
+}
+/*mobile*/
+@media screen and (max-device-width: 767px) {
+  .iwgf-infolijnBar.iw-custom-breakpoint {
+    display: none !important;
+  }
+}

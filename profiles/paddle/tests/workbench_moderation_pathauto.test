@@ -1,0 +1,54 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleWorkbenchModrationPathautoCompatibility.
+ */
+
+/**
+ * Tests if workbench_moderation and pathauto can work together.
+ */
+class PaddleWorkbenchModrationPathautoCompatibility extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'WbM and Pathauto compatibility',
+      'description' => 'Tests if workbench_moderation and pathauto can work together.',
+      'group' => 'Paddle',
+    );
+  }
+
+  /**
+   * Test if the workbench_moderation doesn't clash with pathauto.
+   *
+   * This is a known issue - see https://drupal.org/node/1087044.
+   */
+  public function testCorrectnessCustomAliases() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $path_alias = $this->randomName();
+    $edit = array(
+      'title' => $this->randomName(),
+      'path[pathauto]' => FALSE,
+      'path[alias]' => $path_alias,
+    );
+    $node = $this->drupalCreateUiNode('basic_page', $edit);
+
+    // Check that the URL alias was preserved after node is saved unpublished.
+    $this->drupalGet($path_alias);
+    $this->assertResponse(200, 'Path alias preserved after node is saved as concept.');
+
+    // Now publish it. If the alias is not preserved this will fail.
+    $this->drupalPost(drupal_lookup_path('source', $path_alias, $node->language) . '/edit', array(), t('Save'));
+    $node = node_load(1);
+    $this->moderateNode($node, 'Publish');
+
+    // Check that the URL alias was preserved when node is published.
+    $this->drupalGet($path_alias);
+    $this->assertResponse(200, 'Path alias preserved after node is published.');
+  }
+
+}

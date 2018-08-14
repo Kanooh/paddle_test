@@ -1,0 +1,14 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Social Media.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_social_media_enable() {
+  variable_set('paddle_social_media_content_types', array('basic_page' => 'basic_page'));
+  variable_set('paddle_social_media_networks', array('facebook' => 'facebook', 'twitter' => 'twitter'));
+}

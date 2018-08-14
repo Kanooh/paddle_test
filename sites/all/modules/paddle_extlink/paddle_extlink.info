@@ -1,0 +1,16 @@
+name = External links
+description = Visually differentiate between internal and external links. Optionally configure external links to open in a new window.
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = extlink
+dependencies[] = strongarm
+apps[paddle][level] = extra
+apps[logo] = apps/logo.png
+apps[paddle][vendor] = Paddle
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[variable][] = extlink_css_exclude
+features[variable][] = extlink_css_explicit
+features[variable][] = extlink_mailto_class
+features[variable][] = extlink_use_font_awesome

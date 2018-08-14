@@ -1,0 +1,12 @@
+name = Paddle Menu Display Test
+description = Test module for Paddle Menu Display
+core = 7.x
+
+dependencies[] = paddle_menu_display
+
+hidden = TRUE
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_menu_display"
+datestamp = "1455506617"

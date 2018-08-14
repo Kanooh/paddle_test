@@ -1,0 +1,110 @@
+<?php
+
+/**
+ * @file
+ * Hook implementations of the Paddle Color Palettes Test module.
+ */
+
+/**
+ * Implements hook_paddle_themer_plugin_instances().
+ */
+function paddle_color_palettes_test_paddle_themer_plugin_instances() {
+  $plugin_instances = array();
+
+  $plugin_instances['color_palettes'] = array(
+    'plugin' => 'color_palettes',
+    'allowed_values' => paddle_color_palettes_test_palette_definitions(),
+  );
+
+  return $plugin_instances;
+}
+
+/**
+ * Returns the definitions of the palettes.
+ */
+function paddle_color_palettes_test_palette_definitions() {
+  return array(
+    'palette_a' => array(
+      'palette_a' => array(
+        'title' => 'Spring Palette',
+        'colors' => array(
+          '#aabb44',
+          'rgb(255, 15, 185)',
+          '#98fb44',
+          '#cb561a',
+          '#99cc22',
+        ),
+      ),
+      'palette_a1' => array(
+        'title' => 'Random Palette',
+        'colors' => array(
+          '#AAA',
+          'hsl(120, 100%, 25%)',
+          '#3488cc',
+          'rgb(155, 21, 81)',
+          'DarkOliveGreen',
+        ),
+      ),
+      'palette_a2' => array(
+        'title' => 'Blue Palette',
+        'colors' => array(
+          '#cda2f5',
+          '#8a31de',
+          '#583b73',
+          '#5aaf5c',
+        ),
+      ),
+    ),
+    'palette_b' => array(
+      'palette_b' => array(
+        'title' => 'Classic Palette',
+        'colors' => array(
+          '#d404d0',
+          '#a164a0',
+          '#5c115b',
+          '#fcaa00',
+          '#aafca0',
+        ),
+      ),
+      'palette_b1' => array(
+        'title' => 'Bomb Palette',
+        'colors' => array(
+          '#e32727',
+          '#fc8700',
+          '',
+          '#a4aca0',
+          '#fafa0a',
+        ),
+      ),
+      'palette_b2' => array(
+        'title' => 'Dandy Palette',
+        'colors' => array(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors().
+ */
+function paddle_color_palettes_test_paddle_color_palettes_color_selectors() {
+  return array(
+    array(
+      'color' => array('h1', array('h2' => 0.5), '.block{}'),
+      'background-color' => array('p'),
+    ),
+    array(
+      'color' => array('a', 'a:visited', 'a:hover'),
+      'background-color' => array('p{}'),
+    ),
+    array(
+      'background-color' => array('#page-content', array('#logo {}' => 0.1)),
+    ),
+    array(
+      'color' => array('footer', 'header .region {}'),
+    ),
+    array(
+      'background-color' => array('header'),
+    ),
+  );
+}

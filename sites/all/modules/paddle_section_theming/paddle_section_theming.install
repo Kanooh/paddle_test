@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Section Theming.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_section_theming_schema() {
+  $schema = array();
+
+  $schema['paddle_section_theming'] = array(
+    'description' => 'Links background images to a menu item.',
+    'fields' => array(
+      'mlid' => array(
+        'description' => 'The Identifier of a menu link item.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'sid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The Identifier of a image scald item.',
+      ),
+    ),
+    // There is only one record for each menu item in this table.
+    'primary key' => array('mlid'),
+  );
+
+  return $schema;
+}

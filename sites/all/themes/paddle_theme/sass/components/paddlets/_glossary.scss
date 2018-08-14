@@ -1,0 +1,172 @@
+/**
+ * @file
+ * Glossary Paddlet styling.
+ */
+
+.pane-paddle-glossary-glossary-overview-pane {
+  // The overview pages do not have a border around .pane-content.
+  // Add back the missing styles directly to the pane itself.
+  // @todo this is so ugly...
+  padding: 21px 15px 14px 15px;
+  border: 1px solid #ebebeb;
+  border-bottom: 0;
+  box-shadow: 0 5px 5px -4px #b5b5b5;
+  background-color: #fff;
+
+  .views-row {
+    @include clearfix;
+    margin-bottom: 20px;
+  }
+
+  .views-field-definition {
+    font-size: 1.2em;
+    font-weight: bold;
+  }
+}
+
+.paddle-glossary-pager {
+  @include clearfix;
+  margin-bottom: 30px;
+
+  .views-summary {
+    position: relative;
+    float: left;
+    margin-right: 5px;
+    margin-bottom: 5px;
+
+    $glossary-link-size: 40px;
+
+    > a {
+      display: block;
+      width: $glossary-link-size;
+      height: $glossary-link-size;
+      border: 1px solid #e1e1e1;
+      border-radius: 5px;
+      line-height: $glossary-link-size;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .ajax-progress-throbber {
+      position: absolute;
+      z-index: 2;
+      bottom: -18px;
+      right: -5px;
+    }
+  }
+}
+
+// By default hide the mobile pager.
+.paddle-glossary-mobile-pager {
+  display: none;
+}
+
+@media (max-width: $screen-xs-max) {
+  .paddle-glossary-pager {
+    display: none;
+  }
+
+  .paddle-glossary-mobile-pager {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    height: 40px;
+    margin-bottom: 30px;
+    padding: 8px 11px;
+    border: 1px solid #e1e1e1;
+    font-family: inherit;
+    line-height: 24px;
+    background: #fff;
+    box-shadow: inset 0 1px 2px 0 rgba(0,0,0,0.1);
+  }
+}
+
+.glossary-definition {
+  color: grey;
+  border-bottom: 1px dashed grey;
+}
+
+h2 .glossary-definition, h3 .glossary-definition, h4 .glossary-definition {
+  color: inherit;
+  border-bottom: inherit;
+}
+
+// Tooltip style.
+// @see Bootstrap _tooltip.scss
+$tooltip-arrow-width: 5px;
+$tooltip-bg: #e8e8e8;
+$tooltip-arrow-color: $tooltip-bg;
+
+.tooltip {
+  position: absolute;
+  z-index: 1070;
+  display: block;
+
+  &,
+  p {
+    font-size: .8em;
+    line-height: 1.2;
+  }
+
+  &.top    { margin-top:  -3px; padding: $tooltip-arrow-width 0; }
+  &.right  { margin-left:  3px; padding: 0 $tooltip-arrow-width; }
+  &.bottom { margin-top:   3px; padding: $tooltip-arrow-width 0; }
+  &.left   { margin-left: -3px; padding: 0 $tooltip-arrow-width; }
+}
+
+// Wrapper for the tooltip content
+.tooltip-inner {
+  max-width: 200px;
+  padding: 8px;
+  color: $text-color;
+  background-color: $tooltip-bg;
+  border-radius: 4px;
+
+  @media (min-width: $screen-sm-min) {
+    max-width: 300px;
+  }
+
+  @media (min-width: $screen-md-min) {
+    max-width: 400px;
+  }
+}
+
+// Arrows
+.tooltip-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+}
+// Note: Deprecated .top-left, .top-right, .bottom-left, and .bottom-right as of v3.3.1
+.tooltip {
+  &.top .tooltip-arrow {
+    bottom: 0;
+    left: 50%;
+    margin-left: -$tooltip-arrow-width;
+    border-width: $tooltip-arrow-width $tooltip-arrow-width 0;
+    border-top-color: $tooltip-arrow-color;
+  }
+  &.right .tooltip-arrow {
+    top: 50%;
+    left: 0;
+    margin-top: -$tooltip-arrow-width;
+    border-width: $tooltip-arrow-width $tooltip-arrow-width $tooltip-arrow-width 0;
+    border-right-color: $tooltip-arrow-color;
+  }
+  &.left .tooltip-arrow {
+    top: 50%;
+    right: 0;
+    margin-top: -$tooltip-arrow-width;
+    border-width: $tooltip-arrow-width 0 $tooltip-arrow-width $tooltip-arrow-width;
+    border-left-color: $tooltip-arrow-color;
+  }
+  &.bottom .tooltip-arrow {
+    top: 0;
+    left: 50%;
+    margin-left: -$tooltip-arrow-width;
+    border-width: 0 $tooltip-arrow-width $tooltip-arrow-width;
+    border-bottom-color: $tooltip-arrow-color;
+  }
+}

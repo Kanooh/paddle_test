@@ -1,0 +1,12 @@
+name = Paddle Color Palettes test module
+description = Provides some dummy functionality to facilitate automated testing.
+core = 7.x
+package = Testing
+hidden = TRUE
+
+dependencies[] = paddle_color_palettes
+
+; Information added by drush on 2015-11-24
+version = "7.x-1.x-dev"
+project = "paddle_color_palettes"
+datestamp = "1448369392"

@@ -1,0 +1,18 @@
+/**
+* @file
+* Styling for preview page with the theming applied.
+*
+*/
+.node-iframe.paddle-preview-enabled {
+  background: $c-white;
+}
+.node-iframe.paddle-preview-enabled .region-content {
+  margin: 0;
+}
+.node-iframe.paddle-preview-enabled {
+  margin-top: 0;
+  padding: 2% 2%;
+}
+.node-iframe.paddle-preview-enabled #page-title {
+  margin-top: 0;
+}

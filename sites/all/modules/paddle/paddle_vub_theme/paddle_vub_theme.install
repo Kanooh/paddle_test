@@ -1,0 +1,40 @@
+<?php
+/**
+ * @file
+ * Install code for the VUB theme feature.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_vub_theme_enable() {
+  theme_enable(array('vub_theme'));
+  features_revert_module('paddle_vub_theme');
+  ctools_modules_enabled(array('paddle_vub_theme'));
+
+  $block_permissions = array(
+    'edit vub_address_block content in landing pages',
+    'edit vub_banner_block content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, $block_permissions);
+  }
+
+  variable_set('paddle_vub_tracking_id', 'UA-122158350-1');
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_vub_theme_disable() {
+  theme_disable(array('vub_theme'));
+}
+
+/**
+ * Sets the Google Analytics tracking ID.
+ */
+function paddle_vub_theme_update_7001() {
+  variable_set('paddle_vub_tracking_id', 'UA-122158350-1');
+}

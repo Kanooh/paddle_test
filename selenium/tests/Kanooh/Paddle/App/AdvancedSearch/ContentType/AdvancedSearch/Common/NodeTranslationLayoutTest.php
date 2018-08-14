@@ -1,0 +1,53 @@
+<?php
+
+/**
+ * @file
+ * Contains \Kanooh\Paddle\App\AdvancedSearch\ContentType\AdvancedSearch\Common\NodeTranslationLayoutTestBase.
+ */
+
+namespace Kanooh\Paddle\App\AdvancedSearch\ContentType\AdvancedSearch\Common;
+
+use Kanooh\Paddle\App\Multilingual\ContentType\Base\NodeTranslationLayoutTestBase;
+use Kanooh\Paddle\Pages\Admin\ContentManager\AddPage\CreateNodeModal;
+use Kanooh\Paddle\Pages\Admin\ContentManager\Node\LayoutPage\AdvancedSearchLayoutPage;
+
+/**
+ * {@inheritdoc}
+ *
+ * @runTestsInSeparateProcesses
+ * @preserveGlobalState disabled
+ */
+class NodeTranslationLayoutTest extends NodeTranslationLayoutTestBase
+{
+    /**
+     * @inheritDoc
+     */
+    public function setUpPage()
+    {
+        parent::setUpPage();
+
+        $this->layoutPage = new AdvancedSearchLayoutPage($this);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setUpNode()
+    {
+        return $this->contentCreationService->createAdvancedSearchPage();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function fillTranslationModal($title = null)
+    {
+        $title = !empty($title) ? $title : $this->alphanumericTestDataProvider->getValidValue();
+
+        $modal = new CreateNodeModal($this);
+        $modal->waitUntilOpened();
+        $modal->title->fill($title);
+        $modal->submit();
+        $modal->waitUntilClosed();
+    }
+}

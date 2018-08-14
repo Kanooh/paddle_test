@@ -1,0 +1,51 @@
+/**
+* @file
+* Paddle theme compilation.
+*
+*/
+@import "variables/*";
+@import "abstractions/*";
+
+@import "layout/resets";
+@import "layout/core";
+@import "layout/grid";
+@import "layout/forms";
+
+@import "layout/global";
+@import "layout/vo_branding";
+@import "layout/maintenance";
+@import "layout/menu_slider";
+
+@import "layout/ie";
+
+#colorbox {
+  #cboxClose {
+    top: 0;
+    right: 0;
+  }
+
+  #cboxNext {
+    top: 0;
+    right: 27px;
+    left: auto;
+  }
+
+  #cboxPrevious {
+    top: 0;
+    right: 54px;
+    left: auto;
+  }
+
+  #cboxLoadedContent {
+    margin-top:28px;
+    margin-bottom:0;
+  }
+
+  #cboxCurrent {
+    display: none !important;
+  }
+}
+
+footer .paddingizer.rich_footer {
+  padding-top: 30px;
+}

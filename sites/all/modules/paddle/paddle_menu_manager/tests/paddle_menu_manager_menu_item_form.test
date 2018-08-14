@@ -1,0 +1,125 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuManagerMenuItemFormTest.
+ */
+
+/**
+ * UI tests for the menu item create/edit/delete forms.
+ */
+class PaddleMenuManagerMenuItemFormTest extends PaddleMenuManagerTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Menu item forms'),
+      'description' => t('Create and edit menu item forms.'),
+      'group' => t('Paddle Menu Manager'),
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array('paddle_menu_manager'));
+
+    $this->admin_user = $this->drupalCreateUser(array('manage paddle_menu_manager'));
+    $this->drupalLogin($this->admin_user);
+  }
+
+  /**
+   * Tests menu item creation without js.
+   */
+  public function testCreateMenuItemNoJs() {
+    // Create a menu and clone it so we have a fully functional
+    // menu translation set.
+    $menu = $this->createMenu('en');
+    paddle_menu_manager_create_menu_translations($menu);
+
+    // Test the blank menu item.
+    $edit = array(
+      'link_title' => $this->randomString(32),
+      'description' => $this->randomString(20),
+      'navigation' => $menu['menu_name'] . ':0',
+    );
+
+    $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu['menu_name'] . '/add', $edit, t('Save'));
+
+    // Test if confirmation message appeared.
+    $this->assertText(t('The menu item has been saved successfully.'), 'Confirmation message displayed.');
+
+    // Test if the save was successful.
+    $result = db_select('menu_links', 'ml')
+      ->fields('ml')
+      ->condition('ml.link_title', $edit['link_title'])
+      ->condition('ml.menu_name', $menu['menu_name'])
+      ->condition('ml.language', $menu['language'])
+      ->execute();
+
+    $this->assertEqual(1, $result->rowCount(), 'The menu item was added in the database.');
+
+    $menu_item = $result->fetchAssoc();
+
+    $this->assertTrue($menu_item['mlid'], 'A menu item mlid has been generated automatically.');
+    $options = unserialize($menu_item['options']);
+    $this->assertEqual($options['attributes']['title'], $edit['description'], 'The description of the menu item has been saved.');
+  }
+
+  /**
+   * Tests menu item editing without js.
+   */
+  public function testEditMenuItemNoJs() {
+    // Create a menu and clone it so we have a fully functional
+    // menu translation set.
+    $menu = $this->createMenu('en');
+    paddle_menu_manager_create_menu_translations($menu);
+
+    // Save a menu item.
+    $edit = array(
+      'link_title' => $this->randomString(32),
+      'description' => $this->randomString(20),
+      'navigation' => $menu['menu_name'] . ':0',
+    );
+
+    $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu['menu_name'] . '/add', $edit, t('Save'));
+
+    $menu_item_1 = db_select('menu_links', 'ml')
+      ->fields('ml')
+      ->condition('ml.link_title', $edit['link_title'])
+      ->condition('ml.menu_name', $menu['menu_name'])
+      ->condition('ml.language', $menu['language'])
+      ->execute()
+      ->fetchAssoc();
+
+    $options = unserialize($menu_item_1['options']);
+    $this->assertEqual($options['attributes']['title'], $edit['description'], 'The description of the menu item has been saved.');
+
+    $updated_item = array(
+      'link_title' => $this->randomString(32),
+      'description' => $this->randomString(20),
+      'content_button' => 'external',
+      'external_link' => 'http://www.sporza.be',
+    );
+
+    $this->drupalGet('admin/structure/menu_manager/nojs/' . $menu['menu_name'] . '/' . $menu_item_1['mlid'] . '/edit');
+    $this->assertFieldByName('description', $edit['description'], 'When editing a menu item, the description field contains the previously saved description.');
+
+    $this->drupalPost(NULL, $updated_item, t('Save'));
+
+    $menu_item_2 = db_select('menu_links', 'ml')
+      ->fields('ml')
+      ->condition('ml.mlid', $menu_item_1['mlid'])
+      ->execute()
+      ->fetchAssoc();
+
+    $options = unserialize($menu_item_2['options']);
+    $this->assertEqual($menu_item_2['link_title'], $updated_item['link_title'], 'The menu item contains the submitted title.');
+    $this->assertEqual($menu_item_2['external'], 1, 'The menu item is an external item.');
+    $this->assertEqual($menu_item_2['link_path'], $updated_item['external_link'], 'The menu item path is set correctly.');
+    $this->assertEqual($options['attributes']['title'], $updated_item['description'], 'The description of the menu item has been saved.');
+  }
+}

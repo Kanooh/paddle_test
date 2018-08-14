@@ -1,0 +1,130 @@
+<?php
+
+/**
+ * @file
+ * Contains tests for the recursive array_unique function implementation.
+ */
+
+/**
+ * Class ReferenceTrackerArrayUniqueRecursiveTestCase.
+ */
+class ReferenceTrackerArrayUniqueRecursiveTestCase extends DrupalUnitTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Array unique function',
+      'description' => 'Test the recursive array_unique implementation.',
+      'group' => 'Reference Tracker',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp() {
+    parent::setUp();
+
+    // Load our module code.
+    drupal_load('module', 'reference_tracker');
+  }
+
+  /**
+   * Tests when multiple fields contain the same reference.
+   */
+  public function testMultipleFieldsSameReference() {
+    $references = array(
+      '7' => array(
+        LANGUAGE_NONE => array(
+          'node' => array(5),
+        ),
+      ),
+      '83' => array(
+        LANGUAGE_NONE => array(
+          'node' => array(5),
+        ),
+        'en' => array(
+          'node' => array(5),
+        ),
+      ),
+    );
+
+    // We expect no changes in this case.
+    $this->assertIdentical($references, _reference_tracker_array_unique_recursive($references));
+  }
+
+  /**
+   * Tests when multiple entity types with same id are referenced.
+   */
+  public function testMultipleEntityTypesSameId() {
+    $references = array(
+      0 => array(
+        LANGUAGE_NONE => array(
+          'node' => array(1),
+          'comment' => array(1),
+        ),
+      ),
+    );
+
+    // We expect no changes in this case.
+    $this->assertIdentical($references, _reference_tracker_array_unique_recursive($references));
+  }
+
+  /**
+   * Tests when the same reference id is a string and an integer.
+   */
+  public function testSameReferenceDifferentValueType() {
+    $references = array(
+      13 => array(
+        LANGUAGE_NONE => array(
+          'node' => array(1, '1'),
+        ),
+      ),
+    );
+
+    // We expect to have a single reference to node 1.
+    $expected = array(
+      13 => array(
+        LANGUAGE_NONE => array(
+          'node' => array(1),
+        ),
+      ),
+    );
+
+    $this->assertIdentical($expected, _reference_tracker_array_unique_recursive($references));
+  }
+
+  /**
+   * Tests that duplicate references are removed.
+   */
+  public function testDuplicateRemoval() {
+    $references = array(
+      13 => array(
+        LANGUAGE_NONE => array(
+          'node' => array(7, 83, 7, 83),
+          'comment' => array(7, 7),
+        ),
+        'en' => array(
+          'node' => array(7, 83, 7),
+        ),
+      ),
+    );
+
+    $expected = array(
+      13 => array(
+        LANGUAGE_NONE => array(
+          'node' => array(7, 83),
+          'comment' => array(7),
+        ),
+        'en' => array(
+          'node' => array(7, 83),
+        ),
+      ),
+    );
+
+    $this->assertIdentical($expected, _reference_tracker_array_unique_recursive($references));
+  }
+
+}

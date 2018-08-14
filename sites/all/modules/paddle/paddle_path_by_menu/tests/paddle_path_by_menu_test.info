@@ -1,0 +1,12 @@
+name = Paddle Path by Menu Test
+description = Test module for Paddle Path by Menu.
+core = 7.x
+package = Paddle
+hidden = TRUE
+
+dependencies[] = paddle_path_by_menu
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_path_by_menu"
+datestamp = "1455512497"

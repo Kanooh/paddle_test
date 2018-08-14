@@ -1,0 +1,75 @@
+/**
+ * @file
+ * Organizational unit paddlet styling.
+ */
+
+.node-organizational_unit-form {
+
+  .contact-information {
+    float: left;
+    width: 100%;
+    margin-bottom: 10px;
+    .field-name-field-paddle-ou-address {
+      .locality-block {
+        float: left;
+      }
+      .form-item-field-paddle-ou-address-und-0-country {
+        margin-top: 2em;
+      }
+
+      .form-item-field-paddle-ou-address-und-0-locality {
+        padding-right: 1em;
+      }
+    }
+
+    #edit-field-paddle-ou-phone {
+      clear: left;
+      label {
+        clear: left;
+      }
+    }
+
+    .field-name-field-paddle-ou-linkedin,
+    .field-name-field-paddle-ou-twitter,
+    .field-name-field-paddle-ou-facebook,
+    .field-name-field-paddle-ou-phone,
+    .field-name-field-paddle-ou-fax,
+    .field-name-field-paddle-ou-email,
+    .field-name-field-paddle-ou-website,
+    .field-name-field-paddle-ou-vat-number {
+      float: left;
+      width: 50%;
+      .form-item {
+        margin: 0px;
+        padding: 0;
+      }
+      .field-value {
+        label {
+          display: none;
+        }
+      }
+      input.form-text {
+        width: 90%;
+      }
+
+      fieldset {
+        margin: 0;
+        padding: 0;
+
+        legend {
+          span {
+            font-size: 16px;
+            font-weight: bold;
+          }
+        }
+      }
+    }
+    .field-name-field-paddle-ou-website {
+      .field-value {
+        label {
+          display: block;
+        }
+      }
+    }
+  }
+}

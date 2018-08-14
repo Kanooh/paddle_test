@@ -1,0 +1,889 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Organizational Unit app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_organizational_unit_enable() {
+  // We need to load all files from the dependent modules so hook
+  // implementations can be found, used by field_create_field() invoked
+  // indirectly by this module. Otherwise the addressfield field type and other
+  // new field types are not yet known.
+  module_load_all();
+  drupal_static_reset('module_implements');
+  cache_clear_all('field_info_types:', 'cache_field', TRUE);
+  module_implements('', FALSE, TRUE);
+
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_organizational_unit');
+
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions(). Otherwise our new content type is not yet
+  // known.
+  node_type_cache_reset();
+
+  // We need to clear the CTools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  ctools_modules_enabled(array('paddle_organizational_unit'));
+
+  $permissions = array(
+    'create organizational_unit content',
+    'edit any organizational_unit content',
+    'delete any organizational_unit content',
+    'edit organizational_unit content in landing pages',
+    'administer panelizer node organizational_unit layout',
+    'administer panelizer node organizational_unit content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_organizational_unit_disable() {
+  $permissions = array(
+    'create organizational_unit content',
+    'edit any organizational_unit content',
+    'delete any organizational_unit content',
+    'edit organizational_unit content in landing pages',
+    'administer panelizer node organizational_unit layout',
+    'administer panelizer node organizational_unit content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_revoke_permissions($role->rid, $permissions);
+  }
+
+  // Remove all of the nodes which are of this module's content type.
+  $results = db_select('node', 'n')
+    ->fields('n', array('nid'))
+    ->condition('type', 'organizational_unit', '=')
+    ->execute();
+  foreach ($results as $result) {
+    $nids[] = $result->nid;
+  }
+
+  if (!empty($nids)) {
+    node_delete_multiple($nids);
+    drupal_set_message(t('Deleted %count nodes.', array('%count' => count($nids))));
+  }
+  // Delete the node type.
+  node_type_delete('organizational_unit');
+  node_types_rebuild();
+  // Delete all menu items linked to the deleted nodes.
+  menu_rebuild();
+}
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function paddle_organizational_unit_update_dependencies() {
+  $dependencies = array();
+
+  // Migrate from image field to scald atom field before parsing all the
+  // nodes to update references.
+  $dependencies['paddle'][7108] = array(
+    'paddle_organizational_unit' => 7002,
+  );
+
+  return $dependencies;
+}
+
+/**
+ * Give permissions to the organizational unit pane.
+ */
+function paddle_organizational_unit_update_7000() {
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, array('edit organizational_unit content in landing pages'));
+  }
+}
+
+/**
+ * Widen the 'field_computed_ou' field so it can take long organizational units.
+ */
+function paddle_organizational_unit_update_7001() {
+  // The maximum length of the field is 3 titles of max 255 characters + 6
+  // characters for the ' > ' separators.
+  $length = 3 * 255 + 6;
+
+  // The Field module does not allow us to change the database schema of fields
+  // that already contain data, but widening the field does not affect the data
+  // so let's do it quietly on the tables itself.
+  $query = 'SELECT data FROM {field_config} WHERE field_name = :name';
+  $arguments = array(':name' => 'field_computed_ou');
+  $data = unserialize(db_query($query, $arguments)
+    ->fetchField());
+  $data['settings']['max_length'] = (string) $length;
+  $data['settings']['database']['data_length'] = $length;
+
+  db_update('field_config')
+    ->fields(array('data' => serialize($data)))
+    ->condition('field_name', 'field_computed_ou')
+    ->execute();
+
+  $specification = array('type' => 'varchar', 'length' => $length);
+  db_change_field('field_data_field_computed_ou', 'field_computed_ou_value', 'field_computed_ou_value', $specification);
+  db_change_field('field_revision_field_computed_ou', 'field_computed_ou_value', 'field_computed_ou_value', $specification);
+
+  field_info_cache_clear();
+}
+
+/**
+ * Migrate the logo field from a file managed field to a Scald atom field.
+ */
+function paddle_organizational_unit_update_7002(&$sandbox) {
+  // Enable the module defining the scald atom field.
+  module_enable(array('paddle_scald_atom_field'));
+
+  // Get all the nodes which have the field_paddle_ou_logo field.
+  if (!isset($sandbox['nids'])) {
+    $field = field_info_field('field_paddle_ou_logo');
+    if (!empty($field['bundles']['node'])) {
+      $bundles = $field['bundles']['node'];
+      $query = new EntityFieldQuery();
+      $query->entityCondition('entity_type', 'node')->propertyCondition('type', $bundles);
+      $results = $query->execute();
+
+      if (!empty($results['node'])) {
+        // Setup data for running the steps needed for the updates.
+        $sandbox['#finished'] = 0;
+        $sandbox['nids'] = array_keys($results['node']);
+        $sandbox['field_values'] = array();
+        $sandbox['total'] = count($results['node']);
+        $sandbox['totalSave'] = 0;
+        // Holds the number of processed nodes.
+        $sandbox['count'] = 0;
+        $sandbox['countSave'] = 0;
+        $sandbox['rate'] = 5;
+        // Go to the next step of the update.
+        return;
+      }
+    }
+
+    // Either no node bundles or nodes have been found. Just update the field.
+    _paddle_organizational_unit_update_recreate_ou_logo_field();
+    $sandbox['#finished'] = 1;
+  }
+  // Save the logo image data.
+  elseif (count($sandbox['nids']) > $sandbox['count']) {
+    // Take part of the nodes to process.
+    $nids = array_slice($sandbox['nids'], $sandbox['count'], $sandbox['rate']);
+    foreach ($nids as $nid) {
+      $node = entity_load_single('node', $nid);
+      $value = field_get_items('node', $node, 'field_paddle_ou_logo');
+      if ($value) {
+        $sandbox['field_values'][$nid] = $value[0];
+      }
+      $sandbox['#finished'] = abs((($sandbox['count'] - 1) / $sandbox['total']) / 2);
+      $sandbox['count']++;
+    }
+  }
+  elseif (is_array($sandbox['nids']) && count($sandbox['nids']) === $sandbox['count']) {
+    $sandbox['nids'] = -1;
+    $sandbox['totalSave'] = count($sandbox['field_values']);
+
+    _paddle_organizational_unit_update_recreate_ou_logo_field();
+
+    $sandbox['#finished'] = abs(((($sandbox['count']) - 1) / $sandbox['total']) / 2);
+  }
+  // Create an atom for this node and attach it the field.
+  elseif (count($sandbox['field_values']) > $sandbox['countSave']) {
+    $nids = array_slice($sandbox['field_values'], $sandbox['countSave'], $sandbox['rate'], TRUE);
+    foreach ($nids as $nid => $file) {
+      $node = entity_load_single('node', $nid);
+
+      // Create an atom from the file.
+      $options = array(
+        'alt_text' => $file['filename'],
+      );
+      try {
+        $atom_id = paddle_update_create_atom((object) $file, $options);
+        $wrapper = entity_metadata_wrapper('node', $node);
+        $wrapper->field_paddle_ou_logo->set(array('sid' => $atom_id));
+        $wrapper->save();
+      }
+      catch (\Exception $e) {
+        // Nothing we can do.
+      }
+      $sandbox['#finished'] = abs(0.5 + (((($sandbox['countSave']) - 1) / $sandbox['totalSave']) / 2));
+      $sandbox['countSave']++;
+    }
+  }
+  else {
+    $sandbox['#finished'] = 1;
+  }
+}
+
+/**
+ * Helper function to remove the current ou logo field and update it.
+ */
+function _paddle_organizational_unit_update_recreate_ou_logo_field() {
+  // Delete the OU logo image field.
+  field_delete_field('field_paddle_ou_logo');
+  field_info_cache_clear();
+
+  // Create the new field by reverting the features.
+  features_include_defaults(NULL, TRUE);
+  $revert = array(
+    'paddle_organizational_unit' => array('field_base', 'field_instance'),
+  );
+  features_revert($revert);
+
+  field_info_cache_clear();
+}
+
+/**
+ * Update existing panes used to render the OU logo to use the new approach.
+ */
+function paddle_organizational_unit_update_7003() {
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      $q = db_select('panels_pane', 'p')
+        ->condition('type', 'entity_field')
+        ->condition('subtype', 'node:field_paddle_ou_logo')
+        ->countQuery();
+      return $q->execute()->fetchField();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      $q = db_select('panels_pane', 'p')
+        ->condition('type', 'entity_field')
+        ->condition('subtype', 'node:field_paddle_ou_logo')
+        ->fields('p', array());
+
+      $q->range($offset, $limit);
+
+      $results = $q->execute();
+
+      return $results;
+    },
+    // Single item update callback.
+    function ($db_item, &$sandbox) {
+      // Ensure we unserialize all serialized fields with
+      // ctools_export_unpack_object(). Fields that are not unserialized,
+      // would otherwise become double-serialized when saving them again.
+      // See panels_load_displays().
+      ctools_include('export');
+      $item = ctools_export_unpack_object('panels_pane', $db_item);
+
+      // Change the configuration to reflect the new approach.
+      $item->configuration = array(
+        'label' => 'hidden',
+        'formatter' => 'paddle_organizational_unit_logo',
+        'delta_limit' => 0,
+        'delta_offset' => '0',
+        'delta_reversed' => FALSE,
+        'formatter_settings' => array(),
+        'context' => 'panelizer',
+        'override_title' => 0,
+        'override_title_text' => '',
+        'override_title_heading' => 'h2',
+      );
+      drupal_write_record('panels_pane', $item, 'pid');
+
+      return TRUE;
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "pane {$item->pid}";
+
+      if ($updated) {
+        return $id_string;
+      }
+      else {
+        return "{$id_string} SKIPPED";
+      }
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Grant permissions to edit the panels for the org. unit content type.
+ */
+function paddle_organizational_unit_update_7004() {
+  $permissions = array(
+    'administer panelizer node organizational_unit layout',
+    'administer panelizer node organizational_unit content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Migrate the logo field to the featured image field.
+ */
+function paddle_organizational_unit_update_7005(&$sandbox) {
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      // We use db_select instead of EntityFieldQuery to get all revisions.
+      return db_select('field_revision_field_paddle_ou_logo')
+        ->countQuery()
+        ->execute()
+        ->fetchField();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      $results = db_select('field_revision_field_paddle_ou_logo', 'frfpol')
+        ->fields('frfpol')
+        ->range($offset, $limit)
+        ->execute()
+        ->fetchAllAssoc('revision_id');
+
+      $nodes = array();
+      foreach ($results as $vid => $item) {
+        $nodes[] = node_load($item->entity_id, $vid);
+      }
+
+      return $nodes;
+    },
+    // Single item update callback.
+    function ($node, &$sandbox) {
+      try {
+        $value = field_get_items('node', $node, 'field_paddle_ou_logo');
+        $wrapper = entity_metadata_wrapper('node', $node);
+
+        // Only update the field if no featured image has been set and if there
+        // was a logo set.
+        if (empty($wrapper->field_paddle_featured_image->value()) && !empty($value)) {
+          $wrapper->field_paddle_featured_image->set($value[0]);
+          $wrapper->save();
+        }
+
+        return TRUE;
+      }
+      catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "Organizational unit {$item->nid} rev {$item->vid} lang {$item->language}";
+      $action = $updated ? "has been updated" : "could NOT be updated";
+      return $id_string . " " . $action . ".";
+    }
+  );
+  // @codingStandardsIgnoreEnd
+
+  // Delete the logo field that now got redundant.
+  field_delete_field('field_paddle_ou_logo');
+  field_info_cache_clear();
+}
+
+/**
+ * Update the panelizer entities so that changes take effect for the logo field.
+ */
+function paddle_organizational_unit_update_7006(&$sandbox) {
+  $limit = 5;
+  $entities = paddle_core_get_entity_revisions('node', array('organizational_unit'));
+  $sandbox['entities'] = $entities;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      return count($sandbox['entities']);
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+      return array_slice($sandbox['entities'], $offset, $limit);
+    },
+    // Single item update callback.
+    function ($entity, &$sandbox) {
+      try {
+        paddle_core_update_panelizer_entity('node', $entity);
+        return TRUE;
+      }
+      catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "Organizational unit {$item->nid} rev {$item->vid} lang {$item->language}";
+      $action = $updated ? "has been updated" : "could NOT be updated";
+      return $id_string . " " . $action . ".";
+    }
+  );
+}
+// @codingStandardsIgnoreEnd
+
+/**
+ * Create an ou from the ou-parent-line-one field and use it in the new autocomplete field.
+ */
+function paddle_organizational_unit_update_7007(&$sandbox) {
+  $revert = array(
+    'paddle_organizational_unit' => array('field_base', 'field_instance'),
+  );
+  features_revert($revert);
+
+  $limit = 5;
+  $entities = paddle_core_get_entity_revisions('node', array('organizational_unit'));
+  $sandbox['entities'] = $entities;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      return count($sandbox['entities']);
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      return array_slice($sandbox['entities'], $offset, $limit);
+    },
+    // Single item update callback.
+    function ($entity, &$sandbox) {
+      try {
+        paddle_organizational_unit_update_parent_entity($entity);
+
+        return TRUE;
+      } catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "Organizational unit {$item->nid} rev {$item->vid} lang {$item->language}";
+      $action = $updated ? "has been updated" : "could NOT be updated";
+
+      return $id_string . " " . $action . ".";
+    }
+  );
+}
+// @codingStandardsIgnoreEnd
+
+/**
+ * Create CP node and use it in the new autocomplete field (head of unit).
+ */
+function paddle_organizational_unit_update_7008() {
+  // Only update if the organizational unit is already enabled.
+  if (module_exists('paddle_contact_person')) {
+
+    $limit = 5;
+    $entities = paddle_core_get_entity_revisions('node', array('organizational_unit'));
+    $sandbox['entities'] = $entities;
+
+    // @codingStandardsIgnoreStart
+    paddle_update_batch_helper($sandbox, $limit,
+      // Count callback.
+      function (&$sandbox) {
+        return count($sandbox['entities']);
+      },
+      // Range retrieval callback.
+      function ($limit, &$sandbox) {
+        $offset = $sandbox['progress'];
+
+        return array_slice($sandbox['entities'], $offset, $limit);
+      },
+      // Single item update callback.
+      function ($entity, &$sandbox) {
+        try {
+          paddle_organizational_unit_update_head_of_unit($entity);
+
+          return TRUE;
+        } catch (\Exception $e) {
+          // Nothing we can do.
+          return FALSE;
+        }
+      },
+      // Progress message callback.
+      function ($sandbox) {
+        $item = $sandbox['last_item'];
+        $updated = $sandbox['last_item_update_status'];
+
+        $id_string = "Contact person {$item->nid} rev {$item->vid} lang {$item->language}";
+        $action = $updated ? "has been updated" : "could NOT be updated";
+
+        return $id_string . " " . $action . ".";
+      }
+    );
+    // @codingStandardsIgnoreEnd
+  }
+}
+
+/**
+ * Helper function to create the CP and link it back to the OU.
+ *
+ * @param object $entity
+ *   The entity to update.
+ */
+function paddle_organizational_unit_update_head_of_unit($entity) {
+  $entity_wrapper = entity_metadata_wrapper('node', $entity);
+  $head_of_unit = $entity_wrapper->field_paddle_ou_head_unit->value();
+  if (!empty($head_of_unit)) {
+
+    // First check if there is an OU with the same title.
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', 'contact_person')
+      ->propertyCondition('title', $head_of_unit, '=');
+    $existing_results = $query->execute();
+
+    // If yes: use it as a reference.
+    if (!empty($existing_results)) {
+      $existing_result = reset(reset($existing_results));
+      $entity_wrapper->field_paddle_ou_cp_head_unit->set($existing_result->nid);
+      $entity_wrapper->save();
+    }
+    else {
+      list($first_name, $last_name) = explode(' ', $head_of_unit, 2);
+      empty($last_name) ? $last_name = $first_name : $last_name;
+      // Create a new contact person.
+      $node_cp = entity_create('node', array('type' => 'contact_person'));
+      $node_cp->language = $entity_wrapper->language->value();
+      node_object_prepare($node_cp);
+      $node_cp->uid = $entity->uid;
+      node_submit($node_cp);
+      node_save($node_cp);
+      $node_cp = node_load($node_cp->nid);
+      $cp_wrapper = entity_metadata_wrapper('node', $node_cp);
+      $cp_wrapper->field_paddle_cp_first_name->set($first_name);
+      $cp_wrapper->field_paddle_cp_last_name->set($last_name);
+      $cp_wrapper->save();
+      $nid = $cp_wrapper->getIdentifier();
+
+      // Set the field value.
+      $entity_wrapper->field_paddle_ou_cp_head_unit->set($nid);
+      $entity_wrapper->save();
+    }
+  }
+}
+
+/**
+ * Helper function to create new OU or use existing ones and set them as entity reference.
+ *
+ * @param object $entity
+ *  The entity to update.
+ */
+function paddle_organizational_unit_update_parent_entity($entity) {
+  $parent_field = field_get_items('node', $entity, 'field_paddle_ou_parent_1');
+  if (!empty($parent_field[0]['value'])) {
+
+    // First check if there is an OU with the same title.
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', 'organizational_unit')
+      ->propertyCondition('title', $parent_field[0]['value'], '=');
+    $results = $query->execute();
+
+    // If yes: use it as a reference.
+    if (!empty($results)) {
+      $result = reset(reset($results));
+      $entity->field_paddle_ou_parent_entity[LANGUAGE_NONE][0]['target_id'] = $result->nid;
+      field_attach_presave('node', $entity);
+      field_attach_update('node', $entity);
+    }
+    else {
+      // Create a new OU.
+      $node_ou = new StdClass();
+      $node_ou->type = 'organizational_unit';
+      $node_ou->title = $parent_field[0]['value'];
+      node_object_prepare($node_ou);
+      $node_ou->uid = 1;
+      $node_ou->language = $entity->language;
+      $node_ou->status = 1;
+      $node_ou->active = 1;
+      $node_ou = node_submit($node_ou);
+      node_save($node_ou);
+      // Set the field value.
+      $entity->field_paddle_ou_parent_entity[LANGUAGE_NONE][0]['target_id'] = $node_ou->nid;
+      field_attach_presave('node', $entity);
+      field_attach_update('node', $entity);
+    }
+  }
+}
+
+/**
+ * Publish the newly created contact persons when the OU is published.
+ */
+function paddle_organizational_unit_update_7009() {
+  // Only update if the organizational unit is already enabled.
+  if (module_exists('paddle_contact_person')) {
+    $query = db_select('node', 'n');
+    $query->join('workbench_moderation_node_history', 'wmnh', 'wmnh.nid = n.nid');
+    $query->join('field_data_field_paddle_ou_cp_head_unit', 'hu', 'hu.entity_id = n.nid');
+    $result = $query->fields('hu', array('field_paddle_ou_cp_head_unit_target_id'))
+      ->condition('n.type', 'organizational_unit', '=')
+      ->condition('wmnh.published', 1, '=')
+      ->execute()
+      ->fetchAll();
+
+    $limit = 5;
+    $sandbox['records'] = $result;
+
+    // @codingStandardsIgnoreStart
+    paddle_update_batch_helper($sandbox, $limit,
+      // Count callback.
+      function (&$sandbox) {
+        return count($sandbox['records']);
+      },
+      // Range retrieval callback.
+      function ($limit, &$sandbox) {
+        $offset = $sandbox['progress'];
+
+        return array_slice($sandbox['records'], $offset, $limit);
+      },
+      // Single item update callback.
+      function ($record, &$sandbox) {
+        try {
+          $cp = node_load($record->field_paddle_ou_cp_head_unit_target_id);
+          workbench_moderation_moderate($cp, 'published');
+
+          return TRUE;
+        } catch (\Exception $e) {
+          // Nothing we can do.
+          return FALSE;
+        }
+      },
+      // Progress message callback.
+      function ($sandbox) {
+        $item = $sandbox['last_item'];
+        $updated = $sandbox['last_item_update_status'];
+
+        $id_string = "Contact person {$item->field_paddle_ou_cp_head_unit_target_id}";
+        $action = $updated ? "has been updated" : "could NOT be updated";
+
+        return $id_string . " " . $action . ".";
+      }
+    );
+    // @codingStandardsIgnoreEnd
+  }
+}
+
+/**
+ * Updates existing nodes so certain regions won't allow custom panes.
+ */
+function paddle_organizational_unit_update_7010() {
+  paddle_apps_update_panelizer_default_settings_batch('organizational_unit');
+}
+
+/**
+ * Updates existing nodes so the new regions are added to the OU layout.
+ *
+ * @param array $sandbox
+ *   An array holding data for the batch process.
+ */
+function paddle_organizational_unit_update_7011(&$sandbox) {
+  $limit = 5;
+  $entities = paddle_core_get_entity_revisions('node', array('organizational_unit'));
+  $sandbox['entities'] = $entities;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      return count($sandbox['entities']);
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+      return array_slice($sandbox['entities'], $offset, $limit);
+    },
+    // Single item update callback.
+    function ($entity, &$sandbox) {
+      try {
+        _paddle_organizational_unit_update_display_with_new_layout('node', $entity);
+        return TRUE;
+      } catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "Organizational unit {$item->nid} rev {$item->vid} lang {$item->language}";
+      $action = $updated ? "has been updated" : "could NOT be updated";
+      return $id_string . " " . $action . ".";
+    }
+  );
+}
+
+/**
+ * Updates a display with a new layout.
+ *
+ * @param string $entity_type
+ *   The entity type of the entities that need updating.
+ * @param object $entity
+ *   The entity that needs updating.
+ */
+function _paddle_organizational_unit_update_display_with_new_layout($entity_type = 'node', $entity) {
+  // Get the new display of the panelizer object.
+  ctools_include('export');
+  ctools_include('plugins', 'panels');
+  $panelizers = ctools_export_load_object('panelizer_defaults');
+  $panelizer = $panelizers["$entity_type:$entity->type:default"];
+  $default_display = $panelizer->display;
+  $default_content = $default_display->content;
+
+  if (!empty($entity->panelizer['page_manager']->display->did) &&
+    $entity->panelizer['page_manager']->display->did != 'new'
+  ) {
+    $display = $entity->panelizer['page_manager']->display;
+
+    // Loop over the content in the entity and preserve the content in the
+    // right and bottom columns because these stay unaltered if the renderer
+    // comes from the content_region pipeline.
+    if ($panelizer->pipeline == 'paddle_content_region') {
+      foreach ($display->content as $pid => $pane) {
+        if (!in_array($pane->panel, array('right', 'bottom'))) {
+          unset($display->content[$pid]);
+        }
+      }
+    }
+
+    // For every existing pane, create a new pane and hand it in the display.
+    foreach ($default_content as $pid => $pane) {
+      if (
+        $panelizer->pipeline != 'paddle_content_region' ||
+        ($panelizer->pipeline == 'paddle_content_region' &&
+          !in_array($pane->panel, array('right', 'bottom')))
+      ) {
+        $new_pane = panels_new_pane($pane->type, $pane->subtype);
+
+        foreach ($pane as $key => $value) {
+          if (!in_array($key, array('type', 'subtype'))) {
+            $new_pane->{$key} = $pane->{$key};
+          }
+        }
+
+        $display->content[$new_pane->pid] = $new_pane;
+        $display->panels[$new_pane->panel][] = $new_pane->pid;
+      }
+    }
+
+    $new_layout = ctools_get_plugins('panels', 'layouts', $default_display->layout);
+    $new_layout_regions = panels_get_regions($new_layout, panels_new_display());
+
+    // Add the new regions.
+    $content = array();
+    foreach ($new_layout_regions as $layout_region_id => $layout_region_label) {
+      if (!isset($content[$layout_region_id])) {
+        $content[$layout_region_id] = array();
+      }
+      if (isset($display->panels[$layout_region_id])) {
+        $content[$layout_region_id] = array_merge($content[$layout_region_id], $display->panels[$layout_region_id]);
+      }
+    }
+
+    // Go through each pane and make sure its region id is correct.
+    foreach ($content as $region_id => $region) {
+      foreach ($region as $pid) {
+        $display->content[$pid]->panel = $region_id;
+      }
+    }
+
+    $display->panels = $content;
+    $display->layout = $default_display->layout;
+
+    // Save the display.
+    $saved_display = panels_save_display($display);
+    panels_cache_clear('display', $saved_display->did);
+  }
+}
+
+/**
+ * Saves all the organizational units to transfer the geofield data.
+ *
+ * @param array $sandbox
+ *   An array holding data for the batch process.
+ */
+function paddle_organizational_unit_update_7012(&$sandbox) {
+  if (empty(variable_get('geocoder_field_killswitch', 0))) {
+    $limit = 5;
+    $entities = paddle_core_get_entity_revisions('node',
+      array('organizational_unit'));
+    $sandbox['entities'] = $entities;
+
+    // @codingStandardsIgnoreStart
+    paddle_update_batch_helper(
+      $sandbox,
+      $limit,
+      // Count callback.
+      function (&$sandbox) {
+        return count($sandbox['entities']);
+      },
+      // Range retrieval callback.
+      function ($limit, &$sandbox) {
+        $offset = $sandbox['progress'];
+        return array_slice($sandbox['entities'], $offset, $limit);
+      },
+      // Single item update callback.
+      function ($entity, &$sandbox) {
+        try {
+          time_nanosleep(0, 100);
+          node_save($entity);
+          return TRUE;
+        } catch (\Exception $e) {
+          // Nothing we can do.
+          return FALSE;
+        }
+      },
+      // Progress message callback.
+      function ($sandbox) {
+        $item = $sandbox['last_item'];
+        $updated = $sandbox['last_item_update_status'];
+
+        $id_string = "Organizational unit {$item->nid} rev {$item->vid} lang {$item->language}";
+        $action = $updated ? "has been saved" : "could NOT be saved";
+        return $id_string . " " . $action . ".";
+      }
+    );
+  }
+}

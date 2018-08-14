@@ -1,0 +1,13 @@
+name = Strongarm
+description = Enforces variable values defined by modules that need settings set to operate properly.
+core = 7.x
+dependencies[] = ctools
+
+files[] = strongarm.admin.inc
+files[] = strongarm.install
+files[] = strongarm.module
+
+; Information added by drush on 2012-06-13
+version = "7.x-2.0"
+project = "strongarm"
+datestamp = "1339602368"

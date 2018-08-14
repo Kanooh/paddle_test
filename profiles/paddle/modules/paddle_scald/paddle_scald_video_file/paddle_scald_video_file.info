@@ -1,0 +1,6 @@
+name = Paddle Scald Video File
+description = Provides video file atom integration for Paddle.
+package = Paddle
+core = 7.x
+dependencies[] = scald
+dependencies[] = paddle_scald_video

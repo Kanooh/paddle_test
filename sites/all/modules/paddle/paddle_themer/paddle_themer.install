@@ -1,0 +1,138 @@
+<?php
+/**
+ * @file
+ * Contains install and update functions for Paddle Themer.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_themer_schema() {
+  $schema = array();
+
+  $schema['paddle_themer_theme'] = array(
+    'description' => 'Table storing customized themes',
+    'export' => array(
+      'admin_title' => 'human_name',
+      'default hook' => 'default_paddle_themer_themes',
+      'identifier' => 'theme',
+      'bulk export' => TRUE,
+      'default cache bin' => 'cache',
+      'cache defaults' => TRUE,
+      'can disable' => FALSE,
+      'api' => array(
+        'owner' => 'paddle_themer',
+        'api' => 'default_paddle_themer',
+        'minimum_version' => 1,
+        'current_version' => 1,
+      ),
+      'save callback' => 'paddle_themer_save_theme',
+      'delete callback' => 'paddle_themer_delete_theme',
+    ),
+    'fields' => array(
+      'id' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique customized theme ID.',
+        'no export' => TRUE,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'description' => 'Unique machine name for this customized theme. Used to identify it programmatically.',
+      ),
+      'human_name' => array(
+        'type' => 'varchar',
+        'size' => 'normal',
+        'length' => 255,
+        'default' => '',
+        'description' => 'Human-friendly name for a customized theme',
+      ),
+      'theme' => array(
+        'type' => 'varchar',
+        'size' => 'normal',
+        'length' => 255,
+        'default' => '',
+        'description' => 'Drupal theme which this customized theme builds upon',
+      ),
+      // hook_schema_item_fields_varchar.
+      'style' => array(
+        'type' => 'blob',
+        'description' => 'A serialized array of styling properties for this customized theme.',
+        'serialize' => TRUE,
+        'serialized default' => 'a:0:{}',
+      ),
+      'image_id' => array(
+        'type' => 'int',
+        'description' => 'The {file_managed}.fid being referenced in this field.',
+      ),
+      'changed' => array(
+        'description' => 'The Unix timestamp when the theme was most recently saved.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+    'unique keys' => array(
+      'name' => array('name'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_themer_uninstall() {
+  // Delete the paddle_theme variable.
+  variable_del('paddle_theme');
+
+  // Query the paddle_themer_theme table because paddle_themer is disabled at
+  // this point so we can't use our functions.
+  $themes = db_select('paddle_themer_theme', 'ppt')
+    ->fields('ppt')
+    ->isNotNull('image_id')
+    ->execute()
+    ->fetchAll();
+
+  // Delete the images linked to the theme.
+  foreach ($themes as $theme) {
+    if (!empty($theme->image_id)) {
+      $file = file_load($theme->image_id);
+      file_usage_delete($file, 'paddle_themer', 'image', $theme->id);
+
+      $list = file_usage_list($file);
+      if (empty($list)) {
+        file_delete($file);
+      }
+    }
+  }
+}
+
+/**
+ * Add the "changed" column to the paddle_themer_theme table.
+ */
+function paddle_themer_update_7000() {
+  $spec = array(
+    'description' => 'The Unix timestamp when the theme was most recently saved.',
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+  );
+
+  db_add_field('paddle_themer_theme', 'changed', $spec);
+}
+
+/**
+ * Add the "image_id" column to the paddle_themer_theme table.
+ */
+function paddle_themer_update_7001() {
+  $spec = array(
+    'type' => 'int',
+    'description' => 'The {file_managed}.fid being referenced in this field.',
+  );
+
+  db_add_field('paddle_themer_theme', 'image_id', $spec);
+}

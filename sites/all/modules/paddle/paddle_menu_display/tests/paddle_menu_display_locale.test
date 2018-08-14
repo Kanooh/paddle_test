@@ -1,0 +1,90 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuDisplayLocaleTest.
+ */
+
+/**
+ * Tests if menu displays respect the chosen locale.
+ */
+class PaddleMenuDisplayLocaleTest extends PaddleMenuDisplayTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Locale',
+      'description' => 'Tests if menu displays respect the chosen locale.',
+      'group' => 'Paddle Menu Display',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array('paddle_menu_display', 'locale'));
+
+    // Create a test user and log in.
+    $user = $this->drupalCreateUser(array(
+      'access administration pages',
+      'administer blocks',
+      'administer languages',
+      'administer menu',
+      'administer menu displays',
+      'translate interface',
+    ));
+    $this->drupalLogin($user);
+
+    // Create a menu display based on the Management menu.
+    $options = array('menu_name' => 'management', 'root_path' => 'admin');
+    $menu_display = $this->createMenuDisplay($options);
+
+    // Place the menu display in the header region.
+    $edit = array('regions[bartik]' => 'header');
+    $this->drupalPost('admin/structure/block/manage/paddle_menu_display/' . $menu_display->name . '/configure', $edit, t('Save block'));
+  }
+
+  /**
+   * Tests menu items translation.
+   */
+  public function testMenuTranslation() {
+    $langcode = 'es';
+    $original_title = 'Administration';
+    $translated_title = 'Administración';
+
+    // Add a language.
+    $edit = array('langcode' => $langcode);
+    $this->drupalPost('admin/config/regional/language/add', $edit, t('Add language'));
+
+    // Enable URL language detection and selection.
+    $edit = array('language[enabled][locale-url]' => '1');
+    $this->drupalPost('admin/config/regional/language/configure', $edit, t('Save settings'));
+
+    // Load the menu interface to populate the menu item translation strings.
+    $this->drupalGet($langcode . '/admin/structure/menu/manage/management');
+
+    // Add a translation for the 'Configuration' string.
+    $search = array('string' => $original_title);
+    $this->drupalPost('admin/config/regional/translate/translate', $search, t('Filter'));
+    $this->clickLink(t('edit'));
+    $edit = array("translations[$langcode]" => $translated_title);
+    $this->drupalPost(NULL, $edit, t('Save translations'));
+
+    // Clear the menu cache.
+    paddle_menu_display_cache_clear_by_cid('%', FALSE);
+
+    // Check that the original language menu is shown on English pages.
+    $this->drupalGet('');
+    $this->assertRaw($original_title, 'The English menu item is shown on English pages.');
+    $this->assertNoRaw($translated_title . 'The Spanish menu item is not shown on English pages.');
+
+    // Check that the translated language menu is shown on Spanish pages.
+    $this->drupalGet($langcode);
+    $this->assertNoRaw($original_title, 'The Spanish menu item is shown on Spanish pages.');
+    $this->assertRaw($translated_title, 'The English menu item is not shown on Spanish pages.');
+  }
+
+}

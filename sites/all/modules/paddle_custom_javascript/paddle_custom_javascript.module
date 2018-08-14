@@ -1,0 +1,119 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Custom JavaScript module.
+ */
+
+/**
+ * Implements hook_variable_set('comment_' . $type, $value);().
+ */
+function paddle_custom_javascript_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_custom_javascript_configuration_form',
+  );
+}
+
+/**
+ * Paddle Custom JavaScript configuration form callback.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_custom_javascript_configuration_form() {
+  $form = array();
+
+  if (user_access('manage paddle custom javascript')) {
+    drupal_set_message(t('Watch out! Incorrect use of JavaScript can cause severe harm to the website.'), 'warning', FALSE);
+
+    $form['javascript'] = array(
+      '#title' => t('Script'),
+      '#type' => 'textarea',
+      '#rows' => 10,
+      '#default_value' => variable_get('paddle_custom_javascript', ''),
+    );
+
+    $form['form_footer'] = array(
+      '#type' => 'item',
+      '#markup' => t("The inserted script will be placed between the &lt;head&gt; and &lt;/head&gt; tags."),
+    );
+
+    // Set the buttons in the contextual toolbar if available.
+    if (module_exists('paddle_contextual_toolbar')) {
+      $form['#after_build'][] = 'paddle_custom_javascript_contextual_actions_configuration_form';
+    }
+
+    $form['save'] = array(
+      '#type' => 'submit',
+      '#value' => t('Save'),
+      '#attributes' => array(
+        'class' => array('hidden'),
+      ),
+    );
+  }
+  else {
+    // Don't return status 403 but show a message instead, as we might add extra
+    // settings later that other users than the site manager can change.
+    $form['javascript'] = array(
+      '#type' => 'item',
+      '#markup' => t('You have insufficient access to manage custom JavaScript.'),
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * Submit handler for the Paddle Custom JavaScript configuration form.
+ */
+function paddle_custom_javascript_configuration_form_submit($form, $form_state) {
+  if (!empty($form_state['values']['javascript'])) {
+    variable_set('paddle_custom_javascript', $form_state['values']['javascript']);
+  }
+  else {
+    variable_del('paddle_custom_javascript');
+  }
+
+  drupal_set_message(t('Your configuration has been saved.'), 'status', FALSE);
+}
+
+/**
+ * After-build function of the Paddle Custom JavaScript configuration form.
+ *
+ * @param array $form
+ *   Form render array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_custom_javascript_contextual_actions_configuration_form($form) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-save',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_custom_javascript_permission() {
+  $return = array();
+
+  $return['manage paddle custom javascript'] = array(
+    'title' => t('Manage custom JavaScript'),
+  );
+
+  return $return;
+}

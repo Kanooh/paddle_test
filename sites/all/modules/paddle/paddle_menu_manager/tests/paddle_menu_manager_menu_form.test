@@ -1,0 +1,244 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuManagerMenuFormTest.
+ */
+
+/**
+ * UI tests for the menu create/edit/delete forms.
+ */
+class PaddleMenuManagerMenuFormTest extends PaddleMenuManagerTestCase {
+
+  /**
+   * Stores langcodes of enabled languages.
+   *
+   * @var array
+   */
+  protected $langcodes;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Menu forms'),
+      'description' => t('Create and edit menu forms.'),
+      'group' => t('Paddle Menu Manager'),
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array('i18n_menu', 'paddle_menu_manager'));
+
+    $admin_user = $this->drupalCreateUser(array(
+      'manage paddle_menu_manager',
+      'manage_menu_link_to_published_nodes',
+      'view the administration theme',
+    ));
+    $this->drupalLogin($admin_user);
+
+    // Enable 3 random languages in addition to English.
+    include_once DRUPAL_ROOT . '/includes/iso.inc';
+    $language_list = _locale_get_predefined_list();
+    unset($language_list['en']);
+    $this->langcodes = array('en');
+    foreach (array_rand($language_list, 3) as $langcode) {
+      locale_add_language($langcode);
+      $this->langcodes[] = $langcode;
+    }
+  }
+
+  /**
+   * Tests menu creation without js.
+   */
+  public function testCreateMenuNoJs() {
+    global $language_content;
+
+    // Test with a random language.
+    $languages = language_list();
+    $key = array_rand($this->langcodes);
+    $language_content = $languages[$this->langcodes[$key]];
+
+    $edit = array(
+      'title' => $this->randomString(32),
+      'description' => $this->randomString(20),
+    );
+
+    $this->drupalPost('admin/structure/menu_manager/nojs/add', $edit, t('Save'));
+    $this->assertResponse(200, 'The form has been succesfully sent.');
+
+    // Test if confirmation message appeared.
+    $this->assertText(t('Menu saved successfully'), 'Confirmation message displayed.');
+
+    // Test if the save was successful.
+    $result = db_select('menu_custom', 'mc')
+      ->fields('mc')
+      ->condition('mc.title', $edit['title'])
+      ->condition('mc.language', $language_content->language)
+      ->execute();
+
+    $this->assertEqual(1, $result->rowCount(), 'The menu was added in the database.');
+
+    $menu = $result->fetchAssoc();
+
+    $this->assertEqual($edit['description'], $menu['description'], 'The description was correctly stored.');
+    $this->assertEqual(I18N_MODE_LANGUAGE, $menu['i18n_mode'], 'The i18n mode was set to I18N_MODE_LANGUAGE.');
+    $this->assertTrue($menu['i18n_tsid'], 'The menu has been added to a translation set');
+    $this->assertTrue($menu['menu_name'], 'A menu name has been generated automatically.');
+
+    $translation_set = i18n_translation_set_load($menu['i18n_tsid']);
+    $translations = $translation_set->get_translations();
+    $this->assertEqual(count($translations), 4, format_string('There are 4 translations available for the menu that was created in %language.', array('%language' => $language_content->language)));
+
+    $this->assertTrue(strpos($this->getUrl(), 'admin/structure/menu_manager/' . $menu['i18n_tsid']));
+  }
+
+  /**
+   * Tests menu editing without js.
+   */
+  public function testEditMenuNoJs() {
+    global $language_content;
+
+    // Test with a random language.
+    $languages = language_list();
+    $key = array_rand($this->langcodes);
+    $language_content = $languages[$this->langcodes[$key]];
+
+    // Create a menu and clone it so we have a fully functional
+    // menu translation set.
+    $menu = $this->createMenu($language_content->language);
+    paddle_menu_manager_create_menu_translations($menu);
+
+    // Get the menu edit form.
+    $this->drupalGet('admin/structure/menu_manager/nojs/' . $menu['menu_name'] . '/edit');
+    $this->assertFieldByName('title', $menu['title'], 'The field to change the title is present and is prefilled with the current title.');
+    $this->assertFieldByName('description', $menu['description'], 'The field to change the description is present and is prefilled with the current description.');
+
+    // Update title and description.
+    $edit = array(
+      'title' => $this->randomString(32),
+      'description' => $this->randomString(20),
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+
+    // Test if confirmation message appeared.
+    $this->assertText(t('Menu saved successfully'), 'Confirmation message displayed.');
+
+    // Test if the save was successful.
+    menu_cache_clear_all();
+    $updated_menu = menu_load($menu['menu_name']);
+
+    $this->assertTrue(strpos($this->getUrl(), 'admin/structure/menu_manager/' . $menu['i18n_tsid']));
+    $this->assertEqual($edit['title'], $updated_menu['title'], 'The menu contains the submitted title.');
+    $this->assertEqual($edit['description'], $updated_menu['description'], 'The menu contains the submitted description.');
+    $this->assertEqual($menu['i18n_mode'], $updated_menu['i18n_mode'], 'The i18n mode has not changed.');
+    $this->assertEqual($menu['i18n_tsid'], $updated_menu['i18n_tsid'], 'The translation set ID has not changed.');
+    $this->assertEqual($menu['language'], $updated_menu['language'], 'The menu language has not changed.');
+
+    // Clear any static caches sitting in our way.
+    entity_get_controller('i18n_translation')->resetCache();
+    drupal_static_reset('i18n_get_object');
+
+    $translation_set = i18n_translation_set_load($menu['i18n_tsid']);
+    $translations = $translation_set->get_translations();
+    $this->assertEqual(count($translations), 4, format_string('There are 4 translations available for the menu item that was created in %language.', array('%language' => $language_content->language)));
+
+    // Only the title and description of this menu should have been changed,
+    // not of other menus in the same translation set.
+    foreach ($translations as $translation) {
+      if ($translation['language'] == $updated_menu['language']) {
+        $this->assertEqual($updated_menu, $translation, format_string('%language version in translation set was updated.', array('%language' => $translation['language'])));
+      }
+      else {
+        $this->assertEqual($menu['title'], $translation['title'], format_string('The title of the %language translation remains unchanged.', array('%language' => $translation['language'])));
+        $this->assertEqual($menu['description'], $translation['description'], format_string('The description of the %language translation remains unchanged.', array('%language' => $translation['language'])));
+      }
+    }
+  }
+
+  /**
+   * Tests menu deletion without js.
+   */
+  public function testDeleteMenuNoJs() {
+    global $language_content;
+
+    // Create a menu and clone it so we have a fully functional menu translation
+    // set.
+    $menu = $this->createMenu($language_content->language);
+    paddle_menu_manager_create_menu_translations($menu);
+
+    // Create some menu links for each menu.
+    $translation_set = i18n_translation_set_load($menu['i18n_tsid']);
+    $translations = $translation_set->get_translations();
+
+    $mlids = array();
+    foreach ($translations as $translation) {
+      // Add a front page link to each menu.
+      $item = array(
+        'link_path' => '<front>',
+        'link_title' => $this->randomString(),
+        'menu_name' => $translation['menu_name'],
+      );
+      $mlids[] = menu_link_save($item);
+
+      // Add a system link to each menu.
+      $item['link_path'] = 'admin/structure/menu';
+      $item['link_title'] = $this->randomString();
+      $mlids[] = menu_link_save($item);
+    }
+
+    // Get the menu deletion form and check the title and warning messages.
+    $this->drupalGet('admin/structure/menu_manager/nojs/' . $menu['menu_name'] . '/delete');
+    $this->assertRaw(t('Are you sure you want to delete the custom menu %title?', array('%title' => $menu['title'])), 'The title is displayed.');
+    $this->assertRaw('<p>' . t('<strong>Warning:</strong> The following menus will be removed, along with the menu items they contain:') . '</p>', 'The warning message is displayed');
+    $this->assertRaw(t('This action cannot be undone.'), 'The disclaimer is displayed');
+    $this->assertLink(t('Cancel'), 0, 'The link to cancel the operation is displayed.');
+
+    // Check that all menus are listed.
+    $this->assertRaw('<li>' . check_plain($menu['title']) . '</li>', 'The requested menu is displayed.');
+    $languages = locale_language_list();
+    foreach ($translations as $langcode => $translation) {
+      if ($langcode == $language_content->language) {
+        continue;
+      }
+      $this->assertRaw(check_plain($translation['title']) . ' (' . check_plain($languages[$langcode]) . ')', format_string('The menu in %language is displayed', array('%language' => $languages[$langcode])));
+    }
+
+    // Delete the menus.
+    $this->drupalPost(NULL, array(), t('Delete'));
+
+    // Check if we are redirected to the menu overview.
+    $this->assertTrue(strpos($this->getUrl(), 'admin/structure/menu_manager'));
+
+    // Check if confirmation message appeared.
+    $this->assertRaw(t('The custom menu %title has been deleted.', array('%title' => $menu['title'])), 'Confirmation message displayed.');
+
+    // Check if all menu items have been deleted.
+    $result = db_select('menu_links', 'ml')
+      ->fields('ml', array('mlid'))
+      ->condition('mlid', $mlids, 'IN')
+      ->execute()
+      ->fetchAll();
+    $this->assertFalse($result, 'All menu items have been deleted.');
+
+    // Check if all menus have been deleted.
+    $result = db_select('menu_custom', 'm')
+      ->fields('m', array('menu_name'))
+      ->condition('i18n_tsid', $menu['i18n_tsid'])
+      ->execute()
+      ->fetchAll();
+    $this->assertFalse($result, 'All menus have been deleted.');
+
+    // First clear any static caches sitting in our way.
+    entity_get_controller('i18n_translation')->resetCache();
+    drupal_static_reset('i18n_get_object');
+
+    // Now check if the translation set has been removed.
+    $translation_set = i18n_translation_set_load($menu['i18n_tsid']);
+    $this->assertFalse($translation_set, 'The translation set has been removed.');
+  }
+}

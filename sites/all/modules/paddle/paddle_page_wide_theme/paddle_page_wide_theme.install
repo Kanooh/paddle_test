@@ -1,0 +1,23 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Page Wide Theme.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_page_wide_theme_enable() {
+  // Clear the menu cache so that the hooks declared in the page wide theme
+  // template.php file will be executed.
+  menu_cache_clear_all();
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_page_wide_theme_disable() {
+  variable_del('paddle_page_wide_theme_customized_header');
+  variable_del('paddle_page_wide_theme_sticky_header');
+}

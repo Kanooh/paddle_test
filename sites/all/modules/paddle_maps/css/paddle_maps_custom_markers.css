@@ -1,0 +1,111 @@
+#paddle-maps-configuration-form .form-control {
+  display: block;
+  width: calc(100% - 26px);
+  padding: 7px 25px 7px 12px;
+  font-size: 14px;
+  line-height: 1.42857143;
+  color: #555;
+  background-color: #fff;
+  background-image: none;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+#paddle-maps-configuration-form .custom_marker {
+  margin-top: 20px;
+}
+#paddle-maps-configuration-form .marker-file-upload .form-submit {
+    float: right;
+}
+#paddle-maps-configuration-form .custom_marker input.form-submit {
+  height: 30px;
+  margin-left: 5px;
+  padding: 0 0.6em;
+}
+#paddle-maps-configuration-form button.form-submit {
+  margin-bottom: 20px;
+}
+
+#paddle-maps-configuration-form .input-file-wrapper{
+  display: block;
+  float: left;
+}
+
+#paddle-maps-configuration-form table {
+  margin-top: 5px;
+  background-color: #ececec;
+}
+#paddle-maps-configuration-form table th.is-default-marker {
+  width: 145px;
+}
+#paddle-maps-configuration-form table td {
+  vertical-align: top;
+}
+#paddle-maps-configuration-form table th.drag-weight, #custom-markers-configuratione-form table td.drag-weight {
+  width: 25px;
+}
+#paddle-maps-configuration-form table th.preview-marker, #custom-markers-configuratione-form table td.marker-preview {
+  width: 45px;
+}
+#paddle-maps-configuration-form table td.marker-preview img {
+  margin-left: 10px;
+}
+/*
+#paddle-maps-configuration-form table td .ms-sel-ctn {
+  min-height: 30px;
+}
+*/
+#paddle-maps-configuration-form table td .form-type-checkbox {
+  margin-top: 4px;
+}
+#paddle-maps-configuration-form table td .form-type-checkbox label{
+  font-weight: normal;
+}
+#paddle-maps-configuration-form table td input.marker_is_default {
+  margin-left: 15px;
+}
+
+td.marker-file-upload .form-type-checkbox, td.marker-file-upload .image-preview,
+td.marker-file-upload #magicsuggest, td.marker-file-upload .ms-sel-ctn, td.marker-file-upload .form-type-managed-file label {
+  display: none;
+}
+/*
+#paddle-maps-configuration-form table input.ui-icon-delete {
+  width: 30px;
+  color: transparent;
+  background: url(../markers/kanooh_default_marker.png) #fff no-repeat center center;
+}
+*/
+#paddle-maps-configuration-form table .messages {
+  padding: 8px 10px 7px 40px;
+  margin: 0 0 0 0;
+}
+#paddle-maps-configuration-form .ms-res-ctn.dropdown-menu {
+  background: #fff;
+}
+#paddle-maps-configuration-form .ms-res-ctn.dropdown-menu .depth-1 {
+  padding-left: 15px;
+}
+#paddle-maps-configuration-form .ms-res-ctn.dropdown-menu .depth-2 {
+  padding-left: 30px;
+}
+#paddle-maps-configuration-form .ms-res-ctn.dropdown-menu .depth-3 {
+  padding-left: 45px;
+}
+#paddle-maps-configuration-form .ms-res-ctn.dropdown-menu .depth-4 {
+  padding-left: 60px;
+}
+#paddle-maps-configuration-form .ms-res-item {
+  background: #eee;
+  text-indent: 5px;
+  margin-bottom: 1px;
+}
+
+#paddle-maps-configuration-form textarea,
+#paddle-maps-configuration-form input[type="text"],
+#paddle-maps-configuration-form .form-managed-file .file {
+  border: none;
+}
+
+#paddle-maps-configuration-form .form-item-gmap-api-key input[type="text"]{
+  border: 1px solid #b5b6b7;
+}

@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle XML Sitemap.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_xml_sitemap_enable() {
+  // Enable translatable site maps if paddle_i18n is enabled.
+  if (module_exists('paddle_i18n')) {
+    paddle_xml_sitemap_enable_multilingual();
+  }
+
+  $settings = [
+    // Included.
+    'status' => PADDLE_XML_SITEMAP_INCLUDED_NODE_TYPE,
+    // Priority should be equal for all.
+    'priority' => PADDLE_XML_SITEMAP_TOP_PRIORITY,
+  ];
+
+  // Each node type is added to the XML site map.
+  foreach (node_type_get_types() as $type => $name) {
+    xmlsitemap_link_bundle_settings_save('node', $type, $settings);
+  }
+
+  // We turn off the prefetch_aliases since
+  // we do not want to reduce our performance.
+  variable_set('xmlsitemap_prefetch_aliases', 0);
+
+  // The lifetime will last 1 day.
+  variable_set('xmlsitemap_minimum_lifetime', XMLSITEMAP_FREQUENCY_DAILY);
+
+  // Set a default base_url so no white pages are generated.
+  variable_set('xmlsitemap_base_url', $GLOBALS['base_url']);
+
+  // Update the XML sitemaps.
+  $smid = db_query('SELECT smid FROM {xmlsitemap_sitemap}')->fetchCol();
+  xmlsitemap_sitemap_multiple_update($smid);
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_xml_sitemap_disable() {
+  // Remove the XML site map variables.
+  drupal_load('install', 'xmlsitemap');
+  xmlsitemap_uninstall();
+
+  // Disable the modules.
+  module_disable(['xmlsitemap_node', 'xmlsitemap'], FALSE);
+
+  // Remove the database tables of the previous modules.
+  db_delete('xmlsitemap_sitemap')->execute();
+  db_drop_table('xmlsitemap_sitemap');
+}

@@ -1,0 +1,36 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations of Paddle Menu Manager Test.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_menu_manager_test_menu() {
+  $items = array();
+
+  $items['paddle_menu_manager_test/menu_form'] = array(
+    'title' => 'Test',
+    'access arguments' => array('administer site configuration'),
+    'page callback' => 'paddle_menu_manager_menu_form_test_page',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Page callback linking to a create and edit menu form.
+ */
+function paddle_menu_manager_menu_form_test_page() {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $items = array();
+  $items[] = ctools_modal_text_button(t('Create new'), 'admin/structure/menu_manager/nojs/add', t('Pop me up'));
+  $items[] = ctools_modal_text_button(t('Edit existing'), 'admin/structure/menu_manager/nojs/management/edit', t('Pop me up'));
+
+  return theme('item_list', array('items' => $items));
+}

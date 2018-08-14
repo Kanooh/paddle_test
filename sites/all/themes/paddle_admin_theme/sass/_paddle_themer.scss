@@ -1,0 +1,98 @@
+.paddle-themer-theme-list .theme-selector {
+  padding-top: 20px;
+}
+
+.paddle-themer-theme-list .operations {
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.paddle-themer-theme-list .clearfix:after {
+  content: ".";
+  display: block;
+  height: 0;
+  clear: both;
+  visibility: hidden;
+}
+
+.paddle-themer-theme-image {
+  background: url(placeholder.png) no-repeat left;
+  height: 163px;
+}
+
+.paddle-themer-theme-controls {
+}
+
+.item-list .paddle-themer-controls-list li {
+  margin-bottom: 6px;
+}
+
+.item-list .paddle-themer-controls-list li.last {
+  margin-bottom: 0px;
+}
+
+.paddle-themer-theme {
+  background: #f2f2f2;
+  border: 2px solid $menu-green-color;
+  padding: 20px;
+  margin-bottom: 20px;
+  border-radius: 3px;
+}
+
+.paddle-themer-theme.active {
+  border: 3px solid $menu-darkergreen-color;
+  padding: 19px;
+}
+
+.item-list .paddle-themer-controls-list {
+}
+
+.paddle-themer-theme-image img {
+  max-width: 100%;
+}
+
+.theme-title {
+  font-size: 1.4em;
+  margin-bottom: 5px;
+  color: $menu-darkergreen-color;
+}
+
+.paddle-style-plugin .font-size-container {
+  display: inline;
+
+  .form-type-textfield {
+    margin-top: 0;
+  }
+
+  .suffix {
+    vertical-align: sub;
+  }
+}
+
+#paddle-themer-style-set-basic_styling {
+  .paddle-style-plugin.paddle-style-plugin-font {
+    display: block;
+  }
+}
+
+#paddle-style-plugin-instance-header-title-font {
+  width: 70%;
+}
+
+#page-wide-header-position .fieldset-wrapper {
+  background-color: $light-silver;
+  padding-left: 30px;
+  width: 30%;
+  margin-left: 15px;
+
+  .form-type-radios > label {
+    font-size: 1.2em;
+  }
+
+  .form-radios-header-logo-position, .form-radios-header-navigation-position {
+    div {
+      float: left;
+      width: 50%;
+    }
+  }
+}

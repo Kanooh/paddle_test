@@ -1,0 +1,20 @@
+name = Redirect
+description = Redirect URLs to a new destination on your website or to an external website. Make a page accessible via multiple registered URLs.
+core = 7.x
+package = Paddle
+
+dependencies[] = redirect
+
+stylesheets[all][] = css/paddle_redirect.css
+apps[logo] = apps/logo.png
+
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_redirect"
+datestamp = "1473170447"
+

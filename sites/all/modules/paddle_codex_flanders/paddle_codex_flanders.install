@@ -1,0 +1,38 @@
+<?php
+
+/**
+ * @file
+ * Install and update hook for the Paddle Codex Flanders paddlet.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_codex_flanders_enable() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_codex_flanders'));
+
+  // Give permissions to work with the poll content type.
+  $permissions = array(
+    'edit codex_flanders content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    if ($role = user_role_load_by_name($role_name)) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+}
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_codex_flanders_schema() {
+  $schema = array();
+
+  $schema['cache_flanders_codices'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_flanders_codices']['description'] = 'Cache table for the results of retreived Flanders codex articles.';
+
+  return $schema;
+}

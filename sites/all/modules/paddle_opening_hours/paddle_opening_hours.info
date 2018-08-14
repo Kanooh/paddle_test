@@ -1,0 +1,23 @@
+name = Opening hours
+description = Show your web visitors when the departments of your organisation are open. Manage every update in the Opening hours Paddlet.
+core = 7.x
+package = Paddle
+
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+apps[paddle][vendor_link] = http://kanooh.be
+apps[paddle][third_party_service] = 0
+
+dependencies[] = authcache
+dependencies[] = authcache_ajax
+dependencies[] = authcache_builtin
+dependencies[] = authcache_panels
+dependencies[] = opening_hours_sets
+dependencies[] = paddle_apps
+dependencies[] = entityreference
+dependencies[] = features
+features[features_api][] = api:2
+features[field_base][] = field_paddle_opening_hours
+
+files[] = tests/opening_hours_authcache.test

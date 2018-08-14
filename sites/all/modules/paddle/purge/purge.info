@@ -1,0 +1,13 @@
+name = Purge
+description = Purge clears urls from reverse proxy caches like Varnish and Squid by issuing HTTP PURGE requests.
+package = Performance and scalability
+core = 7.x
+
+files [] = purge.module
+files [] = purge.inc
+configure = admin/config/development/performance/purge
+
+; Information added by drush on 2015-03-03
+version = "7.x-1.7"
+project = "purge"
+datestamp = "1425376701"

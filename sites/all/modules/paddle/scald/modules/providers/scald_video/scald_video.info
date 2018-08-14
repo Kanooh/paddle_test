@@ -1,0 +1,10 @@
+name = Scald Video
+description = Provides Video atoms from video files.
+package = Scald Providers
+core = 7.x
+dependencies[] = scald
+
+; Information added by drush on 2015-05-21
+version = "7.x-1.6"
+project = "scald"
+datestamp = "1432199322"

@@ -1,0 +1,1027 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for Paddle Advanced Search.
+ */
+
+include_once 'paddle_advanced_search.features.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_advanced_search_menu() {
+  $items = array();
+
+  $items['admin/advanced_search/node_autocomplete_callback'] = array(
+    'page callback' => 'paddle_advanced_search_node_autocomplete_callback',
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+    'file' => 'paddle_advanced_search.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_advanced_search_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_advanced_search_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_advanced_search_vocabulary_filter' => array(
+      'render element' => 'element',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_advanced_search_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+
+  if (isset($menu_object) && $menu_object->type == 'paddle_advanced_search_page') {
+    return array(
+      'field_adv_search_content_types',
+      'field_paddle_default_sort_option',
+      'field_paddle_default_sort_order',
+      'field_paddle_search_result_count',
+      'field_paddle_pager_top',
+      'field_paddle_pager_bottom',
+    );
+  }
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields_groups().
+ */
+function paddle_advanced_search_paddle_content_manager_additional_fields_groups() {
+  $menu_object = menu_get_object();
+
+  if ($menu_object->type == 'paddle_advanced_search_page') {
+    $additional_fields_groups = array();
+    $additional_fields_groups['display_options'] = array(
+      'label' => t('Display options'),
+      'weight' => 1,
+      'fields' => array(
+        'field_paddle_default_sort_option',
+        'field_paddle_default_sort_order',
+        'field_paddle_pager_top',
+        'field_paddle_pager_bottom',
+      ),
+    );
+
+    return $additional_fields_groups;
+  }
+}
+
+/**
+ * Implements hook_ctools_render_alter().
+ *
+ * @see paddle_landing_page_ctools_render_alter()
+ */
+function paddle_advanced_search_ctools_render_alter(&$info, &$page, &$context) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  // Load the node context used by panelizer.
+  if ($context['handler']->handler == 'panelizer_node') {
+    $panelizer_context = _panelizer_panelizer_task_get_context($context['handler'], $context['contexts']);
+    // Unfortunately the context handler name 'panelizer_node' is misleading.
+    // It is actually used by other entity types as well. So check the type
+    // of the context as well.
+    if ($panelizer_context->plugin == 'entity:node') {
+      $node = $panelizer_context->data;
+    }
+  }
+
+  // Only act on landing pages, handled by panelizer.
+  if (!isset($node) || !isset($node->type) || $node->type !== 'paddle_advanced_search_page') {
+    return;
+  }
+
+  // Prepend title and body on landing pages in the admin area.
+  if (path_is_admin(current_path())) {
+    $info['title'] = '';
+    $info['content'] = !empty($info['content']) ? $info['content'] : '';
+    $info['content'] = '<h1 class="landing-page-title-view">' . check_plain($node->title) . '</h1>' . $info['content'];
+
+    $body = field_get_items('node', $node, 'body');
+    if (!empty($body[0]['value'])) {
+      $info['content'] .= '<div class="landing-page-body-view">' . check_markup($body[0]['value'], $body[0]['format']) . '</div>';
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ */
+function paddle_advanced_search_paddle_contextual_toolbar_actions_alter(&$actions) {
+  $menu = menu_get_item();
+
+  // Add the change layout button.
+  if ($menu['path'] == 'admin/content_manager/node/%/layout' && $menu['page_arguments'][1]->data->type == 'paddle_advanced_search_page') {
+    if (module_exists('paddle_contextual_toolbar')) {
+      $actions = paddle_contextual_toolbar_actions();
+
+      $action_link = l(
+        t('Change layout'),
+        'panels/ajax/paddle_landing_page/change_layout/panelizer:node:' . $menu['page_arguments'][1]->argument . ':page_manager',
+        array(
+          'attributes' => array(
+            'class' => array(
+              'panels-ipe-change-layout',
+              'ctools-use-modal',
+              'ctools-modal-wide-modal',
+              'ui-icon',
+              'fa-exchange',
+            ),
+          ),
+        )
+      );
+      $actions['Change layout'] = array(
+        'action' => $action_link,
+        'class' => array('change_layout'),
+        'weight' => 10,
+      );
+
+      // Set the buttons.
+      paddle_contextual_toolbar_actions($actions);
+      // Load the click delegator.
+      paddle_contextual_toolbar_add_js('click_delegator');
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_page().
+ *
+ * @see paddle_landing_page_preprocess_page()
+ */
+function paddle_advanced_search_preprocess_page(&$variables) {
+  // Show the title when needed.
+  $menu_item = menu_get_item();
+
+  if (in_array($menu_item['path'], array('node/%/draft', 'node/%')) &&
+    isset($variables['node']) &&
+    ($node = $variables['node']) &&
+    $node->type == 'paddle_advanced_search_page'
+  ) {
+    // Ensure we use the current revision when previewing a draft.
+    if ($menu_item['path'] == 'node/%/draft' && $node->workbench_moderation['current']->vid != $node->vid) {
+      $node = workbench_moderation_node_current_load($node);
+    }
+
+    if (!empty($node)) {
+      $body = field_get_items('node', $node, 'body');
+      if (!empty($body[0]['safe_value'])) {
+        $description = array(
+          'paddle_advanced_search_page_body' => array(
+            '#prefix' => '<div class="row"><div class="field-name-body landing-page-body col-md-12">',
+            '#markup' => $body[0]['safe_value'],
+            '#suffix' => '</div></div>',
+          ),
+        );
+        array_unshift($variables['page']['content'], $description);
+      }
+    }
+  }
+}
+
+/**
+ * Value callback for the advanced search content types field.
+ */
+function paddle_advanced_search_get_content_types() {
+  $types = node_type_get_names();
+
+  // Avoid inception.
+  unset($types['paddle_advanced_search_page']);
+
+  // Allow other modules to alter the list.
+  drupal_alter('paddle_advanced_search_get_content_types', $types);
+
+  return $types;
+}
+
+/**
+ * Implements hook_default_page_manager_handlers_alter().
+ */
+function paddle_advanced_search_default_page_manager_handlers_alter(&$export) {
+  $item = menu_get_item();
+
+  // Add the extra panes to the advanced search page node edit form.
+  if (!empty($export['node_edit_panel_context']) && !empty($item['page_arguments'][0]->type) && $item['page_arguments'][0]->type == 'paddle_advanced_search_page') {
+    // Prepare a list of panes to insert on the fly.
+    $panes_to_insert = array();
+
+    $pane = new stdClass();
+    $pane->pid = '1e090af9-4b28-9734-bd41-065c5c9cc895';
+    $pane->panel = 'left';
+    $pane->type = 'vocabulary_filter_field';
+    $pane->subtype = 'vocabulary_filter';
+    $pane->shown = TRUE;
+    $pane->access = array();
+    $pane->configuration = array(
+      'context' => 'argument_node_edit_1',
+      'override_title' => 0,
+      'override_title_text' => '',
+      'override_title_heading' => 'h2',
+    );
+    $pane->cache = array();
+    $pane->style = array(
+      'settings' => NULL,
+    );
+    $pane->css = array();
+    $pane->extras = array();
+    $pane->position = 4;
+    $pane->locks = array();
+    $pane->uuid = '54ab467c-d4e1-426a-becd-a3b1d1f8d8bb';
+    $export['node_edit_panel_context']->conf['display']->content[$pane->pid] = $pane;
+    $panes_to_insert[] = $pane->pid;
+
+    $pane = new stdClass();
+    $pane->pid = 'new-ec63bd34-519c-4aff-bee2-747683e7b3c3';
+    $pane->panel = 'left';
+    $pane->type = 'search_form_field';
+    $pane->subtype = 'search_form_field';
+    $pane->shown = TRUE;
+    $pane->access = array();
+    $pane->configuration = array(
+      'context' => 'argument_node_edit_1',
+      'override_title' => 0,
+      'override_title_text' => '',
+      'override_title_heading' => 'h2',
+    );
+    $pane->cache = array();
+    $pane->style = array(
+      'settings' => NULL,
+    );
+    $pane->css = array();
+    $pane->extras = array();
+    $pane->position = 13;
+    $pane->locks = array();
+    $pane->uuid = 'ec63bd34-519c-4aff-bee2-747683e7b3c3';
+    $export['node_edit_panel_context']->conf['display']->content[$pane->pid] = $pane;
+    $panes_to_insert[] = $pane->pid;
+
+    // Shortcut to the left column.
+    $left_column = &$export['node_edit_panel_context']->conf['display']->panels['left'];
+
+    // Find the additional fields panes. We want to show it together with
+    // the other node specific panes.
+    if ($key = array_search('new-f14a7a22-a05e-ae44-c122-e71a20f44d45', $left_column)) {
+      unset($left_column[$key]);
+      // Reset the keys to have a proper count again.
+      $left_column = array_values($left_column);
+      // Show it before the others.
+      array_unshift($panes_to_insert, 'new-f14a7a22-a05e-ae44-c122-e71a20f44d45');
+    }
+
+    // Find the featured image pane key in the left column.
+    if ($key = array_search('new-bcec2608-deb8-49ee-86ec-8ea34723fcce', $left_column)) {
+      array_unshift($panes_to_insert, 'new-bcec2608-deb8-49ee-86ec-8ea34723fcce');
+      // Insert the new panes after the body.
+      array_splice($left_column, $key, 1, $panes_to_insert);
+    }
+    else {
+      // For some impossible reason we didn't find the body pane. Just
+      // append to the end of the page.
+      $left_column = array_merge($left_column, $panes_to_insert);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_paddle_advanced_search_page_node_form_alter().
+ */
+function paddle_advanced_search_form_paddle_advanced_search_page_node_form_alter(&$form, &$form_state) {
+  // Unset the N/A options for the default sort.
+  unset($form['field_paddle_default_sort_option'][LANGUAGE_NONE]['#options']['_none']);
+  unset($form['field_paddle_default_sort_order'][LANGUAGE_NONE]['#options']['_none']);
+
+
+  // Load all the first level terms on the general taxonomy.
+  $vocabulary = taxonomy_vocabulary_machine_name_load('paddle_general');
+
+  $root_terms = i18n_taxonomy_get_tree($vocabulary->vid, $form['#entity']->language, 0, 1);
+  if ($root_terms) {
+    $options = array(
+      'list' => t('List'),
+      'dropdown' => t('Dropdown'),
+      'hidden' => t('Hidden'),
+    );
+
+    // Fetch the search result pane configuration, if present.
+    $enabled = array();
+    if ($search_results_pane = _paddle_advanced_search_get_advanced_search_results_pane($form_state['node'])) {
+      // Simplify later access to enabled terms by having the term ids as key
+      // too.
+      $enabled = drupal_map_assoc($search_results_pane->configuration['tids']);
+    }
+
+    // Retrieve existing vocabulary filter panes.
+    $panes = _paddle_advanced_search_get_vocabulary_term_filter_panes($form_state['node']);
+
+    // Loop all the enabled terms to get the related display mode.
+    $modes = array();
+    foreach ($enabled as $tid) {
+      if (!empty($panes[$tid]->configuration['mode'])) {
+        $modes[$tid] = $panes[$tid]->configuration['mode'];
+      }
+      else {
+        $modes[$tid] = 'hidden';
+      }
+    }
+
+    $form['vocabulary_filter'] = array(
+      '#tree' => TRUE,
+      '#theme' => 'paddle_advanced_search_vocabulary_filter',
+      // Pass the options labels to allow easier theming in table.
+      '#option_labels' => array_values($options),
+    );
+
+    foreach ($root_terms as $term) {
+      $form['vocabulary_filter'][$term->tid] = array(
+        // Keep the term itself.
+        '#taxonomy_term' => $term,
+      );
+
+      $form['vocabulary_filter'][$term->tid]['enabled'] = array(
+        '#type' => 'checkbox',
+        '#title' => entity_label('taxonomy_term', $term),
+        '#default_value' => isset($enabled[$term->tid]),
+      );
+      $form['vocabulary_filter'][$term->tid]['mode'] = array(
+        '#type' => 'radios',
+        '#options' => $options,
+        '#default_value' => !empty($modes[$term->tid]) ? $modes[$term->tid] : 'list',
+        '#states' => array(
+          'enabled' => array(
+            'input[name="vocabulary_filter[' . $term->tid . '][enabled]"]' => array('checked' => TRUE),
+          ),
+        ),
+        // Add our custom process callback but preserve all the existing ones.
+        // This is needed as additional element info is appended, so we don't
+        // want to miss process callbacks like form_process_radios().
+        '#process' => array_merge(element_info_property('radios', '#process', array()), array(
+          'paddle_advanced_search_process_vocabulary_filter_radios',
+        )),
+      );
+    }
+  }
+  else {
+    $form['vocabulary_filter'] = array(
+      '#markup' => t('No terms available.'),
+    );
+  }
+
+  // Default configuration for the search form pane.
+  $configuration = array(
+    'enabled' => 0,
+    'use_default_btn_text' => 1,
+    'custom_btn_text' => t('Search'),
+  );
+  // Load the search form pane.
+  if ($search_form_pane = _paddle_advanced_search_get_advanced_search_form_pane($form_state['node'])) {
+    // Mark the pane as enabled, get its configuration and merge it with the
+    // defaults to avoid missing values, even if that should never be possible.
+    $configuration = array_merge($configuration, array('enabled' => 1) + $search_form_pane->configuration);
+  }
+
+  $form['search_form'] = array(
+    '#tree' => TRUE,
+    'enabled' => array(
+      '#type' => 'checkbox',
+      '#title' => t('Show free text search box'),
+      '#default_value' => $configuration['enabled'],
+    ),
+    'use_default_btn_text' => array(
+      '#type' => 'checkbox',
+      '#title' => t('Standard text search button'),
+      '#default_value' => $configuration['use_default_btn_text'],
+      '#states' => array(
+        'visible' => array(
+          'input[name="search_form[enabled]"]' => array('checked' => TRUE),
+        ),
+      ),
+    ),
+    'custom_btn_text' => array(
+      '#type' => 'textfield',
+      '#default_value' => $configuration['custom_btn_text'],
+      '#states' => array(
+        'visible' => array(
+          'input[name="search_form[enabled]"]' => array('checked' => TRUE),
+          'input[name="search_form[use_default_btn_text]"]' => array('checked' => FALSE),
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Additional process function to copy more configuration when expanding radios.
+ *
+ * @see form_process_radios()
+ */
+function paddle_advanced_search_process_vocabulary_filter_radios($element) {
+  if (count($element['#options']) > 0 && !empty($element['#states'])) {
+    foreach ($element['#options'] as $key => $choice) {
+      $element[$key] += array(
+        '#states' => $element['#states'],
+      );
+    }
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_node_submit().
+ */
+function paddle_advanced_search_node_submit($node, $form, &$form_state) {
+  if ($node->type != 'paddle_advanced_search_page' || empty($node->panelizer)) {
+    return;
+  }
+
+  // Retrieve the display.
+  $display = paddle_apps_retrieve_node_display_for_pane_altering($node);
+  // Only continue if there is a display.
+  if (!$display) {
+    return;
+  }
+
+  // Retrieve all the vocabulary term filter panes already existing.
+  $panes = _paddle_advanced_search_get_vocabulary_term_filter_panes($node);
+  // Retrieve the layout.
+  $layout = panels_get_layout($display->layout);
+
+  // For the Alfa layout, we put panes by default in the left region. For all
+  // the remaining layouts, use the same approach as in the change layout modal.
+  if ($layout['name'] == 'paddle_2_col_3_9') {
+    $default_region = 'left';
+  }
+  else {
+    $regions = array_keys(panels_get_regions($layout, $display));
+    $default_region = reset($regions);
+  }
+
+  $values = !empty($form_state['values']['vocabulary_filter']) ? $form_state['values']['vocabulary_filter'] : array();
+  // Keep track of all the enabled terms.
+  $enabled = array();
+  // Loop over the submitted configuration and update or create panes for each
+  // entry.
+  foreach ($values as $tid => $settings) {
+    if ($settings['enabled']) {
+      $enabled[] = $tid;
+
+      // Do not add a pane for the hidden display mode.
+      if ($settings['mode'] == 'hidden') {
+        continue;
+      }
+
+      if (!isset($panes[$tid])) {
+        $pane = panels_new_pane('vocabulary_term_filter', 'vocabulary_term_filter');
+        $display->add_pane($pane, $default_region);
+      }
+      else {
+        $pane = $panes[$tid];
+        // Remove this pane from the list, marking it as processed.
+        unset($panes[$tid]);
+      }
+
+      // Update the configuration.
+      $pane->configuration = array(
+        'tid' => $tid,
+        'mode' => $settings['mode'],
+      );
+
+      // Delete the pane reference, as the display uses references so every loop
+      // will overwrite the previous created panes.
+      unset($pane);
+    }
+  }
+
+  // All the leftover panes need to be removed from the regions.
+  if (!empty($panes)) {
+    foreach ($panes as $pane) {
+      _paddle_advanced_search_remove_pane_from_display($display, $pane);
+    }
+  }
+
+  // Save the enabled configuration in the advanced search results pane.
+  if ($search_results_pane = _paddle_advanced_search_get_advanced_search_results_pane($node)) {
+    $search_results_pane->configuration = array(
+      'tids' => $enabled,
+    );
+  }
+
+  // Reset the caches to make sure that if needed, the facets are shown.
+  paddle_search_reset_caches();
+
+  $search_form_values = $form_state['values']['search_form'];
+  $search_form_pane = _paddle_advanced_search_get_advanced_search_form_pane($node);
+
+  if (!empty($search_form_values['enabled'])) {
+    if (!$search_form_pane) {
+      $search_form_pane = panels_new_pane('advanced_search_form', 'advanced_search_form');
+      $display->add_pane($search_form_pane, $default_region);
+    }
+
+    $search_form_pane->configuration = $search_form_values;
+    // We don't need the enabled status, as the presence of the pane is the
+    // status itself.
+    unset($search_form_pane->configuration['enabled']);
+  }
+  elseif ($search_form_pane) {
+    // Remove the pane from the display.
+    _paddle_advanced_search_remove_pane_from_display($display, $search_form_pane);
+  }
+}
+
+/**
+ * Helper function to extract vocabulary term filter content types from a node.
+ *
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return object[]
+ *   An array of pane objects, keyed by the taxonomy term id they refer.
+ */
+function _paddle_advanced_search_get_vocabulary_term_filter_panes($node) {
+  $panes = array();
+  foreach ($node->panelizer['page_manager']->display->content as $pid => $pane) {
+    if ($pane->type == 'vocabulary_term_filter') {
+      // Key panes by term id, so we can easily work with them afterwards.
+      $tid = $pane->configuration['tid'];
+      $panes[$tid] = $pane;
+    }
+  }
+
+  return $panes;
+}
+
+/**
+ * Removes a pane from a display.
+ *
+ * @param panels_display $display
+ *   The display instance where we want to remove the pane from.
+ * @param object $pane
+ *   The pane object.
+ *
+ * @see panels_display::add_pane()
+ */
+function _paddle_advanced_search_remove_pane_from_display(panels_display $display, $pane) {
+  if (isset($display->content[$pane->pid])) {
+    unset($display->content[$pane->pid]);
+
+    // Find the position of this pane in its region.
+    $position = array_search($pane->pid, $display->panels[$pane->panel]);
+    if ($position !== FALSE) {
+      unset($display->panels[$pane->panel][$position]);
+      // Reset position array to avoid missing position numbers.
+      $display->panels[$pane->panel] = array_values($display->panels[$pane->panel]);
+    }
+  }
+}
+
+/**
+ * Helper function to get the advanced search results pane from a node.
+ *
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return bool|object
+ *   The pane if found, FALSE otherwise.
+ */
+function _paddle_advanced_search_get_advanced_search_results_pane($node) {
+  if ($pane = _paddle_advanced_search_get_pane_by_type('advanced_search_results', $node)) {
+    return $pane;
+  }
+
+  // Unless the wrong node has been passed to the function, the pane should
+  // always be present. Log this error.
+  watchdog('paddle_advanced_search', 'Could not find advanced search pane for node @nid, revision @vid.', array(
+    '@nid' => $node->nid,
+    '@vid' => $node->vid,
+  ));
+
+  return FALSE;
+}
+
+/**
+ * Helper function to get the advanced search form pane from a node.
+ *
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return bool|object
+ *   The pane if found, FALSE otherwise.
+ */
+function _paddle_advanced_search_get_advanced_search_form_pane($node) {
+  if ($pane = _paddle_advanced_search_get_pane_by_type('advanced_search_form', $node)) {
+    return $pane;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Helper function to get a pane of a certain type from a node.
+ *
+ * This function retrieves only the first pane of that type.
+ *
+ * @param string $type
+ *   The content type machine name.
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return bool|object
+ *   The pane if found, FALSE otherwise.
+ */
+function _paddle_advanced_search_get_pane_by_type($type, $node) {
+  if (isset($node->panelizer)) {
+    foreach ($node->panelizer['page_manager']->display->content as $pane) {
+      if ($pane->type == $type) {
+        return $pane;
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_panels_ipe_pane_links_alter().
+ */
+function paddle_advanced_search_panels_ipe_pane_links_alter(&$links, $context) {
+  if ($pane = $context['pane']) {
+    $types = array(
+      'vocabulary_term_filter',
+      'advanced_search_results',
+      'advanced_search_form',
+    );
+
+    if (in_array($pane->type, $types)) {
+      unset($links['delete']);
+      unset($links['edit']);
+    }
+
+    if ($pane->type == 'advanced_search_results') {
+      unset($links['paddle_style']);
+    }
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_advanced_search_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'panels_ipe_pane_links_alter') {
+    $implementation = $implementations['paddle_advanced_search'];
+    unset($implementations['paddle_advanced_search']);
+    $implementations['paddle_advanced_search'] = $implementation;
+  }
+}
+
+/**
+ * Retrieve the enabled facet terms and their info.
+ *
+ * @return array
+ *   The facet info, keyed by term id.
+ */
+function _paddle_advanced_search_get_facets() {
+  $facets = &drupal_static(__FUNCTION__);
+
+  if (!isset($facets)) {
+    $facets = array();
+
+    // Get all the root term ids. As we have multiple revisions of pages,
+    // it is quite expensive to try to find the latest draft and the published
+    // revision, so we provide a facet for each root term.
+    $tids = _paddle_search_get_root_taxonomy_term_ids();
+
+    // Process only if we have some tids.
+    if ($tids) {
+      // Loading time is not a problem as terms are cached.
+      $terms = taxonomy_term_load_multiple($tids);
+
+      $modes = array(
+        'list' => 'facetapi_extended_checkbox_links',
+        'dropdown' => 'facetapi_dropdown',
+      );
+
+      foreach ($modes as $mode => $widget) {
+        foreach ($terms as $tid => $term) {
+          $name = "paddle_advanced_search_term_{$tid}_{$mode}";
+          $facets[$name] = array(
+            'term' => $term,
+            'mode' => $mode,
+            'default widget' => $widget,
+          );
+        }
+      }
+    }
+  }
+
+  return $facets;
+}
+
+/**
+ * Implements hook_facetapi_facet_info_alter().
+ */
+function paddle_advanced_search_facetapi_facet_info_alter(array &$facet_info, array $searcher_info) {
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher_info['name']) {
+    return;
+  }
+
+  // Create facets for all the root terms available.
+  foreach (_paddle_advanced_search_get_facets() as $name => $info) {
+    $facet_info[$name] = array_merge($facet_info['field_paddle_general_tags'], array(
+      'name' => $name,
+      'label' => entity_label('taxonomy_term', $info['term']),
+      'field alias' => "pas_{$info['term']->tid}",
+      'default widget' => $info['default widget'],
+      'taxonomy term id' => $info['term']->tid,
+      'alter callbacks' => array('paddle_search_facet_build_alter'),
+      'default sorts' => array(
+        array('term_weight', SORT_ASC),
+        array('active', SORT_DESC),
+        array('display', SORT_ASC),
+        array('count', SORT_DESC),
+      ),
+    ));
+  }
+}
+
+/**
+ * Implements hook_facetapi_default_facet_settings_alter().
+ *
+ * Provide global settings for the facets declared by this module.
+ */
+function paddle_advanced_search_facetapi_default_facet_settings_alter(&$export) {
+  ctools_include('export');
+
+  foreach (_paddle_advanced_search_get_facets() as $name => $facet) {
+    $settings = ctools_export_crud_new('facetapi');
+    $settings->name = 'search_api@node_index::' . $name;
+    $settings->searcher = 'search_api@node_index';
+    $settings->realm = '';
+    $settings->facet = $name;
+    $settings->enabled = 0;
+    $settings->settings = array(
+      'hard_limit' => -1,
+      'facet_search_ids' => array(
+        'search_api_views:paddle_advanced_search:default' => 'search_api_views:paddle_advanced_search:default',
+      ),
+      'default_true' => 0,
+    );
+
+    // The dropdown widget requires some extra options in order to work.
+    if ($facet['mode'] == 'dropdown') {
+      $settings->settings['individual_parent'] = 1;
+      $settings->settings['limit_active_items'] = 1;
+    }
+
+    $export[$settings->name] = $settings;
+  }
+}
+
+/**
+ * Implements hook_facetapi_force_delta_mapping().
+ */
+function paddle_advanced_search_facetapi_force_delta_mapping() {
+  return array(
+    'search_api@node_index' => array(
+      'block' => array_keys(_paddle_advanced_search_get_facets()),
+    ),
+  );
+}
+
+/**
+ * Implements hook_facetapi_enabled_facets_alter().
+ */
+function paddle_advanced_search_facetapi_enabled_facets_alter(array &$enabled_facets, $searcher, $realm_name) {
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher) {
+    return;
+  }
+
+  // facetapi_get_enabled_facets() gets invoked multiple times. The first one
+  // is during search_api_facetapi_search_api_query_alter(), where the facets
+  // are added to the search being executed. Later, it will called again but
+  // there is no way to access to the view anymore. Let's cache the terms used
+  // to retrieve it later on.
+  // This will still cause enabling of all the facets in every search that is
+  // not an advanced search view.
+  // @todo Improve this LOL
+  $current_search_tids = &drupal_static(__FUNCTION__);
+
+  $adapter = facetapi_adapter_load($searcher);
+
+  // Try to get the current view that is being executed.
+  if (($view = views_get_current_view()) && $view->name == 'paddle_advanced_search') {
+    $current_search_tids = array();
+    // The second parameter indicates the enabled term filters on this query.
+    // This unfortunately will include all the widget types, including the
+    // hidden ones. The 'all' value is the wildcard to skip term filtering.
+    if (!empty($view->args[1]) && $view->args[1] != 'all') {
+      // Explode the value back to term ids array. Flip array for isset().
+      $current_search_tids = array_flip(explode('+', $view->args[1]));
+    }
+  }
+
+  // Gets facet definitions for all enabled facets.
+  $facet_info = facetapi_get_facet_info($searcher);
+
+  // Add our facets to the enabled list.
+  foreach (_paddle_advanced_search_get_facets() as $name => $info) {
+    // First, check if the facet is available in the facet definitions, to
+    // avoid any possible error.
+    if (isset($facet_info[$name])) {
+      // If the term is enabled in the active query, enable the related facet.
+      // If no term arguments were found, enable all the facets.
+      if ($current_search_tids === NULL || isset($current_search_tids[$info['term']->tid])) {
+        $enabled_facets[$name] = $facet_info[$name];
+      }
+    }
+  }
+}
+
+/**
+ * Retrieves the hashed delta for a taxonomy term facet.
+ *
+ * @param string $tid
+ *   The taxonomy term id.
+ * @param string $mode
+ *   The facet mode.
+ *
+ * @return string|NULL
+ *   The hashed delta if available, NULL otherwise.
+ */
+function _paddle_advanced_search_get_taxonomy_term_facet_hashed_delta($tid, $mode) {
+  $deltas = &drupal_static(__FUNCTION__);
+
+  if (!isset($deltas)) {
+    $deltas = array();
+
+    // Gets delta map from facetapi.
+    $map = facetapi_get_delta_map();
+
+    foreach (_paddle_advanced_search_get_facets() as $name => $info) {
+      $facet_delta = facetapi_build_delta('search_api@node_index', 'block', $name);
+      $hashed_delta = array_search($facet_delta, $map);
+      if (FALSE !== $hashed_delta) {
+        $deltas[$info['term']->tid][$info['mode']] = $hashed_delta;
+      }
+    }
+  }
+
+  return !empty($deltas[$tid][$mode]) ? $deltas[$tid][$mode] : NULL;
+}
+
+/**
+ * Helper function to clear all facet related caches at once.
+ */
+function _paddle_advanced_search_reset_caches() {
+  cache_clear_all('facetapi:facet_info:search_api@node_index:', 'cache', TRUE);
+  cache_clear_all('facetapi:delta_map', 'cache');
+}
+
+/**
+ * Implements hook_taxonomy_term_insert().
+ *
+ * Let facetapi know about the new facet.
+ */
+function paddle_advanced_search_taxonomy_term_insert($term) {
+  _paddle_advanced_search_reset_caches();
+}
+
+/**
+ * Implements hook_taxonomy_term_update().
+ *
+ * Pick up any change on the term (name, hierarchy).
+ */
+function paddle_advanced_search_taxonomy_term_update($term) {
+  _paddle_advanced_search_reset_caches();
+}
+
+/**
+ * Implements hook_taxonomy_term_delete().
+ *
+ * Remove the related facet from the system.
+ */
+function paddle_advanced_search_taxonomy_term_delete($term) {
+  _paddle_advanced_search_reset_caches();
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ *
+ * Adds bundle to the search_api_sorts module.
+ */
+function paddle_advanced_search_entity_info_alter(&$entity_info) {
+  $entity_info['node']['bundles']['search_api_sort']['bundles'] = 'search_api_sort';
+}
+
+/**
+ * Implements hook_search_api_sorts_default_sort_alter().
+ */
+function paddle_advanced_search_search_api_sorts_default_sort_alter(&$default_sort, $search_sorts, $keys) {
+  // We can only retrieve the advanced search node from the menu.
+  $node = menu_get_object();
+  if (!empty($node) && $node->type == 'paddle_advanced_search_page') {
+    $node_wrapper = entity_metadata_wrapper('node', $node);
+    // Retrieve the default search option and order and override them.
+    if (!empty($node_wrapper->field_paddle_default_sort_option)) {
+      $sort_option = $node_wrapper->field_paddle_default_sort_option->value();
+      // Loop through every sort to find our default search option.
+      // Once found, break the loop.
+      foreach ($search_sorts as $search_sort) {
+        if ($search_sort->field == $sort_option) {
+          $default_sort = $search_sort;
+          if (!empty($node_wrapper->field_paddle_default_sort_order)) {
+            $default_sort->default_order = $node_wrapper->field_paddle_default_sort_order->value();
+          }
+          break;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_search_api_page_results().
+ */
+function paddle_advanced_search_preprocess_search_api_page_results(&$variables) {
+  // First we check if we are situated in the admin view of the page
+  // since the logic of retrieving the node object from the menu
+  // is different.
+  // @see paddle_content_manager_preprocess_page().
+  if (path_is_admin(current_path())) {
+    $menu_item = menu_get_item();
+    if ($menu_item['path'] == 'admin/content_manager/node/%/view' && is_object($menu_item['page_arguments'][1])) {
+      $node = workbench_moderation_node_current_load($menu_item['page_arguments'][1]->data);
+    }
+  }
+  else {
+    $node = menu_get_object();
+
+  }
+
+  if (!empty($node) && $node->type == 'paddle_advanced_search_page') {
+    $node_wrapper = entity_metadata_wrapper('node', $node);
+    if (!empty($node_wrapper->field_paddle_search_result_count)) {
+      $variables['display_search_result_count'] = $node_wrapper->field_paddle_search_result_count->value();
+    }
+    else {
+      // The result count is not displayed.
+      $variables['display_search_result_count'] = 0;
+    }
+  }
+}
+
+/**
+ * Update the pane to the given node settings.
+ *
+ * @param object $node
+ *   The node to update.
+ * @param array $value
+ *   The value set on the edit page for the pane.
+ * @param string $pane
+ *   The pane to update.
+ * @param \panels_display $display
+ *   The panels display to update.
+ * @param string $default_region
+ *   The region to update the pane in.
+ */
+function paddle_advanced_search_update_advanced_search_page_pane($node, $value, $pane, \panels_display $display, $default_region) {
+  $pane_object = _paddle_advanced_search_get_pane_by_type($pane, $node);
+
+  if ($value) {
+    if (!$pane_object) {
+      $pane_object = panels_new_pane($pane, $pane);
+      $display->add_pane($pane_object, $default_region);
+    }
+
+    $pane_object->configuration = $value;
+    // We don't need the enabled status, as the presence of the pane is the
+    // status itself.
+    unset($pane_object->configuration['enabled']);
+  }
+  elseif ($pane_object) {
+    // Remove the pane from the display.
+    _paddle_advanced_search_remove_pane_from_display($display, $pane_object);
+  }
+}

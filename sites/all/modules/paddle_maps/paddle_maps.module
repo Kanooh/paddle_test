@@ -1,0 +1,1744 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle maps feature.
+ */
+
+include_once 'paddle_maps.features.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_maps_menu() {
+  $items = array();
+
+  $items['admin/maps/node_autocomplete_callback'] = array(
+    'page callback' => 'paddle_maps_node_autocomplete_callback',
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+    'file' => 'paddle_maps.admin.inc',
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_maps_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function paddle_maps_node_type_insert($info) {
+  $supported_types = array();
+  // Allow content types to be added.
+  drupal_alter('paddle_maps_supported_content_types', $supported_types);
+  if (in_array($info->type, $supported_types)) {
+    // Get the already indexed content type fields.
+    $paddle_maps_index_contenttype_fields = variable_get('paddle_maps_index_contenttype_fields', '');
+    $new_content_type = array($info->type => FALSE);
+
+    // Add the new content type field.
+    if (!empty($paddle_maps_index_contenttype_fields)) {
+      $contenttype_fields_array = unserialize($paddle_maps_index_contenttype_fields);
+      $contenttype_fields_array = array_merge($new_content_type, (array) $contenttype_fields_array);
+    }
+    else {
+      $contenttype_fields_array = $new_content_type;
+    }
+
+    $contenttype_fields = serialize($contenttype_fields_array);
+    variable_set('paddle_maps_index_contenttype_fields', $contenttype_fields);
+    // Check for content-type and add the indexfields.
+    paddle_maps_add_index_fields();
+    gmap_regenerate_markers();
+    _drupal_flush_css_js();
+    registry_rebuild();
+    drupal_clear_css_cache();
+    drupal_clear_js_cache();
+  }
+}
+
+/**
+ * Implements hook_node_type_delete().
+ */
+function paddle_maps_node_type_delete($info) {
+  $paddle_maps_index_contenttype_fields = variable_get('paddle_maps_index_contenttype_fields', '');
+
+  if (!empty($paddle_maps_index_contenttype_fields)) {
+    $contenttype_fields_array = unserialize($paddle_maps_index_contenttype_fields);
+
+    if(!empty($contenttype_fields_array[$info->type])) {
+      unset($contenttype_fields_array[$info->type]);
+      paddle_maps_add_index_fields(TRUE);
+      gmap_regenerate_markers();
+      _drupal_flush_css_js();
+      registry_rebuild();
+      drupal_clear_css_cache();
+      drupal_clear_js_cache();
+    }
+  }
+}
+
+/**
+ * Custom function paddle_maps_add_index_fields().
+ *
+ * @param bool $something_changed
+ *   Whether a change has happened to the to be (re-)indexed fields.
+ */
+function paddle_maps_add_index_fields($something_changed = FALSE) {
+  // List the supported content_types.
+  $paddle_maps_index_contenttype_fields = unserialize(variable_get('paddle_maps_index_contenttype_fields', ''));
+
+  // Check if fields for content_type are indexed if not
+  // then add it to the index and update variable else do nothing.
+  $index = search_api_index_load('node_index');
+  if (!isset($index->options['fields']['field_paddle_address_geocode:lat'])) {
+    $index->options['fields']['field_paddle_address_geocode:lat']['type'] = 'decimal';
+    $index->options['fields']['field_paddle_address_geocode:lon']['type'] = 'decimal';
+    $index->options['fields']['field_paddle_address_geocode:left']['type'] = 'decimal';
+    $index->options['fields']['field_paddle_address_geocode:top']['type'] = 'decimal';
+    $index->options['fields']['field_paddle_address_geocode:right']['type'] = 'decimal';
+    $index->options['fields']['field_paddle_address_geocode:bottom']['type'] = 'decimal';
+    $index->options['fields']['field_paddle_address_geocode:srid']['type'] = 'integer';
+    $index->options['fields']['field_paddle_address_geocode:latlon']['type'] = 'string';
+    $index->options['fields']['field_paddle_address_geocode:schemaorg_shape']['type'] = 'string';
+  }
+  drupal_alter('paddle_maps_add_index_fields', $index, $paddle_maps_index_contenttype_fields, $something_changed);
+  if ($something_changed) {
+    entity_save('search_api_index', $index);
+    variable_set('paddle_maps_index_contenttype_fields', serialize($paddle_maps_index_contenttype_fields));
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_maps_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_maps_vocabulary_filter' => array(
+      'render element' => 'element',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+    'paddle_maps_marker_widget_multiple' => array(
+      'render element' => 'element',
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_maps_paddle_content_manager_additional_fields() {
+  return array(
+    'field_map_content_types',
+  );
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_maps_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_maps_configuration_form',
+  );
+}
+
+/**
+ * From here starts the code for custom markers.
+ *
+ * Comments for custom markers:
+ * Assigning markers through hook_gmap happens aid of node-id
+ * as a marker offset is configured via view settings.
+ * That works fine, provided that this view setting is not changed.
+ * The results of function
+ * paddle_maps_custom_markers_get_relevant_general_tagged()
+ * Can also go through cache table if needed.
+ */
+
+/**
+ * Implements hook_js_alter().
+ */
+function paddle_maps_js_alter(&$javascript) {
+
+  $current_uri = current_path();
+
+  if (isset($javascript['misc/jquery.js'])) {
+
+    $drupal_jquery_path = $javascript['misc/jquery.js'];
+    $jquery_path = drupal_get_path('module', 'paddle_maps') . '/js/jquery.1.8.3.min.js';
+
+    if ($current_uri === 'admin/paddlet_store/app/paddle_maps/configure') {
+
+      // We duplicate the important information from the Drupal one.
+      $javascript[$jquery_path] = $drupal_jquery_path;
+      // Ae update the information that we care about.
+      $javascript[$jquery_path]['version'] = '1.8.3';
+      $javascript[$jquery_path]['data'] = $jquery_path;
+
+      // Then we remove the Drupal core version.
+      unset($javascript['misc/jquery.js']);
+
+      if (isset($javascript['misc/jquery.form.js'])) {
+
+        $drupal_jquery_form_path = $javascript['misc/jquery.form.js'];
+        $jquery_form_path = drupal_get_path('module', 'paddle_maps') . '/js/jquery.form.js';
+
+        // We duplicate the important information from the Drupal one.
+        $javascript[$jquery_form_path] = $drupal_jquery_form_path;
+        // We update the information that we care about.
+        $javascript[$jquery_form_path]['version'] = '2.64';
+        $javascript[$jquery_form_path]['data'] = $jquery_form_path;
+
+        // Then we remove the Drupal core version.
+        unset($javascript['misc/jquery.form.js']);
+      }
+    }
+  }
+
+  foreach ($javascript as $path => $data) {
+    // Always call gmap_markers.js with query string.
+    if (strpos($path, '/files/js/gmap_markers.js') !== FALSE) {
+      $gmap_marker_new_path = $path . '?t=' . variable_get('css_js_query_string', '0');
+      $javascript[$gmap_marker_new_path] = $data;
+      $javascript[$gmap_marker_new_path]['data'] = $gmap_marker_new_path;
+      unset($javascript[$path]);
+      break;
+    }
+  }
+}
+
+/**
+ * App configuration form callback.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_maps_configuration_form($form, &$form_state) {
+  module_load_include('inc', 'file', 'file.field');
+  module_load_include('inc', 'image', 'image.field');
+
+  $form = array();
+  $form['#attached']['css'][] = drupal_get_path('module', 'paddle_maps') . '/magicsuggest/magicsuggest-min.css';
+  $form['#attached']['js'][] = drupal_get_path('module', 'paddle_maps') . '/magicsuggest/magicsuggest-min.js';
+  $form['#attached']['css'][] = drupal_get_path('module', 'paddle_maps') . '/css/paddle_maps_custom_markers.css';
+  $form['#attached']['js'][] = drupal_get_path('module', 'paddle_maps') . '/js/paddle_maps_custom_markers.js';
+  $form['#tree'] = TRUE;
+
+  $params = array(
+    '@googlemaps' => 'https://developers.google.com/maps/documentation/javascript/get-api-key',
+  );
+  $key = variable_get('gmap_api_key', FALSE);
+
+  $form['gmap_api_key'] = array(
+    '#title' => t('Google Maps Api Key'),
+    '#type' => 'textfield',
+    '#default_value' => $key,
+    '#description' => t('This ID is unique to each site(app) you want to show maps. To get a Google maps api key, <a href="@googlemaps">register your site(app) with Google Maps</a>.', $params),
+  );
+
+  $config = variable_get('paddle_maps_custom_marker_config', array());
+  $form['current_config'] = array('#type' => 'value', '#value' => $config);
+
+  $form['field_marker'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('custom_marker')),
+    '#language' => LANGUAGE_NONE,
+    LANGUAGE_NONE => array(
+      '#after_build' => array(0 => 'field_form_element_after_build'),
+      '#process' => array(0 => 'file_field_widget_process_multiple'),
+      '#theme' => 'paddle_maps_marker_widget_multiple',
+      '#theme_wrappers' => array(0 => 'fieldset'),
+      '#title' => t('Paddle maps custom markers'),
+      '#field_parents' => array(),
+      '#field_name' => 'field_marker',
+      '#language' => LANGUAGE_NONE,
+      '#display_field' => 1,
+      '#file_upload_title' => t('Add marker'),
+      '#file_upload_description' => '',
+    ),
+  );
+  foreach ($config as $delta => $data) {
+    $form['field_marker'][LANGUAGE_NONE][$delta] = _paddle_maps_marker_upload_field($data);
+  }
+
+  $max_markers = count($config) + 5;
+  for ($i = 0; $i < $max_markers; $i++) {
+    if (!isset($form['field_marker'][LANGUAGE_NONE][$i])) {
+      $form['field_marker'][LANGUAGE_NONE][$i] = _paddle_maps_marker_upload_field();
+    }
+  }
+  // Tell Form API how many upload fields we have in this container.
+  $form['field_marker'][LANGUAGE_NONE]['#file_upload_delta'] = $max_markers;
+
+  $form['save'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#attributes' => array(
+      'class' => array('hidden', 'marker-config-button'),
+    ),
+  );
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_maps_contextual_actions_configuration_form';
+  }
+
+  return $form;
+}
+
+/**
+ * Custom function for upload fields.
+ */
+function _paddle_maps_marker_upload_field($config = array()) {
+  return array(
+    '#type' => 'managed_file',
+    '#title' => t('Custom marker'),
+    '#columns' => array(
+      0 => 'fid',
+      1 => 'alt',
+      2 => 'title',
+      3 => 'width',
+      4 => 'height',
+      5 => 'display',
+      6 => 'description',
+      7 => 'tids',
+      8 => 'is_default',
+    ),
+    '#upload_location' => 'public://paddle_map_markers',
+    '#upload_validators' => array(
+      'file_validate_extensions' => array(0 => 'png gif jpg jpeg'),
+      'file_validate_image_resolution' => array(0 => '50x50'),
+    ),
+    '#preview_image_style' => '',
+    '#value_callback' => '_custom_marker_file_field_widget_value',
+    '#process' => array(
+      0 => 'file_managed_file_process',
+      1 => '_custom_marker_file_field_widget_process',
+      2 => '_custom_marker_image_field_widget_process',
+    ),
+    '#progress_indicator' => 'throbber',
+    '#extended' => 1,
+    '#default_value' => array(
+      'fid' => isset($config['fid']) ? $config['fid'] : 0,
+      'tids' => isset($config['tids']) ? $config['tids'] : '',
+      'is_default' => isset($config['is_default']) ? $config['is_default'] : 0,
+      'display' => 1,
+      'description' => '',
+    ),
+    '#field_parents' => array(),
+    '#field_name' => 'field_marker',
+    '#language' => LANGUAGE_NONE,
+  );
+}
+
+/**
+ * Submit function for the app configuration form.
+ *
+ * Processes configured markers and saves it in a variable.
+ */
+function paddle_maps_configuration_form_submit($form, &$form_state) {
+  $current_config = $form_state['values']['current_config'];
+  $markerpath = 'public://paddle_map_markers/';
+  $regenerate_markers = FALSE;
+  $config = $marked = array();
+
+  if (isset($form_state['values']['gmap_api_key']) && !empty($form_state['values']['gmap_api_key'])) {
+    variable_set('gmap_api_key', trim($form_state['values']['gmap_api_key']));
+    // Also set this key for the geocoder.
+    variable_set('geocoder_google_auth_method', GEOCODER_GOOGLE_AUTH_KEY);
+    variable_set('geocoder_settings', array('geocoder_apikey_google' => trim($form_state['values']['gmap_api_key'])));
+    variable_set('geocoder_google_delay', 200);
+
+  }
+  foreach ($form_state['values']['field_marker'][LANGUAGE_NONE] as $delta => $values) {
+    $fid = $values['fid'];
+
+    if ($fid && is_numeric($fid)) {
+      $file = file_load($fid);
+
+      if ($file->status != FILE_STATUS_PERMANENT) {
+        $markername = _paddle_maps_custom_markers_process_configured_markers($file);
+
+        if ($markername) {
+          $regenerate_markers = TRUE;
+          $marked[$fid] = 1;
+
+          $file->status = FILE_STATUS_PERMANENT;
+          file_save($file);
+          file_usage_add($file, 'paddle_maps', 'gmap_marker', 0);
+        }
+        else {
+          drupal_set_message(t('An error occured while processing marker') . ' ' . $file->filename, 'warning');
+          $watchdog_parameters = array(
+            ':file' => $file->filename,
+            ':fid' => $fid,
+            ':data' => print_r($values, TRUE),
+          );
+          watchdog('paddle_maps', 'Error processing marker :file (:fid). Data = :data', $watchdog_parameters, WATCHDOG_ERROR);
+        }
+      }
+      else {
+        $markername = isset($current_config[$delta]['name']) ? $current_config[$delta]['name'] : FALSE;
+        $marked[$fid] = 1;
+      }
+
+      $config[] = array(
+        'fid' => $values['fid'],
+        'name' => $markername,
+        'tids' => $values['tids'],
+        'is_default' => $values['is_default'],
+      );
+    }
+  }
+
+  foreach ($current_config as $config_data) {
+    $cfid = $config_data['fid'];
+
+    if ($cfid && is_numeric($cfid)) {
+      if (!isset($marked[$cfid])) {
+        if (file_unmanaged_delete($markerpath . $config_data['name'] . '.ini')) {
+          $regenerate_markers = TRUE;
+
+          $cfile = file_load($cfid);
+          file_usage_delete($cfile, 'paddle_maps', 'gmap_marker');
+          file_delete($cfile);
+        }
+        else {
+          watchdog('paddle_maps', 'Error deleting marker ini-file, data = :data', array(':data' => print_r($config_data, TRUE)), WATCHDOG_ERROR);
+        }
+      }
+    }
+  }
+
+  if (!empty($config)) {
+    variable_set('paddle_maps_custom_marker_config', $config);
+  }
+
+  if ($regenerate_markers) {
+    gmap_regenerate_markers();
+  }
+
+  // Everytime the Save button is pressed rebuild the jsfiles.
+  // Change query-strings on css/js files to enforce reload for all users.
+  _drupal_flush_css_js();
+  registry_rebuild();
+  drupal_clear_css_cache();
+  drupal_clear_js_cache();
+
+  drupal_set_message(t('Your configuration has been saved.'));
+}
+
+/**
+ * After-build function of app configuration form.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_maps_contextual_actions_configuration_form($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-save',
+        'class' => array('ui-icon', 'fa-check', 'contextual-submit'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_is_configured().
+ */
+function paddle_maps_is_configured() {
+  $conf = variable_get('gmap_api_key', '');
+  return $conf === '' ? FALSE : TRUE;
+}
+
+/**
+ * Custom function.
+ *
+ * @return array
+ *   Returns array of file.
+ */
+function _custom_marker_file_field_widget_value($element, $input, $form_state) {
+  // We depend on the managed file element to handle uploads.
+  $return = file_managed_file_value($element, $input, $form_state);
+
+  // Ensure that all the required properties are returned even if empty.
+  $return += array(
+    'fid' => 0,
+    'tids' => '',
+    'is_default' => 0,
+    'display' => 1,
+    'description' => '',
+  );
+
+  return $return;
+}
+
+/**
+ * Custom function.
+ */
+function _custom_marker_file_field_widget_process($element, &$form_state, $form) {
+  $item = $element['#value'];
+  $item['fid'] = $element['fid']['#value'];
+
+  $element['#theme'] = 'file_widget';
+  $element['display'] = array(
+    '#type' => 'hidden',
+    '#value' => '1',
+  );
+
+  $parents = array_slice($element['#array_parents'], 0, -1);
+  $new_path = 'file/ajax/' . implode('/', $parents) . '/' . $form['form_build_id']['#value'];
+  $field_element = drupal_array_get_nested_value($form, $parents);
+
+  $new_wrapper = $field_element['#id'] . '-ajax-wrapper';
+  foreach (element_children($element) as $key) {
+    if (isset($element[$key]['#ajax'])) {
+      $element[$key]['#ajax']['path'] = $new_path;
+      $element[$key]['#ajax']['wrapper'] = $new_wrapper;
+    }
+  }
+  unset($element['#prefix'], $element['#suffix']);
+
+  foreach (array('upload_button', 'remove_button') as $key) {
+    $element[$key]['#submit'][] = '_custom_marker_file_managed_file_submit';
+    $element[$key]['#limit_validation_errors'] = array(
+      array_slice($element['#parents'], 0, -1),
+    );
+  }
+  $element['remove_button']['#attributes']['class'][] = 'ui-icon-delete';
+
+  return $element;
+}
+
+/**
+ * Custom function.
+ */
+function _custom_marker_image_field_widget_process($element, &$form_state, $form) {
+  $item = $element['#value'];
+  $item['fid'] = $element['fid']['#value'];
+  $marker_upload_delta = $element['_weight']['#default_value'];
+
+  $element['#theme'] = 'image_widget';
+  $element['#attached']['css'][] = drupal_get_path('module', 'image') . '/image.css';
+
+  // Add the image preview.
+  if ($element['#file']) {
+    $variables = array(
+      'path' => $element['#file']->uri,
+    );
+
+    // Determine image dimensions.
+    if (isset($element['#value']['width']) && isset($element['#value']['height'])) {
+      $variables['width'] = $element['#value']['width'];
+      $variables['height'] = $element['#value']['height'];
+    }
+    else {
+      $info = image_get_info($element['#file']->uri);
+
+      if (is_array($info)) {
+        $variables['width'] = $info['width'];
+        $variables['height'] = $info['height'];
+      }
+      else {
+        $variables['width'] = $variables['height'] = NULL;
+      }
+    }
+
+    $element['preview'] = array(
+      '#type' => 'markup',
+      '#markup' => theme('image', $variables),
+    );
+
+    // Store the dimensions in the form so the file doesn't have to be accessed
+    // again. This is important for remote files.
+    $element['width'] = array(
+      '#type' => 'hidden',
+      '#value' => $variables['width'],
+    );
+    $element['height'] = array(
+      '#type' => 'hidden',
+      '#value' => $variables['height'],
+    );
+  }
+  $element['alt'] = array('#type' => 'hidden', '#value' => '');
+  $element['title'] = array('#type' => 'hidden', '#value' => '');
+
+  $already_selected = isset($item['tids']) ? $item['tids'] : '';
+  drupal_add_js(array(
+    'custom_markers' => array(
+      $marker_upload_delta => array(
+        'terms' => paddle_maps_custom_markers_get_general_tags(),
+        'selected' => empty($already_selected) ? FALSE : explode(',', $already_selected),
+      ),
+    ),
+  ), array('type' => 'setting', 'scope' => JS_DEFAULT));
+  $element['term_selector'] = array('#markup' => '<div id="magicsuggest_' . $marker_upload_delta . '"></div>');
+
+  $element['tids'] = array(
+    '#type' => 'hidden',
+    '#attributes' => array('id' => 'selected_tids_' . $marker_upload_delta),
+    '#value' => $already_selected,
+  );
+
+  $element['is_default'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Default marker'),
+    '#attributes' => array(
+      'class' => array('marker_is_default'),
+      'delta' => $marker_upload_delta,
+    ),
+    '#default_value' => isset($item['is_default']) ? $item['is_default'] : 0,
+    '#weight' => -1,
+  );
+
+  return $element;
+}
+
+/**
+ * Custom submit function.
+ */
+function _custom_marker_file_managed_file_submit($form, &$form_state) {
+  $parents = $form_state['triggering_element']['#array_parents'];
+  $button_key = array_pop($parents);
+  $element = drupal_array_get_nested_value($form, $parents);
+
+  if ($button_key == 'remove_button') {
+    if ($element['#file']) {
+      file_delete($element['#file']);
+    }
+
+    $values_element = $element['#extended'] ? $element['fid'] : $element;
+    form_set_value($values_element, NULL, $form_state);
+    drupal_array_set_nested_value($form_state['input'], $values_element['#parents'], NULL);
+  }
+
+  $form_state['rebuild'] = TRUE;
+}
+
+/**
+ * Implements hook_gmap().
+ */
+function paddle_maps_gmap($op, &$map) {
+  switch ($op) {
+    case 'pre_theme_map':
+      $tagged = paddle_maps_custom_markers_get_relevant_general_tagged();
+      $general_tags = paddle_maps_custom_markers_get_general_tags();
+      $default_marker = 'kanooh_default_marker';
+      $config = array();
+      if (!empty(variable_get('paddle_maps_custom_marker_config', array()))) {
+        $saved_config = variable_get('paddle_maps_custom_marker_config', array());
+        $reversed_config = array_reverse($saved_config, TRUE);
+        if (is_array($reversed_config) && !empty($reversed_config)) {
+          foreach ($reversed_config as $config_data) {
+            if ($config_data['is_default']) {
+              $default_marker = $config_data['name'];
+            }
+            else {
+              $tids = array();
+              $markername = $config_data['name'];
+              $saved_tids = explode(',', $config_data['tids']);
+              if (is_array($saved_tids) && !empty($saved_tids)) {
+                foreach ($saved_tids as $tid) {
+                  $tids[$tid] = $markername;
+                  if (is_array($general_tags[$tid]['kids']) && !empty($general_tags[$tid]['kids'])) {
+                    foreach ($general_tags[$tid]['kids'] as $ktid) {
+                      $tids[$ktid] = $markername;
+                    }
+                  }
+                }
+              }
+              $config[] = $tids;
+            }
+          }
+        }
+        if (!empty($map['markers'])) {
+          foreach ($map['markers'] as $delta => $mdata) {
+            // Get the node id from the offset field. Filter out non-numerical
+            // characters so '1,000' gets transformed to '1000'.
+            $nid = filter_var($mdata['offset'], FILTER_SANITIZE_NUMBER_INT);
+            // Set offset to zero because we don't actually want to move the
+            // marker by this offset.
+            $map['markers'][$delta]['offset'] = 0;
+            $map['markers'][$delta]['markername'] = $default_marker;
+            $exactly_matched = FALSE;
+
+            if (!empty($tagged[$nid])) {
+              foreach ($config as $tids) {
+                foreach ($tids as $tid => $marker) {
+                  if (!empty($tagged[$nid][$tid])) {
+                    if (!$exactly_matched) {
+                      $map['markers'][$delta]['markername'] = $marker;
+                    }
+
+                    if (!count($general_tags[$tid]['kids'])) {
+                      $exactly_matched = TRUE;
+                    }
+                  }
+                }
+              }
+            }
+            $markers[$nid] = $map['markers'][$delta]['markername'];
+          }
+        }
+      }
+      break;
+  }
+}
+
+/**
+ * Custom rel function.
+ *
+ * @return array
+ *    Returns tags array
+ */
+function paddle_maps_custom_markers_get_relevant_general_tagged() {
+  $types = $general_tagged = array();
+
+  $relevant_types = paddle_maps_get_content_types();
+  if (count($relevant_types)) {
+    foreach ($relevant_types as $type => $label) {
+      $types[] = $type;
+    }
+
+    $general_tags = db_query('SELECT * FROM {field_data_field_paddle_general_tags} WHERE bundle IN (:node_types) ORDER BY entity_id, delta', array(':node_types' => $types));
+    foreach ($general_tags as $tag) {
+      $tid = $tag->field_paddle_general_tags_tid;
+      $general_tagged[$tag->entity_id][$tid] = $tid;
+    }
+  }
+  return $general_tagged;
+}
+
+/**
+ * Custom rel function.
+ *
+ * @return bool
+ *   Returns count or false.
+ */
+function paddle_maps_custom_markers_get_general_tags() {
+  $terms = $levels = $parents = $totals = array();
+  $cid = 'paddle_maps:custom_markers:general_tags';
+
+  if ($cached = cache_get($cid, 'cache')) {
+    $terms = $cached->data;
+  }
+  else {
+    $vocabulary = taxonomy_vocabulary_machine_name_load('paddle_general');
+    $root_terms = taxonomy_get_tree($vocabulary->vid);
+    if ($root_terms) {
+      foreach ($root_terms as $term_data) {
+        $tid = $term_data->tid;
+        $depth = $term_data->depth;
+
+        foreach ($term_data->parents as $pid) {
+          $parents[$pid][$tid] = $tid;
+        }
+        $levels[$term_data->depth][$tid] = $tid;
+        $terms[$tid] = array(
+          'id' => $tid,
+          'name' => $depth ? '<span class="depth-' . $depth . '">' . $term_data->name . '</span>' : $term_data->name,
+          'extra_info' => '',
+          'kids' => array(),
+        );
+      }
+    }
+
+    foreach ($parents as $pid => $kids) {
+      if ($pid > 0) {
+        $kid_nids = (array) $kids;
+
+        foreach ($kids as $kid) {
+          if (isset($parents[$kid])) {
+            $kid_nids += $parents[$kid];
+          }
+        }
+        $terms[$pid]['kids'] = $kid_nids;
+        if (count($kid_nids)) {
+          $terms[$pid]['extra_info'] = format_plural(count($kid_nids), 'with 1 term', 'with @count terms');
+        }
+      }
+    }
+    cache_set($cid, $terms, 'cache');
+  }
+
+  return count($terms) ? $terms : FALSE;
+}
+
+/**
+ * Custom rel function.
+ *
+ * @param string $marker
+ *   Returns type of marker.
+ *
+ * @return bool|int
+ *   Returns markername else false.
+ */
+function _paddle_maps_custom_markers_process_configured_markers($marker) {
+  $dir = 'public://paddle_map_markers';
+
+  if (file_prepare_directory($dir, FILE_CREATE_DIRECTORY)) {
+    $anchor_x = round($marker->image_dimensions['width'] / 2);
+    $anchor_y = $marker->image_dimensions['height'];
+    $info_x = 0;
+    $info_y = 0 - round($marker->image_dimensions['height'] / 2);
+
+    $filter = array(' ' => '_', '-' => '_', '/' => '_', '[' => '', ']' => '');
+    $use_name = strtolower(substr($marker->filename, 0, strrpos($marker->filename, '.')));
+    $markername = drupal_clean_css_identifier($use_name, $filter);
+
+    $cnt = 1;
+    while (file_exists($dir . '/' . $markername . '.ini')) {
+      $cnt++;
+      $markername .= $cnt;
+    }
+    $real_filename = substr($marker->uri, (strlen($dir) + 1));
+
+    $data = '[defaults]' . "\r\n";
+    $data .= 'anchorX = ' . $anchor_x . "\r\n";
+    $data .= 'anchorY = ' . $anchor_y . "\r\n";
+    $data .= 'infoX = ' . $info_x . "\r\n";
+    $data .= 'infoY = ' . $info_y . "\r\n\r\n";
+    $data .= '[' . $markername . ']' . "\r\n";
+    $data .= 'name = "' . $markername . '"' . "\r\n";
+    $data .= 'sequence = "' . $real_filename . '"';
+
+    $file_uri = $dir . '/' . $markername . '.ini';
+    if (file_unmanaged_save_data($data, $file_uri, FILE_EXISTS_REPLACE)) {
+      return $markername;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Value callback for the advanced search content types field.
+ *
+ * @return array
+ *   An array with keys and values for the options field.
+ */
+function paddle_maps_get_content_types() {
+  $types = node_type_get_names();
+
+  $types_with_addressfield = array();
+
+  // Avoid inception.
+  unset($types['paddle_maps_page']);
+
+  if (!empty($types)) {
+    foreach ($types as $bundle_system_name => $bundle_name) {
+      // Currently only several page types are supported.
+      $supported_types = array();
+      // Allow content types to be added.
+      drupal_alter('paddle_maps_supported_content_types', $supported_types);
+      if (in_array($bundle_system_name, $supported_types)) {
+        $fields_info = field_info_instances('node', $bundle_system_name);
+        foreach ($fields_info as $field_name => $value) {
+          $field_info = field_info_field($field_name);
+          $type = $field_info['type'];
+          if ($type === 'addressfield') {
+            $types_with_addressfield[$bundle_system_name] = $bundle_name;
+          }
+        }
+      }
+    }
+  }
+
+  return $types_with_addressfield;
+}
+
+/**
+ * Implements hook_ctools_render_alter().
+ *
+ * @see paddle_landing_page_ctools_render_alter()
+ */
+function paddle_maps_ctools_render_alter(&$info, &$page, &$context) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  // Load the node context used by panelizer.
+  if ($context['handler']->handler == 'panelizer_node') {
+    $panelizer_context = _panelizer_panelizer_task_get_context($context['handler'], $context['contexts']);
+    // Unfortunately the context handler name 'panelizer_node' is misleading.
+    // It is actually used by other entity types as well. So check the type
+    // of the context as well.
+    if ($panelizer_context->plugin == 'entity:node') {
+      $node = $panelizer_context->data;
+    }
+  }
+
+  // Only act on landing pages, handled by panelizer.
+  if (!isset($node) || !isset($node->type) || $node->type !== 'paddle_maps_page') {
+    return;
+  }
+
+  // Prepend title and body on landing pages in the admin area.
+  if (path_is_admin(current_path())) {
+    $info['title'] = '';
+    $info['content'] = !empty($info['content']) ? $info['content'] : '';
+    $info['content'] = '<h1 class="landing-page-title-view">' . check_plain($node->title) . '</h1>' . $info['content'];
+
+    $body = field_get_items('node', $node, 'body');
+    if (!empty($body[0]['value'])) {
+      $info['content'] .= '<div class="landing-page-body-view">' . check_markup($body[0]['value'], $body[0]['format']) . '</div>';
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ */
+function paddle_maps_paddle_contextual_toolbar_actions_alter(&$actions) {
+  $menu = menu_get_item();
+
+  // Add the change layout button.
+  if ($menu['path'] == 'admin/content_manager/node/%/layout' && $menu['page_arguments'][1]->data->type == 'paddle_maps_page') {
+    if (module_exists('paddle_contextual_toolbar')) {
+      $actions = paddle_contextual_toolbar_actions();
+
+      $action_link = l(
+        t('Change layout'),
+        'panels/ajax/paddle_landing_page/change_layout/panelizer:node:' . $menu['page_arguments'][1]->argument . ':page_manager',
+        array(
+          'attributes' => array(
+            'class' => array(
+              'panels-ipe-change-layout',
+              'ctools-use-modal',
+              'ctools-modal-wide-modal',
+              'ui-icon',
+              'fa-exchange',
+            ),
+          ),
+        )
+      );
+      $actions['Change layout'] = array(
+        'action' => $action_link,
+        'class' => array('change_layout'),
+        'weight' => 10,
+      );
+
+      // Set the buttons.
+      paddle_contextual_toolbar_actions($actions);
+      // Load the click delegator.
+      paddle_contextual_toolbar_add_js('click_delegator');
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_page().
+ *
+ * @see paddle_landing_page_preprocess_page()
+ */
+function paddle_maps_preprocess_page(&$variables) {
+  // Load stylesheet in frontend.
+  if (isset($variables['node']) && $variables['node']->type === 'paddle_maps_page') {
+    drupal_add_css(drupal_get_path('module', 'paddle_maps') . '/css/paddle_maps_style.css');
+  }
+
+  // Show the title when needed.
+  $menu_item = menu_get_item();
+
+  if (in_array($menu_item['path'], array('node/%/draft', 'node/%')) &&
+      isset($variables['node']) &&
+      ($node = $variables['node']) &&
+      $node->type == 'paddle_maps_page'
+  ) {
+    // Ensure we use the current revision when previewing a draft.
+    if ($menu_item['path'] == 'node/%/draft' && $node->workbench_moderation['current']->vid != $node->vid) {
+      $node = workbench_moderation_node_current_load($node);
+    }
+
+    if (!empty($node)) {
+      $body = field_get_items('node', $node, 'body');
+      if (!empty($body[0]['safe_value'])) {
+        $description = array(
+          'paddle_maps_page_body' => array(
+            '#prefix' => '<div class="row"><div class="field-name-body landing-page-body col-md-12">',
+            '#markup' => $body[0]['safe_value'],
+            '#suffix' => '</div></div>',
+          ),
+        );
+        array_unshift($variables['page']['content'], $description);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_default_page_manager_handlers_alter().
+ */
+function paddle_maps_default_page_manager_handlers_alter(&$export) {
+  $item = menu_get_item();
+  // Add the extra panes to the advanced search page node edit form.
+  if (!empty($export['node_edit_panel_context']) && !empty($item['page_arguments'][0]->type) && $item['page_arguments'][0]->type == 'paddle_maps_page') {
+
+    // Prepare a list of panes to insert on the fly.
+    $panes_to_insert = array();
+
+    $pane = new stdClass();
+    $pane->pid = '1e090af9-4b28-9734-bd41-065c5c9cc895';
+    $pane->panel = 'right';
+    $pane->type = 'map_vocabulary_filter_field';
+    $pane->subtype = 'vocabulary_filter';
+    $pane->shown = TRUE;
+    $pane->access = array();
+    $pane->configuration = array(
+      'context' => 'argument_node_edit_1',
+      'override_title' => 0,
+      'override_title_text' => '',
+      'override_title_heading' => 'h2',
+    );
+    $pane->cache = array();
+    $pane->style = array(
+      'settings' => NULL,
+    );
+    $pane->css = array();
+    $pane->extras = array();
+    $pane->position = 4;
+    $pane->locks = array();
+    $pane->uuid = '54ab467c-d4e1-426a-becd-a3b1d1f8d8bb';
+    $export['node_edit_panel_context']->conf['display']->content[$pane->pid] = $pane;
+    $panes_to_insert[] = $pane->pid;
+
+    $pane = new stdClass();
+    $pane->pid = 'new-ec63bd34-519c-4aff-bee2-747683e7b3c3';
+    $pane->panel = 'left';
+    $pane->type = 'search_form_field';
+    $pane->subtype = 'search_form_field';
+    $pane->shown = TRUE;
+    $pane->access = array();
+    $pane->configuration = array(
+      'context' => 'argument_node_edit_1',
+      'override_title' => 0,
+      'override_title_text' => '',
+      'override_title_heading' => 'h2',
+    );
+    $pane->cache = array();
+    $pane->style = array(
+      'settings' => NULL,
+    );
+    $pane->css = array();
+    $pane->extras = array();
+    $pane->position = 13;
+    $pane->locks = array();
+    $pane->uuid = 'ec63bd34-519c-4aff-bee2-747683e7b3c3';
+    $export['node_edit_panel_context']->conf['display']->content[$pane->pid] = $pane;
+    $panes_to_insert[] = $pane->pid;
+
+    // Shortcut to the left column.
+    $left_column = &$export['node_edit_panel_context']->conf['display']->panels['left'];
+
+    // Find the additional fields panes. We want to show it together with
+    // the other node specific panes.
+    if ($key = array_search('new-f14a7a22-a05e-ae44-c122-e71a20f44d45', $left_column)) {
+      unset($left_column[$key]);
+      // Reset the keys to have a proper count again.
+      $left_column = array_values($left_column);
+      // Show it before the others.
+      array_unshift($panes_to_insert, 'new-f14a7a22-a05e-ae44-c122-e71a20f44d45');
+    }
+
+    // Find the featured image pane key in the left column.
+    if ($key = array_search('new-bcec2608-deb8-49ee-86ec-8ea34723fcce', $left_column)) {
+      array_unshift($panes_to_insert, 'new-bcec2608-deb8-49ee-86ec-8ea34723fcce');
+      // Insert the new panes after the body.
+      array_splice($left_column, $key, 1, $panes_to_insert);
+    }
+    else {
+      // For some impossible reason we didn't find the body pane. Just
+      // append to the end of the page.
+      $left_column = array_merge($left_column, $panes_to_insert);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_paddle_paddle_maps_page_node_form_alter().
+ */
+function paddle_maps_form_paddle_maps_page_node_form_alter(&$form, &$form_state) {
+  // Load all the first level terms on the general taxonomy.
+  $vocabulary = taxonomy_vocabulary_machine_name_load('paddle_general');
+  $root_terms = taxonomy_get_tree($vocabulary->vid, 0, 1, TRUE);
+
+  if ($root_terms) {
+    $options = array(
+      'list' => t('List'),
+      'dropdown' => t('Dropdown'),
+      'hidden' => t('Hidden'),
+    );
+
+    // Fetch the search result pane configuration, if present.
+    $enabled = array();
+    if ($search_results_pane = _paddle_maps_get_block_maps_search_results_pane($form_state['node'])) {
+      // Simplify later access to enabled terms by having the term ids as key
+      // too.
+      $enabled = drupal_map_assoc($search_results_pane->configuration['tids']);
+    }
+
+    // Retrieve existing vocabulary filter panes.
+    $panes = _paddle_maps_get_map_vocabulary_term_filter_panes($form_state['node']);
+
+    // Loop all the enabled terms to get the related display mode.
+    $modes = array();
+    foreach ($enabled as $tid) {
+      if (!empty($panes[$tid]->configuration['mode'])) {
+        $modes[$tid] = $panes[$tid]->configuration['mode'];
+      }
+      else {
+        $modes[$tid] = 'hidden';
+      }
+    }
+
+    $form['vocabulary_filter'] = array(
+      '#tree' => TRUE,
+      '#theme' => 'paddle_maps_vocabulary_filter',
+      // Pass the options labels to allow easier theming in table.
+      '#option_labels' => array_values($options),
+    );
+
+    foreach ($root_terms as $term) {
+      $form['vocabulary_filter'][$term->tid] = array(
+        // Keep the term itself.
+        '#taxonomy_term' => $term,
+      );
+
+      $form['vocabulary_filter'][$term->tid]['enabled'] = array(
+        '#type' => 'checkbox',
+        '#title' => entity_label('taxonomy_term', $term),
+        '#default_value' => isset($enabled[$term->tid]),
+      );
+      $form['vocabulary_filter'][$term->tid]['mode'] = array(
+        '#type' => 'radios',
+        '#options' => $options,
+        '#default_value' => !empty($modes[$term->tid]) ? $modes[$term->tid] : 'list',
+        '#states' => array(
+          'enabled' => array(
+            'input[name="vocabulary_filter[' . $term->tid . '][enabled]"]' => array('checked' => TRUE),
+          ),
+        ),
+        // Add our custom process callback but preserve all the existing ones.
+        // This is needed as additional element info is appended, so we don't
+        // want to miss process callbacks like form_process_radios().
+        '#process' => array_merge(element_info_property('radios', '#process', array()), array(
+          'paddle_maps_process_vocabulary_filter_radios',
+        )),
+      );
+    }
+  }
+  else {
+    $form['vocabulary_filter'] = array(
+      '#markup' => t('No terms available.'),
+    );
+  }
+
+  // Default configuration for the search form pane.
+  $configuration = array(
+    'enabled' => 0,
+    'use_default_btn_text' => 1,
+    'custom_btn_text' => t('Search'),
+  );
+  // Load the search form pane.
+  if ($search_form_pane = _paddle_maps_get_maps_search_form_pane($form_state['node'])) {
+    // Mark the pane as enabled, get its configuration and merge it with the
+    // defaults to avoid missing values, even if that should never be possible.
+    $configuration = array_merge($configuration, array('enabled' => 1) + $search_form_pane->configuration);
+  }
+
+  $form['search_form'] = array(
+    '#tree' => TRUE,
+    'enabled' => array(
+      '#type' => 'checkbox',
+      '#title' => t('Show free text search box'),
+      '#default_value' => $configuration['enabled'],
+    ),
+    'use_default_btn_text' => array(
+      '#type' => 'checkbox',
+      '#title' => t('Standard text search button'),
+      '#default_value' => $configuration['use_default_btn_text'],
+      '#states' => array(
+        'visible' => array(
+          'input[name="search_form[enabled]"]' => array('checked' => TRUE),
+        ),
+      ),
+    ),
+    'custom_btn_text' => array(
+      '#type' => 'textfield',
+      '#default_value' => $configuration['custom_btn_text'],
+      '#states' => array(
+        'visible' => array(
+          'input[name="search_form[enabled]"]' => array('checked' => TRUE),
+          'input[name="search_form[use_default_btn_text]"]' => array('checked' => FALSE),
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Additional process function to copy more configuration when expanding radios.
+ *
+ * @see form_process_radios()
+ */
+function paddle_maps_process_vocabulary_filter_radios($element) {
+  if (count($element['#options']) > 0 && !empty($element['#states'])) {
+    foreach ($element['#options'] as $key => $choice) {
+      $element[$key] += array(
+        '#states' => $element['#states'],
+      );
+    }
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_node_submit().
+ */
+function paddle_maps_node_submit($node, $form, &$form_state) {
+
+  if ($node->type != 'paddle_maps_page' || empty($node->panelizer)) {
+    return;
+  }
+
+  // Retrieve the display.
+  $display = paddle_apps_retrieve_node_display_for_pane_altering($node);
+  // Only continue if there is a display.
+  if (!$display) {
+    return;
+  }
+
+  // Retrieve all the vocabulary term filter panes already existing.
+  $panes = _paddle_maps_get_map_vocabulary_term_filter_panes($node);
+  // Retrieve the layout.
+  $layout = panels_get_layout($display->layout);
+
+  // For the Alfa layout, we put panes by default in the left region. For all
+  // the remaining layouts, use the same approach as in the change layout modal.
+  if ($layout['name'] == 'paddle_2_col_3_9') {
+    $default_region = 'left';
+  }
+  else {
+    $regions = array_keys(panels_get_regions($layout, $display));
+    $default_region = reset($regions);
+  }
+
+  $values = !empty($form_state['values']['vocabulary_filter']) ? $form_state['values']['vocabulary_filter'] : array();
+  // Keep track of all the enabled terms.
+  $enabled = array();
+  // Loop over the submitted configuration and update or create panes for each
+  // entry.
+  foreach ($values as $tid => $settings) {
+    if ($settings['enabled']) {
+      $enabled[] = $tid;
+
+      // Do not add a pane for the hidden display mode.
+      if ($settings['mode'] == 'hidden') {
+        continue;
+      }
+
+      if (!isset($panes[$tid])) {
+        $pane = panels_new_pane('map_vocabulary_term_filter', 'map_vocabulary_term_filter');
+        $display->add_pane($pane, $default_region);
+      }
+      else {
+        $pane = $panes[$tid];
+        // Remove this pane from the list, marking it as processed.
+        unset($panes[$tid]);
+      }
+
+      // Update the configuration.
+      $pane->configuration = array(
+        'tid' => $tid,
+        'mode' => $settings['mode'],
+      );
+
+      // Delete the pane reference, as the display uses references so every loop
+      // will overwrite the previous created panes.
+      unset($pane);
+    }
+  }
+
+  // All the leftover panes need to be removed from the regions.
+  if (!empty($panes)) {
+    foreach ($panes as $pane) {
+      _paddle_maps_remove_pane_from_display($display, $pane);
+    }
+  }
+
+  // Save the enabled configuration in the advanced search results pane.
+  if ($search_map_results_pane = _paddle_maps_get_block_maps_search_results_pane($node)) {
+    $search_map_results_pane->configuration = array(
+      'tids' => $enabled,
+    );
+  }
+
+  // Reset the caches to make sure that if needed, the facets are shown.
+  paddle_search_reset_caches();
+
+  $search_form_values = $form_state['values']['search_form'];
+  $search_form_pane = _paddle_maps_get_maps_search_form_pane($node);
+
+  if (!empty($search_form_values['enabled'])) {
+    if (!$search_form_pane) {
+      $search_form_pane = panels_new_pane('maps_search_form', 'maps_search_form');
+      $display->add_pane($search_form_pane, $default_region);
+    }
+
+    $search_form_pane->configuration = $search_form_values;
+    // We don't need the enabled status, as the presence of the pane is the
+    // status itself.
+    unset($search_form_pane->configuration['enabled']);
+  }
+  elseif ($search_form_pane) {
+    // Remove the pane from the display.
+    _paddle_maps_remove_pane_from_display($display, $search_form_pane);
+  }
+
+  // Finally index all not indexed content.
+  search_api_cron();
+  _paddle_maps_reset_caches();
+}
+
+/**
+ * Implements hook_panels_ipe_pane_links_alter().
+ */
+function paddle_maps_panels_ipe_pane_links_alter(&$links, $context) {
+  if ($pane = $context['pane']) {
+    $types = array(
+      'map_vocabulary_term_filter',
+      'block_maps_search_results',
+      'maps_search_form',
+    );
+
+    if (in_array($pane->type, $types)) {
+      unset($links['delete']);
+      unset($links['edit']);
+    }
+
+    if ($pane->type == 'block_maps_search_results') {
+      unset($links['paddle_style']);
+    }
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_maps_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'panels_ipe_pane_links_alter') {
+    $implementation = $implementations['paddle_maps'];
+    unset($implementations['paddle_maps']);
+    $implementations['paddle_maps'] = $implementation;
+  }
+}
+
+/**
+ * Implements hook_facetapi_facet_info_alter().
+ */
+function paddle_maps_facetapi_facet_info_alter(array &$facet_info, array $searcher_info) {
+
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher_info['name']) {
+    return;
+  }
+
+  // Create facets for all the root terms available.
+  foreach (_paddle_maps_get_facets() as $name => $info) {
+    if (is_array($facet_info['field_paddle_general_tags'])) {
+      $facet_info[$name] = array_merge($facet_info['field_paddle_general_tags'], array(
+        'name' => $name,
+        'label' => entity_label('taxonomy_term', $info['term']),
+        'field alias' => "pas_{$info['term']->tid}",
+        'default widget' => $info['default widget'],
+        'taxonomy term id' => $info['term']->tid,
+        'alter callbacks' => array('paddle_search_facet_build_alter'),
+        'default sorts' => array(
+          array('term_weight', SORT_ASC),
+          array('active', SORT_DESC),
+          array('display', SORT_ASC),
+          array('count', SORT_DESC),
+        ),
+      ));
+    }
+  }
+}
+
+/**
+ * Implements hook_facetapi_default_facet_settings_alter().
+ *
+ * Provide global settings for the facets declared by this module.
+ */
+function paddle_maps_facetapi_default_facet_settings_alter(&$export) {
+  ctools_include('export');
+
+  foreach (_paddle_maps_get_facets() as $name => $facet) {
+    $settings = ctools_export_crud_new('facetapi');
+    $settings->name = 'search_api@node_index::' . $name;
+    $settings->searcher = 'search_api@node_index';
+    $settings->realm = '';
+    $settings->facet = $name;
+    $settings->enabled = 0;
+    $settings->settings = array(
+      'hard_limit' => 100,
+      'facet_search_ids' => array(
+        'search_api_views:paddle_maps:block_maps' => 'search_api_views:paddle_maps:block_maps',
+        'search_api_views:paddle_maps:block_maps_text' => 'search_api_views:paddle_maps:block_maps_text',
+      ),
+      'default_true' => 0,
+    );
+
+    // The dropdown widget requires some extra options in order to work.
+    if ($facet['mode'] == 'dropdown') {
+      $settings->settings['individual_parent'] = 1;
+      $settings->settings['limit_active_items'] = 1;
+    }
+
+    $export[$settings->name] = $settings;
+  }
+}
+
+/**
+ * Implements hook_facetapi_force_delta_mapping().
+ */
+function paddle_maps_facetapi_force_delta_mapping() {
+  return array(
+    'search_api@node_index' => array(
+      'block' => array_keys(_paddle_maps_get_facets()),
+    ),
+  );
+}
+
+/**
+ * Implements hook_facetapi_enabled_facets_alter().
+ */
+function paddle_maps_facetapi_enabled_facets_alter(array &$enabled_facets, $searcher, $realm_name) {
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher) {
+    return;
+  }
+
+  // facetapi_get_enabled_facets() gets invoked multiple times. The first one
+  // is during search_api_facetapi_search_api_query_alter(), where the facets
+  // are added to the search being executed. Later, it will called again but
+  // there is no way to access to the view anymore. Let's cache the terms used
+  // to retrieve it later on.
+  // This will still cause enabling of all the facets in every search that is
+  // not an advanced search view.
+  // @todo Improve this LOL
+  $current_search_tids = &drupal_static(__FUNCTION__);
+
+  $adapter = facetapi_adapter_load($searcher);
+
+  // Try to get the current view that is being executed.
+  if (($view = views_get_current_view()) && $view->name == 'paddle_maps') {
+    $current_search_tids = array();
+    // The second parameter indicates the enabled term filters on this query.
+    // This unfortunately will include all the widget types, including the
+    // hidden ones. The 'all' value is the wildcard to skip term filtering.
+    if (!empty($view->args[1]) && $view->args[1] != 'all') {
+      // Explode the value back to term ids array. Flip array for isset().
+      $current_search_tids = array_flip(explode('+', $view->args[1]));
+    }
+  }
+
+  // Gets facet definitions for all enabled facets.
+  $facet_info = facetapi_get_facet_info($searcher);
+
+  // Add our facets to the enabled list.
+  foreach (_paddle_maps_get_facets() as $name => $info) {
+    // First, check if the facet is available in the facet definitions, to
+    // avoid any possible error.
+    if (isset($facet_info[$name])) {
+      // If the term is enabled in the active query, enable the related facet.
+      // If no term arguments were found, enable all the facets.
+      if ($current_search_tids === NULL || isset($current_search_tids[$info['term']->tid])) {
+        $enabled_facets[$name] = $facet_info[$name];
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_taxonomy_term_insert().
+ *
+ * Let facetapi know about the new facet.
+ */
+function paddle_maps_taxonomy_term_insert($term) {
+  _paddle_maps_reset_caches();
+}
+
+/**
+ * Implements hook_taxonomy_term_update().
+ *
+ * Pick up any change on the term (name, hierarchy).
+ */
+function paddle_maps_taxonomy_term_update($term) {
+  _paddle_maps_reset_caches();
+}
+
+/**
+ * Implements hook_taxonomy_term_delete().
+ *
+ * Remove the related facet from the system.
+ */
+function paddle_maps_taxonomy_term_delete($term) {
+  _paddle_maps_reset_caches();
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ *
+ * Adds bundle to the search_api_sorts module.
+ */
+function paddle_maps_entity_info_alter(&$entity_info) {
+  $entity_info['node']['bundles']['search_api_sort']['bundles'] = 'search_api_sort';
+}
+
+/* =============================================================================
+ *   HELPER FUNCTIONS
+ * ========================================================================== */
+
+/**
+ * Helper function to get the advanced search results pane from a node.
+ *
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return bool|object
+ *   The pane if found, FALSE otherwise.
+ */
+function _paddle_maps_get_block_maps_search_results_pane($node) {
+  if ($pane = _paddle_maps_get_pane_by_type('block_maps_search_results', $node)) {
+    return $pane;
+  }
+
+  // Unless the wrong node has been passed to the function, the pane should
+  // always be present. Log this error.
+  watchdog('paddle_maps', 'Could not find view for node @nid, revision @vid.', array(
+    '@nid' => $node->nid,
+    '@vid' => $node->vid,
+  ));
+
+  return FALSE;
+}
+
+/**
+ * Helper function to extract vocabulary term filter content types from a node.
+ *
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return object[]
+ *   An array of pane objects, keyed by the taxonomy term id they refer.
+ */
+function _paddle_maps_get_map_vocabulary_term_filter_panes($node) {
+  $panes = array();
+  foreach ($node->panelizer['page_manager']->display->content as $pid => $pane) {
+    if ($pane->type == 'map_vocabulary_term_filter') {
+      // Key panes by term id, so we can easily work with them afterwards.
+      $tid = $pane->configuration['tid'];
+      $panes[$tid] = $pane;
+    }
+  }
+
+  return $panes;
+}
+
+/**
+ * Helper function to get a pane of a certain type from a node.
+ *
+ * This function retrieves only the first pane of that type.
+ *
+ * @param string $type
+ *   The content type machine name.
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return bool|object
+ *   The pane if found, FALSE otherwise.
+ */
+function _paddle_maps_get_pane_by_type($type, $node) {
+  if (isset($node->panelizer)) {
+    foreach ($node->panelizer['page_manager']->display->content as $pane) {
+      if ($pane->type == $type) {
+        return $pane;
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Helper function to get a pane of a certain type from a node.
+ *
+ * This function retrieves only the first pane of that type.
+ *
+ * @param string $type
+ *   The content type machine name.
+ * @param string $subtype
+ *   The content type machine name.
+ * @param string $display
+ *   The content type machine name.
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return bool|object
+ *   The pane if found, FALSE otherwise.
+ */
+function _paddle_maps_get_view_display_pane_by_type($type, $subtype, $display, $node) {
+  if (isset($node->panelizer)) {
+    foreach ($node->panelizer['page_manager']->display->content as $pane) {
+      if ($pane->type == $type && $pane->subtype == $subtype && $pane->configuration['display'] == $display) {
+        return $pane;
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Helper function to get the advanced search form pane from a node.
+ *
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return bool|object
+ *   The pane if found, FALSE otherwise.
+ */
+function _paddle_maps_get_maps_search_form_pane($node) {
+  if ($pane = _paddle_maps_get_pane_by_type('maps_search_form', $node)) {
+    return $pane;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Removes a pane from a display.
+ *
+ * @param panels_display $display
+ *   The display instance where we want to remove the pane from.
+ * @param object $pane
+ *   The pane object.
+ *
+ * @see panels_display::add_pane()
+ */
+function _paddle_maps_remove_pane_from_display(panels_display $display, $pane) {
+  if (isset($display->content[$pane->pid])) {
+    unset($display->content[$pane->pid]);
+
+    // Find the position of this pane in its region.
+    $position = array_search($pane->pid, $display->panels[$pane->panel]);
+    if ($position !== FALSE) {
+      unset($display->panels[$pane->panel][$position]);
+      // Reset position array to avoid missing position numbers.
+      $display->panels[$pane->panel] = array_values($display->panels[$pane->panel]);
+    }
+  }
+}
+
+/**
+ * Retrieve the enabled facet terms and their info.
+ *
+ * @return array
+ *   The facet info, keyed by term id.
+ */
+function _paddle_maps_get_facets() {
+  $facets = &drupal_static(__FUNCTION__);
+
+  if (!isset($facets)) {
+    $facets = array();
+
+    // Get all the root term ids. As we have multiple revisions of pages,
+    // it is quite expensive to try to find the latest draft and the published
+    // revision, so we provide a facet for each root term.
+    $tids = _paddle_search_get_root_taxonomy_term_ids();
+
+    // Process only if we have some tids.
+    if ($tids) {
+      // Loading time is not a problem as terms are cached.
+      $terms = taxonomy_term_load_multiple($tids);
+
+      $modes = array(
+        'list' => 'facetapi_extended_checkbox_links',
+        'dropdown' => 'facetapi_dropdown',
+      );
+
+      foreach ($modes as $mode => $widget) {
+        foreach ($terms as $tid => $term) {
+          $name = "paddle_maps_term_{$tid}_{$mode}";
+          $facets[$name] = array(
+            'term' => $term,
+            'mode' => $mode,
+            'default widget' => $widget,
+          );
+        }
+      }
+    }
+  }
+
+  return $facets;
+}
+
+/**
+ * Retrieves the hashed delta for a taxonomy term facet.
+ *
+ * @param string $tid
+ *   The taxonomy term id.
+ * @param string $mode
+ *   The facet mode.
+ *
+ * @return string|null
+ *   The hashed delta if available, NULL otherwise.
+ */
+function _paddle_maps_get_taxonomy_term_facet_hashed_delta($tid, $mode) {
+  $deltas = &drupal_static(__FUNCTION__);
+
+  if (!isset($deltas)) {
+    $deltas = array();
+
+    // Gets delta map from facetapi.
+    $map = facetapi_get_delta_map();
+
+    foreach (_paddle_maps_get_facets() as $name => $info) {
+      $facet_delta = facetapi_build_delta('search_api@node_index', 'block', $name);
+      $hashed_delta = array_search($facet_delta, $map);
+      if (FALSE !== $hashed_delta) {
+        $deltas[$info['term']->tid][$info['mode']] = $hashed_delta;
+      }
+    }
+  }
+
+  return !empty($deltas[$tid][$mode]) ? $deltas[$tid][$mode] : NULL;
+}
+
+/**
+ * Helper function to clear all facet related caches at once.
+ */
+function _paddle_maps_reset_caches() {
+  cache_clear_all('facetapi:facet_info:search_api@node_index:', 'cache', TRUE);
+  cache_clear_all('facetapi:delta_map', 'cache');
+  cache_clear_all('paddle_maps:custom_markers:general_tags', 'cache');
+}

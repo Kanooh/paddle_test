@@ -1,0 +1,57 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Content Regions.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_content_region_schema() {
+  $schema = array();
+
+  $schema['paddle_content_region'] = array(
+    'description' => 'Stores Paddle Content Region configuration entities.',
+    'fields' => array(
+      'pcrid' => array(
+        'description' => 'The primary identifier for a Paddle Content Region.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'node_type' => array(
+        'description' => 'The content type to which the configuration applies. If this is empty then these are the global settings.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => 'all_pages',
+      ),
+      'language' => array(
+        'description' => 'The {languages}.language of this Content Region.',
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'inherit' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 1,
+        'size' => 'tiny',
+        'description' => 'Defines if the content type should inherit global settings (when it is 1) or not (when it is 0).',
+      ),
+    ),
+    'indexes' => array(
+      'node_type' => array('node_type'),
+      'language' => array('language'),
+    ),
+    'foreign keys' => array(
+      'node_type' => array('node_types' => 'type'),
+    ),
+    'primary key' => array('pcrid'),
+  );
+
+  return $schema;
+}

@@ -1,0 +1,54 @@
+<?php
+/**
+ * @file
+ * Tests the presence of the Dashboard in the administration menu.
+ */
+
+/**
+ * Test the presence of the Dashboard menu link.
+ */
+class PaddleDashboardMenuLinkTestCase extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Menu link',
+      'description' => 'Tests the presence of the menu link to the Dashboard.',
+      'group' => 'Paddle Dashboard',
+    );
+  }
+
+  /**
+   * Tests if a link to the Dashboard is present in the administration section.
+   */
+  public function testMenuLink() {
+    // Log in as Chief Editor.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Test a few pages in the administration section.
+    $paths = array(
+      'admin',
+      'admin/content_manager',
+      'admin/dashboard',
+      'admin/structure/menu_manager',
+      'admin/structure/taxonomy_manager',
+    );
+    foreach ($paths as $path) {
+      $this->drupalGet($path);
+
+      // Retrieve the first item from the management menu.
+      $elements = $this->xpath('//div[@id="block-paddle-menu-display-management-level-2"]//ul/li[1]');
+      $element = reset($elements);
+
+      // Check that the first menu item links to the dashboard.
+      $href = $element->xpath('a/@href');
+      $this->assertEqual((string) $href[0], url('admin/dashboard'), format_string('The first item in the navigation menu on the %path page links to the dashboard.', array('%path' => $path)));
+
+      // Check that the first menu item contains the word "Dashboard" in a span.
+      $title = $element->xpath('a/span');
+      $this->assertEqual((string) $title[0], t('Dashboard'), format_string('The first item in the navigation menu on the %path page has the title "Dashboard".', array('%path' => $path)));
+    }
+  }
+}

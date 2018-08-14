@@ -1,0 +1,13 @@
+<?php
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Dashboard.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_dashboard_install() {
+  // Enable our page manager variants for /admin.
+  variable_set('pm_existing_pages_disabled_admin', 0);
+}

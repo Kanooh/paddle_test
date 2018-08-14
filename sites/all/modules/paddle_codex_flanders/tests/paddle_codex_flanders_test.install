@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Install and update hook for Codex Flanders test module.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_codex_flanders_test_enable() {
+  // menu_router_build();
+}

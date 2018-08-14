@@ -1,0 +1,169 @@
+<?php
+
+/**
+ * @file
+ * Tests for the Paddle Apps module.
+ */
+
+/**
+ * Tests the user interface.
+ *
+ * @todo Do not depend on PaddleWebTestCase for this test. This should work
+ *   independently from Paddle.
+ */
+class PaddleAppsUiTestCase extends PaddleWebTestCase {
+
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'User interface',
+      'description' => 'Tests the user interface components.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * Tests the pages of the paddlet store.
+   */
+  public function testAppsOverview() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Test that we arrive on the 'Active Paddlets' overview page and see tabs.
+    $this->drupalGet('admin/paddlet_store');
+
+    $texts = array(
+      'active-paddlets' => t('Active Paddlets'),
+      'available-paddlets' => t('Available Paddlets'),
+    );
+
+    // Get all apps which are installed.
+    $apps = paddle_apps_enabled_apps();
+
+    // Test all the required fields in the front end for each app.
+    foreach ($apps as $app) {
+      $this->assertPaddletDetailView($app);
+    }
+
+    // Get all apps which are not installed.
+    $apps = paddle_apps_disabled_apps();
+
+    // @todo Rewrite this test so that this condition is eliminated. First mock
+    //   an app server with no available apps and test that this message
+    //   appears. Then mock an app server with one app available and test that
+    //   the message no longer appears.
+    if (empty($apps)) {
+      $this->assertTrue($this->xpath('//p[@class="paddle-paddlets-none-available"]'), 'There are no available paddlets.');
+    }
+    else {
+      // Test all the required fields in the front end for each app.
+      foreach ($apps as $app) {
+        $this->assertPaddletDetailView($app);
+      }
+    }
+  }
+
+  /**
+   * Tests the detail view of a paddlet.
+   *
+   * @param object $app
+   *   App object to test.
+   */
+  public function assertPaddletDetailView($app) {
+    $this->assertRaw($app->name, 'The title of the app is visible.');
+    $this->assertRaw($app->description, 'The description of the app is visible.');
+    if (!empty($app->logo['type']) && $app->logo['type'] == 'image') {
+      $url = file_create_url($app->logo['uri']);
+      $this->assertRaw($url, 'The image of the app is shown in the overview.');
+    }
+  }
+
+  /**
+   * Tests the description pages of the paddlets.
+   */
+  public function testAppsDescription() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Get all apps which are installed.
+    $apps = entity_load('paddle_app');
+    foreach ($apps as $app) {
+      $this->drupalGet('admin/paddlet_store/app/' . $app->machineName);
+
+      if (!empty($app->name)) {
+        $this->assertTrue(
+          $this->xpath(
+            $this->buildXPathQuery(
+              '//h1[contains(@class, "paddle-apps-paddlet-name") and contains(text(), :text)]',
+              array(':text' => $app->name)
+            )
+          ),
+          'The title of the app is shown on the paddlet description page.'
+        );
+      }
+      if (!empty($app->description)) {
+        $this->assertTrue(
+          $this->xpath(
+            '//div[contains(@class, "paddle-apps-paddlet-description")]'
+          ),
+          'The description of the app is shown on the paddlet description page.'
+        );
+      }
+      if (!empty($app->logo['type']) && $app->logo['type'] == 'image') {
+        $this->assertTrue(
+          $this->xpath(
+            '//div[contains(@class, "paddle-apps-paddlet")]//div[contains(@class, "paddle-apps-paddlet-image")]//img'
+          ),
+          'The logo of the app is shown on the paddlet description page.'
+        );
+      }
+      if (!empty($app->screenshots)) {
+        $this->assertTrue(
+          $this->xpath(
+            '//div[contains(@class, "paddle-apps-paddlet-screenshots")]'
+          ),
+          'The screenshots of the app are shown on the paddlet description page.'
+        );
+      }
+
+      $enable_path = url(
+        'admin/paddlet_store/app/' . $app->machineName . '/activate'
+      );
+      $store_path = url('admin/paddlet_store');
+
+      // Tests for the contextual toolbar.
+      $this->assertTrue(
+        $this->xpath('//ul[@id="contextual-actions-list"]'),
+        'The contextual toolbar is rendered for the app.'
+      );
+      if (!$app->status) {
+        $this->assertTrue(
+          $this->xpath(
+            '//ul[@id="contextual-actions-list"]//li[contains(@class, "activate")]//a[@href="' . $enable_path . '"]'
+          ),
+          'The enable button is being rendered in the contextual toolbar.'
+        );
+        $this->assertTrue(
+          $this->xpath(
+            '//ul[@id="contextual-actions-list"]//li[contains(@class, "cancel")]//a[@href="' . $store_path . '"]'
+          ),
+          'The cancel button is being rendered correctly in the contextual toolbar.'
+        );
+      }
+      else {
+        $this->assertFalse(
+          $this->xpath(
+            '//ul[@id="contextual-actions-list"]//li[contains(@class, "activate")]//a[@href="' . $enable_path . '"]'
+          ),
+          'The enable button is not being rendered in the contextual toolbar.'
+        );
+        $this->assertTrue(
+          $this->xpath(
+            '//ul[@id="contextual-actions-list"]//li[contains(@class, "cancel")]//a[@href="' . $store_path . '"]'
+          ),
+          'The cancel button is being rendered correctly in the contextual toolbar.'
+        );
+      }
+    }
+  }
+}

@@ -1,0 +1,337 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleTextFormatFilter.
+ */
+
+/**
+ * Filter tests for input formats.
+ */
+class PaddleTextFormatsFilterTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Test text format filters'),
+      'description' => t('Test if saving content applies the correct text format filters.'),
+      'group' => t('Paddle Text Formats'),
+    );
+  }
+
+  /**
+   * Tests if anchors link are not filtered.
+   */
+  public function testAnchorLinks() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $link_element = array(
+      '#tag' => 'a',
+      '#attributes' => array(
+        'name' => 'anchor',
+        'id' => 'anchor',
+      ),
+      '#value' => 'anchortest',
+    );
+    $body_text = theme('html_tag', array('element' => $link_element));
+
+    $node = $this->drupalCreateNode(
+      array(
+        'type' => 'basic_page',
+        'title' => $this->randomString(),
+        'body'  => array(LANGUAGE_NONE => array(array('value' => $body_text))),
+      )
+    );
+
+    $this->drupalGet('node/' . $node->nid);
+
+    // Check if the id attribute is present.
+    $anchor_link = $this->xpath('//a[@id="' . $link_element['#attributes']['id'] . '"]');
+    $this->assertTrue($anchor_link, t('Anchor link was found in body by id.'));
+
+    // Check if the name attribute is present.
+    $anchor_link = $this->xpath('//a[@name="' . $link_element['#attributes']['name'] . '"]');
+    $this->assertTrue($anchor_link, t('Anchor link was found in body by name .'));
+  }
+
+
+  /**
+   * Tests if iframe src attribute is not filtered.
+   */
+  public function testIframe() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $iframe_element = array(
+      '#tag' => 'iframe',
+      '#attributes' => array(
+        'title' => 'Kanooh website',
+        'name' => 'kanooh-frame-name',
+        'id' => 'kanooh-frame-name',
+        'src' => 'http://www.kanooh.be',
+      ),
+    );
+    $body_text = theme('html_tag', array('element' => $iframe_element));
+
+    $node = $this->drupalCreateNode(array(
+      'type' => 'basic_page',
+      'title' => $this->randomString(),
+      'body'  => array(LANGUAGE_NONE => array(array('value' => $body_text))),
+    ));
+
+    $this->drupalGet('node/' . $node->nid);
+
+    foreach ($iframe_element['#attributes'] as $attr => $value) {
+      $iframe = $this->xpath('//iframe[@' . $attr . '="' . $value . '"]');
+      $this->assertTrue($iframe, t('iframe was found with attribute %attr value %value.', array(
+        '%attr' => $attr,
+        '%value' => $value,
+      )));
+    }
+  }
+
+  /**
+   * Tests if caption tag is not filtered.
+   */
+  public function testTables() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Anysurfer example data.
+    $body_text = '<table align="left" border="1" cellpadding="1" cellspacing="1" id="table_id" style="height:500px;width:500px;" summary="My Summary" dir="ltr">
+  <thead>
+    <tr>
+      <th style="vertical-align:top" scope="col">Dag</th>
+      <th scope="col">Uren</th>
+    </tr>
+  </thead>
+  <caption>Openingsuren</caption>
+  <tbody>
+    <tr>
+      <td>Maandag tot vrijdag</td>
+      <td>9h - 16h</td>
+    </tr>
+    <tr>
+      <td style="vertical-align:top">Zaterdag</td>
+      <td>9h - 17h</td>
+    </tr>
+    <tr>
+      <td>Zon - en feestdagen</td>
+      <td>gesloten</td>
+    </tr>
+  </tbody>
+</table>';
+
+    $node = $this->drupalCreateNode(
+      array(
+        'type' => 'basic_page',
+        'title' => $this->randomString(),
+        'body'  => array(LANGUAGE_NONE => array(array('value' => $body_text))),
+      )
+    );
+
+    $this->drupalGet('node/' . $node->nid);
+
+    // Check that all the attributes of the table are preserved.
+    $table = $this->xpath('//table[@align="left" and @border="1" and @cellpadding="1" and @cellspacing="1" and @id="table_id" and @style="height:500px;width:500px;" and @summary="My Summary" and @dir="ltr"]');
+    $this->assertTrue($table, 'Table attributes preserved');
+
+    // Check that all the attributes of the td are preserved.
+    $td = $this->xpath('//td[@style="vertical-align:top;"]');
+    $this->assertTrue($td, 'td attributes preserved');
+
+    // Check that all the attributes of the th are preserved.
+    $th = $this->xpath('//th[@style="vertical-align:top;"]');
+    $this->assertTrue($th, 'th attributes preserved');
+
+    // Check for thead and tbody.
+    $this->assertTrue($this->xpath('//thead'), t('"thead" tag was found in the body.'));
+    $this->assertTrue($this->xpath('//tbody'), t('"tbody" tag was found in the body.'));
+
+    $caption = $this->xpath('//table/caption');
+
+    $this->assertTrue($caption, t('"caption" tag was found in the body.'));
+    $caption = reset($caption);
+    $this->assertEqual('Openingsuren', (string) $caption, 'Caption contains the right text.');
+  }
+
+
+  /**
+   * Tests if correct image attributes are allowed.
+   */
+  public function testImageAttributes() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $body_text = '<img class="joh" align="right" height="206" hspace="10" vspace="10" src="/sites/themes/images/add.png" width="20" alt="alt text" />';
+
+    $node = $this->drupalCreateNode(
+      array(
+        'type' => 'basic_page',
+        'title' => $this->randomString(),
+        'body'  => array(LANGUAGE_NONE => array(array('value' => $body_text))),
+      )
+    );
+
+    $this->drupalGet('node/' . $node->nid);
+
+    $img = $this->xpath('//img[@align="right" and @hspace="10" and @vspace="10" and @height="206" and @width="20" and @alt="alt text" and @class="joh"]');
+    $this->assertTrue($img, t('Image with attributes was found in the body.'));
+    $img = $this->xpath('//p/img[@align="right" and @hspace="10" and @vspace="10" and @height="206" and @width="20" and @alt="alt text" and @class="joh"]');
+    $this->assertFalse($img, t('P-wrapper for the image tag is removed.'));
+  }
+
+  /**
+   * Tests if it is possible to remove the body text from a basic page.
+   *
+   * Regression test for KANWEBS-1044
+   * @see https://one-agency.atlassian.net/browse/KANWEBS-1044
+   */
+  public function testBodyTextRemoval() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $body_text = '<p>' . $this->randomString() . '</p>';
+    $node = $this->drupalCreateNode(
+      array(
+        'type' => 'basic_page',
+        'title' => $this->randomString(),
+        'body'  => array(
+          LANGUAGE_NONE => array(
+            array(
+              'value' => $body_text,
+            ),
+          ),
+        ),
+      )
+    );
+
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw(check_markup($body_text, 'full_html'), 'When a body text is added to a basic page, it is visible on the node view page.');
+
+    $edit = array(
+      'body[und][0][value]' => '',
+    );
+    $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+    $this->moderateNode($node, 'Publish');
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertNoRaw(check_markup($body_text, 'full_html'), 'When the body text is removed from a basic page, it is no longer visible on the node view page.');
+  }
+
+  /**
+   * Tests if horizontal rules can be used in the HTML text format.
+   */
+  public function testHorizontalRule() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $body_text = '<p>A first paragraph.</p>
+<hr>
+<p>Another paragraph!</p>';
+
+    $node = $this->drupalCreateNode(
+      array(
+        'type' => 'basic_page',
+        'title' => $this->randomString(),
+        'body'  => array(LANGUAGE_NONE => array(array('value' => $body_text))),
+      )
+    );
+
+    $this->drupalGet('node/' . $node->nid);
+
+    // Check if a single horizontal rule is found in the main body text.
+    $elements = $this->xpath('//div[@id = "block-system-main"]//div[contains(@class, "node-basic-page")]//div[contains(@class, "field-name-body")]//hr');
+    $this->assertEqual(count($elements), 1, 'The horizontal rule is shown in the body text.');
+  }
+
+  /**
+   * Tests if strikethrough rules can be used in the HTML text format.
+   */
+  public function testStrikethrough() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $body_text = '<p><s>Some strikethrough text.</s> Some other text.</p>';
+
+    $node = array(
+      'type' => 'basic_page',
+      'title' => $this->randomString(),
+      'body' => array(LANGUAGE_NONE => array(array('value' => $body_text))),
+    );
+    $node = $this->drupalCreateNode($node);
+
+    $this->drupalGet('node/' . $node->nid);
+
+    // Check if the strikethrough is found in the main body text.
+    $elements = $this->xpath('//div[@id = "block-system-main"]//div[contains(@class, "node-basic-page")]//div[contains(@class, "field-name-body")]//s');
+    $this->assertEqual(count($elements), 1, 'The strikethrough is shown in the body text.');
+  }
+
+  /**
+   * Tests if absolute URLs are are made relative and then absolute again.
+   */
+  public function testAbsoluteUrls() {
+    $this->drupalLogin($this->chiefEditor);
+
+    $absolute_file_url = $this->getAbsoluteUrl('sites/default/files/testPaddleTextFormat.pdf');
+    $absolute_page_url = $this->getAbsoluteUrl('fr/test-paddle-text-format');
+    // Use both URLs in the body text.
+    $body_text = '<p><a href="' . $absolute_file_url . '">link to file</a><a href="' . $absolute_page_url . '">link to page</a></p>';
+
+    // @todo Make the following line of code redundant.
+    // drupalCreateNode() should work so that this text_format value callback
+    // 'paddle_text_formats_text_format_value' is called automatically like it
+    // does when manually executing the steps in this test via the UI.
+    $body_text = paddle_text_formats_text_format_value('', $body_text);
+
+    $node = array(
+      'type' => 'basic_page',
+      'title' => $this->randomString(),
+      'body' => array(LANGUAGE_NONE => array(array('value' => $body_text))),
+    );
+    $node = $this->drupalCreateNode($node);
+
+    // Get node object like a node view would do.
+    $node = node_load($node->nid);
+
+    $this->assertEqual(
+      $node->body[LANGUAGE_NONE][0]['value'],
+      '<p><a href="local://sites/default/files/testPaddleTextFormat.pdf">link to file</a><a href="local://fr/test-paddle-text-format">link to page</a></p>',
+      'Absolute URLs to current website are made relative.'
+    );
+
+    $this->ensureLinksAreRenderedAbsolute($node->nid, $absolute_file_url, $absolute_page_url);
+
+    // Paddle enables Dutch, English, French and German by default and has
+    // Dutch as default language.
+    // Test if all still works, even if Drupal uses language detection through
+    // URLs with a language prefix.
+    $this->drupalLogout();
+    $admin_user = $this->drupalCreateUser(array('administer languages'));
+    $this->drupalLogin($admin_user);
+    // Set content language detection to URL.
+    $edit = array('language_content[enabled][locale-url]' => TRUE);
+    $this->drupalPost('admin/config/regional/language/configure', $edit, t('Save settings'));
+    // Make the new language settings known in this PHP thread.
+    $this->refreshVariables();
+
+    // Ensure the link formatter still works as before.
+    $this->ensureLinksAreRenderedAbsolute($node->nid, $absolute_file_url, $absolute_page_url);
+  }
+
+  /**
+   * Assert that 'local://' gets replaced with base URL and path.
+   *
+   * @param int $nid
+   *   Node ID.
+   * @param string $absolute_file_url
+   *   Absolute file URL.
+   * @param string $absolute_page_url
+   *   Absolute page URL.
+   */
+  protected function ensureLinksAreRenderedAbsolute($nid, $absolute_file_url, $absolute_page_url) {
+    $this->drupalGet('node/' . $nid);
+
+    $elements = $this->xpath('//div[@id = "block-system-main"]//div[contains(@class, "node-basic-page")]//div[contains(@class, "field-name-body")]//a[@href = "' . $absolute_file_url . '"]');
+    $this->assertEqual(count($elements), 1, 'The file link is rendered as absolute link in the body text.');
+    $elements = $this->xpath('//div[@id = "block-system-main"]//div[contains(@class, "node-basic-page")]//div[contains(@class, "field-name-body")]//a[@href = "' . $absolute_page_url . '"]');
+    $this->assertEqual(count($elements), 1, 'The page link is rendered as absolute link in the body text.');
+  }
+
+}

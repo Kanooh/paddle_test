@@ -1,0 +1,285 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Color Palettes module.
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_color_palettes_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'paddle_style' && $plugin_type == 'paddle_style') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Fetches the color palettes definitions for a given theme.
+ *
+ * @param object $theme
+ *   A theme object as provided by list_themes(). Defaults to the default theme.
+ *
+ * @return array
+ *   The palettes definitions for this theme.
+ */
+function paddle_color_palettes_get_palettes_definitions(stdClass $theme = NULL) {
+  // Default to the default theme.
+  if (empty($theme)) {
+    $theme = paddle_themer_get_theme_by_name();
+  }
+
+  // Get the plugin instance.
+  $color_palettes_instance = paddle_themer_get_plugin_instance('color_palettes', $theme);
+
+  // Make sure the color palettes are well formed.
+  paddle_color_palettes_validate_palettes($color_palettes_instance['allowed_values']);
+
+  return $color_palettes_instance['allowed_values'];
+}
+
+/**
+ * Returns a color palette, optionally filtered by name.
+ *
+ * @param string $palette_name
+ *   Optional name of the palette to retrieve. Defaults to the first palette.
+ * @param object $theme
+ *   The theme for which to retrieve the palette. Defaults to the active theme.
+ *
+ * @return array
+ *   A complete palette including sub-palettes.
+ */
+function paddle_color_palettes_get_palette($palette_name = NULL, stdClass $theme = NULL) {
+  $palettes = paddle_color_palettes_get_palettes_definitions($theme);
+
+  // If no palette name is given, default to the first palette.
+  reset($palettes);
+  $palette_name = $palette_name ?: key($palettes);
+
+  return !empty($palettes[$palette_name]) ? $palettes[$palette_name] : FALSE;
+}
+
+/**
+ * Returns all colour-selector pairs for each colour position.
+ *
+ * @see hook_paddle_color_palettes_color_selectors()
+ *
+ * @param object $theme
+ *   A theme object as provided by Paddle Themers' list_themes(). Defaults to
+ *   the default theme.
+ * @param bool $reset
+ *   Whether to reset the internal style sets cache. Defaults to FALSE.
+ *
+ * @return array
+ *   An array of colour positions. Each colour position is an associative array
+ *   keyed on colour property, containing an array of selectors that pertain to
+ *   the property. Example:
+ *   array(
+ *     // "0" matches the first colour in the palette.
+ *     0 => array(
+ *       'color' => array('h1', 'body.logged-in'),
+ *       'background-color' => array('#page-content'),
+ *     ),
+ *   )
+ */
+function paddle_color_palettes_get_color_selectors(stdClass $theme = NULL, $reset = FALSE) {
+  // Default to the active theme.
+  $theme = $theme ? $theme : paddle_themer_get_theme_by_name();
+
+  $data = &drupal_static(__FUNCTION__);
+
+  if (!empty($data) && !$reset) {
+    return $data;
+  }
+
+  // Get theme-specific settings. These override app styles with the same key.
+  $raw_theme_data = paddle_themer_theme_invoke($theme, 'paddle_color_palettes_color_selectors', array());
+  $theme_data = array();
+
+  // Give them indexes so they pass correctly through array_merge_recursive().
+  foreach ($raw_theme_data as $index => $value) {
+    $theme_data['color' . $index] = $value;
+  }
+
+  // Get colour selectors from modules and apps and loop over them. So we make sure they are usable for
+  // array_merge_recursive.
+  $module_data = array();
+  foreach (module_implements('paddle_color_palettes_color_selectors') as $module) {
+    $hook_data = module_invoke($module, 'paddle_color_palettes_color_selectors');
+
+    // Give them indexes so they pass correctly through array_merge_recursive().
+    $selectors = array();
+    foreach ($hook_data as $color => $selector) {
+      $selectors['color' . $color] = $selector;
+    }
+
+    $module_data = array_merge_recursive($module_data, $selectors);
+  }
+
+  $raw_data = array_merge_recursive($module_data, $theme_data);
+  $data = array();
+  foreach ($raw_data as $value) {
+    $data[] = $value;
+  }
+
+  drupal_alter('paddle_color_palettes_color_selectors', $data, $theme);
+
+  return $data;
+}
+
+/**
+ * Verifies that the given color palette definition is well formed.
+ *
+ * @param array $palettes
+ *   The color palette definition to validate.
+ *
+ * @throws Exception
+ *   Throws an Exception when the defined palettes do not have an equal number
+ *   of subpalettes.
+ * @throws Exception
+ *   Throws an Exception when a subpalette has more colors than the primary
+ *   palette.
+ */
+function paddle_color_palettes_validate_palettes($palettes) {
+  foreach ($palettes as $palette_name => $palette) {
+    // Each palette should have an identical number of subpalettes.
+    $count = !isset($count) ? count($palette) : $count;
+    if (count($palette) != $count) {
+      throw new Exception(format_string('The color palette "@palette_name" does not have the same number of subpalettes as the other palettes.', array('@palette_name' => $palette_name)));
+    }
+
+    // None of the subpalettes should have more colors than the primary palette.
+    $primary = array_shift($palette);
+    foreach ($palette as $subpalette_name => $subpalette) {
+      if (count($subpalette['colors']) > count($primary['colors'])) {
+        throw new Exception(format_string('The subpalette "@subpalette_name" of the color palette "@palette_name" has more colors than the primary palette.', array('@subpalette_name' => $subpalette_name, '@palette_name' => $palette_name)));
+      }
+    }
+  }
+}
+
+/**
+ * Get the number of sub-palettes that the primary palettes have.
+ *
+ * @return int
+ *   The number of sub-palettes that the primary palettes have.
+ */
+function paddle_color_palettes_get_subpalettes_count() {
+  $palettes = paddle_color_palettes_get_palettes_definitions();
+
+  // Since all the palettes have an equal amount of sub-palettes we only need to
+  // count the number of sub-palettes of the first given primary palette.
+  $subpalette = reset($palettes);
+  return count($subpalette);
+}
+
+/**
+ * Returns the default palette for the given Paddle theme.
+ *
+ * This is usually the theme that is chosen by the site administrator in the
+ * Paddle Themer interface.
+ *
+ * @todo Create a generic way of storing the default color palette, so we can
+ *   remove the hard dependency on Paddle Themer and can integrate with other
+ *   modules that can provide a context wherein a default palette can be chosen,
+ *   such as Page Manager, Spaces, Domain Access, Rules, ...
+ *
+ * @param object $paddle_theme
+ *   The Paddle theme for which to receive the default palette. Defaults to the
+ *   enabled theme.
+ *
+ * @return array
+ *   An associative array containing all the sub-palettes of the default palette
+ *   or FALSE if it could not be determined.
+ */
+function paddle_color_palettes_get_default_palette(stdClass $paddle_theme = NULL) {
+  // Default to the enabled Paddle theme.
+  $paddle_theme = $paddle_theme ? $paddle_theme : paddle_themer_enabled_theme();
+
+  // Get the theme on which the Paddle theme is based.
+  $theme = paddle_themer_get_theme_by_name($paddle_theme->theme);
+
+  // Retrieve the color palette plugin instances. It makes no sense to have this
+  // plugin multiple times, so we use the machine name of the first instance.
+  $plugin_instances = paddle_themer_get_plugin_instances_by_type('color_palettes', $theme);
+  list($machine_name) = array_keys($plugin_instances);
+
+  // Get the saved form value for the plugin instance. If it has not yet been
+  // saved, default to the first palette in the list.
+  $values = paddle_themer_get_default_values($machine_name, $paddle_theme);
+  $palettes = !empty($plugin_instances[$machine_name]['allowed_values']) ? $plugin_instances[$machine_name]['allowed_values'] : array();
+  reset($palettes);
+  $value = !empty($values['primary_color_palettes']) ? $values['primary_color_palettes'] : key($palettes);
+
+  // Get the palette that was saved.
+  if ($value == 'custom_palette') {
+    foreach ($palettes[$value] as $key => &$colors) {
+      if ($key == 'custom_palette') {
+        $colors['colors'] = $values[$key . '-color-pickers'];
+      }
+      else {
+        foreach (array_keys($values) as $key_2) {
+          if (strpos($key_2, $key) === 0) {
+            $colors['colors'] = $values[$key_2];
+          }
+        }
+      }
+    }
+  }
+
+  $palette = !empty($palettes[$value]) ? $palettes[$value] : FALSE;
+
+  // Supplement the missing colors in the sub-palettes before returning.
+  return !empty($palette) ? paddle_color_palettes_supplement_subpalettes($palette) : FALSE;
+}
+
+/**
+ * Fills in missing colours in sub-palettes from the primary palette.
+ *
+ * Color palettes can contain a number of variations (sub-palettes). The first
+ * sub-palette (a.k.a. the "primary palette") contains the full colour range,
+ * while all subsequent palettes can contain a subset of colours - only the ones
+ * that differ from the primary palette.
+ * This makes sure all sub-palettes contain an equal number of colours.
+ *
+ * @param array $palette
+ *   A color palette array, as defined in the 'allowed_values' section of the
+ *   color palette plugin instance definition.
+ *
+ * @return array
+ *   The supplemented palette.
+ */
+function paddle_color_palettes_supplement_subpalettes($palette) {
+  // Filter out any additional properties, keeping only the sub-palette arrays.
+  $subpalettes = paddle_color_palettes_filter_subpalettes($palette);
+
+  // The primary palette contains the reference colors.
+  $primary = array_shift($subpalettes);
+
+  foreach ($subpalettes as $name => $subpalette) {
+    // Loop over the primary colors and supplement the missing colors in the
+    // subpalette with the ones from the primary palette.
+    foreach ($primary['colors'] as $key => $color) {
+      if (empty($subpalette['colors'][$key])) {
+        $palette[$name]['colors'][$key] = $color;
+      }
+    }
+  }
+
+  return $palette;
+}
+
+/**
+ * Filter out any additional properties, keeping only the subpalette arrays.
+ *
+ * @param array $palette
+ *   A color palette array, as defined in the 'allowed_values' section of the
+ *   color palette plugin instance definition.
+ *
+ * @return array
+ *   The filtered color palette.
+ */
+function paddle_color_palettes_filter_subpalettes($palette) {
+  return array_filter($palette, function ($subpalette) {
+    return is_array($subpalette);
+  });
+}

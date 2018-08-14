@@ -1,0 +1,10 @@
+name = Paddle Menu Manager Test
+description = Test module for Paddle Menu Manager
+core = 7.x
+dependencies[] = paddle_menu_manager
+hidden = TRUE
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_menu_manager"
+datestamp = "1455508466"

@@ -1,0 +1,25 @@
+name = Paddle Landing Page Test
+description = Test module for Paddle Landing Page
+core = 7.x
+dependencies[] = paddle_landing_page
+hidden = TRUE
+
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = page_manager
+dependencies[] = panelizer
+dependencies[] = panels
+dependencies[] = strongarm
+features[ctools][] = panelizer:panelizer:1
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[panelizer_defaults][] = node:landing_page:paddle_2_col_3_9
+features[panelizer_defaults][] = node:landing_page:paddle_2_col_6_6
+features[panelizer_defaults][] = node:landing_page:paddle_2_col_9_3
+features[panelizer_defaults][] = node:landing_page:paddle_no_column
+features[variable][] = panelizer_defaults_node_landing_page
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_landing_page"
+datestamp = "1455495232"

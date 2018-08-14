@@ -1,0 +1,755 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Formbuilder module.
+ */
+
+include_once 'paddle_formbuilder.features.inc';
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_formbuilder_paddle_content_region_content_type_info() {
+  return 'paddle_formbuilder_page';
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_formbuilder_menu() {
+  $items = array();
+
+  $items['admin/content_manager/node/%node/build_form'] = array(
+    'title callback' => 'paddle_formbuilder_content_manager_title_callback',
+    'title arguments' => array('Build', 3),
+    'page callback' => 'form_builder_webform_components_page',
+    'page arguments' => array(3),
+    'access arguments' => array('create paddle_formbuilder_page content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content_manager/node/%node/configure_form'] = array(
+    'title callback' => 'paddle_formbuilder_content_manager_title_callback',
+    'title arguments' => array('Configure', 3),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_formbuilder_configure_webform', 3),
+    'file' => 'includes/paddle_formbuilder.forms.inc',
+    'access arguments' => array('create paddle_formbuilder_page content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content_manager/node/%node/emails'] = array(
+    'title callback' => 'paddle_formbuilder_content_manager_title_callback',
+    'title arguments' => array('Emails settings for', 3),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_formbuilder_webform_emails', 3),
+    'file' => 'includes/paddle_formbuilder.forms.inc',
+    'access callback' => 'webform_node_update_access',
+    'access arguments' => array(3),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content_manager/node/%webform_menu/submissions'] = array(
+    'title' => 'Submissions',
+    'page callback' => 'paddle_formbuilder_results_submissions',
+    'page arguments' => array(3, FALSE, '50'),
+    'file' => 'includes/paddle_formbuilder.pages.inc',
+    'access callback' => 'paddle_formbuilder_access_submissions',
+    'access arguments' => array(3),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content_manager/node/%node/download'] = array(
+    'title' => 'Download results',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_formbuilder_webform_results_download', 3),
+    'file' => 'includes/paddle_formbuilder.forms.inc',
+    'access callback' => 'paddle_formbuilder_access_submissions',
+    'access arguments' => array(3),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Access callback for the submissions page.
+ */
+function paddle_formbuilder_access_submissions($webform) {
+  global $user;
+
+  $wrapper = entity_metadata_wrapper('node', $webform);
+  $responsible_author = $wrapper->field_page_responsible_author->value();
+  $uid = !empty($responsible_author) ? $responsible_author->uid : $webform->uid;
+  if (
+    ((user_access('access own webform results') && $uid == $user->uid) ||
+      user_access('access all webform results')) &&
+    (empty($webform->webform['shield_submissions']) ||
+      user_access('manage paddle formbuilder permissions'))
+  ) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function paddle_formbuilder_menu_alter(&$items) {
+  // We have to wrap all the /submission/ pages/forms to allow the management
+  // menu to be shown.
+  $base = 'node/%webform_menu/submission/%webform_menu_submission';
+
+  // Avoid multiple calls to drupal_get_path().
+  $module_path = drupal_get_path('module', 'paddle_formbuilder');
+
+  // Handle all the page items.
+  $ends = array('', '/view', '/edit', '/delete', '/resend');
+  foreach ($ends as $endpoint) {
+    $path = $base . $endpoint;
+
+    if (isset($items[$path])) {
+      // Use the new callback here. drupal_get_form() calls will be wrapped
+      // in our form_wrapper function, the others go to our submission page
+      // callback.
+      if ($items[$path]['page callback'] === 'drupal_get_form') {
+        $items[$path]['page callback'] = 'paddle_formbuilder_submission_form_wrapper';
+      }
+      else {
+        $items[$path]['page callback'] = 'paddle_formbuilder_submission_page';
+      }
+
+      $items[$path]['file'] = 'includes/paddle_formbuilder.pages.inc';
+      $items[$path]['file path'] = $module_path;
+    }
+  }
+
+  // Wraps the default webform access callback for the conditionals page with a
+  // custom one.
+  if (isset($items['node/%webform_menu/webform/conditionals'])) {
+    $items['node/%webform_menu/webform/conditionals']['access callback'] = 'paddle_formbuilder_webform_conditionals_access';
+  }
+}
+
+/**
+ * Title callback for content manager pages.
+ *
+ * @param string $action
+ *   The name of the action performed.
+ * @param object $node
+ *   The node object.
+ *
+ * @return string
+ *   The generated title.
+ */
+function paddle_formbuilder_content_manager_title_callback($action, $node) {
+  return t("$action @type @title", array(
+    '@type' => module_exists('i18n_node') ? i18n_node_type_name($node->type) : $node->type,
+    '@title' => $node->title,
+  ));
+}
+
+/**
+ * Implements hook_ctools_render_alter().
+ */
+function paddle_formbuilder_ctools_render_alter(&$info, &$page, &$context) {
+  // Add the "Form" action for the formbuilder.
+  if (module_exists('paddle_contextual_toolbar')) {
+    if (!empty($context['subtask']['name']) && $context['subtask']['name'] == 'paddle_content_manager_node_view') {
+      if ($node = node_load($context['args'][0])) {
+        if ($node->type == 'paddle_formbuilder_page' && user_access('create paddle_formbuilder_page content')) {
+          // Add a Formbuilder group.
+          $groups = paddle_contextual_toolbar_groups();
+          $groups['formbuilder'] = array('weight' => 20);
+          paddle_contextual_toolbar_groups($groups);
+
+          // Prepare all the items to show as children of the main form builder
+          // button.
+          $items = array();
+
+          // Add an item to edit the form elements.
+          $items[] = array(
+            'data' => l(t('Build'), 'admin/content_manager/node/' . $node->nid . '/build_form', array(
+              'attributes' => array(
+                'class' => array('ui-icon', 'fa-list-alt'),
+              ),
+            )),
+            'class' => array('create-form'),
+          );
+          // Add an item to add conditions for displaying form elements.
+          $argument = reset($context['contexts']);
+          if (count($argument->data->webform['components'])) {
+            $items[] = array(
+              'data' => l(t('Conditionals'),
+                'node/' . $node->nid . '/webform/conditionals', array(
+                  'attributes' => array(
+                    'class' => array('ui-icon', 'fa-question'),
+                  ),
+                )),
+              'class' => array('conditionals-page'),
+            );
+          }
+          // Add a button to configure the form settings.
+          $items[] = array(
+            'data' => l(t('Configure'), 'admin/content_manager/node/' . $node->nid . '/configure_form', array(
+              'attributes' => array(
+                'class' => array('ui-icon', 'fa-wrench'),
+              ),
+            )),
+            'class' => array('configure-form'),
+          );
+          // Add a button to configure the emails.
+          $items[] = array(
+            'data' => l(t('Emails'), 'admin/content_manager/node/' . $node->nid . '/emails', array(
+              'attributes' => array(
+                'class' => array('ui-icon', 'fa-at'),
+              ),
+            )),
+            'class' => array('form-emails'),
+          );
+          if (paddle_formbuilder_access_submissions($node)) {
+            // Add a button to go to the submissions.
+            $items[] = array(
+              'data' => l(t('Submissions'), 'admin/content_manager/node/' . $node->nid . '/submissions', array(
+                'attributes' => array(
+                  'class' => array('ui-icon', 'fa-bar-chart'),
+                ),
+              )),
+              'class' => array('submissions'),
+            );
+
+            // Add a button to go to the download form.
+            $items[] = array(
+              'data' => l(t('Download'), 'admin/content_manager/node/' . $node->nid . '/download', array(
+                'attributes' => array(
+                  'class' => array('ui-icon', 'fa-download'),
+                ),
+              )),
+              'class' => array('download'),
+            );
+          }
+
+          $items[] = array(
+            'data' => l(t('Generate PDF'), 'node/' . $node->nid . '/webform/webform2pdf', array(
+              'attributes' => array(
+                'class' => array('ui-icon', 'fa-file-pdf-o'),
+              ),
+            )),
+            'class' => array('generate-pdf'),
+          );
+
+          // Render the items already.
+          $item_list = theme('item_list', array(
+            'items' => $items,
+          ));
+
+          // Add a dropdown button to group all the items above.
+          $actions = paddle_contextual_toolbar_actions();
+          $actions['form'] = array(
+            'action' => '<a href="#" class="contextual-dropdown ui-icon fa-list-alt"><span>' . t('Form') . '</span></a>' . $item_list,
+            'class' => array('formbuilder', 'dropdown-group'),
+            'weight' => 10,
+            'group' => 'content',
+          );
+
+          // Activate the contextual toolbar buttons.
+          paddle_contextual_toolbar_actions($actions);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_formbuilder_form_form_builder_webform_save_form_alter(&$form, &$form_state) {
+  // Add the contextual toolbar on the form page.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_formbuilder_add_contextual_actions_configuration_form';
+
+    // Hide the save button. It is not needed if there is a contextual toolbar.
+    $form['actions']['save']['#attributes']['class'][] = 'hidden';
+    // The cancel button is not needed on the configuration form.
+    unset($form['actions']['cancel']);
+  }
+
+  // Add an extra submit handler to send the user back to the node view page
+  // after saving.
+  $form['#submit'][] = 'paddle_formbuilder_goto_view';
+}
+
+/**
+ * After-build function of the formbuilder create form.
+ */
+function paddle_formbuilder_add_contextual_actions_configuration_form($form, &$form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  // Add the back button.
+  $action_link = l(
+    t('Back'),
+    'admin/content_manager/node/' . $form['nid']['#value'] . '/view',
+    array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-arrow-left'),
+      ),
+    )
+  );
+  $actions[] = array(
+    'action' => $action_link,
+    'class' => array('cancel', 'cancel-js'),
+    'weight' => 0,
+  );
+
+  // Add the save button.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-save',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 0,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Extra submit handler to send the user back to the view page.
+ */
+function paddle_formbuilder_goto_view($form, &$form_state) {
+  $form_state['redirect'] = 'admin/content_manager/node/' . $form['nid']['#value'] . '/view';
+}
+
+/**
+ * Implements hook_form_webform_email_edit_form_alter().
+ */
+function paddle_formbuilder_form_webform_email_edit_form_alter(&$form, &$form_state, $form_id) {
+  $form['#submit'][] = 'paddle_formbuilder_goto_emails';
+
+  // Save the nid in the form_state for proper retrieval.
+  $form_state['nid'] = $form['#node']->nid;
+
+  // Add the contextual toolbar on this form.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_formbuilder_webform_email_edit_contextual_toolbar';
+
+    // Hide the save button. It is not needed if there is a contextual toolbar.
+    $form['actions']['submit']['#attributes']['class'][] = 'hidden';
+  }
+}
+
+/**
+ * Implements hook_form_webform_email_delete_form_alter().
+ */
+function paddle_formbuilder_form_webform_email_delete_form_alter(&$form, &$form_state, $form_id) {
+  $form['#submit'][] = 'paddle_formbuilder_goto_emails';
+
+  // Save the nid in the form_state for proper retrieval.
+  $form_state['nid'] = $form['node']['#value']->nid;
+}
+
+/**
+ * After build handler to add contextual toolbar on the emails edit form.
+ */
+function paddle_formbuilder_webform_email_edit_contextual_toolbar($form, &$form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  // Retrieve the nid for url generation.
+  $nid = $form_state['nid'];
+
+  // Add the back button.
+  $action_link = l(
+    t('Back'),
+    'admin/content_manager/node/' . $nid . '/emails',
+    array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-arrow-left'),
+      ),
+    )
+  );
+  $actions[] = array(
+    'action' => $action_link,
+    'class' => array('cancel', 'cancel-js'),
+    'weight' => 0,
+  );
+
+  // Add the "add" button.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-actions-submit',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 0,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_formbuilder_form_webform2pdf_edit_form_alter(&$form, &$form_state, $form_id) {
+  // Include the core ajax library which is needed for the CKEditor on the page.
+  drupal_add_library('system', 'drupal.ajax');
+
+  // Add the Ctools Javascript to make sure Paddle Scald plugins for CKEditor
+  // can load.
+  ctools_include('ajax');
+  ctools_add_js('ajax-responder');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $form['#submit'][] = 'paddle_formbuilder_goto_view';
+  // Add the contextual toolbar on this form.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_formbuilder_webform_webform2pdf_edit_contextual_toolbar';
+
+    // Hide the save button. It is not needed if there is a contextual toolbar.
+    $form['submit']['#attributes']['class'][] = 'hidden';
+    $form['reset']['#attributes']['class'][] = 'hidden';
+  }
+}
+
+/**
+ * After build handler to add contextual toolbar on the webform2pdf edit form.
+ */
+function paddle_formbuilder_webform_webform2pdf_edit_contextual_toolbar($form, &$form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  // Retrieve the nid for url generation.
+  $nid = $form_state['values']['nid'];
+
+  // Add the back button.
+  $action_link = l(
+    t('Back'),
+    'admin/content_manager/node/' . $nid . '/view',
+    array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-arrow-left'),
+      ),
+    )
+  );
+  $actions[] = array(
+    'action' => $action_link,
+    'class' => array('cancel', 'cancel-js'),
+    'weight' => 0,
+  );
+
+  // Add the "add" button.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-submit',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 0,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Submit handler to redirect to emails page.
+ */
+function paddle_formbuilder_goto_emails($form, &$form_state) {
+  $nid = $form_state['nid'];
+  $form_state['redirect'] = "admin/content_manager/node/{$nid}/emails";
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors().
+ */
+function paddle_formbuilder_paddle_color_palettes_color_selectors() {
+  return array(
+    array(
+      'background-color' => array(
+        '.webform-grid th',
+      ),
+    ),
+    array(),
+    array(),
+    array(),
+    array(),
+    array(
+      'color' => array(
+        // Insanely long selector to override default from the paddle theme.
+        '.region-content .webform-client-form .webform-component-grid table.webform-grid th',
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_webform_submission_insert().
+ */
+function paddle_formbuilder_webform_submission_insert($node, $submission) {
+  // When a submission is inserted in the system, the next_serial counter
+  // is incremented directly with an update query on the webform table.
+  // If entitycache module is used, the cache is not cleared and problems might
+  // occur, like next_serial error messages on form configuration page.
+  entity_get_controller('node')->resetCache(array($node->nid));
+}
+
+/**
+ * Implements hook_preprocess_webform_confirmation().
+ */
+function paddle_formbuilder_preprocess_webform_confirmation(&$vars) {
+  $confirmation = check_markup($vars['node']->webform['confirmation'], $vars['node']->webform['confirmation_format'], '', TRUE);
+
+  // Replace tokens.
+  module_load_include('inc', 'webform', 'includes/webform.submissions');
+  $submission = webform_get_submission($vars['node']->nid, $vars['sid']);
+  $confirmation = webform_replace_tokens($confirmation, $vars['node'], $submission, NULL, TRUE);
+
+  // Strip out empty tags added by WYSIWYG editors if needed.
+  $vars['confirmation_message'] = strlen(trim($confirmation)) ? $confirmation : '';
+
+  // Progress bar.
+  $vars['progressbar'] = '';
+  $page_labels = webform_page_labels($vars['node']);
+  $page_count = count($page_labels);
+  if ($vars['node']->webform['progressbar_include_confirmation'] && $page_count > 2) {
+    $vars['progressbar'] = theme('webform_progressbar', array(
+      'node' => $vars['node'],
+      'page_num' => $page_count,
+      'page_count' => $page_count,
+      'page_labels' => $page_labels,
+    ));
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_formbuilder_form_webform_conditionals_form_alter(&$form, $form_state) {
+  // Add the contextual toolbar on the form page.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_formbuilder_conditionals_contextual_actions';
+
+    // Hide the save button. It is not needed if there is a contextual toolbar.
+    $form['actions']['submit']['#attributes']['class'][] = 'hidden';
+  }
+
+  // Change the title of the 'New conditional' button.
+  $form['conditionals']['new']['new']['#value'] = t('Add new conditional');
+
+  // Add an extra submit handler to send the user ack to the node view page
+  // after saving.
+  $form['nid']['#value'] = $form['#node']->nid;
+  $form['actions']['submit']['#submit'][] = 'paddle_formbuilder_goto_view';
+}
+
+/**
+ * After-build function of the formbuilder conditionals form.
+ */
+function paddle_formbuilder_conditionals_contextual_actions(&$form, $form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  // Add the back button.
+  $action_link = l(
+    t('Back'),
+    'admin/content_manager/node/' . $form['#node']->nid . '/view',
+    array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-arrow-left'),
+      ),
+    )
+  );
+  $actions[] = array(
+    'action' => $action_link,
+    'class' => array('cancel', 'cancel-js'),
+    'weight' => 0,
+  );
+
+  // Add the save button.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-submit',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 2,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_element_info_alter().
+ */
+function paddle_formbuilder_element_info_alter(&$type) {
+  if (isset($type['webform_conditional'])) {
+    $type['webform_conditional']['#process'][] = 'paddle_formbuilder_webform_conditional_process';
+  }
+}
+
+/**
+ * Form API #process function to expand a webform conditional element.
+ *
+ * @see webform_conditional_expand()
+ */
+function paddle_formbuilder_webform_conditional_process($element) {
+  foreach ($element['rules'] as &$rule) {
+    $rule['add']['#value'] = t('Add rule');
+    $rule['remove']['#value'] = t('Remove rule');
+  }
+
+  return $element;
+}
+
+/**
+ * Menu access callback. Ensure a sure has access to update a webform node.
+ *
+ * Remove access to the conditionals page if no components were added yet.
+ */
+function paddle_formbuilder_webform_conditionals_access($node, $account = NULL) {
+  return webform_node_update_access($node, $account) && count($node->webform['components']);
+}
+
+/**
+ * Implements hook_mail_alter().
+ */
+function paddle_formbuilder_mail_alter(&$message) {
+  // Change the "Sender" and "Return-Path" headers to make sure that we
+  // correctly fake the sender to be whatever the webform has set as "from".
+  if ($message['id'] == 'webform_submission') {
+    // Find the "from" email from the "Reply-To" header because the "From"
+    // header might already be set to the site's default from mail - usually
+    // $default_from = variable_get('site_mail', ini_get('sendmail_from'));.
+    preg_match('/^"?([^<]*?)"? *(?:<(.*)>)?$/', $message['headers']['Reply-To'], $matches);
+    if ($matches && valid_email_address(end($matches))) {
+      $message['headers']['Sender'] = $message['headers']['Return-Path'] = end($matches);
+    }
+  }
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_formbuilder_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_formbuilder_configuration_form',
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_formbuilder_permission() {
+  $return = array();
+
+  $return['manage paddle formbuilder permissions'] = array(
+    'title' => t('Manage paddle formbuilder permissions'),
+  );
+
+  return $return;
+}
+
+/**
+ * Form callback displaying paddle formbuilder configuration.
+ *
+ * @see user_admin_permissions()
+ */
+function paddle_formbuilder_configuration_form() {
+  if (user_access('manage paddle formbuilder permissions')) {
+    // Retrieve role names for columns.
+    $role_names = paddle_user_paddle_user_roles();
+
+    // Fetch permissions for all roles or the one selected role.
+    $role_permissions = user_role_permissions($role_names);
+
+    // Store $role_names for use when saving the data.
+    $form['role_names'] = array(
+      '#type' => 'value',
+      '#value' => $role_names,
+    );
+    // Render role/permission overview:
+    $options = array();
+    $hide_descriptions = system_admin_compact_mode();
+
+    if ($permissions = module_invoke('webform', 'permission')) {
+      unset($permissions['edit webform components']);
+      $form['permission'][] = array(
+        '#markup' => 'Webform',
+        '#id' => 'webform',
+      );
+      foreach ($permissions as $perm => $perm_item) {
+        // Fill in default values for the permission.
+        $perm_item += array(
+          'description' => '',
+          'restrict access' => FALSE,
+          'warning' => !empty($perm_item['restrict access']) ? t('Warning: Give to trusted roles only; this permission has security implications.') : '',
+        );
+        $options[$perm] = '';
+        $form['permission'][$perm] = array(
+          '#type' => 'item',
+          '#markup' => $perm_item['title'],
+          '#description' => theme('user_permission_description', array(
+            'permission_item' => $perm_item,
+            'hide' => $hide_descriptions
+          )),
+        );
+        foreach ($role_names as $rid => $name) {
+          // Builds arrays for checked boxes for each role.
+          if (isset($role_permissions[$rid][$perm])) {
+            $status[$rid][] = $perm;
+          }
+        }
+      }
+    }
+
+    // Have to build checkboxes here after checkbox arrays are built.
+    foreach ($role_names as $rid => $name) {
+      $form['checkboxes'][$rid] = array(
+        '#type' => 'checkboxes',
+        '#options' => $options,
+        '#default_value' => isset($status[$rid]) ? $status[$rid] : array(),
+        '#attributes' => array('class' => array('rid-' . $rid)),
+      );
+      $form['role_names'][$rid] = array(
+        '#markup' => check_plain($name),
+        '#tree' => TRUE
+      );
+    }
+
+    $form['actions'] = array('#type' => 'actions');
+    $form['actions']['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Save permissions')
+    );
+    $form['#submit'][] = 'user_admin_permissions_submit';
+
+    $form['#attached']['js'][] = drupal_get_path('module', 'user') . '/user.permissions.js';
+    $form['#theme'] = 'user_admin_permissions';
+  }
+  else {
+    // Don't return status 403 but show a message instead, as we might add extra
+    // settings later that other users than the site manager can change.
+    $form['empty_message'] = array(
+      '#type' => 'item',
+      '#markup' => t('You have insufficient access to manage webform permissions.'),
+    );
+  }
+
+  return $form;
+}

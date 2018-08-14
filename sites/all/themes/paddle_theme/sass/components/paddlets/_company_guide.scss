@@ -1,0 +1,93 @@
+/**
+ * @file
+ * Company guide Paddlet styling.
+ */
+
+.pane-company-basic-info {
+  @include flexbox();
+
+  .company-name {
+    font-size: 1.5em;
+    padding-top: 1rem;
+  }
+
+  .company-logo {
+    max-width: 40%;
+    img {
+      padding: 1rem;
+    }
+  }
+
+  label {
+    display: inline-block;
+    padding-right: 5px;
+  }
+
+  .company-address {
+    .company-address-container {
+      display:inline-grid;
+      .addressfield-container-inline.name-block {
+        display: inline-flex;
+      }
+    }
+    .company-vat {
+      margin-left: 18px;
+      label {
+        font-weight: normal;
+      }
+    }
+  }
+  .company-info {
+    padding: 0 2em 1em 2em;
+    width: 100%;
+
+    .company-top-info {
+      margin-bottom: 1em;
+    }
+
+    .company-details {
+      @include flexbox();
+      @include justify-content(space-between);
+
+      .company-social p {
+        margin-top: 0;
+      }
+
+      .company-social-icons {
+        .fa {
+          padding-right: 0.1em;
+        }
+
+        a {
+          text-decoration: none;
+        }
+      }
+    }
+  }
+}
+
+// Remove columns when space is not enough.
+@media (max-width: $screen-md-max) {
+  .pane-company-basic-info .company-info {
+    width: auto;
+  }
+
+.company-details {
+    @include flex-direction(column);
+  }
+}
+
+// Remove columns when space is not enough.
+@media (max-width: $screen-xs-max) {
+  .pane-company-basic-info {
+    @include flex-direction(column);
+
+    .company-logo {
+      max-width: 80%;
+
+      img{
+        padding: 1em 2em;
+      }
+    }
+  }
+}

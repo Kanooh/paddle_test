@@ -1,0 +1,454 @@
+<?php
+/**
+ * @file
+ * Definition of PaddleSimpleContactFieldTest.
+ */
+
+/**
+ * Tests the simple contact field.
+ */
+class PaddleSimpleContactFieldTest extends DrupalWebTestCase {
+
+  protected $profile = 'testing';
+
+  protected $contentType;
+  protected $field;
+  protected $fieldInstance;
+  protected $adminUser;
+  protected $visitorUser;
+
+  /**
+   * Returns test metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Field test',
+      'description' => 'Tests the simple contact form field type.',
+      'group' => t('Paddle Simple Contact'),
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp() {
+    $modules = array(
+      'filter',
+      'paddle_simple_contact_field',
+    );
+    parent::setUp($modules);
+
+    $content_type_settings = array(
+      'has_body' => 0,
+    );
+    $this->contentType = $this->drupalCreateContentType($content_type_settings);
+
+    $field = array(
+      'field_name' => drupal_strtolower($this->randomName()),
+      'type' => 'simple_contact_form',
+      'entity_types' => array(
+        'node',
+      ),
+    );
+    $this->field = field_create_field($field);
+
+    $field_instance = array(
+      'field_name' => $this->field['field_name'],
+      'entity_type' => 'node',
+      'bundle' => $this->contentType->type,
+      'label' => $this->randomString(),
+      'widget' => array(
+        'type' => 'simple_contact_form_default',
+      ),
+      'settings' => array(
+        'display_summary' => TRUE,
+      ),
+      'display' => array(
+        'default' => array(
+          'label' => 'hidden',
+          'type' => 'simple_contact_form_default',
+        ),
+        'teaser' => array(
+          'label' => 'hidden',
+          'type' => 'simple_contact_form_default',
+        ),
+      ),
+      'default_value' => NULL,
+    );
+    $this->fieldInstance = field_create_instance($field_instance);
+
+    $format = new stdClass();
+    $format->format = 'full_html';
+    $format->name = 'Full HTML';
+    $format->status = 1;
+    $format->cache = 1;
+    $format->weight = -10;
+    filter_format_save($format);
+
+    drupal_static_reset();
+
+    $admin_permissions = array(
+      "create {$this->contentType->type} content",
+      "edit any {$this->contentType->type} content",
+      "use text format {$format->format}",
+    );
+    $this->adminUser = $this->drupalCreateUser($admin_permissions);
+    $visitor_permissions = array(
+      'access content',
+    );
+    $this->visitorUser = $this->drupalCreateUser($visitor_permissions);
+  }
+
+  /**
+   * Tests the contact form field widget.
+   */
+  public function testField() {
+    $delta = 0;
+    $language = LANGUAGE_NONE;
+    $field_name_base = "{$this->field['field_name']}[{$language}][{$delta}]";
+
+    // Add some global defaults and test if they apply.
+    $default_thank_you = array(
+      'value' => $this->randomString(),
+      'format' => 'full_html',
+    );
+    variable_set('paddle_simple_contact_field_default_thank_you', $default_thank_you);
+
+    $recipients = array();
+    for ($i = 0; $i < 6; $i++) {
+      $recipients[] = "{$this->randomName()}@kanooh.be";
+    }
+
+    list($default_recipients, $random_recipients) = array_chunk($recipients, 3);
+
+    variable_set('paddle_simple_contact_field_default_recipients', implode(', ', $default_recipients));
+
+    $recipients = array();
+
+    $random_string = $this->randomString();
+
+    $test_configs = array();
+    $test_configs['defaults'] = array(
+      'title' => 'Using the default configuration.',
+      'edit' => array(),
+    );
+    $test_configs['hide_name'] = array(
+      'title' => 'Hiding the name input element.',
+      'edit' => array(
+        'label_options][show_name' => FALSE,
+      ),
+      'expected_item' => array(
+        'show_name' => '0',
+      ),
+    );
+    $test_configs['hide_subject'] = array(
+      'title' => 'Hiding the subject input element.',
+      'edit' => array(
+        'label_options][show_subject' => FALSE,
+      ),
+      'expected_item' => array(
+        'show_subject' => '0',
+      ),
+    );
+    $test_configs['hide_body'] = array(
+      'title' => 'Hiding the body element.',
+      'edit' => array(
+        'label_options][show_body' => FALSE,
+      ),
+      'expected_item' => array(
+        'show_body' => '0',
+      ),
+    );
+    $test_configs['override_recipients'] = array(
+      'title' => 'Overriding the recipients.',
+      'edit' => array(
+        'recipients' => implode(', ', $recipients),
+      ),
+      'expected_item' => array(
+        'recipients' => implode(', ', $recipients),
+      ),
+    );
+    $thank_you = $this->randomString();
+    $test_configs['override_thank_you'] = array(
+      'title' => 'Overriding the thank you message.',
+      'edit' => array(
+        'thank_you][value' => $thank_you,
+      ),
+      'expected_item' => array(
+        'thank_you' => array(
+          'value' => $thank_you,
+          'format' => 'full_html',
+        ),
+      ),
+    );
+
+    foreach (array('name', 'subject', 'body', 'email', 'submit') as $override_label_field) {
+      $test_configs['override_label_' . $override_label_field] = array(
+        'title' => 'Overriding the label for ' . $override_label_field . '.',
+        'edit' => array(
+          'label_options][label_' . $override_label_field => $random_string,
+        ),
+        'expected_item' => array(
+          'label_' . $override_label_field => $random_string,
+        ),
+      );
+    }
+
+    $node_settings = array(
+      'type' => $this->contentType->type,
+    );
+
+    $mail_count = 0;
+    foreach ($test_configs as $test_config) {
+      // Create a node with a privileged user.
+      $this->drupalLogin($this->adminUser);
+
+      $node = $this->drupalCreateNode($node_settings);
+
+      $this->drupalGet("node/{$node->nid}/edit");
+
+      $element = $this->getField($field_name_base . '[thank_you][format]');
+      $this->assertFalse($element, 'Text format selection of thank you field is not present.');
+
+      // Verify default values first.
+      $show_name_checkbox = $this->getField($field_name_base . '[label_options][show_name]');
+      $this->assertEqual('checked', (string) $show_name_checkbox->attributes()->checked);
+      $this->assertEqual(1, (string) $show_name_checkbox->attributes()->value);
+
+      $show_subject_checkbox = $this->getField($field_name_base . '[label_options][show_subject]');
+      $this->assertEqual('checked', (string) $show_subject_checkbox->attributes()->checked);
+      $this->assertEqual(1, (string) $show_subject_checkbox->attributes()->value);
+
+      $show_body_checkbox = $this->getField($field_name_base . '[label_options][show_body]');
+      $this->assertEqual('checked', (string) $show_body_checkbox->attributes()->checked);
+      $this->assertEqual(1, (string) $show_body_checkbox->attributes()->value);
+
+      $title_input = $this->getField('title');
+      $this->assertEqual($node->title, (string) $title_input->attributes()->value);
+
+      $thank_you_input = $this->getField($field_name_base . '[thank_you][value]');
+      $this->assertEqual('', (string) $thank_you_input->attributes()->value);
+
+      $recipients_input = $this->getField($field_name_base . '[recipients]');
+      $this->assertEqual('', (string) $recipients_input->attributes()->value);
+
+      $this->drupalPost(NULL, $this->prepareEdit($test_config['edit'], $field_name_base), 'Save');
+
+      // No reason to continue with assertions if form submission failed.
+      if (!$this->assertUrl('node/' . $node->nid, array(), 'The node edit form was submitted succesfully.')) {
+        continue;
+      }
+
+      // Ensure we re-fetch the fields from the database.
+      field_cache_clear();
+
+      // Verify values are correctly stored by field API.
+      $node = node_load($node->nid, NULL, TRUE);
+      if (!isset($test_config['expected_item'])) {
+        $test_config['expected_item'] = array();
+      }
+
+      $expected_field_item = $test_config['expected_item'] + array(
+        'recipients' => '',
+        'show_body' => '1',
+        'show_subject' => '1',
+        'show_name' => '1',
+        'thank_you' => array(
+          'value' => '',
+          'format' => 'full_html',
+        ),
+        'label_name' => paddle_simple_contact_field_variable_default_get('label_name'),
+        'label_subject' => paddle_simple_contact_field_variable_default_get('label_subject'),
+        'label_body' => paddle_simple_contact_field_variable_default_get('label_body'),
+        'label_email' => paddle_simple_contact_field_variable_default_get('label_email'),
+        'label_submit' => paddle_simple_contact_field_variable_default_get('label_submit'),
+      );
+
+      ksort($expected_field_item);
+
+      $field_items = field_get_items('node', $node, $this->field['field_name']);
+      $field_item = reset($field_items);
+      ksort($field_item);
+
+      $this->assertEqual($expected_field_item, $field_item, $test_config['title'] . ' ' . t('Field input is stored properly.'));
+
+      $config = $expected_field_item;
+      paddle_simple_contact_field_merge_config_defaults($config);
+
+      $this->drupalLogout();
+
+      $this->drupalLogin($this->visitorUser);
+
+      // Verify that values result in the right behavior in the frontend.
+      $this->drupalGet('node/' . $node->nid);
+
+      $available_fields = array();
+
+      foreach (array('name', 'email', 'subject', 'body') as $field_name) {
+        $field = $this->getField($field_name);
+        $shown = !isset($config['show_' . $field_name]) || $config['show_' . $field_name] == '1';
+        if ($shown) {
+          $available_fields[] = $field_name;
+          if ($this->assertTrue($field, $test_config['title'] . ' ' . t('Input element !field is present in the contact form when it should be shown.', array('!field' => $field_name)))) {
+            $this->assert(strpos($field->attributes()->class, 'required') !== FALSE, $test_config['title'] . ' ' . t('The input element !field is required.', array('!field' => $field_name)));
+          }
+
+          $field_id = (string) $field->attributes()->id;
+
+          $label = $this->xpath('//label[@for=:field_id]', array(':field_id' => $field_id));
+          $label = reset($label);
+
+          // Just do a partial match because the label contains additional
+          // markup for required fields as well.
+          $this->assert(FALSE !== strpos((string) $label, $config['label_' . $field_name]), $test_config['title'] . ' ' . t('The correct label is used for the !field input element.', array('!field' => $field_name)));
+        }
+        else {
+          $this->assertFalse($field, $test_config['title'] . ' ' . t("Field !field is not present in the contact form when it shouldn't be shown", array('!field' => $field_name)));
+        }
+      }
+
+      $submit = $config['label_submit'];
+      $edit = $this->randomContactFormData($available_fields);
+
+      // Explicitly test with an invalid e-mail address.
+      $invalid_mail_edit = $edit;
+      $invalid_mail_edit['email'] = $this->randomString();
+
+      $this->drupalPost(NULL, $invalid_mail_edit, $submit);
+
+      $invalid_mail_message = 'Please provide a valid e-mail address.';
+
+      $this->assertText($invalid_mail_message, $test_config['title'] . ' An error message is shown when the entered e-mail address is invalid.');
+      $this->assertNoRaw(check_markup($config['thank_you']['value'], $config['thank_you']['format']), $test_config['title'] . ' The thank you message is not shown when the entered e-mail address is invalid.');
+
+      $this->drupalPost(NULL, $edit, $submit);
+
+      $this->assertNoText($invalid_mail_message, $test_config['title'] . ' An error message is not shown when the entered e-mail address is valid.');
+
+      $mail_count++;
+
+      $this->assertRaw(check_markup($config['thank_you']['value'], $config['thank_you']['format']), $test_config['title'] . ' The thank you message is shown.');
+
+      $mails_sent = $this->drupalGetMails();
+      if ($this->assertEqual($mail_count, count($mails_sent), $test_config['title'] . ' Expected one mail was sent, actual count: ' . count($mails_sent) . '.')) {
+        $mail_sent = end($mails_sent);
+
+        $expected['recipients'] = $config['recipients'];
+        $expected['subject'] = t('New message sent from the !website_name website', array('!website_name' => variable_get('site_name', '')));
+        $expected['params_values'] = $edit;
+        $config['nid'] = $node->nid;
+
+        $mail_system = drupal_mail_system('paddle_simple_contact_field', 'contact_form_submitted');
+        $message = array('body' => paddle_simple_contact_field_mail_body($config, $edit));
+        $message = $mail_system->format($message);
+        $expected['body'] = $message['body'];
+        $expected['reply-to'] = $edit['email'];
+
+        $this->assertEqual($expected['recipients'], $mail_sent['to'], $test_config['title'] . ' Mail was sent to the configured recipients.');
+        $this->assertEqual($expected['subject'], $mail_sent['subject'], $test_config['title'] . ' Mail was sent with the right subject.');
+        $this->assertEqual($expected['body'], $mail_sent['body'], $test_config['title'] . ' Mail was sent with the right body text.');
+        $this->assertEqual($expected['reply-to'], $mail_sent['headers']['Reply-To'], $test_config['title'] . ' Mail was sent with the Reply-To header pointing to the submitted e-mail address.');
+        $this->assertEqual($expected['params_values'], $mail_sent['params']['values'], $test_config['title'] . ' The right parameters were passed to the hook_mail() implementation.');
+      }
+    }
+  }
+
+  /**
+   * Generates random contact form data.
+   *
+   * @param array $fields
+   *   Names of the contact form elements to populate.
+   */
+  protected function randomContactFormData($fields) {
+    $data = array();
+
+    foreach ($fields as $field_name) {
+      switch ($field_name) {
+        case 'email':
+          $data[$field_name] = $this->randomName() . '@example.com';
+          break;
+
+        default:
+          $data[$field_name] = $this->randomString();
+      }
+    }
+
+    $expected_order = array('name', 'email', 'subject', 'body');
+    uksort($data, function($a, $b) use ($expected_order) {
+      $a_weight = array_search($a, $expected_order);
+      $b_weight = array_search($b, $expected_order);
+
+      return $a_weight >= $b_weight;
+    });
+
+    return $data;
+  }
+
+  /**
+   * Prepares data for form submission.
+   *
+   * The names of the values to be submitted is prefixed with a common base
+   * name.
+   *
+   * @param array $edit
+   *   Data to be submitted.
+   * @param string $field_name_base
+   *   Base name of the values to submit.
+   *
+   * @return array
+   *   Data to be submitted, with the names properly prefixed.
+   */
+  protected function prepareEdit($edit, $field_name_base) {
+    $return = array();
+
+    foreach ($edit as $key => $value) {
+      $return[$field_name_base . '[' . $key . ']'] = $value;
+    }
+
+    return $return;
+  }
+
+  /**
+   * Get a HTML form field by its name.
+   *
+   * @param string $name
+   *   The name of the form field.
+   *
+   * @return SimpleXMLElement|NULL
+   *   The field as a SimpleXMLElement, if found.
+   */
+  protected function getField($name) {
+    $xpath = $this->constructFieldXpath('name', $name);
+    $results = $this->xpath($xpath);
+
+    return reset($results);
+  }
+
+  /**
+   * Tests construction of the mail body.
+   */
+  public function testMailBody() {
+    $node_settings = array(
+      'type' => $this->contentType->type,
+    );
+    $node = $this->drupalCreateNode($node_settings);
+
+    $config = array(
+      'label_name' => $this->randomString(),
+      'label_email' => $this->randomString(),
+      'nid' => $node->nid,
+    );
+    $values = array(
+      'name' => $this->randomString(),
+      'email' => $this->randomString(),
+    );
+    $body = paddle_simple_contact_field_mail_body($config, $values);
+
+    $this->assertEqual(2 + count($values), count($body), 'The mail body consists the right parts.');
+
+    $this->assertEqual($body[0], t('Someone has submitted the contact form at !url.', array('!url' => url('node/' . $node->nid, array('absolute' => TRUE)))), 'Mail body refers to the node URL.');
+    $this->assertEqual($body[1], t('Submitted data:'), 'Mail body introduces submitted data.');
+    $this->assertEqual($body[2], $config['label_name'] . ': ' . $values['name'], 'Mail body lists values.');
+    $this->assertEqual($body[3], $config['label_email'] . ': ' . $values['email'], 'Mail body lists values');
+  }
+}

@@ -1,0 +1,22 @@
+<?php
+/**
+ * @file
+ * Paddle Page Wide Theme API documentation.
+ */
+
+/**
+ * Allows other themes and modules to alter whether the theme is page wide.
+ *
+ * @param string $is_base_theme
+ *   Whether the page wide theme has already been set to TRUE.
+ * @param string $paddle_base_theme
+ *   The Paddle base theme variable.
+ *
+ * @see paddle_page_wide_theme_is_page_wide()
+ */
+function hook_paddle_page_wide_theme_is_page_wide_alter(&$is_base_theme, $paddle_base_theme) {
+  if ($paddle_base_theme == 'guile_theme') {
+    $is_base_theme = TRUE;
+  }
+}
+

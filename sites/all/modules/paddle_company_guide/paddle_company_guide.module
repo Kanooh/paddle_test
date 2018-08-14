@@ -1,0 +1,326 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Company Guide feature.
+ */
+
+include_once 'paddle_company_guide.features.inc';
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_company_guide_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'company_page') {
+      return array(
+        'field_company_page_address',
+        'field_company_page_email',
+        'field_company_page_facebook',
+        'field_company_page_linkedin',
+        'field_company_page_main_image',
+        'field_company_page_phone',
+        'field_company_page_twitter',
+        'field_company_page_vat',
+        'field_company_page_website',
+        'field_ous_monday',
+        'field_ous_tuesday',
+        'field_ous_wednesday',
+        'field_ous_thursday',
+        'field_ous_friday',
+        'field_ous_saturday',
+        'field_ous_sunday',
+      );
+    }
+  }
+
+  return array();
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields_groups().
+ */
+function paddle_company_guide_paddle_content_manager_additional_fields_groups() {
+  $menu_object = menu_get_object();
+
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'company_page') {
+      $additional_fields_groups = array();
+
+      $additional_fields_groups['company page basic info'] = array(
+        'label' => t('Basic info'),
+        'weight' => -4,
+        'fields' => array(
+          'field_paddle_featured_image',
+          'field_company_page_address',
+        ),
+      );
+
+      $additional_fields_groups['company page contact data'] = array(
+        'label' => t('Contact data'),
+        'weight' => -3,
+        'fields' => array(
+          'field_company_page_email',
+          'field_company_page_phone',
+          'field_company_page_vat',
+        ),
+      );
+
+      $additional_fields_groups['company page online data'] = array(
+        'label' => t('Online data'),
+        'weight' => -2,
+        'fields' => array(
+          'field_company_page_website',
+          'field_company_page_facebook',
+          'field_company_page_twitter',
+          'field_company_page_linkedin',
+        ),
+      );
+
+      $additional_fields_groups['company page opening hours'] = array(
+        'label' => t('Opening hours'),
+        'weight' => -1,
+        'fields' => array(
+          'field_ous_monday',
+          'field_ous_tuesday',
+          'field_ous_wednesday',
+          'field_ous_thursday',
+          'field_ous_friday',
+          'field_ous_saturday',
+          'field_ous_sunday',
+        ),
+      );
+
+      return $additional_fields_groups;
+    }
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_company_guide_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_company_guide_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_company_guide_basic_info' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-company-guide-basic-info',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function paddle_company_guide_field_formatter_info() {
+  return array(
+    'paddle_company_guide_main_image' => array(
+      'label' => t('Company guide main image'),
+      'field types' => array('paddle_scald_atom'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function paddle_company_guide_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  foreach ($items as $index => $item) {
+    $atom = scald_atom_load($item['sid']);
+    $attributes = array('class' => array('paddle-company-guide-main-image'));
+
+    if ($display['type'] == 'paddle_company_guide_main_image') {
+      // Determine the image style, if any.
+      $image_style = !empty($item['style']) ? $item['style'] : '';
+      // Render the image markup.
+      $element[$index]['#markup'] = theme('paddle_scald_render_atom', array(
+        'atom' => $atom,
+        'image_style' => $image_style,
+        'attributes' => $attributes,
+      ));
+    }
+  }
+  return $element;
+}
+
+/**
+ * Checks whether the opening hours are filled in or not.
+ *
+ * @param array $opening_hours_week
+ *   An array produced in the opening_hours ctool plugin which contains all OH.
+ *
+ * @return bool
+ *   Whether the opening hours are filled in or not.
+ */
+function paddle_company_guide_opening_hours_week_empty($opening_hours_week) {
+  foreach ($opening_hours_week as $index => $opening_hours_day) {
+    if (count($opening_hours_day['opening_hours']) > 1 || $opening_hours_day['opening_hours'][0]['time'] != t('Closed')) {
+      return FALSE;
+    }
+  }
+
+  return TRUE;
+}
+
+/**
+ * Implements hook_paddle_maps_supported_content_types_alter().
+ */
+function paddle_company_guide_paddle_maps_supported_content_types_alter(&$supported_types) {
+  $supported_types[] = 'company_page';
+}
+
+/**
+ * Implements hook_paddle_maps_add_index_fields_alter().
+ */
+function paddle_company_guide_paddle_maps_add_index_fields_alter(&$index, &$paddle_maps_index_contenttype_fields, &$something_changed) {
+  $index->options['fields']['nid']['type'] = 'integer';
+  $index->options['fields']['field_company_page_website:value']['type'] = 'uri';
+  $index->options['fields']['field_company_page_website:title']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:country']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:country']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:name_line']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:name_line']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:first_name']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:first_name']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:last_name']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:last_name']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:organisation_name']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:organisation_name']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:administrative_area']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:administrative_area']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:sub_administrative_area']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:sub_administrative_area']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:locality']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:locality']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:dependent_locality']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:dependent_locality']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:postal_code']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:postal_code']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:thoroughfare']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:thoroughfare']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:premise']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:premise']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_address:sub_premise']['type'] = 'text';
+  $index->options['fields']['field_company_page_address:sub_premise']['boost'] = '2.0';
+  $index->options['fields']['field_company_page_phone']['type'] = 'text';
+  $index->options['fields']['field_company_page_phone']['boost'] = '2.0';
+  $paddle_maps_index_contenttype_fields['company_page'] = TRUE;
+  $something_changed = TRUE;
+}
+
+/**
+ * Implements hook_views_default_views_alter().
+ */
+function paddle_company_guide_views_default_views_alter(&$views) {
+  if (isset($views['paddle_maps'])) {
+    // Load the default view handler.
+    $default_handler =& $views['paddle_maps']->display['default']->handler;
+
+    // Add the contact person as allowed filter type.
+    if (!empty($default_handler->display->display_options['filters']['type'])) {
+      $default_handler->display->display_options['filters']['type']['value']['company_page'] = 'company_page';
+    }
+
+    // Allow the address to be searched through the API fields.
+    if (!empty($default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields'])) {
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:administrative_area'] = 'field_company_page_address:administrative_area';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:dependent_locality'] = 'field_company_page_address:dependent_locality';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:first_name'] = 'field_company_page_address:first_name';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:last_name'] = 'field_company_page_address:last_name';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:locality'] = 'field_company_page_address:locality';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:name_line'] = 'field_company_page_address:name_line';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:postal_code'] = 'field_company_page_address:postal_code';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:premise'] = 'field_company_page_address:premise';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:premise'] = 'field_company_page_address:sub_administrative_area';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:premise'] = 'field_company_page_address:sub_premise';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_company_page_address:premise'] = 'field_company_page_address:thoroughfare';
+    }
+
+    // Loads the maps view handlers. (We pass our values by reference)
+    $maps_handlers[] =& $views['paddle_maps']->display['block_maps']->handler;
+    $maps_handlers[] =& $views['paddle_maps']->display['block_maps_text']->handler;
+
+    // Add the fields which we want to use in our maps views.
+    foreach ($maps_handlers as $maps_handler) {
+      /* Field: Address: Thoroughfare (i.e. Street address) (indexed) */
+      $maps_handler->display->display_options['fields']['field_company_page_address_thoroughfare']['id'] = 'field_company_page_address_thoroughfare';
+      $maps_handler->display->display_options['fields']['field_company_page_address_thoroughfare']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_company_page_address_thoroughfare']['field'] = 'field_company_page_address_thoroughfare';
+      $maps_handler->display->display_options['fields']['field_company_page_address_thoroughfare']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_company_page_address_thoroughfare']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_thoroughfare']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_thoroughfare']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_thoroughfare']['link_to_entity'] = 0;
+      /* Field: Address: Postal code (indexed) */
+      $maps_handler->display->display_options['fields']['field_company_page_address_postal_code']['id'] = 'field_company_page_address_postal_code';
+      $maps_handler->display->display_options['fields']['field_company_page_address_postal_code']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_company_page_address_postal_code']['field'] = 'field_company_page_address_postal_code';
+      $maps_handler->display->display_options['fields']['field_company_page_address_postal_code']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_company_page_address_postal_code']['exclude'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_postal_code']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_postal_code']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_postal_code']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_postal_code']['link_to_entity'] = 0;
+      /* Field: Address: Locality (i.e. City) (indexed) */
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['id'] = 'field_company_page_address_locality';
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['field'] = 'field_company_page_address_locality';
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['alter']['alter_text'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['alter']['text'] = '[field_company_page_address_postal_code] [field_company_page_address_locality]';
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_address_locality']['link_to_entity'] = 0;
+      /* Field: Indexed Node: Phone */
+      $maps_handler->display->display_options['fields']['field_company_page_phone']['id'] = 'field_company_page_phone';
+      $maps_handler->display->display_options['fields']['field_company_page_phone']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_company_page_phone']['field'] = 'field_company_page_phone';
+      $maps_handler->display->display_options['fields']['field_company_page_phone']['label'] = 'T';
+      $maps_handler->display->display_options['fields']['field_company_page_phone']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_phone']['empty_zero'] = TRUE;
+      /* Field: Indexed Node: Website */
+      $maps_handler->display->display_options['fields']['field_company_page_website']['id'] = 'field_company_page_website';
+      $maps_handler->display->display_options['fields']['field_company_page_website']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_company_page_website']['field'] = 'field_company_page_website';
+      $maps_handler->display->display_options['fields']['field_company_page_website']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_company_page_website']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_company_page_website']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_website']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_company_page_website']['settings'] = array(
+        'trim_length' => '80',
+        'nofollow' => 0,
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function paddle_company_guide_modules_enabled($modules) {
+  if (in_array('paddle_maps', $modules)) {
+    $company_page = array('company_page' => FALSE);
+    $contenttype_fields = serialize($company_page + unserialize(variable_get('paddle_maps_index_contenttype_fields', array())));
+    variable_set('paddle_maps_index_contenttype_fields', $contenttype_fields);
+
+    // Check for content-type and add the indexfields.
+    paddle_maps_add_index_fields();
+
+    gmap_regenerate_markers();
+    _drupal_flush_css_js();
+    registry_rebuild();
+    drupal_clear_css_cache();
+    drupal_clear_js_cache();
+  }
+}

@@ -1,0 +1,68 @@
+<?php
+
+/**
+ * @file
+ * Paddle Scald Atom field installation.
+ */
+
+/**
+ * Implements hook_field_schema().
+ *
+ * Defines how we store our paddle scald atom field type in the DB.
+ */
+function paddle_scald_atom_field_field_schema($field) {
+  $schema = array();
+
+  switch ($field['type']) {
+    case 'paddle_scald_atom':
+      $schema['columns']['sid'] = array(
+        'type' => 'int',
+        'default' => 0,
+        'not null' => FALSE,
+      );
+      $schema['columns']['style'] = array(
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+        'not null' => FALSE,
+      );
+
+      $schema['indexes']['sid'] = array('sid');
+      break;
+
+  }
+
+  return $schema;
+}
+
+/**
+ * Add the 'style' column to all fields of the paddle_scald_atom type.
+ */
+function paddle_scald_atom_field_update_7000() {
+  // This code is based on entityreference_update_7001(), media_update_7016()
+  // and atom_reference_update_7001.
+  if (!module_exists('field_sql_storage')) {
+    return;
+  }
+
+  $fields = field_read_fields(
+    array(
+      'type' => 'paddle_scald_atom',
+      'storage_type' => 'field_sql_storage',
+    ),
+    array('include_inactive' => TRUE)
+  );
+  foreach ($fields as $field_name => $field) {
+    $column_name = $field_name . '_style';
+    $column_schema = $field['columns']['style'];
+    $tables = array(
+      _field_sql_storage_tablename($field),
+      _field_sql_storage_revision_tablename($field),
+    );
+    foreach ($tables as $table) {
+      if (!db_field_exists($table, $column_name)) {
+        db_add_field($table, $column_name, $column_schema);
+      }
+    }
+  }
+}

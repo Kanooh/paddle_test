@@ -1,0 +1,14 @@
+diff --git a/sites/all/modules/paddle/htmlpurifier/htmlpurifier.module b/sites/all/modules/paddle/htmlpurifier/htmlpurifier.module
+index 6f087b1..c4d5792 100644
+--- a/sites/all/modules/paddle/htmlpurifier/htmlpurifier.module
++++ b/sites/all/modules/paddle/htmlpurifier/htmlpurifier.module
+@@ -387,6 +387,9 @@ function _htmlpurifier_get_config($format = 0) {
+     $config->mergeArrayFromForm($config_data, FALSE, TRUE, FALSE);
+   }
+ 
++  $def = $config->getHTMLDefinition(TRUE);
++  drupal_alter('htmlpurifier_html_definition', $def);
++
+   return $config;
+ 
+ }

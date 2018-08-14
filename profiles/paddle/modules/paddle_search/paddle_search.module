@@ -1,0 +1,565 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Search feature.
+ */
+
+include_once 'paddle_search.features.inc';
+
+/**
+ * Implements hook_paddle_search_engines().
+ */
+function paddle_search_paddle_search_engines() {
+  return array(
+    'default_search' => array(
+      'label' => t('Paddle search'),
+      'text' => t('On this website'),
+      'enabled' => TRUE,
+      'weight' => -1,
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_core_search_SEARCH_ENGINE_ID_form_submit().
+ */
+function paddle_search_paddle_search_default_search_form_submit($form, &$form_state) {
+  search_api_page_search_form_submit($form, $form_state);
+}
+
+/**
+ * Implements hook_paddle_core_additional_panes_contexts().
+ */
+function paddle_search_paddle_core_additional_panes_contexts() {
+  return array(
+    'search_results' => array(
+      'name' => t('Search results'),
+      'regions' => array(
+        'sidebar' => t('Sidebar'),
+        'results_top' => t('Above search results'),
+        'results_bottom' => t('Below search results'),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_preprocess_search_api_page_result().
+ */
+function paddle_search_preprocess_search_api_page_result(&$variables) {
+  // If the excerpt is there, it has been generated using either the summary
+  // or the whole body value.
+  if (!empty($variables['result']['excerpt'])) {
+    $text = $variables['result']['excerpt'];
+  }
+  else {
+    /* @var SearchApiIndex $index */
+    $index = $variables['index'];
+    $wrapper = $index->entityWrapper($variables['item'], FALSE);
+
+    try {
+      // Prevent errors on empty bodies.
+      if ($wrapper->body->value()) {
+        $text = $wrapper->body->summary->value() ?: $wrapper->body->value->value();
+        $text = text_summary(strip_tags($text));
+      }
+    }
+    catch (EntityMetadataWrapperException $e) {
+      $text = '';
+    }
+  }
+
+  $variables['snippet'] = isset($text) ? $text : '';
+
+  if (!empty($variables['url']['path'])) {
+    $variables['url']['full_path'] = url($variables['url']['path'], array('absolute' => TRUE));
+  }
+
+  // Get the menu object.
+  $object = menu_get_object();
+
+  if ($object) {
+    // Load the node which is in the object.
+    $node = node_load($object->nid);
+
+    // If it is an advanced search page, make sure that the featured image for
+    // an item is added to the variables for rendering.
+    if ($node->type == 'paddle_advanced_search_page') {
+      if (isset($variables['item'])) {
+        $atom = field_get_items('node', $variables['item'], 'field_paddle_featured_image');
+      }
+
+      if (!empty($atom[0])) {
+        $atom = scald_atom_load($atom[0]['sid']);
+
+        $variables['paddle_featured_image'] = theme('paddle_scald_render_atom', array(
+          'atom' => $atom,
+          'image_style' => 'paddle_search_featured_image',
+        ));
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_search_api_page_results().
+ */
+function paddle_search_preprocess_search_api_page_results(&$variables) {
+  // Override the standard no results message with the custom message.
+  $variables['no_results_help'] = paddle_search_retrieve_no_search_results_message(FALSE);
+}
+
+/**
+ * Returns the no search results message.
+ *
+ * @param bool $with_title
+ *   Whether to prepend a title to the message.
+ *
+ * @return string
+ *   The no search results message.
+ */
+function paddle_search_retrieve_no_search_results_message($with_title = TRUE) {
+  $message = $default_message = paddle_search_retrieve_default_no_search_results_message();
+
+  if (paddle_core_is_multilingual()) {
+    global $language_content;
+    $message = i18n_variable_get(
+      'paddle_no_results_on_search',
+      $language_content->language,
+      i18n_variable_get(
+        'paddle_no_results_on_search',
+        language_default('language'),
+        $default_message
+      )
+    );
+  }
+
+  if ($with_title) {
+    $message = '<h2>' . t('Your search yielded no results.') . '</h2>' . $message;
+  }
+
+  return check_markup($message, paddle_search_retrieve_no_search_results_message_format());
+}
+
+/**
+ * Returns the default no results message if no custom message has been chosen.
+ *
+ * We pick the 'terms' no results search message which had been created in the
+ * search_api_pages module.
+ *
+ * @see template_preprocess_search_api_page_results
+ *
+ * @return array
+ *   The default no results search message in text_format format.
+ */
+function paddle_search_retrieve_default_no_search_results_message() {
+  return variable_get(
+    'paddle_no_results_on_search',
+    t('<ul>
+<li>Check if your spelling is correct.</li>
+<li>Remove quotes around phrases to search for each word individually. <em>bike shed</em> will often show more results than <em>&quot;bike shed&quot;</em>.</li>
+<li>Use fewer keywords to increase the number of results.</li>
+</ul>')
+  );
+}
+
+/**
+ * Returns the default no results message text format.
+ *
+ * @return string
+ */
+function paddle_search_retrieve_no_search_results_message_format() {
+  return 'full_html';
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function paddle_search_field_formatter_info() {
+  return array(
+    'paddle_search_featured_image' => array(
+      'label' => t('Search result featured image'),
+      'field types' => array('paddle_scald_atom'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ *
+ * Based on:
+ *
+ * @see paddle_organizational_unit_field_formatter_view(()
+ * @see paddle_search_preprocess_search_api_page_result()
+ */
+function paddle_search_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+
+  if ($display['type'] == 'paddle_search_featured_image') {
+    foreach ($items as $index => $item) {
+      // Render the image markup.
+      $element[$index]['#markup'] = theme('paddle_scald_render_atom', array(
+        'atom' => scald_atom_load($item['sid']),
+        'image_style' => 'paddle_search_featured_image',
+      ));
+    }
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_search_api_solr_query_alter().
+ */
+function paddle_search_search_api_solr_query_alter(array &$call_args, SearchApiQueryInterface $query) {
+  // "Min Number Should Match" parameter. By default:
+  // - if search has less than 2 elements, all terms are required;
+  // - from 3 on, all but 34% are required. Number is rounded by excess.
+  $call_args['params']['mm'] = variable_get('paddle_search_mm', '2<-34%');
+
+  // If any facets are specified, avoid duplicated field requests.
+  if (!empty($call_args['params']['facet.field'])) {
+    $call_args['params']['facet.field'] = array_unique($call_args['params']['facet.field']);
+  }
+}
+
+/**
+ * Implements hook_facetapi_widgets().
+ */
+function paddle_search_facetapi_widgets() {
+  return array(
+    'facetapi_extended_checkbox_links' => array(
+      'handler' => array(
+        'label' => t('Links with checkboxes and data attributes'),
+        'class' => 'FacetapiWidgetExtendedCheckboxLinks',
+        'query types' => array('term', 'date'),
+      ),
+    ),
+    'facetapi_dropdown' => array(
+      'handler' => array(
+        'label' => t('Dropdown'),
+        'class' => 'FacetapiWidgetDropdown',
+        'query types' => array('term', 'date'),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_facetapi_sort_info().
+ */
+function paddle_search_facetapi_sort_info() {
+  return array(
+    'term_weight' => array(
+      'label' => t('Term weight'),
+      'callback' => 'paddle_search_facetapi_sort_by_term_weight',
+      'description' => t('Sort by taxonomy term weight.'),
+      'weight' => 50,
+    ),
+  );
+}
+
+/**
+ * Sorts by term weight.
+ *
+ * This is useful and should be used only if the indexed value is a term id.
+ *
+ * @see uasort()
+ */
+function paddle_search_facetapi_sort_by_term_weight(array $a, array $b) {
+  $a_value = (isset($a['#indexed_value'])) ? $a['#indexed_value'] : '';
+  $b_value = (isset($b['#indexed_value'])) ? $b['#indexed_value'] : '';
+
+  // If the value is the same, the term is the same. Almost impossible though.
+  if ($a_value == $b_value) {
+    return 0;
+  }
+
+  // Load the associated terms.
+  $terms = taxonomy_term_load_multiple(array($a_value, $b_value));
+
+  // Prevent empty weights.
+  $a_weight = (!empty($terms[$a_value]->weight)) ? $terms[$a_value]->weight : 0;
+  $b_weight = (!empty($terms[$b_value]->weight)) ? $terms[$b_value]->weight : 0;
+
+  if ($a_weight == $b_weight) {
+    return 0;
+  }
+
+  return ($a_weight < $b_weight) ? -1 : 1;
+}
+
+/**
+ * Filters a list of term ids to keep only root terms.
+ *
+ * @param array $tids
+ *   An array of term ids to filter.
+ *
+ * @return array
+ *   An array of term tids that are root terms.
+ */
+function _paddle_search_filter_root_tids(array $tids) {
+  // Prevent errors when no term ids are provided.
+  if (!count($tids)) {
+    return array();
+  }
+
+  return array_intersect($tids, _paddle_search_get_root_taxonomy_term_ids());
+}
+
+/**
+ * Get the ids of root taxonomy terms of hierarchical vocabularies.
+ *
+ * @return array
+ *   An array of taxonomy term ids.
+ */
+function _paddle_search_get_root_taxonomy_term_ids() {
+  $tids = &drupal_static(__FUNCTION__);
+
+  if (!isset($tids)) {
+    $tids = array();
+
+    // Get the Paddle hierarchical vocabularies.
+    $hierarchical_vocabularies = array();
+    foreach (taxonomy_vocabulary_load_multiple(FALSE) as $vid => $vocabulary) {
+      if (variable_get('taxonomy_vocabulary_' . $vocabulary->machine_name . '_type') != 'flat') {
+        $hierarchical_vocabularies[] = $vid;
+      }
+    }
+
+    if ($hierarchical_vocabularies) {
+      // Get the root terms for hierarchical vocabularies.
+      $query = db_select('taxonomy_term_hierarchy', 'tth');
+      $query->join('taxonomy_term_data', 'ttd', 'ttd.tid = tth.tid');
+      $query->fields('ttd', array('tid'))
+        ->condition('tth.parent', 0)
+        ->condition('ttd.vid', $hierarchical_vocabularies, 'IN');
+      $tids = $query->execute()->fetchCol();
+    }
+  }
+
+  return $tids;
+}
+
+/**
+ * Alter callback of facet build array.
+ *
+ * Shows only the children of the taxonomy term the facet is build for.
+ *
+ * @param array $build
+ *   The prepared build.
+ * @param SearchApiFacetapiAdapter $adapter
+ *   The FacetapiAdapter.
+ * @param array $facet
+ *   The facet configuration.
+ */
+function paddle_search_facet_build_alter(&$build, SearchApiFacetapiAdapter $adapter, $facet) {
+  // Fetch the root term id, saved previously in the facet.
+  $root_tid = $facet['taxonomy term id'];
+
+  // Load the terms that are children of the root term.
+  $vocabulary = taxonomy_vocabulary_machine_name_load('paddle_general');
+  $tree = taxonomy_get_tree($vocabulary->vid, $root_tid);
+
+  // Prepare a flat list of allowed terms.
+  $allowed = array();
+  foreach ($tree as $term) {
+    $allowed[$term->tid] = $term->tid;
+  }
+
+  // Remove all non-allowed terms.
+  $build = array_intersect_key($build, $allowed);
+}
+
+/**
+ * Implements hook_taxonomy_term_insert().
+ *
+ * Let facetapi know about the new facet.
+ */
+function paddle_search_taxonomy_term_update_insert($term) {
+  paddle_search_reset_caches();
+}
+
+/**
+ * Implements hook_taxonomy_term_update().
+ */
+function paddle_search_taxonomy_term_update($term) {
+  // Reset caches so term attributes changes will be picked up.
+  paddle_search_reset_caches();
+}
+
+/**
+ * Implements hook_taxonomy_term_delete().
+ */
+function paddle_search_taxonomy_term_delete($term) {
+  // Reset caches so terms not available will be removed from facets.
+  paddle_search_reset_caches();
+}
+
+/**
+ * Helper function to clear all facet related caches at once.
+ */
+function paddle_search_reset_caches() {
+  cache_clear_all('facetapi:facet_info:search_api@node_index:', 'cache', TRUE);
+  cache_clear_all('facetapi:delta_map', 'cache');
+}
+
+/**
+ * Implements hook_entity_property_info_alter().
+ */
+function paddle_search_entity_property_info_alter(&$info) {
+  $info['node']['properties']['publication_date'] = array(
+    'type' => 'string',
+    'label' => t('Publication date'),
+    'getter callback' => 'paddle_search_api_publication_date_getter_callback',
+  );
+}
+
+/**
+ * Callback to get the published date node property.
+ */
+function paddle_search_api_publication_date_getter_callback($node) {
+  $publication_date = 0;
+
+  if (isset($node->workbench_moderation['published'])) {
+    $publication_date = $node->workbench_moderation['published']->stamp;
+  }
+  // The publication date could be overwritten in an alter hook.
+  drupal_alter('paddle_search_publication_date', $publication_date, $node);
+  // If no publication date has been found so far, none exists.
+  return $publication_date;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_search_form_paddle_taxonomy_manager_vocabulary_overview_form_alter(&$form, &$form_state) {
+  $form['#submit'][] = 'paddle_search_taxonomy_overview_submit';
+}
+
+/**
+ * Submit handler to reset the search caches after saving the taxonomy form.
+ */
+function paddle_search_taxonomy_overview_submit($form, &$form_state) {
+  paddle_search_reset_caches();
+}
+
+/**
+ * Implements hook_search_api_alter_callback_info().
+ */
+function paddle_search_search_api_alter_callback_info() {
+  module_load_include('inc', 'paddle_search', 'includes/callback_attachments_paddle_scald_settings');
+  $callbacks['paddle_search_search_api_attachments_alter_settings'] = array(
+    'name' => t('Paddle Scald File attachments'),
+    'description' => t('Extract the content of attached files of a paddle scald file in any field.'),
+    'class' => 'SearchApiAttachmentsPaddleScaldAlterSettings',
+  );
+  return $callbacks;
+}
+
+/**
+ * Returns the sorting options for the node_index search index.
+ */
+function paddle_search_retrieve_sort_options() {
+  $sort_options = array();
+  $sorts = search_api_sorts_search_sorts('node_index');
+
+  foreach ($sorts as $sort) {
+    $sort_options[$sort->field] = t($sort->name);
+  }
+
+  return $sort_options;
+}
+
+/**
+ * Renders a custom facet block in the Paddle Panes style.
+ *
+ * @param string $hashed_delta
+ *   The hashed delta of the default Facet block.
+ *
+ * @return array|\stdClass
+ *   The block shown as a Paddle Pane (or an empty array).
+ */
+function paddle_search_render_facet_block($hashed_delta) {
+  // Render the related block as the CTools block content type does.
+  $block_view = module_invoke('facetapi', 'block_view', $hashed_delta);
+
+  // If the block view is empty, the facet is not being rendered.
+  if (empty($block_view)) {
+    return array();
+  }
+
+  $block = new stdClass();
+  $block->title = '';
+  $block->content = array();
+
+  // If the rendered standard block has a subject, use it as title and wrap it
+  // to behave like a top pane section.
+  // @see paddle_panes_pane_sections_render()
+  if (!empty($block_view['subject'])) {
+    $block->content['top'] = array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'class' => array('pane-section-top'),
+      ),
+      '#weight' => -1,
+      'subject' => array(
+        '#markup' => $block_view['subject'],
+      ),
+    );
+  }
+
+  // Wrap the content too.
+  $block->content['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'class' => array('pane-section-body'),
+    ),
+    '#weight' => 0,
+    'content' => $block_view['content'],
+  );
+
+  return $block;
+}
+
+/**
+ * Retrieves the hashed delta for a vocabulary facet.
+ *
+ * @param string $facet_name
+ *   The facet name.
+ *
+ * @return string|null
+ *   The hashed delta if available, NULL otherwise.
+ */
+function paddle_search_get_taxonomy_vocabulary_facet_hashed_delta($facet_name, $module_name) {
+  $deltas = &drupal_static(__FUNCTION__);
+
+  if (!isset($deltas[$facet_name])) {
+    $deltas = array();
+
+    // Gets delta map from facetapi.
+    $map = facetapi_get_delta_map();
+
+    // Get the function name as 'dynamically' as possible.
+    $function = $module_name . '_get_facets';
+
+    foreach ($function() as $name => $info) {
+      if ($name == $module_name . '_' . $facet_name) {
+        $facet_delta = facetapi_build_delta('search_api@node_index', 'block', $name);
+        $hashed_delta = array_search($facet_delta, $map);
+        if (FALSE !== $hashed_delta) {
+          $deltas[$facet_name] = $hashed_delta;
+        }
+      }
+    }
+  }
+
+  return !empty($deltas[$facet_name]) ? $deltas[$facet_name] : NULL;
+}
+
+/**
+ * Implements hook_default_search_api_index().
+ */
+function paddle_search_default_search_api_index_alter(array &$defaults) {
+  // Allows us to override the default cron limit value through a custom variable.
+  $defaults['node_index']->options['cron_limit'] = variable_get("paddle_search_node_cron_limit",50);
+}

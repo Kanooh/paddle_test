@@ -1,0 +1,325 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Menu Display.
+ */
+
+/**
+ * Add a field to the database table for storing the root path for 404 pages.
+ */
+function paddle_menu_display_update_7001() {
+  $new_field = array(
+    'type' => 'varchar',
+    'length' => 100,
+    'not null' => TRUE,
+    'default' => 'admin',
+  );
+
+  db_add_field('menu_displays', '404_root_path', $new_field);
+}
+
+/**
+ * Remove the obsolete template file field from the database table.
+ */
+function paddle_menu_display_update_7002() {
+  // We no longer need the template_file field.
+  if (db_field_exists('menu_displays', 'template_file')) {
+    db_drop_field('menu_displays', 'template_file');
+  }
+}
+
+/**
+ * Create table for caching the menu display menu trees for each menu item.
+ */
+function paddle_menu_display_update_7003() {
+  db_create_table('cache_menu_displays', drupal_get_schema_unprocessed('paddle_menu_display', 'cache_menu_displays'));
+}
+
+/**
+ * Split up configuration of the root path and following the active trail.
+ */
+function paddle_menu_display_update_7004() {
+  // Add a database column for the active trail.
+  $new_field = array(
+    'type' => 'int',
+    'length' => 1,
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+    'default' => 0,
+  );
+  db_add_field('menu_displays', 'follow_active_trail', $new_field);
+
+  // Previously if we were following the active trail this was indicated by the
+  // value '<none>' in the root path. Migrate this to the new column.
+  db_update('menu_displays')
+    ->fields(array(
+      'follow_active_trail' => 1,
+    ))
+    ->execute();
+  db_update('menu_displays')
+    ->fields(array(
+      'follow_active_trail' => 0,
+      'root_path' => '',
+    ))
+    ->condition('root_path', '<none>')
+    ->execute();
+}
+
+/**
+ * Don't cache menu blocks.
+ */
+function paddle_menu_display_update_7005() {
+  // Explicitly disable caching for the blocks of this module,
+  // so we can globally enable block caching without hiccups.
+  db_update('block')
+    ->fields(array(
+      'cache' => DRUPAL_NO_CACHE,
+    ))
+    ->condition('module', 'paddle_menu_display', '=')
+    ->execute();
+}
+
+/**
+ * Add a field to the database table for storing the root path for 403 pages.
+ */
+function paddle_menu_display_update_7006() {
+  $new_field = array(
+    'type' => 'varchar',
+    'length' => 100,
+    'not null' => TRUE,
+    'default' => 'admin',
+  );
+
+  db_add_field('menu_displays', 'access_denied_root_path', $new_field);
+}
+
+/**
+ * Update the cache_menu_displays table schema.
+ */
+function paddle_menu_display_update_7007() {
+  // Drop the contents of the cache table.
+  db_truncate('cache_menu_displays');
+
+  // Add an 'expire' column.
+  $specification = array(
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+    'description' => 'A Unix timestamp indicating when the cache entry should expire, or 0 for never.',
+  );
+  db_add_field('cache_menu_displays', 'expire', $specification);
+
+  // Add a 'created' column.
+  $specification = array(
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+    'description' => 'A Unix timestamp indicating when the cache entry was created.',
+  );
+  db_add_field('cache_menu_displays', 'created', $specification);
+
+  // Add a 'serialized' column.
+  $specification = array(
+    'type' => 'int',
+    'size' => 'small',
+    'not null' => TRUE,
+    'default' => 0,
+    'description' => 'A flag to indicate whether content is serialized (1) or not (0).',
+  );
+  db_add_field('cache_menu_displays', 'serialized', $specification);
+
+  // Update the 'menu_tree' column and rename it to 'data'.
+  $specification = array(
+    'type' => 'blob',
+    'not null' => FALSE,
+    'size' => 'big',
+    'description' => 'Contains the serialized array representing the menu_tree for this cache item.',
+  );
+  db_change_field('cache_menu_displays', 'menu_tree', 'data', $specification);
+
+  // Add an index on the new 'expire' column.
+  db_add_index('cache_menu_displays', 'expire', array('expire'));
+}
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_menu_display_schema() {
+  $schema['menu_displays'] = array(
+    'description' => 'Holds definitions of menu displays.',
+    'fields' => array(
+      'mdid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'Menu display title; displayed at top of block.',
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'description' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => 'Menu display description.',
+      ),
+      'menu_name' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'root_path' => array(
+        'type' => 'varchar',
+        'length' => 100,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'from_level' => array(
+        'type' => 'varchar',
+        'length' => 25,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'to_level' => array(
+        'type' => 'varchar',
+        'length' => 25,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'add_active_class' => array(
+        'type' => 'int',
+        'length' => 1,
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'add_first_last' => array(
+        'type' => 'int',
+        'length' => 1,
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'add_odd_even' => array(
+        'type' => 'int',
+        'length' => 1,
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'add_active_trail' => array(
+        'type' => 'int',
+        'length' => 1,
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'tag_classes' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => '',
+      ),
+      'cont_types_roots' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => 'Root items for content types.',
+      ),
+      'no_links' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => 'Menu links to be displayed just as text - no link.',
+      ),
+      'path_roots' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => 'Root items for paths.',
+      ),
+      '404_root_path' => array(
+        'type' => 'varchar',
+        'length' => 100,
+        'not null' => TRUE,
+        'default' => 'admin',
+      ),
+      'follow_active_trail' => array(
+        'type' => 'int',
+        'length' => 1,
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'access_denied_root_path' => array(
+        'type' => 'varchar',
+        'length' => 100,
+        'not null' => TRUE,
+        'default' => 'admin',
+      ),
+    ),
+    'primary key' => array('mdid'),
+  );
+
+  $schema['cache_menu_displays'] = array(
+    'description' => 'Holds caches of menu displays for specific menu items.',
+    'fields' => array(
+      'cid' => array(
+        'type' => 'varchar',
+        'length' => 127,
+        'not null' => TRUE,
+        'description' => 'Cache ID. Formed by <mdid>:<user roles separated by |>:<plid (0 if the menu display displays all items)>',
+      ),
+      'mlid_list' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => 'List of all the menu items displayed by this menu display.',
+      ),
+      'data' => array(
+        'type' => 'blob',
+        'not null' => FALSE,
+        'size' => 'big',
+        'description' => 'Contains the serialized array representing the menu_tree for this cache item.',
+      ),
+      'expire' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'A Unix timestamp indicating when the cache entry should expire, or 0 for never.',
+      ),
+      'created' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'A Unix timestamp indicating when the cache entry was created.',
+      ),
+      'serialized' => array(
+        'type' => 'int',
+        'size' => 'small',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'A flag to indicate whether content is serialized (1) or not (0).',
+      ),
+    ),
+    'indexes' => array(
+      'mlid_list_index' => array(array('mlid_list', 6)),
+      'expire' => array('expire'),
+    ),
+    'primary key' => array('cid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_menu_display_uninstall() {
+  variable_del('paddle_menu_display_cache_expire_time');
+}

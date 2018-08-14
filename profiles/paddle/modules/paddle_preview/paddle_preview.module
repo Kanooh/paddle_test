@@ -1,0 +1,237 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Preview module.
+ */
+
+/**
+ * Implements hook_page_build().
+ *
+ * Outputs the preview toolbar on the page when needed.
+ */
+function paddle_preview_page_build(&$page) {
+  global $_paddle_preview, $user;
+  $_paddle_preview = FALSE;
+
+  // Get the user preferred language if paddle_i18n is enabled otherwise get the default language.
+  module_exists('admin_language') ? $language = admin_language_retrieve() : $language = language_default();
+
+  if (!user_access('use paddle preview')) {
+    return;
+  }
+
+  // Performance: Skip this entirely for AJAX requests.
+  if (strpos($_GET['q'], 'js/') === 0) {
+    return;
+  }
+
+  // Do not apply on admin paths.
+  if (path_is_admin(current_path())) {
+    return;
+  }
+
+  // Load some custom css from the admin theme if it's defined.
+  $admin_theme = variable_get('admin_theme', '');
+  if ($admin_theme) {
+    $themes = list_themes();
+    if (isset($themes[$admin_theme]->info['paddle_preview_toolbar_stylesheet_location'])) {
+      $path = drupal_get_path('theme', $admin_theme) . '/';
+      $path .= $themes[$admin_theme]->info['paddle_preview_toolbar_stylesheet_location'];
+      drupal_add_css($path, array('group' => CSS_THEME));
+    }
+  }
+
+  $_paddle_preview = TRUE;
+
+  $page['page_bottom']['paddle_preview_toolbar'] = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'id' => 'paddle-preview-toolbar',
+    ),
+  );
+  $page['page_bottom']['paddle_preview_toolbar']['paddle_preview_toolbar_content'] = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'id' => 'paddle-preview-toolbar-content',
+      'class' => array(
+        'paddingizer',
+      ),
+      'data-language' => $language->language,
+    ),
+    'admin-home' => array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'id' => 'paddle-preview-toolbar-admin-home',
+      ),
+      'content' => array(
+        '#theme' => 'link',
+        '#text' => '<span>' . locale('Dashboard', NULL, $language->language) . '</span>',
+        '#path' => 'admin',
+        '#options' => array(
+          'attributes' => array(
+            'title' => t('Dashboard'),
+          ),
+          'html' => TRUE,
+          'paddle_themer_disable_url_outbound_alter' => TRUE,
+        ),
+      ),
+    ),
+  );
+
+  $theme_preview_active = FALSE;
+
+  module_load_include('inc', 'paddle_themer', 'paddle_themer.preview');
+  $preview_theme = paddle_themer_preview_theme();
+  $page['page_bottom']['paddle_preview_toolbar']['paddle_preview_toolbar_content']['theme-switcher'] = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'id' => 'paddle-preview-toolbar-theme-switcher',
+    ),
+  );
+  if ($preview_theme) {
+    $active_theme = paddle_themer_active_theme();
+    if ($preview_theme === $active_theme) {
+      $theme_preview_active = TRUE;
+
+      $all_preview_themes = paddle_themer_preview_themes($preview_theme);
+      $previous_theme = end($all_preview_themes);
+      $next_theme = reset($all_preview_themes);
+
+      $page['page_bottom']['paddle_preview_toolbar']['paddle_preview_toolbar_content']['theme-switcher']['previous-theme'] = array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'id' => 'paddle-preview-toolbar-previous-theme',
+        ),
+        'content' => array(
+          '#theme' => 'link',
+          '#text' => '<span><i class="fa fa-arrow-circle-left"></i></span>',
+          '#path' => paddle_themer_preview_url($previous_theme),
+          '#options' => array(
+            'attributes' => array(
+              'title' => t('Previous theme'),
+            ),
+            'external' => TRUE,
+            'html' => TRUE,
+          ),
+        ),
+      );
+      $page['page_bottom']['paddle_preview_toolbar']['paddle_preview_toolbar_content']['theme-switcher']['theme-name'] = array(
+        '#weight' => 92,
+        '#type' => 'container',
+        '#attributes' => array(
+          'id' => 'paddle-preview-toolbar-theme-name',
+        ),
+        'theme-name-value' => array(
+          '#markup' => '(' . $preview_theme->human_name . ')',
+        ),
+      );
+      $page['page_bottom']['paddle_preview_toolbar']['paddle_preview_toolbar_content']['theme-switcher']['next-theme'] = array(
+        '#weight' => 93,
+        '#type' => 'container',
+        '#attributes' => array(
+          'id' => 'paddle-preview-toolbar-next-theme',
+        ),
+        'content' => array(
+          '#theme' => 'link',
+          '#text' => '<span><i class="fa fa-arrow-circle-right"></i></span>',
+          '#path' => paddle_themer_preview_url($next_theme),
+          '#options' => array(
+            'attributes' => array(
+              'title' => t('Next theme'),
+            ),
+            'external' => TRUE,
+            'html' => TRUE,
+          ),
+        ),
+      );
+    }
+  }
+
+  // Determine the close link.
+  $close_btn_link = 'admin';
+  $close_btn_label = t('Edit');
+  if ($theme_preview_active) {
+    $close_btn_link = 'admin/themes/' . $preview_theme->name . '/edit';
+    $close_btn_label = locale('Edit theme', NULL, $language->language);
+  }
+  elseif (menu_get_object('node', 1)) {
+    // If the path is node/<nid> we link to the backend node view.
+    $node = menu_get_object('node', 1);
+    if (isset($node->nid)) {
+      $close_btn_link = "admin/content_manager/node/{$node->nid}/view";
+      $close_btn_label = locale('Edit Page', NULL, $language->language);
+    }
+  }
+
+  // Make sure the theme can be edited. If not change the link to point to the
+  // themes overview page.
+  $link_class = array('edit');
+  if (!drupal_valid_path($close_btn_link)) {
+    $close_btn_label = t('Close preview');
+    $close_btn_link = 'admin/themes';
+    $link_class = array('close');
+  }
+  $page['page_bottom']['paddle_preview_toolbar']['paddle_preview_toolbar_content']['theme-switcher']['close-btn'] = array(
+    '#type' => 'container',
+    '#weight' => 90,
+    '#attributes' => array(
+      'id' => 'paddle-preview-toolbar-close-btn',
+    ),
+    'content' => array(
+      '#theme' => 'link',
+      '#text' => '<span>' . $close_btn_label . '</span>',
+      '#path' => $close_btn_link,
+      '#options' => array(
+        'attributes' => array(
+          'title' => t('Close preview'),
+          'class' => $link_class,
+        ),
+        'html' => TRUE,
+        'paddle_themer_disable_url_outbound_alter' => TRUE,
+      ),
+    ),
+  );
+
+  $page['page_bottom']['paddle_preview_toolbar']['paddle_preview_toolbar_content']['user'] = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'id' => 'paddle-preview-toolbar-user',
+    ),
+    'content' => array(
+      '#markup' => $user->name,
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_preview_permission() {
+  $return = array();
+
+  $return['use paddle preview'] = array(
+    'title' => t('Use the Paddle preview toolbar'),
+  );
+
+  return $return;
+}
+
+/**
+ * Implements theme_preprocess_html().
+ */
+function paddle_preview_preprocess_html(&$variables) {
+  global $_paddle_preview;
+
+  if ($_paddle_preview) {
+    // When any of the classes below is set in $variables['classes_array'] we
+    // don't add our 'paddle-preview-enabled' class.
+    $body_classes_to_exlude = array(
+      'page-media-format-form',
+    );
+    if (!array_intersect($variables['classes_array'], $body_classes_to_exlude)) {
+      // Add a class to the body element to help identify that the preview
+      // toolbar was added.
+      $variables['classes_array'][] = 'paddle-preview-enabled';
+    }
+  }
+}

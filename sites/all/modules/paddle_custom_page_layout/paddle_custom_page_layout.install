@@ -1,0 +1,25 @@
+<?php
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Custom page layout app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_custom_page_layout_enable() {
+  // Make sure the site managers can manage custom page layouts
+  // on Paddle websites.
+  $permissions = array(
+    'create custom page layouts',
+    'edit custom page layouts',
+  );
+
+  $role = user_role_load_by_name('Site Manager');
+  if (!empty($role)) {
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Add a new default layout.
+  variable_set('layout_default_responsive_layout', 'responsive:default_paddle');
+}

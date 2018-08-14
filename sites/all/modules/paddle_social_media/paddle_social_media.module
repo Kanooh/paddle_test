@@ -1,0 +1,207 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Social Media.
+ */
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_social_media_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_social_media_settings_form',
+  );
+}
+
+/**
+ * Form callback displaying Paddle Social Media settings.
+ */
+function paddle_social_media_settings_form() {
+  $form = array();
+
+  $node_types = node_type_get_names();
+  // Do not show share on newsletters.
+  unset($node_types['newsletter']);
+
+  $form['paddle_social_media_content_types'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Content type for which to enable the widget'),
+    '#options' => $node_types,
+    '#default_value' => variable_get('paddle_social_media_content_types', array('basic_page' => 'basic_page')),
+  );
+
+  $form['paddle_social_media_networks'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Social networks to include in the widget'),
+    '#options' => paddle_social_media_available_networks(),
+    '#default_value' => variable_get('paddle_social_media_networks', array('facebook' => 'facebook', 'twitter' => 'twitter')),
+  );
+
+  $form['#validate'][] = 'paddle_recaptcha_configuration_form_validation';
+  return system_settings_form($form);
+}
+
+/**
+ * Returns a list of available networks.
+ *
+ * @return array
+ *   The available network list.
+ */
+function paddle_social_media_available_networks() {
+  return array(
+    'facebook' => t('Facebook'),
+    'twitter' => t('Twitter'),
+    'linkedin' => t('LinkedIn'),
+    'google_plusone_share' => t('Google+'),
+    'pinterest_share' => t('Pinterest'),
+    'wordpress' => t('Wordpress'),
+    'tumblr' => t('Tumblr'),
+    'blogger' => t('Blogger'),
+    'yammer' => t('Yammer'),
+  );
+}
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function paddle_social_media_preprocess_page(&$variables) {
+  if (!empty(paddle_social_media_get_networks()) && !empty($variables['node']) && !path_is_admin(current_path())) {
+    $node = $variables['node'];
+    if (paddle_social_media_check_content_type($node->type)) {
+      if ($node->type == 'paddle_overview_page' || !paddle_content_manager_panelized_node_uses_entity_view($node)) {
+        // Append the social share after content.
+        $variables['page']['content']['paddle_social_share'] = paddle_social_media_get_share_button_array();
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function paddle_social_media_node_view($node, $view_mode, $langcode) {
+  if ($view_mode == 'full' && !empty(paddle_social_media_get_networks()) && !path_is_admin(current_path())) {
+    if (paddle_social_media_check_content_type($node->type)) {
+      if ($node->type != 'paddle_overview_page' && paddle_content_manager_panelized_node_uses_entity_view($node)) {
+        // Append the social share after content.
+        $node->content['paddle_social_share'] = paddle_social_media_get_share_button_array();
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_social_media_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_social_media_share_button' => array(
+      'variables' => array(
+        'expanded' => array(),
+        'compat' => '',
+        'excluded' => '',
+        'language' => '',
+      ),
+      'path' => drupal_get_path('module', 'paddle_social_media') . '/templates',
+      'template' => 'paddle_social_media_share_button',
+    ),
+  );
+}
+
+/**
+ * Get the enabled or disabled social media networks.
+ *
+ * @return array
+ *   List of networks in an array.
+ */
+function paddle_social_media_get_networks() {
+  $networks = &drupal_static(__FUNCTION__);
+
+  if (is_null($networks)) {
+    $values = variable_get('paddle_social_media_networks', array());
+
+    $networks = array();
+    foreach (paddle_social_media_available_networks() as $name => $title) {
+      if (!empty($values[$name])) {
+        $networks[] = $name;
+      }
+    }
+  }
+
+  return $networks;
+}
+
+/**
+ * Determines if the passed content type should get a share button.
+ *
+ * @param string $content_type
+ *   The content type we are checking for.
+ *
+ * @return bool
+ *   True if the content type should get a share button, false otherwise.
+ */
+function paddle_social_media_check_content_type($content_type) {
+  $content_types = variable_get('paddle_social_media_content_types', array('basic_page' => 'basic_page'));
+  return !empty($content_types[$content_type]) && $content_types[$content_type] == $content_type;
+}
+
+/**
+ * Returns the share button render array.
+ *
+ * @return array
+ *   The render array.
+ */
+function paddle_social_media_get_share_button_array() {
+  global $language;
+
+  $enabled = paddle_social_media_get_networks();
+  array_unshift($enabled, 'email', 'print');
+
+  $expanded = $enabled;
+  $compat = array();
+  // If there are more than 5 socials enabled, show only the first 4 and move
+  // the remaining in a dropdown menu.
+  if (count($enabled) > 5) {
+    $expanded = array_slice($enabled, 0, 4);
+    $compat = array_slice($enabled, 4);
+    // Add the label to the ones in the dropdown.
+    $compat = array_intersect_key(paddle_social_media_available_networks(), array_flip($compat));
+  }
+
+  return array(
+    '#theme' => 'paddle_social_media_share_button',
+    '#expanded' => $expanded,
+    '#compat' => $compat,
+    '#language' => $language->language,
+    '#weight' => 100,
+    '#attached' => array(
+      'js' => array(
+        drupal_get_path('module', 'paddle_social_media') . '/js/paddle_social_media.js',
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors().
+ */
+function paddle_social_media_paddle_color_palettes_color_selectors() {
+  return array(
+    array(),
+    array(),
+    array(
+      'background-color' => array(
+        '.paddle-social-media-share .compat-dropdown__list',
+      ),
+    ),
+    array(),
+    array(),
+    array(),
+    array(
+      'color' => array(
+        '.paddle-social-media-share a',
+      ),
+    ),
+  );
+}

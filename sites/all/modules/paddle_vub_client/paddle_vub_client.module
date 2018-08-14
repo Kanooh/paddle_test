@@ -1,0 +1,613 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle VUB Client feature.
+ */
+
+include_once 'paddle_vub_client.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_vub_client_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_vub_client_settings_form',
+  );
+}
+
+/**
+ * Form callback for the VUB Client module settings.
+ */
+function paddle_vub_client_settings_form() {
+  $form = array();
+
+  $form['form_wrapper']['paddle_vub_client_server_site'] = array(
+    '#type' => 'textfield',
+    '#title' => t('VUB server website'),
+    '#description' => t('The website of your VUB Server (HTTP protocol included)'),
+    '#default_value' => variable_get('paddle_vub_client_server_site', ''),
+    '#required' => TRUE,
+  );
+
+  $form['form_wrapper']['paddle_vub_client_server_username'] = array(
+    '#type' => 'textfield',
+    '#title' => t('VUB server username'),
+    '#description' => t('The username which you have received to connect to the VUB server'),
+    '#default_value' => variable_get('paddle_vub_client_server_username', ''),
+    '#required' => TRUE,
+  );
+
+  $form['form_wrapper']['#tree'] = TRUE;
+
+  $form['actions']['#type'] = 'actions';
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save configuration'),
+  );
+
+  $vub_tags = paddle_vub_client_tags_get_term_list_for_server();
+
+  if (!empty($vub_tags)) {
+    $form['paddle_vub_client_tags'] = array(
+      '#type' => 'select',
+      '#multiple' => TRUE,
+      '#title' => t('VUB server tags'),
+      '#description' => t('You can specify through a set of tags which news items you would like to retrieve from the server.'),
+      '#required' => FALSE,
+      '#options' => $vub_tags,
+      '#size' => count($vub_tags),
+      '#default_value' => variable_get('paddle_vub_client_tags', array()),
+    );
+  }
+
+  $form['#validate'][] = 'paddle_vub_client_settings_form_validation';
+  $form['#validate'][] = 'paddle_vub_client_settings_form_validate_user';
+  $form['#submit'][] = 'paddle_vub_client_settings_form_submit';
+
+  return $form;
+}
+
+/**
+ * Validates that either both fields need to be filled in or none of them.
+ */
+function paddle_vub_client_settings_form_validation($form, &$form_state) {
+  if (!empty($form_state['values']['form_wrapper']['paddle_vub_client_server_site']) && !valid_url($form_state['values']['form_wrapper']['paddle_vub_client_server_site'], TRUE)) {
+    form_set_error('paddle_vub_client_server_site', t('The VUB server website URL is not valid.'));
+  }
+}
+
+/**
+ * Retrieves the user ID from the server users and stores it.
+ */
+function paddle_vub_client_settings_form_validate_user($form, &$form_state) {
+  $ch = curl_init();
+
+  if (!empty($form_state['values']['form_wrapper']['paddle_vub_client_server_site']) && !empty($form_state['values']['form_wrapper']['paddle_vub_client_server_username'])) {
+    $server_url = $form_state['values']['form_wrapper']['paddle_vub_client_server_site'];
+    $user_name = $form_state['values']['form_wrapper']['paddle_vub_client_server_username'];
+    $http_x_csrf_token = paddle_vub_client_retrieve_http_x_crsf_token($ch, $server_url, $user_name);
+    // Search the user with the machine_name filled in as user.
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json', 'X-CSRF-Token: ' . $http_x_csrf_token));
+    curl_setopt($ch, CURLOPT_URL, $server_url . '/user.json?name=' . $user_name);
+
+    $data = curl_exec($ch);
+
+    if (!paddle_vub_client_check_for_curl_errors($ch, 'cURL error (@code) @error for retrieving the user id from @url', TRUE, 'form_wrapper')) {
+      $data_array = drupal_json_decode($data);
+      // A machine name is unique so we will only retrieve one result.
+      if (!empty($data_array['list'][0]['uid'])) {
+        variable_set('paddle_vub_client_user_id', $data_array['list'][0]['uid']);
+      }
+    }
+  }
+}
+
+/**
+ * Submit handler of the configuration form.
+ */
+function paddle_vub_client_settings_form_submit($form, &$form_state) {
+  if (!empty($form_state['values']['form_wrapper']['paddle_vub_client_server_username'])) {
+    variable_set('paddle_vub_client_server_username', $form_state['values']['form_wrapper']['paddle_vub_client_server_username']);
+  }
+  if (!empty($form_state['values']['form_wrapper']['paddle_vub_client_server_site'])) {
+    variable_set('paddle_vub_client_server_site', $form_state['values']['form_wrapper']['paddle_vub_client_server_site']);
+  }
+
+  drupal_set_message(t('The configuration options have been saved.'));
+}
+
+/**
+ * Implements hook_workbench_moderation_transition().
+ *
+ * On publish of the news items, we push them to the VUB Server.
+ */
+function paddle_vub_client_workbench_moderation_transition($node, $previous_state, $new_state) {
+  if ($node->type == 'news_item' && $new_state == 'published' && !property_exists($node, 'feeds_item')) {
+    // Wrap the node to access the fields properly.
+    $node_wrapper = entity_metadata_wrapper('node', $node);
+    // Initialize the variables.
+    $field_changed = FALSE;
+
+    // Fill in the basic node information.
+    $node_info = array(
+      'title' => $node->title,
+      'body' => $node_wrapper->body->value(),
+      'type' => $node->type,
+      'language' => $node->language,
+      'status' => $node->status,
+      'author' => array('id' => variable_get('paddle_vub_client_user_id', 1)),
+    );
+
+    // Fill in the VUB tag reference fields.
+    if (!empty($node_wrapper->field_vub_tags) && !empty($node_wrapper->field_vub_tags->value())) {
+      $vub_tags = $node_wrapper->field_vub_tags->value();
+
+      foreach ($vub_tags as $vub_tag) {
+        $vub_tag_wrapper = entity_metadata_wrapper('taxonomy_term', $vub_tag);
+        if (!empty($vub_tag_wrapper->field_vub_server_tid) && !empty($vub_tag_wrapper->field_vub_server_tid->value())) {
+          $node_info['field_vub_tags'][] = array('id' => $vub_tag_wrapper->field_vub_server_tid->value());
+        }
+      }
+    }
+
+    // Handle the Featured image processing.
+    $featured_image_processed_info = paddle_vub_client_process_featured_image($node_wrapper, $field_changed);
+
+    // Set a link to the source node if this is a translated node.
+    if (module_exists('paddle_i18n') && !empty($node->tnid)) {
+      $local_source_nid = $node->tnid;
+      $local_source_node_wrapper = entity_metadata_wrapper('node',
+        node_load($local_source_nid));
+
+      if (!empty($local_source_node_wrapper->field_vub_server_nid) && !empty($local_source_node_wrapper->field_vub_server_nid->value())) {
+        $node_info['source']['id'] = $local_source_node_wrapper->field_vub_server_nid->value();
+      }
+    }
+
+    if (!empty($featured_image_processed_info)) {
+      $field_changed = $featured_image_processed_info['field_changed'];
+      $node_info['field_paddle_featured_image'] = $featured_image_processed_info['field_paddle_featured_image'];
+    }
+
+    // Fill in the Featured image position field (for news items).
+    if (!empty($node_wrapper->field_paddle_news_image_position) && !empty($node_wrapper->field_paddle_news_image_position->value())) {
+      $node_info['field_paddle_news_image_position'] = $node_wrapper->field_paddle_news_image_position->value();
+    }
+
+    $json = drupal_json_encode($node_info);
+
+    if (!empty($node_wrapper->field_vub_server_nid) && !empty($node_wrapper->field_vub_server_nid->value())) {
+      $server_nid = $node_wrapper->field_vub_server_nid->value();
+      $response = paddle_vub_client_transfer_node_to_server($json, $server_nid);
+    }
+    else {
+      $response = paddle_vub_client_transfer_node_to_server($json);
+    }
+
+    if (empty($server_nid) && !empty($response)) {
+      $response_array = drupal_json_decode($response);
+      if (json_last_error() === JSON_ERROR_NONE && !empty($response_array['id'])) {
+        $node_wrapper->field_vub_server_nid->set($response_array['id']);
+        $field_changed = TRUE;
+      }
+    }
+
+    if ($field_changed == TRUE) {
+      // We need to save this change without calling node_save().
+      field_attach_presave('node', $node);
+      field_attach_update('node', $node);
+      entity_get_controller('node')->resetCache(array($node->nid));
+    }
+  }
+}
+
+/**
+ * Handles the featured image process to transfer the field to the VUB server.
+ *
+ * @param \EntityMetadataWrapper $node_wrapper
+ *   The entity metadata wrapper which contains the published node.
+ * @param bool $field_changed
+ *   Whether a field has already been changed on the wrapper.
+ *
+ * @return array
+ *   A set of return values, firstly the updated field_changed status, second
+ *   the value of the featured image which has to be sent to the VUB server.
+ */
+function paddle_vub_client_process_featured_image(EntityMetadataWrapper $node_wrapper, $field_changed) {
+  // Initialize the return value.
+  $return_value = array(
+    'field_changed' => $field_changed,
+    'field_paddle_featured_image' => NULL,
+  );
+
+  // Check if the featured image is filled in on the local node.
+  if (!empty($node_wrapper->field_paddle_featured_image) && !empty($node_wrapper->field_paddle_featured_image->value())) {
+    // Initialize the variables.
+    $server_sid = 0;
+    // Retrieve the scald atom from the featured image field.
+    $atom = $node_wrapper->field_paddle_featured_image->value();
+    $atom_wrapper = entity_metadata_wrapper('scald_atom', $atom['sid']);
+
+    // Basic scald info.
+    $scald_info = array(
+      'title' => !empty($atom_wrapper->title) ? $atom_wrapper->title->value() : '',
+      'provider' => 'paddle_scald_image',
+      'type' => 'image',
+      'publisher' => array(
+        'id' => variable_get('paddle_vub_client_user_id', 1),
+      ),
+    );
+
+    // Check if the server_sid has been filled in. This means that the atom
+    // already exists on the server and that we just need to update the scald
+    // atom.
+    if (!empty($atom_wrapper->field_vub_server_sid) && !empty($atom_wrapper->field_vub_server_sid->value())) {
+      $server_sid = $atom_wrapper->field_vub_server_sid->value();
+    }
+
+    // Fill in the alt tags.
+    if (!empty($atom_wrapper->field_scald_alt_tag) && !empty($atom_wrapper->field_scald_alt_tag->value())) {
+      $scald_info['field_scald_alt_tag'] = $atom_wrapper->field_scald_alt_tag->value();
+    }
+
+    // Fill in the scald file field.
+    if (!empty($atom_wrapper->scald_thumbnail) && !empty($atom_wrapper->scald_thumbnail->value())) {
+      // We need to convert the filefield to a base64 encoded string.
+      // This way we can pass the file to the server which can recreate it.
+      $scald_info['scald_thumbnail'] = paddle_vub_client_convert_file_to_base64($atom_wrapper->scald_thumbnail->value());
+    }
+
+    $scald_json = drupal_json_encode($scald_info);
+
+    if (!empty($node_wrapper->field_published_image) && !empty($node_wrapper->field_published_image->value())) {
+      $published_atom = $node_wrapper->field_published_image->value();
+
+      // Check if our scald atom has been changed since the previous time the
+      // node has been published.
+      if ($atom['sid'] != $published_atom['sid']) {
+        $return_value['field_paddle_featured_image'] = paddle_vub_client_set_featured_image_on_server($scald_json, $atom, $server_sid);
+        $node_wrapper->field_published_image->set($atom);
+        $return_value['field_changed'];
+      }
+      // If not, check if one of the base properties had been changed so we
+      // need to update the scald atom on the server.
+      else {
+        $update_scald = FALSE;
+        // Only update the fields if they have been changed.
+        $published_atom_wrapper = entity_metadata_wrapper('scald_atom', $published_atom['sid']);
+        if (!empty($published_atom_wrapper->field_scald_alt_tag) && $scald_info['field_scald_alt_tag'] != $published_atom_wrapper->field_scald_alt_tag->value()) {
+          $update_scald = TRUE;
+        }
+        else {
+          unset($scald_info['field_scald_alt_tag']);
+        }
+
+        if (!empty($published_atom_wrapper->scald_thumbnail) && $scald_info['scald_thumbnail'] != paddle_vub_client_convert_file_to_base64($published_atom_wrapper->scald_thumbnail->value())) {
+          $update_scald = TRUE;
+        }
+        else {
+          unset($scald_info['scald_thumbnail']);
+        }
+
+        if ($update_scald == TRUE) {
+          paddle_vub_client_scald_transfer_scald_atom_to_server($scald_json, $server_sid);
+        }
+      }
+    }
+    else {
+      // Link to or create a new scald atom on the server.
+      $return_value['field_paddle_featured_image'] = paddle_vub_client_set_featured_image_on_server($scald_json, $atom, $server_sid);
+      $node_wrapper->field_published_image->set($atom);
+      $return_value['field_changed'];
+    }
+  }
+  // If the featured image does not exist on the current revision of the node,
+  // it could have existed in the past and been published on the server.
+  // In this case we need to update the node to contain an empty featured image.
+  elseif (!empty($node_wrapper->field_published_image) && !empty($node_wrapper->field_published_image->value())) {
+    $node_wrapper->field_published_image = array();
+    $return_value['field_changed'] = TRUE;
+  }
+
+  return $return_value;
+}
+
+/**
+ * Sets the scald atom on the server and returns the values required to set the featured image on the server.
+ *
+ * @param string $scald_json
+ *   The JSON string which is sent to create or update the atom on the server.
+ * @param array $atom
+ *   The scald atom retrieved from the Featured image from the local node.
+ * @param string $server_sid
+ *   The sid of the scald atom on the VUB Server.
+ *
+ * @return array
+ *   The array which we will convert to JSON to link the proper scald atom to
+ *   the featured image on the VUB server node.
+ */
+function paddle_vub_client_set_featured_image_on_server($scald_json, $atom, $server_sid) {
+  $returned_atom_array = array();
+  $atom_wrapper = entity_metadata_wrapper('scald_atom', $atom['sid']);
+  if (!empty($server_sid)) {
+    paddle_vub_client_scald_transfer_scald_atom_to_server($scald_json, $server_sid);
+  }
+  else {
+    $response = paddle_vub_client_scald_transfer_scald_atom_to_server($scald_json);
+
+    if (!empty($response)) {
+      $response_array = drupal_json_decode($response);
+      if (json_last_error() === JSON_ERROR_NONE && !empty($response_array['id'])) {
+        $server_sid = $response_array['id'];
+        // Save the server scald atom ID.
+        if (!empty($atom_wrapper->field_vub_server_sid)) {
+          $atom_wrapper->field_vub_server_sid->set($server_sid);
+          $atom_wrapper->save();
+        }
+      }
+    }
+  }
+
+  if (!empty($server_sid)) {
+    // Add the Scald ID which we want to save the node on the server with.
+    $returned_atom_array['sid'] = $server_sid;
+    $returned_atom_array['style'] = $atom['style'];
+  }
+
+  return $returned_atom_array;
+}
+
+/**
+ * Transfers the node data to the server after publishing the node.
+ *
+ * @param string $json
+ *   The node data wrapped in a JSON string.
+ * @param string $server_nid
+ *   The node id of the existing node on the server.
+ *
+ * @return string
+ *   The JSON string response.
+ */
+function paddle_vub_client_transfer_node_to_server($json, $server_nid = '') {
+  $server_url = variable_get('paddle_vub_client_server_site', '');
+  $ch = curl_init();
+
+  // Retrieve the X-CSRF-token.
+  $http_x_csrf_token = paddle_vub_client_retrieve_http_x_crsf_token($ch, $server_url);
+
+  // Transfer the node content to the server.
+  curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json', 'X-CSRF-Token: ' . $http_x_csrf_token));
+  curl_setopt($ch, CURLOPT_HTTPGET, FALSE);
+  curl_setopt($ch, CURLOPT_NOBODY, FALSE);
+  curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+
+  // If there is a Server node NID linked, we will do an update command. (PUT)
+  if (!empty($server_nid)) {
+    curl_setopt($ch, CURLOPT_URL, $server_url . '/node/' . $server_nid);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+  }
+  // Otherwise we have to do a create command. (POST)
+  else {
+    curl_setopt($ch, CURLOPT_URL, $server_url . '/node.json');
+    curl_setopt($ch, CURLOPT_POST, TRUE);
+  }
+  $response = curl_exec($ch);
+
+  if (paddle_vub_client_check_for_curl_errors($ch, 'cURL error (@code) @error for @url')) {
+    // Send an empty response so nothing will be triggered
+    // when the function is called.
+    $response = '';
+  }
+
+  curl_close($ch);
+  return $response;
+}
+
+/**
+ * Retrieves the HTTP X-CSRF-Token to authenticate with cURL requests.
+ *
+ * @param resource $curl_object
+ *   The initialised cURL resource.
+ * @param string $server_url
+ *   The VUB Server URL to connect to.
+ * @param string $user_name
+ *   The username to connect to the VUB server.
+ *
+ * @return mixed|string
+ *   The token if we are able to receive one.
+ */
+function paddle_vub_client_retrieve_http_x_crsf_token($curl_object, $server_url, $user_name = '') {
+  if (!empty($user_name)) {
+    $server_username = $user_name;
+  }
+  else {
+    $server_username = variable_get('paddle_vub_client_server_username', '');
+  }
+  // Unlike the username and url, the password will not be
+  // provided by the settings form. It shall be stored in a settings file, safe
+  // from harm.
+  $server_password = variable_get('paddle_vub_client_server_password', '');
+
+  curl_setopt($curl_object, CURLOPT_HTTPGET, TRUE);
+  curl_setopt($curl_object, CURLOPT_RETURNTRANSFER, 1);
+  curl_setopt($curl_object, CURLOPT_USERPWD, $server_username . ':' . $server_password);
+  curl_setopt($curl_object, CURLOPT_URL, $server_url . '/restws/session/token');
+  $token = curl_exec($curl_object);
+
+  if (paddle_vub_client_check_for_curl_errors($curl_object, 'cURL error (@code) @error for retrieving the X-CSRF-Token')) {
+    // Send an empty response so nothing will be triggered
+    // when the function is called.
+    $token = '';
+  }
+
+  return $token;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function paddle_vub_client_cron() {
+  /** @var FeedsSource $src */
+  $src = feeds_source('vub_client_news_importer');
+  $src->save();
+  // Get the base URL.
+  $source = variable_get('paddle_vub_client_server_site', '');
+  // Get all published news items.
+  $source .= '/node.json?type=news_item&status=1';
+  // If VUB tags are selected in the configuration, filter on those.
+  if (!empty(variable_get('paddle_vub_client_tags', array()))) {
+    $term_ids = array_keys(variable_get('paddle_vub_client_tags', array()));
+
+    if (!empty($term_ids)) {
+      $source .= '&field_vub_tags=';
+      $source .= implode(',', $term_ids);
+    }
+  }
+
+  $config = array('VUBFeedsHTTPFetcher' => array('source' => $source));
+  $src->addConfig($config);
+  $src->save();
+
+  try {
+    $src->import();
+    $src->schedule();
+  }
+  catch (Exception $e) {
+    return FALSE;
+  }
+  // Prevent notices from being thrown.
+  $src->state(FEEDS_FETCH);
+  $src->state(FEEDS_PROCESS);
+  $src->state(FEEDS_PROCESS_CLEAR);
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_vub_client_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'feeds_processor_targets_alter') {
+    // Move paddle_vub_client_feeds_processor_targets_alter() to the end.
+    // module_implements() iterates through $implementations with a foreach loop
+    // which PHP iterates in the order that the items were added, so to move an
+    // item to the end of the array, we remove it and then add it. This is
+    // required because we need to ensure any other
+    // hook_feeds_processor_targets_alter() have
+    // already been performed so we can do the final tweaks.
+    $vub_client_implementation = $implementations['paddle_vub_client'];
+    unset($implementations['paddle_vub_client']);
+    $implementations['paddle_vub_client'] = $vub_client_implementation;
+  }
+}
+
+/**
+ * Checks if the cURL connection failed or not.
+ *
+ * @param resource $curl_object
+ *   The object created through cURL.
+ * @param string $message
+ *   The error messages which needs to be sent.
+ * @param bool $is_form
+ *   Whether a form caused the cURL connection.
+ * @param string $form_item
+ *   The form element.
+ *
+ * @return bool
+ *   Whether the cURL connection failed or not.
+ */
+function paddle_vub_client_check_for_curl_errors($curl_object, $message, $is_form = FALSE, $form_item = '') {
+  $has_errors = FALSE;
+  $successful_http_codes = array(200, 201, 202, 203, 204, 205, 206);
+  if (curl_error($curl_object)) {
+    // Log the error message.
+    $message_parameters = array(
+      '@code' => curl_errno($curl_object),
+      '@error' => curl_error($curl_object),
+      '@url' => $curl_object,
+    );
+    watchdog('paddle_vub_client', $message, $message_parameters);
+    drupal_set_message(t($message, $message_parameters), 'error');
+
+    if ($is_form && !empty($form_item)) {
+      form_set_error($form_item, t($message, $message_parameters));
+    }
+    $has_errors = TRUE;
+  }
+  elseif (!in_array($status_code = curl_getinfo($curl_object, CURLINFO_HTTP_CODE), $successful_http_codes)) {
+    $status_text = 'HTTP error while connecting to the VUB server: @status_code';
+    $status_parameter = array(
+      '@status_code' => $status_code,
+    );
+    watchdog('paddle_vub_client', $status_text, $status_parameter);
+    if ($is_form && !empty($form_item)) {
+      form_set_error($form_item, t($status_text, $status_parameter));
+    }
+    else {
+      drupal_set_message(t($status_text, $status_parameter), 'error');
+    }
+
+    $has_errors = TRUE;
+  }
+
+  return $has_errors;
+}
+
+/**
+ * Implements hook_field_attach_prepare_translation_alter().
+ */
+function paddle_vub_client_field_attach_prepare_translation_alter(&$entity, $context) {
+  // Do not copy the server node ID while translation nodes.
+  if ($context['entity_type'] == 'node' && $entity->type == 'news_item') {
+    $entity->field_vub_server_nid = array();
+  }
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ */
+function paddle_vub_client_paddle_contextual_toolbar_actions_alter(&$actions) {
+  if (!empty($actions['Unpublish']) && !empty($actions['Page layout'])) {
+    // First receive the nid of the node which might not be allowed
+    // to be unpublished.
+    $layout_link = $actions['Page layout']['action'];
+    if (preg_match('/node\/(.*?)\/layout/', $layout_link, $match) == 1) {
+      $nid = $match[1];
+      $node = node_load($nid);
+      if (!empty($node)) {
+        $wrapper = entity_metadata_wrapper('node', $node);
+        // Remove possible modifications on force published nodes.
+        if (!empty($wrapper->field_vub_force_publish) && !empty($wrapper->field_vub_force_publish->value())) {
+          unset($actions['Unpublish']);
+          unset($actions['Archive']);
+          unset($actions['Page layout']);
+          unset($actions['Page properties']);
+          unset($actions['To check']);
+          unset($actions['In review']);
+          unset($actions['Concept']);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_views_default_views_alter().
+ */
+function paddle_vub_client_views_default_views_alter(&$views) {
+  global $user;
+
+  // Do not hide these pages for admin users.
+  if (!empty($views['content_manager']) && $user->uid != 1) {
+    $handler =& $views['content_manager']->display['default']->handler;
+
+    $handler->display->display_options['filters']['field_vub_force_publish_value']['id'] = 'field_vub_force_publish_value';
+    $handler->display->display_options['filters']['field_vub_force_publish_value']['table'] = 'field_data_field_vub_force_publish';
+    $handler->display->display_options['filters']['field_vub_force_publish_value']['field'] = 'field_vub_force_publish_value';
+    $handler->display->display_options['filters']['field_vub_force_publish_value']['relationship'] = 'nid';
+    $handler->display->display_options['filters']['field_vub_force_publish_value']['operator'] = 'not';
+    $handler->display->display_options['filters']['field_vub_force_publish_value']['value'] = array(
+      1 => '1',
+    );
+  }
+}

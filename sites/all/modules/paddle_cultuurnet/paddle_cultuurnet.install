@@ -1,0 +1,76 @@
+<?php
+
+/**
+ * @file
+ * Install and update functionality for the paddle_cultuurnet module.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_cultuurnet_enable() {
+  // We need to clear the CTools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  ctools_modules_enabled(array('paddle_cultuurnet'));
+
+  $permissions = array(
+    'edit uitdatabank_pane content in landing pages',
+  );
+
+  // Make sure the site managers and chief editors can manage glossary
+  // definitions on Paddle websites.
+  foreach (array('Chief Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Create image style for search page logos.
+  if (image_style_load('search_page_logo') === FALSE) {
+    $style = image_style_save(array('name' => 'search_page_logo'));
+    $effect = array(
+      'name' => 'image_scale',
+      'data' => array(
+        'width' => NULL,
+        'height' => 100,
+        'upscale' => FALSE,
+      ),
+      'isid' => $style['isid'],
+    );
+    image_effect_save($effect);
+  }
+
+  // Set the Cultuurnet search API URL to production.
+  variable_set('culturefeed_search_api_location', 'http://www.uitid.be/uitid/rest/searchv2/');
+
+  // Hide the type filter on the Cultuurnet events search form.
+  variable_set('culturefeed_agenda_search_block_active_fields', array('what' => 0, 'type' => 0));
+
+  // Import Cultuurnet terms.
+  paddle_cultuurnet_import();
+
+  drupal_flush_all_caches();
+
+  // Enable the culturefeed cache.
+  variable_set('culturefeed_cache_status', TRUE);
+  variable_set('culturefeed_search_cache_enabled', TRUE);
+}
+
+function paddle_cultuurnet_import() {
+  $import = new CultureFeedDomainImport();
+  $import->import();
+
+  if (drupal_is_cli() && function_exists('drush_main')) {
+    foreach ($import->logMessages as $message) {
+      drush_log($message['message'], $message['code']);
+    }
+  }
+}
+
+/**
+ * Enable the culturefeed cache.
+ */
+function paddle_cultuurnet_update_7000() {
+  variable_set('culturefeed_cache_status', TRUE);
+  variable_set('culturefeed_search_cache_enabled', TRUE);
+}

@@ -1,0 +1,45 @@
+<?php
+
+/**
+ * @file
+ * Contains tests for the dashboard more links.
+ */
+
+/**
+ * Tests the dashboard more links.
+ */
+class PaddleDashboardMoreLinksTestCase extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'More links test',
+      'description' => 'Tests the dashboard more links.',
+      'group' => 'Paddle Dashboard',
+    );
+  }
+
+  /**
+   * Tests the more links of all panes.
+   */
+  public function testMoreLinks() {
+    $this->drupalLogin($this->chiefEditor);
+    $this->drupalGet('admin');
+
+    // Test more links.
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-planned-publications")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('state' => 'scheduled'))) . '"]'), 'The more link is shown for the scheduled for publication view.');
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-planned-unpublications")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('state' => 'scheduled_depublication'))) . '"]'), 'The more link is shown for the scheduled for unpublication view.');
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-my-concepts")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('creation_uid' => $this->chiefEditor->uid, 'state' => 'draft'))) . '"]'), 'The more link is shown for the my concepts view.');
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-all-to-check")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('state' => 'to_check'))) . '"]'), 'The more link is shown for the to check view.');
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-mine-in-review")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('uid_1' => $this->chiefEditor->uid, 'state' => 'needs_review'))) . '"]'), 'The more link is shown for mine needs review view.');
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-all-in-review")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('state' => 'needs_review'))) . '"]'), 'The more link is shown for needs review view.');
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-all-published")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('state' => 'published'))) . '"]'), 'The more link is shown for the published view.');
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-all-unpublished")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('state' => 'offline'))) . '"]'), 'The more link is shown for the offline view.');
+
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin');
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-mine-to-check")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('uid_to_check' => $this->editor->uid, 'state' => 'to_check'))) . '"]'), 'The more link is shown for the mine to check view.');
+  }
+}

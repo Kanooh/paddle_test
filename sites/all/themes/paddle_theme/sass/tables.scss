@@ -1,0 +1,179 @@
+/**
+* @file
+* Styling for tables.
+*/
+
+
+@import "variables/*";
+@import "abstractions/*";
+
+.region-content {
+  table {
+    border-collapse: collapse;
+    border-style: solid;
+    border-color: $light-grey;
+    table-layout: fixed;
+    width: 100%;
+    max-width: 100%;
+
+    &:not(.no-table-hover) {
+      > tbody {
+        > tr:hover {
+          background-color: $silver;
+        }
+      }
+    }
+  }
+
+  tbody {
+    border: none;
+  }
+
+  tr {
+    border-top: 1px solid;
+
+    &:first-child {
+      border-top-width: 0;
+    }
+  }
+
+
+  th,
+  td {
+    border: none;
+  }
+
+  .responsive-table {
+    overflow-x: auto;
+    min-height: 0.01%;
+
+    @media screen and (max-width: $screen-sm-max) {
+      width: 100%;
+      overflow-y: hidden;
+      -ms-overflow-style: -ms-autohiding-scrollbar;
+
+      > table {
+        table-layout: auto;
+
+        // Ensure the content doesn't wrap
+        > thead,
+        > tbody,
+        > tfoot {
+          > tr {
+            > th,
+            > td {
+              white-space: nowrap;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .zebra-striping {
+    > tbody,
+    > thead,
+    > tfoot {
+      > tr {
+        border: none;
+      }
+    }
+
+    > thead {
+      > tr {
+        border-bottom: 1px solid $c-alto;
+      }
+    }
+
+    > tbody {
+      > tr:nth-child(even) {
+        background-color: $light-silver;
+      }
+    }
+
+    &:not(.no-table-hover) {
+      > tbody {
+        > tr:nth-child(even):hover {
+          background-color: $silver;
+        }
+      }
+    }
+  }
+
+  .panel-pane {
+    table {
+      &.horizontal-border,
+      &.vertical-border,
+      &.full-border {
+        > thead,
+        > tbody,
+        > tfoot {
+          > tr {
+            border-top: 0;
+            border-color: $light-grey;
+          }
+        }
+      }
+    }
+  }
+
+  .horizontal-border {
+    > thead,
+    > tbody,
+    > tfoot {
+      > tr {
+        border-bottom: 1px solid $light-grey;
+
+        &:last-child {
+          border-bottom: none;
+        }
+      }
+    }
+  }
+
+  .vertical-border {
+    > thead,
+    > tbody,
+    > tfoot {
+      > tr {
+        > td,
+        > th {
+          border-right: 1px solid $light-grey;
+
+          &:last-child {
+            border-right: none;
+          }
+        }
+      }
+    }
+  }
+
+  .full-border {
+    > thead,
+    > tbody,
+    > tfoot {
+      > tr {
+        > td,
+        > th {
+          border: 1px solid $light-grey;
+        }
+      }
+    }
+  }
+
+  .no-border {
+    border: none;
+
+    > thead,
+    > tbody,
+    > tfoot {
+      > tr {
+        border: none;
+
+        > td {
+          border: none;
+        }
+      }
+    }
+  }
+}

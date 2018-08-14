@@ -1,0 +1,336 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Custom CSS module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_custom_css_menu() {
+  $items = array();
+
+  $items['admin/content/context/%ctools_js/delete/%context'] = array(
+    'title' => 'Delete context',
+    'page callback' => 'paddle_custom_css_delete_context',
+    'page arguments' => array(3, 5),
+    'access arguments' => array('manage paddle_apps'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_custom_css_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'paddle_style' && $plugin == 'paddle_style') {
+    return 'plugins/paddle_style';
+  }
+}
+
+/**
+ * Implements hook_paddle_themer_style_set().
+ */
+function paddle_custom_css_paddle_themer_style_set() {
+  $style_sets = array();
+
+  $style_sets['custom_css'] = array(
+    'title' => t('Custom CSS'),
+    'plugins' => array(
+      'custom_css' => t('Upload CSS file to change the style'),
+    ),
+    'weight' => 4,
+  );
+
+  return $style_sets;
+}
+
+/**
+ * Implements hook_paddle_themer_plugin_instances().
+ */
+function paddle_custom_css_paddle_themer_plugin_instances() {
+  $plugin_instances = array();
+
+  $plugin_instances['custom_css'] = array('plugin' => 'custom_css');
+
+  return $plugin_instances;
+}
+
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_custom_css_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_custom_css_settings_form',
+  );
+}
+
+/**
+ * Settings form for the custom css paddlet.
+ */
+function paddle_custom_css_settings_form() {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $form = array();
+
+  $contexts = context_load();
+
+  if (!empty($contexts)) {
+    $table = array(
+      'attributes' => array('id' => 'context-list'),
+    );
+
+    $table['header'] = array(
+      array(
+        'data' => t('Name'),
+        'class' => array('name'),
+      ),
+      array(
+        'data' => t('Actions'),
+        'colspan' => 2,
+        'class' => array('actions'),
+      ),
+    );
+
+    $action_class = 'ui-icon ui-icon-hiddentext';
+
+    foreach ($contexts as $context) {
+      $table['rows'][] = array(
+        'data' => array(
+          array(
+            'data' => $context->name,
+            'class' => 'context-name',
+          ),
+          array(
+            'data' => l(
+              t('Edit'),
+              'admin/structure/context/list/' . $context->name . '/edit',
+              array(
+                'attributes' => array(
+                  'class' => $action_class . ' ui-icon-edit'
+                ),
+              )
+            ),
+            'class' => 'context-edit',
+          ),
+          array(
+            'data' => ctools_modal_text_button(t('Delete'), 'admin/content/context/nojs/delete/' . $context->name, t('Delete the context'), $action_class . ' ui-icon-delete'),
+            'class' => 'context-delete',
+          ),
+        ),
+      );
+    }
+
+    $form['contexts'] = array(
+      '#type' => 'item',
+      '#markup' => theme('table', $table),
+    );
+  }
+  else {
+    $form['contexts'] = array(
+      '#type' => 'item',
+      '#markup' => t('No contexts have been created yet.'),
+    );
+  }
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_custom_css_configuration_form_add_contextual_actions';
+  }
+
+  return $form;
+}
+
+/**
+ * After-build function of the Paddle Custom css configuration form.
+ *
+ * @param array $form
+ *   Form render array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_custom_css_configuration_form_add_contextual_actions($form) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add an add definition button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('New context'), 'admin/structure/context/add', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-plus'),
+      ),
+    )),
+    'class' => array('add-context'),
+    'weight' => 20,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function paddle_custom_css_menu_alter(&$items) {
+  $items['admin/structure/context']['page callback'] = 'paddle_custom_css_redirect_user';
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_custom_css_form_ctools_export_ui_edit_item_form_alter(&$form, &$form_state) {
+  if (!empty($form_state['plugin']['name']) && $form_state['plugin']['name'] == 'context') {
+    $form['condition_mode']['#default_value'] = 1;
+    $form['condition_mode']['#access'] = FALSE;
+
+    // Whitelist the needed conditions.
+    $needed_conditions = array('node_taxonomy', 0);
+    $form['conditions']['selector']['#options'] = array_intersect_key($form['conditions']['selector']['#options'], array_flip($needed_conditions));
+    $form['conditions']['plugins']['node_taxonomy']['options']['node_form']['#access'] = FALSE;
+
+    $needed_reactions = array('theme_html', 0);
+    $form['reactions']['selector']['#options'] = array_intersect_key($form['reactions']['selector']['#options'], array_flip($needed_reactions));
+
+    $form['info']['tag']['#access'] = FALSE;
+    $form['info']['description']['#access'] = FALSE;
+
+    // Set the buttons in the contextual toolbar if available.
+    if (module_exists('paddle_contextual_toolbar')) {
+      $form['#after_build'][] = 'paddle_custom_css_ctools_export_ui_edit_item_form_add_contextual_actions';
+    }
+  }
+}
+
+/**
+ * After-build function of the ctools_export_ui_edit_item form.
+ *
+ * @param array $form
+ *   Form render array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_custom_css_ctools_export_ui_edit_item_form_add_contextual_actions($form) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  $actions[] = array(
+    'action' => l(t('Back'), 'admin/paddlet_store/app/paddle_custom_css/configure', array('attributes' => array('class' => array('ui-icon', 'fa-arrow-left')))),
+    'class' => array('cancel', 'cancel-js'),
+    'weight' => -10,
+  );
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-submit',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * When landing on admin/structure/context, we need to redirect the user.
+ */
+function paddle_custom_css_redirect_user() {
+  global $user;
+
+  // Admins should get the contrib page.
+  if ($user->uid != '1') {
+    drupal_goto('admin/paddlet_store/app/paddle_custom_css/configure');
+  }
+  else {
+    drupal_goto('admin/structure/context/list');
+  }
+}
+
+/**
+ * Page callback for the "delete context" form.
+ */
+function paddle_custom_css_delete_context($js, $context) {
+  $form_state = array(
+    'ajax' => $js,
+    'context' => $context,
+  );
+
+  if ($js) {
+    ctools_include('ajax');
+    ctools_include('modal');
+
+    // Open the settings form in a modal.
+    $commands = ctools_modal_form_wrapper('paddle_custom_css_delete_context_form', $form_state);
+
+    if ($form_state['executed'] && !$form_state['rebuild']) {
+      $commands = array();
+      $commands[] = ctools_modal_command_dismiss();
+      $commands[] = ctools_ajax_command_reload();
+    }
+
+    print ajax_render($commands);
+    ajax_footer();
+    drupal_exit();
+  }
+  else {
+    return drupal_build_form('paddle_custom_css_delete_context_form', $form_state);
+  }
+}
+
+/**
+ * Form callback for the "delete context" form.
+ */
+function paddle_custom_css_delete_context_form($form, &$form_state) {
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+
+  $form['body']['message'] = array(
+    '#type' => 'item',
+    '#markup' => t('Are you sure you want to delete the context %name?', array('%name' => $form_state['context']->name)),
+  );
+
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+  $form['buttons']['confirm'] = array(
+    '#type' => 'submit',
+    '#value' => t('Delete'),
+  );
+
+  // Can't use "cancel" as a key here, as that would cause the button to be
+  // hidden by CSS...
+  $form['buttons']['cancelling'] = array(
+    '#type' => 'submit',
+    '#value' => t('Cancel'),
+  );
+
+  return $form;
+}
+
+/**
+ * Delete a context.
+ */
+function paddle_custom_css_delete_context_form_submit($form, &$form_state) {
+  $form_state['completed'] = TRUE;
+  $form_state['refresh'] = FALSE;
+
+  if ($form_state['clicked_button']['#value'] == t('Delete')) {
+    context_delete($form_state['context']);
+    $form_state['refresh'] = TRUE;
+    drupal_set_message(t('Context deleted.'));
+  }
+}

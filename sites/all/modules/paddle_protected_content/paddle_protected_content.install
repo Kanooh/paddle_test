@@ -1,0 +1,82 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Protected Content.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_protected_content_enable() {
+  // Clear the caches so the menu item is recognized.
+  $cache_tables = module_invoke_all('flush_caches');
+  foreach ($cache_tables as $table) {
+    cache_clear_all('*', $table, TRUE);
+  }
+
+  paddle_apps_prepare_module_for_permissions('paddle_protected_content');
+  $permissions = array('administer user roles');
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, $permissions);
+
+  // Create the base fields.
+  features_revert_module('paddle_protected_content');
+
+  // Add the field instances to all content types.
+  foreach (node_type_get_types() as $type) {
+    paddle_protected_content_create_field_instances($type);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_protected_content_disable() {
+  // Remove the permissions.
+  $permissions = array('administer user roles');
+  $role = user_role_load_by_name('Site Manager');
+  user_role_revoke_permissions($role->rid, $permissions);
+
+  // Restores the default node grant so all published items are visible.
+  db_delete('node_access')->execute();
+
+  db_insert('node_access')
+      ->fields(array(
+          'nid' => 0,
+          'realm' => 'all',
+          'gid' => 0,
+          'grant_view' => 1,
+          'grant_update' => 0,
+          'grant_delete' => 0,
+      ))
+      ->execute();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_protected_content_uninstall() {
+  paddle_apps_remove_field('field_paddle_prot_pg_visibility');
+  paddle_apps_remove_field('field_paddle_prot_pg_user_roles');
+}
+
+/**
+ * Rebuilds the grants for existing nodes.
+ *
+ * @see paddle_apps_modules_enabled
+ */
+function paddle_protected_content_update_7000() {
+  db_delete('node_access')->execute();
+
+  $sandbox['nodes'] = node_load_multiple(FALSE);
+  paddle_apps_rebuild_node_access_batch($sandbox);
+  node_access_needs_rebuild(FALSE);
+}
+
+/**
+ * Enable the paddle_apps module in case it hasn't been enabled yet.
+ */
+function paddle_protected_content_update_7001() {
+  module_enable(array('paddle_apps'));
+}

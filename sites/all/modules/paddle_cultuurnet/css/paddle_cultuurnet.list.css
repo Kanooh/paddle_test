@@ -1,0 +1,45 @@
+.paddle-cultuurnet-event .event-image {
+    width: 90px;
+    -webkit-background-size: 90px;
+    background-size: 90px;
+    height: 90px;
+    border-radius: 45px;
+}
+
+.paddle-cultuurnet-event .img-wrapper {
+    display: inline-block;
+    vertical-align: middle;
+    min-width: 90px;
+    width: 7%;
+    margin-right: 15px;
+    float: left;
+}
+
+.paddle-cultuurnet-event .detail-wrapper {
+    min-height: 90px;
+}
+
+.paddle-cultuurnet-event {
+    padding-bottom: 10px;
+}
+
+a.paddle-cultuurnet-event-link {
+    text-decoration: none;
+}
+
+.list-title a.paddle-cultuurnet-event-link:before {
+    font-family: 'FontAwesome';
+    content: '\f111';
+    font-size: 6px;
+    float: left;
+    padding: 6px 10px 0px 0px;
+}
+
+@media screen and (max-width: 578px) {
+    .paddle-cultuurnet-event .img-wrapper {
+        display: block;
+        float: none;
+        height: auto;
+        padding-bottom: 5px;
+    }
+}

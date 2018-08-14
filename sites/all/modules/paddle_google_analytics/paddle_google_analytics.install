@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Install code for the Paddle Google Analytics App.
+ */
+
+/**
+ * Enable search term tracking.
+ */
+function paddle_google_analytics_update_7000() {
+  features_revert_module('paddle_google_analytics');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_google_analytics_uninstall() {
+  variable_set('googleanalytics_account', 'UA-');
+}

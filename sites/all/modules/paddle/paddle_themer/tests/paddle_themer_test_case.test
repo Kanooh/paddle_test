@@ -1,0 +1,129 @@
+<?php
+
+/**
+ * @file
+ * Base class for the Paddle Themer automated tests.
+ */
+
+class PaddleThemerTestCase extends DrupalWebTestCase {
+
+  /**
+   * The profile to install as a basis for testing.
+   *
+   * @var string
+   */
+  protected $profile = 'testing';
+
+  /**
+   * Creates a Paddle theme for testing.
+   *
+   * @param array $options
+   *   An optional associative array containing settings for the theme to be
+   *   created. Random values will be used for missing settings. Possible keys:
+   *   - 'name': a machine name for the theme.
+   *   - 'human_name': a human readable name for the theme.
+   *   - 'style': a style set to use in the theme.
+   *   - 'theme': the Drupal theme this Paddle theme is built upon. Defaults to
+   *     Bartik.
+   *
+   * @return string
+   *   The machine name of the generated theme.
+   */
+  protected function createPaddleTheme($options = array()) {
+    // Generate a random theme name.
+    $name = isset($options['name']) ? $options['name'] : $this->randomName();
+    $human_name = isset($options['human_name']) ? $options['human_name'] : $this->randomString();
+    $style = isset($options['style']) ? $options['style'] : $this->randomStyleSettings();
+    $theme = isset($options['theme']) ? $options['theme'] : 'bartik';
+
+    // Insert the theme into the database.
+    db_insert('paddle_themer_theme')
+      ->fields(array(
+        'name' => $name,
+        'human_name' => $human_name,
+        'theme' => $theme,
+        'style' => serialize($style),
+        'changed' => REQUEST_TIME,
+      ))
+      ->execute();
+
+    return $name;
+  }
+
+  /**
+   * Creates a random style settings array.
+   *
+   * @todo Make this return random style settings from all supported plugin
+   *   instances, instead of a hardcoded array.
+   *
+   * @return array
+   *   A style settings array.
+   */
+  protected function randomStyleSettings() {
+    // Generate a style settings array.
+    $style = array(
+      'h1_background' => array(
+        'background_color' => '345c4d',
+        'color_enabled' => 1,
+      ),
+      'h1_font' => array(
+        'font_family' => 'Arial, Helvetica, sans-serif',
+        'font_size' => '14px',
+        'font_style' => array(
+          'bold' => 'bold',
+          'italic' => 'italic',
+          'underline' => 0,
+        ),
+      ),
+    );
+    return $style;
+  }
+
+  /**
+   * Takes a stream wrapper URI and returns an absolute path.
+   */
+  protected function getAbsoluteUrlFromUri($uri) {
+    // Split out the scheme and target path.
+    list($scheme, $target) = explode('://', $uri, 2);
+
+    if (!file_stream_wrapper_valid_scheme($scheme)) {
+      return FALSE;
+    }
+
+    $wrapper = file_stream_wrapper_get_instance_by_scheme($scheme);
+    $wrapper->setUri($uri);
+
+    // Remove erroneous leading or trailing, forward-slashes and backslashes.
+    $target = trim($target, '\/');
+
+    return ($wrapper->getDirectoryPath() . '/' . $target);
+  }
+
+  /**
+   * Reimplements DrupalWebTestCase::drupalLogin().
+   *
+   * DrupalWebTestCase::drupalLogin() verifies a successful login by checking if
+   * there is a logout link present. However, not all themes have a logout link.
+   * So instead we verify if the logged-in class is set on the body tag.
+   */
+  protected function drupalLogin(stdClass $account) {
+    if ($this->loggedInUser) {
+      $this->drupalLogout();
+    }
+
+    $edit = array(
+      'name' => $account->name,
+      'pass' => $account->pass_raw,
+    );
+    $this->drupalPost('user', $edit, t('Log in'));
+
+    // If the logged-in class is present on the body element, it is almost
+    // certain that the login was successful.
+    $pass = $this->assertTrue($this->xpath('//body[contains(@class, "logged-in")]'), 'The class "logged-in" was found on the body element.');
+
+    if ($pass) {
+      $this->loggedInUser = $account;
+    }
+  }
+
+}

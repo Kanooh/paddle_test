@@ -1,0 +1,172 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Holiday Participation.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_holiday_participation_install() {
+  module_load_include('inc', 'paddle_holiday_participation', 'paddle_holiday_participation_be_zip_codes');
+  paddle_holiday_participation_import_zip_codes();
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_holiday_participation_enable() {
+  // Rebuild the content type list to make Drupal aware of the new type.
+  // Otherwise the granting of permissions will fail.
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions. Otherwise our new content type is not yet
+  // known.
+  drupal_load('module', 'paddle_holiday_participation');
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_holiday_participation');
+  node_type_cache_reset();
+  drupal_static_reset();
+  _node_types_build(TRUE);
+
+  $permissions = array(
+    'create offer content',
+    'edit any offer content',
+    'delete any offer content',
+    'administer panelizer node offer layout',
+    'administer panelizer node offer content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+
+    if ($role) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+
+  paddle_content_region_panelize_node_type('offer');
+  paddle_content_region_grant_node_type_permissions('offer');
+
+  // Set url alias for each category view.
+  $url_aliases = array(
+    'offer/daytrips' => 'aanbod/daguitstappen',
+    'offer/holidayaccommodations' => 'aanbod/vakantieverblijven',
+    'offer/groupaccommodations' => 'aanbod/groepsverblijven',
+    'offer/organisedholidays' => 'aanbod/georganiseerdevakanties',
+    'offer/daytrips/map' => 'aanbod/daguitstappen/kaart',
+    'offer/holidayaccommodations/map' => 'aanbod/vakantieverblijven/kaart',
+    'offer/groupaccommodations/map' => 'aanbod/groepsverblijven/kaart',
+    'offer/organisedholidays/map' => 'aanbod/georganiseerdevakanties/kaart',
+  );
+
+  foreach ($url_aliases as $key => $value) {
+    $path_args = array(
+      "source" => $key,
+      "alias" => $value,
+      "language" => 'nl',
+    );
+
+    path_save($path_args);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_holiday_participation_disable() {
+  // Remove the url aliases on module disable.
+  $url_aliases = array(
+    'offer/daytrips' => 'aanbod/daguitstappen',
+    'offer/holidayaccommodations' => 'aanbod/vakantieverblijven',
+    'offer/groupaccommodations' => 'aanbod/groepsverblijven',
+    'offer/organisedholidays' => 'aanbod/georganiseerdevakanties',
+    'offer/daytrips/map' => 'aanbod/daguitstappen/kaart',
+    'offer/holidayaccommodations/map' => 'aanbod/vakantieverblijven/kaart',
+    'offer/groupaccommodations/map' => 'aanbod/groepsverblijven/kaart',
+    'offer/organisedholidays/map' => 'aanbod/georganiseerdevakanties/kaart',
+  );
+  foreach ($url_aliases as $key => $value) {
+    path_delete($args = array("source" => $key));
+  }
+}
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_holiday_participation_schema() {
+  $schema['zipcodes'] = array(
+    'description' => 'Location.module zipcode database.',
+    'fields' => array(
+      'zip' => array(
+        'description' => 'Postal / ZIP code.',
+        'type' => 'varchar',
+        'length' => 16,
+        'not null' => TRUE,
+        'default' => '0',
+      ),
+      'city' => array(
+        'description' => 'City.',
+        'type' => 'varchar',
+        'length' => 50,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'state' => array(
+        'description' => 'Province / State.',
+        'type' => 'varchar',
+        'length' => 50,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'latitude' => array(
+        'description' => 'Location latitude (decimal degrees).',
+        'type' => 'int',
+        'size' => 'big',
+        'scale' => 6,
+        'not null' => TRUE,
+        'default' => 0.0,
+      ),
+      'longitude' => array(
+        'description' => 'Location longitude (decimal degrees).',
+        'type' => 'int',
+        'size' => 'big',
+        'scale' => 6,
+        'not null' => TRUE,
+        'default' => 0.0,
+      ),
+      'timezone' => array(
+        'description' => 'Timezone (unused).',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      // @@@ Not used, an artifact of the original data dump format.
+      'dst' => array(
+        'description' => 'Daylight Savings Time (unused).',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'country' => array(
+        'description' => 'Two letter ISO country code.',
+        'type' => 'char',
+        'length' => 2,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('zip', 'city'),
+    'indexes' => array(
+      'pc' => array('country', 'zip'),
+      'zip' => array('zip'),
+      'latitude' => array('latitude'),
+      'longitude' => array('longitude'),
+      'country' => array('country'),
+    ),
+  );
+
+  return $schema;
+}

@@ -1,0 +1,94 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Content Manager.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_content_manager_install() {
+  variable_set('page_manager_node_edit_disabled', FALSE);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_content_manager_uninstall() {
+  variable_delete('paddle_content_manager_validation_states');
+}
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_content_manager_schema() {
+  $schema['paddle_content_manager_validate_user'] = array(
+    'description' => 'Keeps track of which users have validated nodes.',
+    'fields' => array(
+      'nid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Node ID of the node that has been validated.',
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'User ID of the user that has validated the node.',
+      ),
+      'hid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => 'Workbench Moderation node history ID of the moderation state transition that validated the node.',
+      ),
+    ),
+    'unique keys' => array(
+      'nid' => array('nid'),
+    ),
+  );
+
+  $schema['paddle_content_manager_revision_assignee'] = array(
+    'description' => 'Holds historical information on node revisions assignees.',
+    'fields' => array(
+      'entity_type' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The entity type of the revision.',
+      ),
+      'entity_id' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'workbench_hid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('entity_type', 'entity_id', 'workbench_hid'),
+  );
+
+  return $schema;
+}
+
+
+/**
+ * Enable the "Featured image" master field instance.
+ */
+function paddle_content_manager_update_7000() {
+  module_enable(array('paddle_scald_atom_field'));
+  features_revert_module('paddle_content_manager');
+}

@@ -1,0 +1,149 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Mega Dropdown.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_mega_dropdown_schema() {
+  $schema = array();
+
+  $schema['paddle_mega_dropdown'] = array(
+    'description' => 'Stores Paddle Mega Dropdown configuration entities.',
+    'fields' => array(
+      'pmdid' => array(
+        'description' => 'The primary identifier for a Paddle Mega Dropdown.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'mlid' => array(
+        'description' => 'The menu link ID (mlid) is the foreign key.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'language' => array(
+        'description' => 'The {languages}.language of this Mega Dropdown.',
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'indexes' => array(
+      'mlid' => array('mlid'),
+      'language' => array('language'),
+    ),
+    'foreign keys' => array(
+      'mlid' => array('menu_links' => 'mlid'),
+    ),
+    'primary key' => array('pmdid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function paddle_mega_dropdown_install() {
+  // Load the module file explicitly - as it wasn't loaded at bootstrap yet,
+  // for PHP to find paddle_mega_dropdown_menu(). Otherwise the paths from that
+  // hook_menu() implementation won't be known from the start.
+  // This should probably be fixed in the apps module.
+  drupal_load('module', 'paddle_mega_dropdown');
+}
+
+/**
+ * Implements hook_enable().
+ *
+ * Runs at the end of the enabling process.
+ * - Show language switcher block on admin overview page.
+ * - Revert features.
+ * - Allow editors and chief editors to edit Mega Dropdown panels content.
+ * - Show the admin menu on all our admin pages
+ */
+function paddle_mega_dropdown_enable() {
+  if (module_exists('block') && module_exists('locale')) {
+    // Provide an easy way to switch to another language.
+    db_update('block')
+      ->expression('pages', "CONCAT(pages, '\r\nadmin/apps/paddle_apps/paddle_mega_dropdown/configure')")
+      ->condition('module', 'locale')
+      ->condition('delta', 'language_content')
+      ->execute();
+  }
+
+  // This requires drupal_static_reset() and
+  // files[] = plugins/entity/PanelizerEntityPaddleMegaDropdown.class.php
+  // to be explicitly in paddle_mega_dropdown.install for the registry to find
+  // the Mega Dropdown ctools entity plugin class even though this module isn't
+  // fully enabled yet. And thus also find the related panelizer permissions,
+  // so we can enable one of them.
+  // Already tried to be more specific, but it didn't suffice;
+  // drupal_static_reset('checkPermissions');
+  // drupal_static_reset('user_access');
+  // Maybe https://drupal.org/node/1265168 will fix this at the core of the
+  // problem.
+  module_load_all();
+  entity_info_cache_clear();
+
+  // We need to reset the ctools plugin caches, to be sure all required
+  // data of the mega dropdown entity will be loaded in the panelizer entity
+  // plugin.
+  drupal_static_reset();
+
+  features_include_defaults(NULL, TRUE);
+  // Revert the features of this module to their original state, just in case
+  // they were altered meanwhile.
+  features_revert_module('paddle_mega_dropdown');
+
+  // Specifically revert the panelizer static cache as it seems it's not reverted
+  // with drupal_static_reset() or it is rebuilt meanwhile. In any case the
+  // Simpletests need this.
+  drupal_static_reset('panelizer_entity_plugin_get_handler');
+
+  // Clear the CTools plugin cache so our new Panelizer permission gets known.
+  ctools_modules_enabled(array('paddle_mega_dropdown'));
+
+  // Set permissions.
+  $permissions = array(
+    'administer panelizer paddle_mega_dropdown paddle_mega_dropdown content',
+  );
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Add the Mega Dropdown entity edit page to the management menu display path
+  // root items.
+  if ('paddle' == variable_get('install_profile')) {
+    $path_roots = array(
+      array(
+        'path' => 'admin/paddle-mega-dropdown/%',
+        'root_item' => 'admin',
+      ),
+    );
+    module_load_include('install', 'paddle');
+    _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+  }
+}
+
+/**
+ * Remove mega dropdowns where the menu link does not exist for.
+ */
+function paddle_mega_dropdown_update_7001() {
+  $mega_dropdowns = paddle_mega_dropdown_load_all();
+
+  foreach ($mega_dropdowns as $mega_dropdown) {
+    $menu_link = menu_link_load($mega_dropdown->mlid);
+
+    if (!$menu_link) {
+      $mega_dropdown->delete();
+    }
+  }
+}

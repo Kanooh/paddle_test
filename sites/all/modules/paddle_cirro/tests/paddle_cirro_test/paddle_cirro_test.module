@@ -1,0 +1,86 @@
+<?php
+
+/**
+ * @file
+ * Helper module for Paddle CIRRO tests.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_cirro_test_menu() {
+  $items['testing/resources'] = array(
+    'page callback' => 'paddle_cirro_test_get_resources',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'delivery callback' => 'drupal_json_output',
+  );
+  $items['testing/resources/%guid'] = array(
+    'page callback' => 'paddle_cirro_test_get_resource',
+    'page arguments' => array(2),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'delivery callback' => 'drupal_json_output',
+  );
+
+  return $items;
+}
+
+/**
+ * Returns the MOCK resources of the feed.
+ *
+ * @return array
+ *   An overview of all resources.
+ */
+function paddle_cirro_test_get_resources() {
+  $resources = array(
+    0 => array(
+      "Guid" => "6fefc292-aaa2-4a15-9ea0-4462dc48ae21",
+      "Naam" => "BVOKA-BHK - Minigids en formats voor afgeleide beelden",
+      "Publicatiedatum" => "2017-06-13T00:00:00",
+      "DatumVerwijderd" => NULL,
+    ),
+    1 => array(
+      "Guid" => "ede227db-a0a3-44a9-9fed-172567324473",
+      "Naam" => "BVOKA-BHK - Presentatie voor heterogeen doelpubliek",
+      "Publicatiedatum" => "2017-06-11T00:00:00",
+      "DatumVerwijderd" => NULL,
+    ),
+  );
+
+  return $resources;
+}
+
+/**
+ * Returns a mock CIRRO resource by GUID.
+ *
+ * @param string $guid
+ *   The GUID of the mock CIRRO resource.
+ *
+ * @return array
+ *   The mock CIRRO resource as an array.
+ */
+function paddle_cirro_test_get_resource($guid) {
+  $resource = array();
+
+  switch ($guid) {
+    case 'ede227db-a0a3-44a9-9fed-172567324473':
+      $resource = array(
+        "Guid" => "ede227db-a0a3-44a9-9fed-172567324473",
+        "Name" => "BVOKA-BHK - Presentatie voor heterogeen doelpubliek",
+        "Description" => "Logo's kunnen beroep doen op gevormde sprekers (pool) voor het geven van consensuspresentaties voor een heterogeen doelpubliek. Er wordt aandacht besteed aan de bevordering van de geïnformeerde keuze.\r\nHiervoor wordt de consensuspresentatie door het CvKo ter beschikking gesteld, wordt de spreker vergoed.\r\nTer ondersteuning van de informatie die gegeven wordt, wordt een publieksfolder ontwikkeld. ",
+        "Contactinfo" => "CvKO vzw\r\nMariane De Vriendt\r\nlogos.contact@bevolkingsonderzoek.be\r\n09 332 36 36",
+      );
+      break;
+
+    case '6fefc292-aaa2-4a15-9ea0-4462dc48ae21':
+      $resource = array(
+        "Guid" => "6fefc292-aaa2-4a15-9ea0-4462dc48ae21",
+        "Name" => "BVOKA-BHK - Minigids en formats voor afgeleide beelden",
+        "Description" => "Handleiding en formats voor het aanmaken van afgeleide beelden  van de conceptbeelden CvKO",
+      );
+      break;
+  }
+
+  return $resource;
+}

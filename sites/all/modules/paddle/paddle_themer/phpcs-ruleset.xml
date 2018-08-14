@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- PHP_CodeSniffer standard for Paddle Themer. -->
+<!-- See http://pear.php.net/manual/en/package.php.php-codesniffer.annotated-ruleset.php -->
+<ruleset name="Paddle-Themer">
+    <description>Drupal coding standard</description>
+
+    <rule ref="Drupal">
+
+    </rule>
+
+    <!-- False positive on {@inheritdoc} comment. See https://drupal.org/node/1879768 -->
+    <rule ref="Drupal.Commenting.FunctionComment">
+        <exclude-pattern>*</exclude-pattern>
+    </rule>
+
+</ruleset>

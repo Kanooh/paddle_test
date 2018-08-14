@@ -1,0 +1,49 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCoreLanguageSwitcherTest.
+ */
+
+/**
+ * Tests the presence of the language switcher block.
+ */
+class PaddleCoreLanguageSwitcherTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Language Switcher Presence',
+      'description' => 'Tests the presence of the language switcher block.',
+      'group' => 'Paddle Core',
+    );
+  }
+
+  /**
+   * Test that the language switcher is not visible.
+   */
+  public function testLanguageSwitcher() {
+    $paths = array(
+      'admin/structure/menu_manager',
+      'node/%nid/edit',
+      'admin',
+      'admin/content_manager',
+      'admin/content_manager/node/%nid/view',
+      'admin/structure/taxonomy_manager',
+    );
+    foreach (array('editor', 'chiefEditor') as $user) {
+      $this->drupalLogin($this->{$user});
+      foreach (array('basic_page', 'landing_page') as $type) {
+        $node = $this->drupalCreateUiNode($type);
+        // Go to the pages on which the language switcher is usually visible.
+        foreach ($paths as $path) {
+          $this->drupalGet(str_replace('%nid', $node->nid, $path));
+          $this->assertFalse($this->xpath('//div[@id="block-locale-language-content"]'), "Language switcher not present on '$path'");
+        }
+      }
+      $this->drupalLogout();
+    }
+  }
+}

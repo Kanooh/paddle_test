@@ -1,0 +1,42 @@
+<?php
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Timestamp.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_timestamp_install() {
+  // Set all timestamp settings for existing content types.
+  foreach (node_type_get_types() as $type => $name) {
+    variable_set('paddle_timestamp_' . $type, 0);
+  }
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_timestamp_enable() {
+  features_revert_module('paddle_timestamp');
+  node_type_cache_reset();
+
+  foreach (node_type_get_types() as $type) {
+    paddle_timestamp_create_timestamp_fields_instances($type);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_timestamp_disable() {
+  paddle_apps_remove_field('field_paddle_timestamp');
+  paddle_apps_remove_field('field_paddle_overwrite_timestamp');
+}
+
+/**
+ * Enable the paddle_apps module in case it hasn't been enabled yet.
+ */
+function paddle_timestamp_update_7000() {
+  module_enable(array('paddle_apps'));
+}

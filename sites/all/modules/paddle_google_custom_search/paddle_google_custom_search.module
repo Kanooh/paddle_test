@@ -1,0 +1,165 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Google Custom Search app.
+ */
+
+include_once 'inc/google_custom_search.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_google_custom_search_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_google_custom_search_settings_form',
+  );
+}
+
+/**
+ * Form callback displaying Google Custom Search settings.
+ */
+function paddle_google_custom_search_settings_form() {
+  $form = array();
+
+  $help_text = '<p>' . t('Google Custom Search Engine exists in a freemium and a payable model. If you use the freemium model you will only have 100 requests per day.') . '</p>';
+  $help_text .= '<p>' . t('No matter the model you choose, follow the instructions below to activate a GSE and to have it connected with your Kañooh-website.') . '</p>';
+  $active_theme = paddle_themer_enabled_theme();
+  $active_theme_url = 'admin/themes/' . $active_theme->name . '/edit';
+  $args = array('!link' => l(t('active theme'), $active_theme_url));
+  $help_text .= '<p>' . t('After you set up your key, enable the Google Custom Search in your !link. You can find it in the "Header" section.', $args) . '</p>';
+
+  $form['cse_text'] = array('#markup' => $help_text);
+
+  $form['cse_id'] = array(
+    '#type' => 'textfield',
+    '#title' => '1 - ' . t('Enter your CSE ID'),
+    '#default_value' => variable_get('cse_id', ''),
+    '#size' => 35,
+    '#maxlength' => 35,
+    '#description' => t('Go to CSE (<a href="https://www.google.com/cse/">https://www.google.com/cse/</a>) to create an account if you do not have one yet.'),
+  );
+
+  $form['cse_api_key'] = array(
+    '#type' => 'textfield',
+    '#title' => '2 - ' . t('Enter your API key'),
+    '#default_value' => variable_get('cse_api_key', ''),
+    '#size' => 40,
+    '#maxlength' => 40,
+    '#description' => t('Go to <a href="https://console.developers.google.com">https://console.developers.google.com</a> to create an API key if you do not have one yet.'),
+  );
+
+  $form['cse_labels_container'] = array(
+    '#type' => 'container',
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_google_custom_search_menu() {
+  $items['google-custom-search'] = array(
+    'title' => 'Search results',
+    'description' => '',
+    'page callback' => 'paddle_google_custom_search_search_page',
+    'access arguments' => array('access content'),
+    'file' => 'paddle_google_custom_search.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_paddle_search_engines().
+ */
+function paddle_google_custom_search_paddle_search_engines() {
+  return array(
+    'google_custom' => array(
+      'label' => t('Google custom search'),
+      'text' => t('On all websites'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_search_SEARCH_ENGINE_form_submit().
+ *
+ * @see search_api_page_search_form_submit()
+ */
+function paddle_google_custom_search_paddle_search_google_custom_form_submit($form, &$form_state) {
+  // We format our keys in the same way as search_api_search_form does it on
+  // submit.
+  $keys = trim($form_state['values']['keys_' . $form_state['values']['id']]);
+  $keys = strtr($keys, array("\\" => "\\\\", '/' => "\\"));
+  $form_state['redirect'] = 'google-custom-search/' . $keys;
+
+  // To completely control the redirect destination, we need to remove the
+  // 'destination' GET parameter, which would override our destination, if
+  // present.
+  unset($_GET['destination']);
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_google_custom_search_theme($existing, $type, $theme, $path) {
+  return array(
+    'google_search_result' => array(
+      'variables' => array(
+        'title' => NULL,
+        'url' => NULL,
+        'snippet' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * Returns HTML for a google search result.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - title: The title of the search result item.
+ *   - url: The url to the search result.
+ *   - snippet: A text snippet from the search result.
+ *
+ * @ingroup themeable
+ */
+function theme_google_search_result($variables) {
+  $output = '<div class="google-custom-search-result">';
+  $output .= '<h3 class="google-custom-search-title"><a href="' . check_plain($variables['url']) . '">' . $variables['title'] . '</a></h3>';
+  $output .= '<p class="google-custom-search-snippet">' . check_plain($variables['snippet']) . '</p>';
+  $output .= '</div>';
+
+  return $output;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_google_custom_search_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_googleanalytics_get_page_search_info_alter().
+ */
+function paddle_google_custom_search_googleanalytics_get_page_search_info_alter(&$search_page) {
+  $item = menu_get_item();
+  $page_callback = $item['page_callback'];
+  $page_arguments = $item['page_arguments'];
+
+  // Provide support for search_api_page pages.
+  if ('paddle_google_custom_search_search_page' == $page_callback && !empty($page_arguments[0])) {
+    $search_page['path'] = $item['path'];
+    $search_page['keys'] = $page_arguments[0];
+  }
+}

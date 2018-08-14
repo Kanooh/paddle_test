@@ -1,0 +1,53 @@
+/**
+* @file
+* Custom pane styling.
+*/
+
+
+/**
+* ==========================================================================================
+* //                        Menu Structure Pane                                           //
+* ==========================================================================================
+*/
+
+.pane-add-menu-structure {
+  .pane-section-body {
+    &.view-mode-spotlight_extended, &.view-mode-spotlight_short, &.view-mode-doormat {
+      ul.menu {
+        @include flexbox();
+        @include flex-wrap(wrap);
+        margin-top: -3rem;
+        margin-left: -3rem;
+
+        li {
+          margin-top: 3rem;
+          padding-left: 3rem;
+        }
+      }
+    }
+  }
+}
+
+.pane-section-top {
+  h2 {
+    font-size: 3.4rem;
+    font-family: flanders-serif,serif;
+    font-weight: 400;
+    margin-bottom: 2rem;
+    line-height: 1.5;
+  }
+}
+
+/**
+* ==========================================================================================
+* //                        Download List Pane                                           //
+* ==========================================================================================
+*/
+
+.pane-download-list a, .field-name-body .document-miniature a {
+  text-decoration: none;
+
+  .document-miniature__title:hover {
+    text-decoration: underline;
+  }
+}

@@ -1,0 +1,257 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Section Theming.
+ */
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_section_theming_form_paddle_menu_manager_menu_item_form_alter(&$form, &$form_state, $form_id) {
+  // @TODO: Allow image to be added on menu item creation.
+  _paddle_section_theming_form_helper_add_background_by_menu_item($form, $form_state['menu_item']['mlid']);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_section_theming_form_paddle_menu_manager_node_menu_item_menu_link_form_alter(&$form, &$form_state) {
+  _paddle_section_theming_form_helper_add_background_by_menu_item($form, $form_state['menu_link']['mlid']);
+}
+
+/**
+ * Submit callback for the paddle_menu_manager_menu_item_form.
+ */
+function paddle_section_theming_menu_link_submit(&$form, &$form_state) {
+  if (isset($form_state['menu_item'])) {
+    $menu = $form_state['menu_item'];
+  }
+  elseif (isset($form_state['menu_link'])) {
+    $menu = $form_state['menu_link'];
+  }
+  if (!empty($menu['mlid'])) {
+    $mlid = $menu['mlid'];
+    $old_sid = _paddle_section_theming_get_background_by_menu_item($mlid);
+
+    if (!empty($form_state['values']['menu_background'])) {
+      $new_sid = $form_state['values']['menu_background'][0];
+    }
+
+    if (!empty($old_sid) && !empty($new_sid)) {
+      if ($old_sid != $new_sid) {
+        _paddle_section_theming_update_background_to_menu_item($mlid, $new_sid);
+      }
+    }
+    elseif (!empty($old_sid)) {
+      _paddle_section_theming_remove_background_from_menu_item($mlid);
+    }
+    elseif (!empty($new_sid)) {
+      _paddle_section_theming_link_background_to_menu_item($mlid, $new_sid);
+    }
+  }
+}
+
+/**
+ * Implements hook_menu_link_delete().
+ *
+ *   Associative array defining a menu link as passed into menu_link_save().
+ */
+function paddle_section_theming_menu_link_delete($link) {
+  _paddle_section_theming_remove_background_from_menu_item($link['mlid']);
+}
+
+/**
+ * Retrieves the background image linked to a menu item if there is one.
+ *
+ * @param int $mlid
+ *   The identifier of the menu link item.
+ *
+ * @return mixed
+ *   The result of the query.
+ */
+function _paddle_section_theming_get_background_by_menu_item($mlid) {
+  return db_select('paddle_section_theming', 'pst')
+    ->fields('pst', array('sid'))
+    ->condition('mlid', $mlid)
+    ->execute()->fetchField();
+}
+
+/**
+ * Links a background image to a menu item in a new record in the db..
+ *
+ * @param int $mlid
+ *   The Identifier of the menu item.
+ * @param int $sid
+ *   The Identifier of the scald image.
+ */
+function _paddle_section_theming_link_background_to_menu_item($mlid, $sid) {
+  db_insert('paddle_section_theming')
+    ->fields(array(
+      'mlid' => $mlid,
+      'sid' => $sid,
+    ))
+    ->execute();
+
+  _paddle_section_theming_clear_page_cache_per_menu_item($mlid);
+}
+
+/**
+ * Update a new background image to a menu item in an existing record in the db.
+ *
+ * @param int $mlid
+ *   The Identifier of the menu item.
+ * @param int $sid
+ *   The Identifier of the scald image.
+ */
+function _paddle_section_theming_update_background_to_menu_item($mlid, $sid) {
+  db_update('paddle_section_theming')
+    ->fields(array(
+      'sid' => $sid,
+    ))
+    ->condition('mlid', $mlid, '=')
+    ->execute();
+
+  _paddle_section_theming_clear_page_cache_per_menu_item($mlid);
+}
+
+/**
+ * Remove a background image of a menu item from an existing record in the db.
+ *
+ * @param int $mlid
+ *   The Identifier of the menu item.
+ */
+function _paddle_section_theming_remove_background_from_menu_item($mlid) {
+  db_delete('paddle_section_theming')
+    ->condition('mlid', $mlid, '=')
+    ->execute();
+
+  _paddle_section_theming_clear_page_cache_per_menu_item($mlid);
+}
+
+/**
+ * Clears the page cache of a menu item if linked to a node.
+ *
+ * @param int $mlid
+ *   The Identifier of the menu item.
+ */
+function _paddle_section_theming_clear_page_cache_per_menu_item($mlid) {
+  $menu_item = menu_link_load($mlid);
+
+  if (!empty($menu_item) && $menu_item['router_path'] == 'node/%') {
+    $menu_paths[] = drupal_get_path_alias($menu_item['link_path']);
+    $menu_paths[] = $menu_item['link_path'];
+
+    if (module_exists('paddle_path_by_menu')) {
+      $menu_paths[] = paddle_path_by_menu_get_menu_path($menu_item);
+    }
+
+    foreach ($menu_paths as $menu_path) {
+      cache_clear_all(url($menu_path, array('absolute' => TRUE)), 'cache_page');
+    }
+  }
+
+  // Retrieve the children of the menu.
+  $children = db_select('menu_links', 'ml')
+    ->fields('ml', array('mlid'))
+    ->condition('plid', $mlid, '=')
+    ->execute()
+    ->fetchCol();
+
+  if (!empty($children)) {
+    // Recursively call this function for each child.
+    foreach ($children as $child) {
+      _paddle_section_theming_clear_page_cache_per_menu_item($child);
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function paddle_section_theming_preprocess_page(&$variables) {
+  if (empty($variables['node'])) {
+    return;
+  }
+
+  $background_image_sid = _paddle_section_theming_get_background_image();
+
+  if (!empty($background_image_sid)) {
+    $background_image = scald_atom_load($background_image_sid);
+    $image_path = $background_image->thumbnail_source;
+
+    $variables['paddle_section_theming_background_image_url'] = file_create_url($image_path);
+  }
+}
+
+/**
+ * Retrieve the background image for the current page if linked to a menu.
+ *
+ * @param int $mlid
+ *   The Identifier of the menu item.
+ *
+ * @return string
+ *   The Identifier of the scald image or empty string.
+ */
+function _paddle_section_theming_get_background_image($mlid = 0) {
+  // Get the current menu item.
+  if ($mlid == 0) {
+    $active_trail = menu_get_active_trail();
+    $menu_item = array_pop($active_trail);
+  }
+  else {
+    $menu_item = menu_link_load($mlid);
+  }
+
+  $skip_menus = array('user-menu', 'navigation');
+
+  if (!empty($menu_item['mlid']) && !empty($menu_item['menu_name']) && !in_array($menu_item['menu_name'], $skip_menus)) {
+    $background_image_sid = _paddle_section_theming_get_background_by_menu_item($menu_item['mlid']);
+    // If there is no background image attached, check the parents.
+    if (empty($background_image_sid) && !empty($menu_item['plid'])) {
+      return _paddle_section_theming_get_background_image($menu_item['plid']);
+    }
+    else {
+      return $background_image_sid;
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Add the field for the background image linked to a menu_item.
+ *
+ * @param int $mlid
+ *   The Identifier of the menu item.
+ */
+function _paddle_section_theming_form_helper_add_background_by_menu_item(&$form, $mlid) {
+  if (!empty($mlid)) {
+    // Retrieve the default menu background if there is one.
+    $default_sid = _paddle_section_theming_get_background_by_menu_item($mlid);
+
+    $form['body']['section_theming'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Section-based theming'),
+      '#collapsable' => TRUE,
+      '#collapsed' => TRUE,
+      '#weight' => 1,
+      '#description' => t("Upload a custom background for this menu item and its children."),
+      '#states' => array(
+        'visible' => array(
+          'input[name="content_button"]' => array('value' => 'internal'),
+        ),
+      ),
+    );
+
+    $form['body']['section_theming']['menu_background'] = array(
+      '#title' => t('Choose a background image'),
+      '#type' => 'paddle_scald_atom',
+      '#button_text' => t('Choose an image...'),
+      '#default_value' => (!empty($default_sid)) ? $default_sid : NULL,
+      '#allowed_types' => array('image'),
+    );
+
+    $form['#submit'][] = 'paddle_section_theming_menu_link_submit';
+  }
+}

@@ -1,0 +1,36 @@
+name = Glossary
+description = With this paddlet you can create a list with words and their definitions/descriptions. These words will be underlined on the website. Visitors can hover over the words and a pop-up will open with the matching definition of the word.
+core = 7.x
+package = Paddle
+dependencies[] = ckeditor
+dependencies[] = features
+dependencies[] = paddle_scald
+dependencies[] = paddle_text_formats
+dependencies[] = text
+dependencies[] = views
+dependencies[] = views_content
+
+features[ckeditor_profile][] = Glossary_Full_HTML
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2
+features[field_base][] = field_glossary_description
+features[field_instance][] = paddle_glossary_definition-paddle_glossary_definition-field_glossary_description
+features[filter][] = glossary_full_html
+features[views_view][] = paddle_glossary
+
+files[] = includes/paddle_glossary_handler_field_edit_link.inc
+files[] = includes/paddle_glossary_handler_field_delete_link.inc
+
+apps[logo] = apps/logo.png
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+apps[paddle][vendor_link] = http://kanooh.be
+apps[paddle][third_party_service] = 0
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_glossary"
+datestamp = "1473170415"
+

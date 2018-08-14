@@ -1,0 +1,125 @@
+<?php
+/**
+ * @file
+ * Install and update hook for Incoming RSS paddlet.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_incoming_rss_schema() {
+  $schema = array();
+
+  $schema['paddle_incoming_rss_feed'] = array(
+    'description' => 'Base table for Paddle Incoming RSS feed entities.',
+    'fields' => array(
+      'feed_id' => array(
+        'description' => 'The primary identifier for an Incoming RSS feed entity.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'description' => 'The title of this Incoming RSS feed entity, always treated as non-markup plain text.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('feed_id'),
+  );
+
+  $schema['paddle_incoming_rss_feed_item'] = array(
+    'description' => 'Base table for Paddle Incoming RSS feed item entities.',
+    'fields' => array(
+      'feed_item_id' => array(
+        'description' => 'The primary identifier for a feed item entity.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'description' => 'The title of this feed item entity, always treated as non-markup plain text.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'thumbnail' => array(
+        'description' => 'The URI to access the remote thumbnail image.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp when the feed item was created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'The Unix timestamp when the feed item was most recently saved.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'source' => array(
+        'description' => 'The source URL of the feed item.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'indexes' => array(
+      'node_changed' => array('changed'),
+      'node_created' => array('created'),
+    ),
+    'primary key' => array('feed_item_id'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_incoming_rss_enable() {
+  // Clear the plugin cache to pick up the plugins declared by this module.
+  cache_clear_all('plugins:feeds:plugins', 'cache');
+
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_incoming_rss'));
+
+  // Give permissions to users to administer Incoming RSS configuration and add
+  // Incoming RSS list panes.
+  $permissions = array(
+    'administer paddle incoming rss',
+    'edit incoming_rss content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Add the source field to the table.
+ */
+function paddle_incoming_rss_update_7001()
+{
+  $source = array(
+    'description' => 'The source URL of the feed item.',
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => TRUE,
+    'default' => '',
+  );
+  if (!db_field_exists('paddle_incoming_rss_feed_item', 'source')){
+    db_add_field('paddle_incoming_rss_feed_item', 'source', $source);
+  }
+}

@@ -1,0 +1,207 @@
+/**
+ * @file
+ * Multilingual Paddlet styling.
+ */
+
+// ----------------------------
+// Locale block
+// ----------------------------
+.block-locale {
+  position: relative;
+  // Set z-index to avoid the top links menu catching click events.
+  z-index: 10;
+  float: right;
+  padding-top: 15px;
+
+  > h2 {
+    @include sr-only;
+  }
+
+  @media (max-width: $screen-xs-max) {
+    display: none;
+  }
+
+  + .block-paddle-menu-display {
+    overflow-x: auto;
+  }
+}
+
+#blgm_belgiumHeader {
+  .federal-header {
+    @media (min-width: 800px) {
+      width: $page-width;
+      margin: 0 auto;
+    }
+
+    @media (min-width: $screen-xs-max) {
+      #language-switcher-btn {
+        display: none;
+      }
+    }
+
+    background-color: #fff;
+    font-family: Arial, Verdana, sans-serif;
+    border-bottom: 1px solid #D3D1D2;
+
+    .paddingizer {
+      @include flexbox();
+      @include justify-content(space-between);
+      @include flex-direction(row-reverse);
+
+      .block-locale {
+        float: none;
+
+        .language-switcher-locale-url {
+          display: block;
+          position: relative;
+          padding: 0 4.20248%;
+
+          li {
+            display: inline-block;
+
+            padding: 4px;
+            text-decoration: none;
+            color: #666;
+            font-size: 11px;
+            border-radius: 3px 3px 3px 3px;
+
+            :hover {
+              background-color: #666;
+              color: #fff;
+            }
+
+            .active-language {
+              background-color: #ccc;
+              color: #fff;
+            }
+
+            span.locale-untranslated {
+              color: #ccc;
+              text-decoration: line-through;
+
+              :hover {
+                background-color: #fff;
+                color: #ccc;
+              }
+            }
+          }
+        }
+      }
+
+      .federal-header-more-info {
+        @include flexbox();
+        margin-top: 25px;
+
+        .more-info-text {
+          text-align: right;
+          color: #333;
+          font-size: 12px;
+          padding-right: 5px;
+        }
+
+        .more-info-image {
+          width: 32px;
+          margin-left: 5px;
+        }
+      }
+    }
+  }
+}
+
+.block-locale > .content,
+.language-switcher-locale-url {
+  background-color: #fff;
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.language-switcher-btn {
+  display: block;
+  margin: 0;
+  padding: 10px;
+  border: 0;
+  font: inherit;
+  background: none transparent;
+
+  .fa {
+    margin-left: 5px;
+  }
+}
+
+.language-switcher-btn,
+.language-switcher-locale-url {
+  font-size: 13.5px;
+  line-height: 21px;
+  color: #666;
+}
+
+.language-switcher-locale-url {
+  display: none;
+  position: absolute;
+  z-index: 100;
+  width: 100%;
+  margin: 0;
+  padding: 0 0 5px 0;
+  list-style: none;
+
+  > li {
+    margin: 0;
+    padding: 0;
+  }
+
+  .language-link {
+    display: block;
+    padding: 0 10px;
+    color:#666;
+    text-decoration:none;
+    margin-bottom:5px;
+  }
+
+  .locale-untranslated {
+    text-decoration: none;
+  }
+
+  .is-open & {
+    display: block;
+  }
+}
+
+// ----------------------------
+// Mobile switcher.
+// ----------------------------
+.mobile-language-switcher {
+  position: relative;
+  display: none;
+  float: right;
+  width: 60px;
+  height: 60px;
+  color: #666;
+  background-color: #fff;
+  background-color: rgba(255, 255, 255, 0.9);
+
+  .fa {
+    margin-left: 5px;
+  }
+
+  .current-language {
+    padding: 10px;
+    line-height: 40px;
+    text-align: center;
+  }
+
+  .language-switcher-select {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    outline: 0;
+    opacity: 0;
+    -webkit-appearance: none;
+  }
+
+  @media (max-width: $screen-xs-max) {
+    display: block;
+  }
+}

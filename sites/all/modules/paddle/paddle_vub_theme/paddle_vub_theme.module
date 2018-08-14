@@ -1,0 +1,105 @@
+<?php
+/**
+ * @file
+ * Code for the VUB theme module.
+ */
+
+include_once 'paddle_vub_theme.features.inc';
+
+function paddle_vub_theme_init() {
+  if (!path_is_admin(current_path())) {
+    if (variable_get('paddle_vub_tracking_id', '')) {
+      $tracking_id = variable_get('paddle_vub_tracking_id', '');
+      paddle_core_add_analytics_tracker($tracking_id);
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_page_wide_theme_is_page_wide_alter().
+ */
+function paddle_vub_theme_paddle_page_wide_theme_is_page_wide_alter(&$is_base_theme, $paddle_base_theme) {
+  if ($paddle_base_theme == 'vub_theme') {
+    $is_base_theme = TRUE;
+  }
+}
+
+/**
+ * Checks if the base theme of the current theme is the vub theme.
+ *
+ * @return bool
+ *   Whether the base theme is the vub theme.
+ */
+function paddle_vub_theme_is_vub() {
+  $is_base_theme = FALSE;
+  $paddle_base_theme = variable_get('paddle_base_theme', '');
+
+  if ($paddle_base_theme == 'vub_theme') {
+    $is_base_theme = TRUE;
+  }
+
+  return $is_base_theme;
+}
+
+/**
+ * Implements preprocess_page().
+ *
+ * @param array $vars
+ *   The variables used to process the page.
+ */
+function paddle_vub_theme_preprocess_page(array &$vars) {
+  if (paddle_vub_theme_is_vub()) {
+    $vars['show_logo_vub'] = FALSE;
+    $active_color_palette = variable_get('paddle_primary_color_palette', 'palette_vub');
+    if ($active_color_palette == 'palette_vub') {
+      $vars['show_logo_vub'] = TRUE;
+    }
+
+    $theme_settings = &drupal_static('theme_get_setting', array());
+    $vars['default_logo'] = !(empty($theme_settings['vub_theme']['default_logo'])) ? TRUE : FALSE;
+
+    // We always use the rich footer.
+    $footer_id = variable_get('paddle_rich_footer_id');
+    $footer = entity_load_single('paddle_rich_footer', $footer_id);
+    $display = $footer->panelizer['page_manager']->display;
+    $vars['page']['footer'] = panels_render_display($display);
+    $vars['footer_style'] = 'rich_footer';
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_vub_theme_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_vub_address_block' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-vub-address-block',
+    ),
+    'paddle_vub_banner_block' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-vub-banner-block',
+    ),
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_vub_theme_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function paddle_vub_theme_form_paddle_themer_theme_edit_form_alter(&$form, &$form_state) {
+  if (!empty($form_state['item']) && $form_state['item']->theme == 'vub_theme') {
+    // VUB theme is locked to a specific.
+    $form['style_sets']['header']['header_positioning']['sections']['form_elements']['header_positioning']['position_fields']['logo']['#options'] = array('left' => 'Left');
+    $form['style_sets']['header']['header_positioning']['sections']['form_elements']['header_positioning']['position_fields']['navigation']['#options'] = array('center' => 'Center');
+    $form['style_sets']['header']['header_positioning']['sections']['form_elements']['header_positioning']['position_fields']['sticky_header']['#disabled'] = TRUE;
+  }
+}

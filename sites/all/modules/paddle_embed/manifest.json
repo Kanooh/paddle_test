@@ -1,0 +1,13 @@
+{
+  "name":"Embed",
+  "description":"Provides embed functionality.",
+  "machine_name":"paddle_embed",
+  "version":"1.0",
+  "author":"Kanooh",
+  "author_url":"http:\/\/www.kanooh.be",
+  "logo": "",
+  "rating":{
+    "count":0,
+    "average":0
+  }
+}

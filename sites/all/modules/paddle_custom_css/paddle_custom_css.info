@@ -1,0 +1,16 @@
+name = Custom CSS
+description = Change the look and feel of your website using your own CSS. All elements of the website can be adapted in line with the graphic design.
+core = 7.x
+package = Paddle
+
+apps[logo] = apps/logo.png
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+
+dependencies[] = context_ui
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_custom_css"
+datestamp = "1473170408"

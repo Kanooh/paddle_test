@@ -1,0 +1,13 @@
+<?php
+/**
+ * @file
+ * Install code for the Paddle GO themes.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_go_themes_enable() {
+  // Enable the go_theme.
+  theme_enable(array('go_theme'));
+}

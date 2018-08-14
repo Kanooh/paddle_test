@@ -1,0 +1,396 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Faceted Search module.
+ */
+
+include_once 'paddle_faceted_search.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_faceted_search_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_faceted_search_settings_form',
+  );
+}
+
+/**
+ * Implements hook_paddle_core_additional_panes().
+ */
+function paddle_faceted_search_paddle_core_additional_panes($context, $region) {
+  $panes = array();
+
+  if ($context != 'search_results' || $region != 'sidebar') {
+    return $panes;
+  }
+
+  foreach (_paddle_faceted_search_get_facet_hashed_deltas() as $delta => $info) {
+    $pane = panels_new_pane('block', "facetapi-$delta", TRUE);
+    $pane->css['css_class'] = 'pane-facetapi pane-facetapi--tid-' . $info['term']->tid;
+    $panes[] = array(
+      'pane' => $pane,
+      'weight' => $info['weight'],
+    );
+  }
+
+  return $panes;
+}
+
+/**
+ * Implements hook_panels_panes_prepared_alter().
+ *
+ * Ensure that the pane containing the search results is rendered before the
+ * facet panes. The facets depend on the search query being executed.
+ */
+function paddle_faceted_search_panels_panes_prepared_alter(&$panes, &$renderer) {
+  // Check if this is the search results page which is managed by Page Manager
+  // Existing Pages page.
+  $pm_args = paddle_faceted_search_pm_existing_pages_get_pm_args($renderer->display->args);
+  // Note: 'ti' is an abbreviation used by the Page Manager Existing Pages
+  // module. It stands for 'task id'. 'pmep' is short for the module name.
+  if (!empty($pm_args['pmep']) && $pm_args['pmep']['ti'] == 'search_results') {
+    // Make sure the search results are rendered first, so that the search query
+    // is executed and available for the facet panes to use.
+    foreach ($panes as $key => $pane) {
+      if ($pane->type == 'pm_existing_pages' && $pane->configuration['task_id'] == 'search_results') {
+        // It might seem more natural to use array_unshift() to move the pane in
+        // front of the array, but alas we need to retain the numeric indexes.
+        unset($panes[$key]);
+        $panes = array($pane->pid => $pane) + $panes;
+        break;
+      }
+    }
+  }
+}
+
+/**
+ * Helper function to split menu arguments from page manager arguments.
+ *
+ * This is a public version of a private function from the Page Manager Existing
+ * Pages module. It has been copied here rather than wrapped to avoid having to
+ * load the pm_existing_pages.inc include file on each Panels page.
+ *
+ * @param array $args
+ *   A collection of arguments.
+ *
+ * @return array
+ *   The menu arguments.
+ *
+ * @see _pm_existing_pages_get_pm_args()
+ */
+function paddle_faceted_search_pm_existing_pages_get_pm_args($args) {
+  $arguments = array('menu' => array(), 'pmep' => array());
+
+  foreach ($args as $key => $value) {
+    if (is_array($value) && isset($value['ti'])) {
+      // Supposing this pmep argument.
+      $arguments['pmep'] = $args[$key];
+    }
+    else {
+      $arguments['menu'][] = $value;
+    }
+  }
+
+  return $arguments;
+}
+
+/**
+ * Form callback displaying faceted search settings.
+ */
+function paddle_faceted_search_settings_form() {
+  drupal_set_title(t('Configure Faceted Search'));
+
+  $form = array();
+
+  $form['content_types'] = array(
+    '#type' => 'fieldset',
+    '#tree' => FALSE,
+    '#collapsible' => FALSE,
+    '#title' => t('Allowed content types'),
+    '#description' => t('When not selecting any content types, all content types will be shown in he search results. This will not be shown on the website.'),
+  );
+
+  // Set the checkboxes for the content types.
+  $form['content_types']['paddle_faceted_search_content_types'] = array(
+    '#type' => 'checkboxes',
+    '#options' => node_type_get_names(),
+    '#default_value' => paddle_faceted_search_get_content_types(),
+  );
+
+  // Load all the first level terms on the general taxonomy.
+  $vocabulary = taxonomy_vocabulary_machine_name_load('paddle_general');
+  $root_terms = taxonomy_get_tree($vocabulary->vid, 0, 1, TRUE);
+
+  $form['facets'] = array(
+    '#type' => 'fieldset',
+    '#tree' => FALSE,
+    '#collapsible' => FALSE,
+    '#title' => t('Available facets'),
+    '#description' => t('Select which first level terms from the <a href="@url">general vocabulary</a> should expand into filter links.', array(
+      '@url' => url("admin/structure/taxonomy_manager/{$vocabulary->vid}"),
+    )),
+  );
+
+  if (count($root_terms)) {
+    $options = array();
+    foreach ($root_terms as $term) {
+      $options[$term->tid] = entity_label('taxonomy_term', $term);
+    }
+
+    $form['facets']['paddle_faceted_search_facet_terms'] = array(
+      '#type' => 'checkboxes',
+      '#options' => $options,
+      '#default_value' => variable_get('paddle_faceted_search_facet_terms', array()),
+    );
+  }
+  else {
+    // If no terms are present, fallback to a warning message.
+    $form['facets']['empty'] = array(
+      '#markup' => t('No terms available.'),
+    );
+  }
+
+  $form = system_settings_form($form);
+
+  // Add our handlers last, so the variables are saved already.
+  $form['#validate'][] = 'paddle_faceted_search_settings_form_validate';
+  $form['#submit'][] = 'paddle_faceted_search_settings_form_submit';
+
+  return $form;
+}
+
+/**
+ * Validate handler for paddle_faceted_search_settings_form().
+ */
+function paddle_faceted_search_settings_form_validate($form, &$form_state) {
+  if (isset($form_state['values']['paddle_faceted_search_facet_terms'])) {
+    // Remove unselected checkboxes from values.
+    form_set_value(
+      $form['facets']['paddle_faceted_search_facet_terms'],
+      array_filter($form_state['values']['paddle_faceted_search_facet_terms']),
+      $form_state
+    );
+  }
+}
+
+/**
+ * Submit handler for paddle_faceted_search_settings_form().
+ */
+function paddle_faceted_search_settings_form_submit($form, &$form_state) {
+  // Clear some facetapi caches so facets will be enabled.
+  paddle_search_reset_caches();
+}
+
+/**
+ * Implements hook_search_api_query_alter().
+ */
+function paddle_faceted_search_search_api_query_alter(SearchApiQueryInterface $query) {
+  $menu_item = menu_get_item();
+
+  // Check if we're on the search page.
+  if ($menu_item['path'] == 'search') {
+    $content_types = paddle_faceted_search_get_content_types();
+
+    // If the we set allowed content types, then filter on them.
+    if (!empty($content_types)) {
+      $base_filter = $query->createFilter('AND');
+      $sub_filter = $query->createFilter('OR');
+
+      foreach ($content_types as $key => $value) {
+        $sub_filter->condition('type', $key, '=');
+      }
+
+      $base_filter->filter($sub_filter);
+      $query->filter($base_filter);
+    }
+  }
+}
+
+/**
+ * Gets the content types set in the configuration form.
+ *
+ * @return array
+ *   An array containing the content types which are set, empty otherwise.
+ */
+function paddle_faceted_search_get_content_types() {
+  return array_filter(variable_get('paddle_faceted_search_content_types', array()));
+}
+
+/**
+ * Retrieve the enabled facet terms and their info.
+ *
+ * @return array
+ *   The facet info, keyed by term id.
+ */
+function _paddle_faceted_search_get_facets() {
+  $facets = &drupal_static(__FUNCTION__);
+
+  if (!isset($facets)) {
+    $facets = array();
+
+    // Get the current selected tids.
+    $tids = variable_get('paddle_faceted_search_facet_terms', array());
+
+    // Process only if we have some tids.
+    if (count($tids)) {
+      // Filter out tids that might be not root terms anymore.
+      $root_tids = _paddle_search_filter_root_tids($tids);
+
+      // Load all the terms at once. By doing this, deleted terms will
+      // be removed. Loading time is not a problem as terms are cached.
+      $terms = taxonomy_term_load_multiple($root_tids);
+
+      foreach ($terms as $tid => $term) {
+        $facets[$tid] = array(
+          'name' => "paddle_faceted_search_term_$tid",
+          'term' => $term,
+        );
+      }
+    }
+  }
+
+  return $facets;
+}
+
+/**
+ * Retrieve all the block (hashed) deltas for our facets.
+ *
+ * @return array
+ *   A list of block hashed deltas, keyed by term weight.
+ */
+function _paddle_faceted_search_get_facet_hashed_deltas() {
+  $deltas = &drupal_static(__FUNCTION__);
+
+  if (!isset($deltas)) {
+    $deltas = array();
+
+    // Gets delta map from facetapi.
+    $map = facetapi_get_delta_map();
+
+    // Process only if we have facets configured.
+    $facets = _paddle_faceted_search_get_facets();
+    if (count($facets)) {
+      foreach ($facets as $tid => $info) {
+        $facet_delta = facetapi_build_delta('search_api@node_index', 'block', $info['name']);
+        $hashed_delta = array_search($facet_delta, $map);
+        if (FALSE !== $hashed_delta) {
+          // Preserve term info.
+          $deltas[$hashed_delta] = $info;
+        }
+      }
+
+      // Sort facets by weight and by name if needed.
+      // This mimics the taxonomy_get_tree() query
+      // but it actually prevents a query.
+      uasort($deltas, '_paddle_faceted_search_sort_deltas');
+
+      // Put back a weight in place, using the new order.
+      $weight = 0;
+      foreach ($deltas as $hashed_delta => $info) {
+        $deltas[$hashed_delta]['weight'] = $weight++;
+      }
+    }
+  }
+
+  return $deltas;
+}
+
+/**
+ * Sort callback to reorder deltas.
+ *
+ * It will sort the array by term weight, name and then tid.
+ */
+function _paddle_faceted_search_sort_deltas($a, $b) {
+  $term_a = $a['term'];
+  $term_b = $b['term'];
+
+  // Order by weight, if they are different.
+  if ($term_a->weight !== $term_b->weight) {
+    return $term_a->weight < $term_b->weight ? -1 : 1;
+  }
+
+  // Order by name, if they differ (might be...).
+  if ($term_a->name !== $term_b->name) {
+    return $term_a->name < $term_b->name ? -1 : 1;
+  }
+
+  // At last, compare by tid.
+  return $term_a->tid < $term_b->tid ? -1 : 1;
+}
+
+/**
+ * Implements hook_facetapi_facet_info_alter().
+ */
+function paddle_faceted_search_facetapi_facet_info_alter(array &$facet_info, array $searcher_info) {
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher_info['name']) {
+    return;
+  }
+
+  // Create facets for all enabled root terms.
+  foreach (_paddle_faceted_search_get_facets() as $tid => $info) {
+    $facet_info[$info['name']] = array_merge($facet_info['field_paddle_general_tags'], array(
+      'name' => $info['name'],
+      'label' => entity_label('taxonomy_term', $info['term']),
+      'field alias' => "pfs_$tid",
+      'default widget' => 'facetapi_extended_checkbox_links',
+      'taxonomy term id' => $tid,
+      'alter callbacks' => array('paddle_search_facet_build_alter'),
+      'default sorts' => array(
+        array('term_weight', SORT_ASC),
+        array('active', SORT_DESC),
+        array('display', SORT_ASC),
+        array('count', SORT_DESC),
+      ),
+    ));
+  }
+}
+
+/**
+ * Implements hook_facetapi_enabled_facets_alter().
+ */
+function paddle_faceted_search_facetapi_enabled_facets_alter(array &$enabled_facets, $searcher, $realm_name) {
+  // We add our facets only for the node index.
+  if ('search_api@node_index' != $searcher) {
+    return;
+  }
+
+  // Gets facet definitions for all enabled facets.
+  $facet_info = facetapi_get_facet_info($searcher);
+
+  // Add our facets to the enabled list.
+  foreach (_paddle_faceted_search_get_facets() as $tid => $info) {
+    if (isset($facet_info[$info['name']])) {
+      $enabled_facets[$info['name']] = $facet_info[$info['name']];
+    }
+  }
+}
+
+/**
+ * Implements hook_facetapi_default_facet_settings_alter().
+ *
+ * Provide global settings for the facets declared by this module.
+ */
+function paddle_faceted_search_facetapi_default_facet_settings_alter(&$export) {
+  ctools_include('export');
+
+  foreach (_paddle_faceted_search_get_facets() as $facet) {
+    $settings = ctools_export_crud_new('facetapi');
+    $settings->name = 'search_api@node_index::' . $facet['name'];
+    $settings->searcher = 'search_api@node_index';
+    $settings->realm = '';
+    $settings->facet = $facet['name'];
+    $settings->enabled = 0;
+    $settings->settings = array(
+      'hard_limit' => 100,
+      'facet_search_ids' => array(
+        'search_api_page:search' => 'search_api_page:search',
+      ),
+      'default_true' => 0,
+    );
+
+    $export[$settings->name] = $settings;
+  }
+}

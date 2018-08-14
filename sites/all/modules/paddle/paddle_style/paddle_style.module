@@ -1,0 +1,323 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Style module.
+ */
+
+/**
+ * Implements hook_ctools_plugin_type().
+ */
+function paddle_style_ctools_plugin_type() {
+  $plugins = array();
+
+  $plugins['paddle_style'] = array(
+    'load themes' => TRUE,
+  );
+
+  return $plugins;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_style_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'paddle_style' && $plugin_type == 'paddle_style') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_style_theme() {
+  return array(
+    'paddle_style_plugin_form' => array(
+      'variables' => array(),
+    ),
+  );
+}
+
+/**
+ * Themes a single instance of a plugin form.
+ *
+ * Adds a wrapper around the form elements that allows to target the plugin form
+ * in CSS.
+ *
+ * @param array $variables
+ *   An associative array with the following keys:
+ *   - name: The name of the plugin that is being themed.
+ *   - id: Optional HTML id to use in the rendered form.
+ *   - form: The form output from the plugin.
+ *   - title: Optional title to use for the plugin.
+ */
+function theme_paddle_style_plugin_form($variables) {
+  $output = $variables['form'];
+  $class = drupal_clean_css_identifier('paddle-style-plugin-' . $variables['name']);
+  $id = !empty($variables['id']) ? ' id="' . drupal_html_id(drupal_clean_css_identifier($variables['id'])) . '"' : '';
+  $output['#prefix'] = '<div class="paddle-style-plugin ' . $class . '"' . $id . '>';
+  if (!empty($variables['title'])) {
+    $output['#prefix'] .= '<h3>' . check_plain($variables['title']) . '</h3>';
+  }
+  $output['#suffix'] = '</div>';
+
+  return $output;
+}
+
+/**
+ * Get the Paddle Style plugin for the corresponding plugin name.
+ *
+ * @param string $plugin_name
+ *   A string containing the name of the plugin.
+ *
+ * @return object
+ *   The plugin object, or FALSE if the plugin is not registered.
+ */
+function paddle_style_get_plugin($plugin_name = NULL) {
+  $plugins = &drupal_static(__FUNCTION__);
+
+  if (empty($plugins[$plugin_name])) {
+    ctools_include('plugins');
+    $ctools_plugins = ctools_get_plugins('paddle_style', 'paddle_style');
+
+    $plugin = FALSE;
+    if (!empty($ctools_plugins[$plugin_name])) {
+      $plugin = new $ctools_plugins[$plugin_name]['handler']['class']();
+      $plugin->name = $ctools_plugins[$plugin_name]['name'];
+    }
+    $plugins[$plugin_name] = $plugin;
+  }
+
+  return $plugins[$plugin_name];
+}
+
+/**
+ * Interface for Paddle Style plugin classes.
+ *
+ * This interface provides a form builder and form validation method that can be
+ * used to configure the plugin.
+ *
+ * Most plugins should not implement this interface directly, but extend the
+ * PaddleStyleConfigurablePlugin class.
+ */
+interface PaddleStyleConfigurablePluginInterface {
+
+  /**
+   * Provides form elements to configure the plugin settings.
+   *
+   * @param array $allowed_values
+   *   An associative array keyed by property name containing an array of values
+   *   that can be configured by the user for the property. This can be used to
+   *   limit the configuration options that are available to the user. If this
+   *   is left empty the plugin will show all options.
+   *   This allows themers to protect the integrity of the theme, for example
+   *   by only allowing a range of fonts and font sizes that work well in a
+   *   particular section of the site.
+   *
+   *   An example (for the 'font' plugin):
+   *     $allowed_values = array(
+   *       // Enable the 'font_family' property, but only allow three fonts.
+   *       'font_family' => array(
+   *         'arial',
+   *         'helvetica',
+   *         'times new roman',
+   *       ),
+   *       // Enable the 'font_size' property, and allow all available sizes.
+   *       'font_size' => array(),
+   *       // The 'font_emphasis' property is also supported by the plugin, but
+   *       // not listed here, so will not be shown to the user.
+   *     );
+   *
+   *   Passing an empty array enables all properties with their options:
+   *     $allowed_values = array();
+   *
+   * @param array $default_values
+   *   An associative array, keyed on property name, defining the default values
+   *   for the form elements which are being generated.
+   * @param ctools_context $context
+   *   The optional CTools context for which the form elements are defined.
+   *
+   * @return array
+   *   An array with the form elements which need to be rendered in the form.
+   */
+  public function form($allowed_values = array(), $default_values = array(), ctools_context $context = NULL);
+
+  /**
+   * Validate arguments. Return error message if validation failed.
+   *
+   * @param array $values
+   *   An array which contains the values which need to be validated.
+   * @param ctools_context $context
+   *   The optional CTools context for which the form elements are defined.
+   *
+   * @return array
+   *   An associative array, keyed by property name, of validation errors that
+   *   occurred. Return an empty array if there were no validation errors.
+   *   If the property is nested, use the naming convention as explained in the
+   *   param $name documentation of form_set_error().
+   * @see form_set_error()
+   */
+  public function validate($values, ctools_context $context = NULL);
+
+  /**
+   * Submit handler. Allows to perform actions on form submit.
+   *
+   * @param array $values
+   *   An array which contains the values that were submitted.
+   * @param ctools_context $context
+   *   The optional CTools context for which the form elements are defined.
+   */
+  public function submit($values, ctools_context $context = NULL);
+
+  /**
+   * React to a style plugin being cloned.
+   *
+   * Here we can for instance increase the file usage counters for a managed
+   * file.
+   *
+   * @param array $values
+   *   An array which contains the values which need to be cloned.
+   * @param ctools_context $context
+   *   The optional CTools context for which the form elements are defined.
+   */
+  public function onClone($values, ctools_context $context = NULL);
+
+  /**
+   * React to a style plugin being deleted.
+   *
+   * Here we can for instance decrease the file usage counters for a managed
+   * file and delete it if needed.
+   *
+   * @param array $values
+   *   An array which contains the values which need to be deleted.
+   * @param ctools_context $context
+   *   The optional CTools context for which the form elements are defined.
+   */
+  public function onDelete($values, ctools_context $context = NULL);
+}
+
+interface PaddleStyleStylesPluginInterface {
+  /**
+   * Map CSS style properties to the given values.
+   *
+   * @param array $values
+   *   An array with the form elements with their values.
+   * @param ctools_context $context
+   *   The optional CTools context for which the form elements are defined.
+   *
+   * @return array
+   *   An associative array, keyed on CSS property, with the corresponding
+   *   value as supplied by the form element. For example:
+   *     return array(
+   *       'font-family' => 'Arial, Helvetica, sans-serif',
+   *       'font-size' => '1.1em',
+   *     );
+   */
+  public function getProperties($values, ctools_context $context = NULL);
+}
+
+interface PaddleStyleCssPluginInterface {
+  /**
+   * Allows the plugin to provide full CSS code ready for rendering.
+   *
+   * @param array $values
+   *   An array with the form elements with their values.
+   * @param ctools_context $context
+   *   The optional CTools context for which the form elements are defined.
+   *
+   * @return array
+   *   The CSS code ready for rendering. For example:
+   *     body.not-logged-in,
+   *     li.some-class {
+   *       background-color: #55FF55;
+   *       margin-bottom: 11px;
+   *     }
+   */
+  public function getCss($values, ctools_context $context = NULL);
+}
+
+interface PaddleStyleExecutePluginInterface {
+  /**
+   * Allows plugins to execute custom code.
+   *
+   * Your plugin might need to be able to execute some custom code. For example
+   * you might need to include some javascript on the page, or manipulate Drupal
+   * variables by changing the global $conf array.
+   *
+   * The Paddle Themer implementation for example will execute this code on
+   * hook_init().
+   *
+   * @param array $values
+   *   An array containing the form elements with their values.
+   * @param ctools_context $context
+   *   The optional CTools context for which the form elements are defined.
+   */
+  public function execute($values, ctools_context $context = NULL);
+}
+
+/**
+ * Interface for Paddle Style plugins that return CSS classes.
+ */
+interface PaddleStyleClassPluginInterface {
+  /**
+   * Allows plugins to provide CSS classes.
+   *
+   * In some cases you might want your plugin to provide some CSS classes to
+   * apply to certain page elements, depending on the chosen options. It is
+   * up to the implementing framework to apply these classes.
+   *
+   * For example you might want to apply some CSS classes to specific blocks to
+   * style them differently.
+   *
+   * An example implementation can be found in the Paddle Landing Page module.
+   * @see paddle_landing_page_preprocess_panels_pane()
+   *
+   * @param array $values
+   *   An array containing the form elements with their values.
+   * @param ctools_context $context
+   *   The optional CTools context for which the form elements are defined.
+   *
+   * @return array
+   *   An array of CSS classes to apply to the page element.
+   */
+  public function getClasses($values, ctools_context $context = NULL);
+}
+
+/**
+ * Abstract class which needs to be extended by plugins of the type.
+ *
+ * This implements all methods from the interface. Most plugins will want to
+ * extend this class rather than implement the interface directly as not all
+ * methods will be required by all plugins.
+ */
+abstract class PaddleStyleConfigurablePlugin implements PaddleStyleConfigurablePluginInterface {
+
+  /**
+   * {@inheritdoc}
+   */
+  public function form($allowed_values = array(), $default_values = array(), ctools_context $context = NULL) {
+    return array();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function validate($values, ctools_context $context = NULL) {
+    return array();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function submit($values, ctools_context $context = NULL) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public function onClone($values, ctools_context $context = NULL) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public function onDelete($values, ctools_context $context = NULL) {}
+}

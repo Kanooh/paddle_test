@@ -1,0 +1,20 @@
+name = Paddle Menu Display
+description = Displays menus in Drupal blocks following specific settings
+core = 7.x
+version = 0.6
+package = "Paddle"
+
+dependencies[] = block
+dependencies[] = menu
+
+files[] = tests/paddle_menu_display_404_handling.test
+files[] = tests/paddle_menu_display_cache.test
+files[] = tests/paddle_menu_display_empty_menu.test
+files[] = tests/paddle_menu_display_frontend_menus.test
+files[] = tests/paddle_menu_display_locale.test
+files[] = tests/paddle_menu_display_test_case.test
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_menu_display"
+datestamp = "1455506617"

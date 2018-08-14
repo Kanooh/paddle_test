@@ -1,0 +1,16 @@
+.widget-preview-modal p {
+  margin: 15px 0;
+}
+
+#widget-preview-container {
+  display: block;
+  padding-bottom: 15px;
+  text-align: center;
+}
+#widget-preview {
+  display: inline-block;
+  width: auto;
+  height: auto;
+  background: #fff;
+  text-align: left;
+}

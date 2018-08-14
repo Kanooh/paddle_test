@@ -1,0 +1,5 @@
+#paddle-social-identities-settings-form .field-type-url .field-value-url,
+#paddle-social-identities-settings-form .field-type-url  .field-value-title {
+  display: inline-block;
+  width: 40%;
+}

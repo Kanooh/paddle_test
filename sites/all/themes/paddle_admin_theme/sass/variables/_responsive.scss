@@ -1,0 +1,11 @@
+//
+// @file
+// Responsive related variables.
+// ----------
+/* structure.css should be also converted to sass so it will make those of the
+following variables */
+$responsive-small: 579px;
+$responsive-medium: 889px;
+$responsive-large: 1170px;
+// We use a different responsive width for the menu.
+$menu-display-min-width: 800px;

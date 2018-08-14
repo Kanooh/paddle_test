@@ -1,0 +1,395 @@
+/**
+ * @file
+ * Calendar Paddlet styling.
+ */
+
+.event-details {
+  box-sizing: border-box;
+  position: relative;
+  float: right;
+  max-width: 50%;
+  min-width: 250px;
+  margin: 0 0 3px 10px;
+  padding: 15px 35px 15px 15px;
+
+  .event-location {
+    margin-top: 15px;
+  }
+
+  .ical-event {
+    position: absolute;
+    bottom: 15px;
+    right: 15px;
+  }
+
+  @media (max-width: 579px) {
+    & {
+      float: none;
+      min-width: 0;
+      max-width: none;
+    }
+  }
+}
+
+.view-calendar-pane {
+  // Title / pager.
+  .date-nav-wrapper {
+    margin: 0;
+
+    .date-nav {
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+    }
+
+    .date-heading h3 {
+      margin: 0 30px;
+      line-height: 1.2em;
+    }
+
+    .pager {
+      a {
+        display: block;
+        width: 20px;
+        height: 20px;
+        margin: 0;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        line-height: 20px;
+      }
+    }
+
+    .date-prev,
+    .date-next {
+      top: 50%;
+      margin-top: -11px;
+      z-index: 0;
+    }
+
+    .date-prev {
+      i {
+        padding-left: 3px;
+      }
+    }
+
+    .date-next {
+      i {
+        padding-right: 3px;
+      }
+    }
+
+    .pager {
+      padding: 0;
+
+      li {
+        display: block;
+      }
+    }
+  }
+
+  .feed-icon {
+    margin: 10px 0 10px 0;
+    line-height: .9em;
+    text-align: right;
+  }
+
+  // Again, due to specificity issue, we have to increment the selectors...
+  &.view .feed-icon {
+    a.ical-feed,
+    a.ical-feed:hover,
+    a.ical-feed:visited {
+      font-size: .9em;
+    }
+  }
+
+  .calendar-empty {
+    display: none;
+  }
+
+  .calendar-item-time {
+    float: right;
+    font-size: .9em;
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  // Month calendar view.
+  table.mini {
+    table-layout: auto;
+    width: 100%;
+
+    tr {
+      border: 0;
+    }
+
+    th,
+    td {
+      padding: 4px 2px;
+      text-align: center;
+    }
+
+    a {
+      display: block;
+      text-decoration: none;
+    }
+
+    td.mini {
+      position: relative;
+
+      > .month {
+        width: 24px;
+        height: 24px;
+        margin: 0 auto;
+        border: 1px solid;
+        border-radius: 13px;
+        line-height: 24px;
+      }
+    }
+
+    .ajax-progress {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      z-index: 10;
+      margin-top: -8px;
+      margin-left: 10px;
+    }
+  }
+
+  // Day view.
+  &.view-display-id-day_view {
+    .view-header {
+      padding: 15px 0 5px;
+      font-size: 1.2em;
+      font-weight: 700;
+    }
+
+    .views-row {
+      @include clearfix;
+    }
+
+    .views-row-last {
+      margin-bottom: 0;
+    }
+  }
+
+  // Month list view.
+  &.view-display-id-month_list_view {
+    > .view-header {
+      padding-bottom: 10px;
+    }
+
+    .month-list-view-day {
+      padding-bottom: 5px;
+    }
+
+    .day-name {
+      margin-bottom: 5px;
+      padding: 3px 8px;
+    }
+
+    .views-row {
+      @include clearfix;
+      margin: 0 0 3px 15px;
+    }
+
+    .views-field-title {
+      margin-right: 35px;
+      font-weight: 700;
+    }
+  }
+
+  // Week list view.
+  &.view-display-id-week_list_view {
+    > .view-header {
+      padding-bottom: 10px;
+    }
+
+    > .view-content {
+      display: table;
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .week-list-view-day {
+      padding: 3px 0;
+      border-top: 1px solid;
+      display: table-row;
+    }
+
+    .day-name,
+    .rows-wrapper {
+      display: table-cell;
+      padding: 3px 0;
+    }
+
+    .day-name {
+      padding-right: 10px;
+      font-size: 1.2em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .rows-wrapper {
+      width: 100%;
+    }
+
+    .calendar-item-time {
+      float: none;
+      font-size: 1em;
+    }
+
+    .calendar-item-time,
+    .views-field-title {
+      display: inline;
+    }
+
+    .views-field-title a {
+      text-decoration: underline;
+    }
+  }
+}
+
+// Mixin to apply smaller size to calendar view.
+// The name is "namespaced" as there are no "private" mixins in sass.
+@mixin paddlet-calendar-responsive {
+  .view-calendar-pane {
+    .date-heading h3 {
+      font-size: 16px;
+    }
+
+    .pager {
+      a {
+        font-size: 12px;
+        width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        line-height: 18px;
+      }
+    }
+
+    // Again, due to specificity issue, we have to increment the selectors...
+    &.view .feed-icon a.ical-feed {
+      font-size: .7334em;
+    }
+
+    .calendar-item-time {
+      float: none;
+    }
+
+    table.mini {
+      table-layout: fixed;
+      font-size: 12px;
+
+      a {
+        font-size: 12px;
+      }
+
+      th,
+      td {
+        padding: 0;
+        border: 1px solid #d5d5d5;
+      }
+
+      td.mini {
+        > .month {
+          width: auto;
+          height: auto;
+          margin: 0;
+          border: 0;
+          border-radius: 0;
+          line-height: 24px;
+        }
+      }
+
+      .remaining-letters {
+        display: none;
+      }
+    }
+
+    &.view-display-id-month_list_view {
+      .views-row {
+        margin-left: 0;
+        margin-bottom: 10px;
+      }
+
+      .views-field-title {
+        margin-right: 0;
+      }
+    }
+  }
+}
+
+// On small screens, use small size.
+@media (max-width: 300px) {
+  @include paddlet-calendar-responsive;
+}
+
+// On medium screens, use small size if the pane is used inside a smaller than 6/12 column.
+@media (min-width: 889px) {
+  .col-md-1,
+  .col-md-2,
+  .col-md-3,
+  .col-md-4,
+  .col-md-5 {
+    @include paddlet-calendar-responsive;
+  }
+}
+
+// On large screens, use small size if the pane is used inside a smaller than 4/12 column.
+@media (min-width: 1170px) {
+  .col-lg-1,
+  .col-lg-2,
+  .col-lg-3 {
+    @include paddlet-calendar-responsive;
+  }
+}
+
+.view-display-id-month_list_view_image {
+  margin-bottom: -15px;
+
+  .views-row {
+    overflow: hidden;
+
+    img {
+      float: left;
+      margin-right: 20px;
+      border-radius: 45px;
+      width: 90px;
+    }
+
+    .views-field-title {
+      a {
+        font-size: 0.9em;
+      }
+    }
+  }
+
+  .month-list-view-image-day {
+    border: 0;
+    border-bottom-width: 1px;
+    border-style: solid;
+    border-color: #ebebeb;
+    margin-top: 15px;
+  }
+}
+
+.col-md-12, .col-md-4, .col-md-6, .col-md-9, .col-md-8 {
+  .month-list-view-image-day {
+    .views-field-title {
+      padding-top: 20px;
+    }
+  }
+}
+
+@media(max-width: $screen-md-min) {
+  .col-md-3 {
+    .month-list-view-image-day {
+      .views-field-title {
+        padding-top: 20px;
+      }
+    }
+  }
+}

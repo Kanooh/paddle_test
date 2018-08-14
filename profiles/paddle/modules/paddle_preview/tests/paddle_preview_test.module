@@ -1,0 +1,9 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Preview Test
+ * module.
+ */
+
+include_once 'paddle_preview_test.features.inc';

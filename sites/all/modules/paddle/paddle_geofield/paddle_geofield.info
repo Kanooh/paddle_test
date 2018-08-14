@@ -1,0 +1,10 @@
+name = Paddle geofield
+description = Manages geofields for addresses within Paddle
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = geocoder
+dependencies[] = geofield
+features[features_api][] = api:2
+features[field_base][] = field_paddle_address_geocode

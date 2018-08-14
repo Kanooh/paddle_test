@@ -1,0 +1,44 @@
+/* The default theme file of the EBL paddlet, independent of the theme selected. */
+
+.pane-ebl-metadata-label {
+  font-weight: 900;
+}
+
+@media (min-width: 579px) {
+  .pane-ebl-metadata-group {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .pane-ebl-metadata-item {
+    margin-left:15px;
+    width: calc(25% - 20px);
+  }
+
+  .pane-ebl-metadata-item:first-of-type, .pane-ebl-metadata-item:nth-child(5n) {
+    margin-left: 0;
+  }
+}
+
+.pane-ebl-metadata-group {
+  padding: 15px;
+}
+
+.pane-ebl-metadata-item {
+  margin-bottom: 2%;
+}
+
+.pane-node-field-paddle-ebl-subtitle .pane-content, .pane-ebl-cover .pane-content {
+  border: 0;
+  box-shadow: none;
+  font-size: 1.2em;
+}
+
+.pane-ebl-cover img {
+  display: block;
+  margin: 0 auto;
+}
+
+.pane-ebl-links .table-listing li {
+  list-style: none;
+}

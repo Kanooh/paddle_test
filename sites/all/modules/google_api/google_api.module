@@ -1,0 +1,70 @@
+<?php
+
+/**
+ * @file
+ *   Google API Library implementation
+ *
+ */
+
+/**
+ * Implements hook_libraries_info().
+ */
+function google_api_libraries_info() {
+  return array(
+    'google-api-php-client' => array(
+      'name' => 'Google APIs Client Library for PHP',
+      'vendor url' => 'https://github.com/google/google-api-php-client',
+      'download url' => 'https://github.com/google/google-api-php-client/archive/1.0.4-beta.zip',
+      'path' => 'src/Google',
+      'version callback' => 'google_api_get_version',
+      'version arguments' => array(
+        'file' => 'src/Google/Client.php',
+        'pattern' => '/LIBVER = "([0-9a-zA-Z\.-]+)"/',
+        'lines' => 50,
+      ),
+      'files' => array(
+        'php' => array(
+          'Client.php',
+          'Service/Customsearch.php'
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Detects the version of the Google APIs Client Library for PHP installed.
+ */
+function google_api_get_version($library, $options) {
+  // Detect the version using library defaults.
+  $version = libraries_get_version($library, $options);
+
+  if (!empty($version)) {
+    return $version;
+  }
+
+  // Sort versions in descending order (newest first).
+  krsort($library['versions']);
+
+  // Detect the version using version specific overrides.
+  foreach ($library['versions'] as $version_properties) {
+    if (isset($version_properties['version arguments'])) {
+      $options = $version_properties['version arguments'] += $options;
+      $version = libraries_get_version($library, $options);
+
+      if (!empty($version)) {
+        return $version;
+      }
+    }
+  }
+}
+
+/**
+ * Load the library.
+ */
+function google_api_load_library() {
+  // Make sure we find the files and they are properly loaded.
+  $lib_path = libraries_get_path('google-api-php-client');
+  set_include_path(get_include_path() . ':' . DRUPAL_ROOT . '/' . $lib_path . '/src/');
+  libraries_load('google-api-php-client');
+}

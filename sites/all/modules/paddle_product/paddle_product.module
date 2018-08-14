@@ -1,0 +1,323 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Product feature.
+ */
+
+include_once 'paddle_product.features.inc';
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_product_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object('node');
+
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'paddle_product') {
+      $fields = array(
+        'field_paddle_prod_form',
+        'field_paddle_introduction',
+      );
+
+      $fields = array_merge($fields, paddle_product_get_common_product_fields());
+
+      // Only show the responsible organizational unit if the module is
+      // installed.
+      if (module_exists('paddle_organizational_unit')) {
+        array_splice($fields, 1, 0, 'field_paddle_responsible_ou');
+      }
+
+      return $fields;
+    }
+  }
+
+  return array();
+}
+
+/**
+ * Gets the product fields which are needed in different places.
+ *
+ * @return array
+ *   Array containing the needed fields.
+ */
+function paddle_product_get_common_product_fields() {
+  return array(
+    'field_paddle_target_group',
+    'field_paddle_conditions',
+    'field_paddle_procedure',
+    'field_paddle_required',
+    'field_paddle_amount',
+    'field_paddle_exceptions',
+    'field_paddle_legislation',
+  );
+}
+
+/**
+ * Gets all products fields.
+ *
+ * @return array
+ *   Array containing all fields used in the Product paddlet.
+ */
+function paddle_product_get_all_product_fields() {
+  $field_instances = field_info_instances("node", "paddle_product");
+  $fields = array();
+
+  foreach ($field_instances as $field_instance) {
+    $fields[] = $field_instance['field_name'];
+  }
+
+  return $fields;
+}
+
+/**
+ * Implements hook_default_page_manager_handlers_alter().
+ */
+function paddle_product_default_page_manager_handlers_alter(&$export) {
+  $object = menu_get_object('node');
+
+  if (!empty($object) && $object->type == 'paddle_product' && !empty($export['node_edit_panel_context'])) {
+    $panes_to_insert = array();
+
+    // Shortcut to the left column.
+    $left_column = &$export['node_edit_panel_context']->conf['display']->panels['left'];
+
+    // Find the additional fields panes. We want to show it together with
+    // the other node specific panes.
+    if ($key = array_search('new-f14a7a22-a05e-ae44-c122-e71a20f44d45',
+      $left_column)
+    ) {
+      unset($left_column[$key]);
+      // Reset the keys to have a proper count again.
+      $left_column = array_values($left_column);
+      // Show it before the others.
+      array_unshift($panes_to_insert,
+        'new-f14a7a22-a05e-ae44-c122-e71a20f44d45');
+    }
+
+    // Find the featured image pane key in the left column.
+    if ($key = array_search('new-bcec2608-deb8-49ee-86ec-8ea34723fcce',
+      $left_column)
+    ) {
+      // Reset the keys to have a proper count again.
+      $left_column = array_values($left_column);
+      // Show it before the others.
+      array_unshift($panes_to_insert,
+        'new-bcec2608-deb8-49ee-86ec-8ea34723fcce');
+      // Insert the new panes after the body.
+      array_splice($left_column, $key, 1, $panes_to_insert);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_product_form_paddle_product_node_form_alter(&$form, &$form_state) {
+  $type = $form['#node']->type;
+
+  if ($type == 'paddle_product') {
+    $form['field_paddle_prod_form'][LANGUAGE_NONE][0]['title']['#title'] = t('Button text');
+
+    $section_label = array(
+      '#markup' => t('Specifications'),
+      '#prefix' => '<legend>',
+      '#suffix' => '</legend>',
+      '#weight' => 8
+    );
+
+    $form['field_paddle_prod_form']['section-label'] = $section_label;
+
+    drupal_add_js(drupal_get_path('module', 'paddle_menu_manager') . '/js/paddle_menu_manager_big_menus.js');
+  }
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors_alter().
+ */
+function paddle_product_paddle_color_palettes_color_selectors_alter(&$data, $theme) {
+  $data[1]['background-color'][] = '.field-name-field-paddle-prod-form a';
+  $data[2]['color'][] = '.region-content .field-name-field-paddle-prod-form a';
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_product_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_panels_ipe_pane_links_alter().
+ */
+function paddle_product_panels_ipe_pane_links_alter(&$links, $context) {
+  if ($pane = $context['pane']) {
+    $types = array(
+      'product_lead_image',
+      'product_opening_hours',
+    );
+
+    if (in_array($pane->type, $types)) {
+      unset($links['delete']);
+      unset($links['edit']);
+      unset($links['paddle_style']);
+    }
+  }
+}
+
+/**
+ * Implements hook_node_submit().
+ */
+function paddle_product_node_submit($node, $form, &$form_state) {
+  if ($node->type != 'paddle_product' || empty($node->panelizer)) {
+    return;
+  }
+
+  // Retrieve the display.
+  $display = paddle_apps_retrieve_node_display_for_pane_altering($node);
+  // Only continue if there is a display.
+  if (!$display) {
+    return;
+  }
+
+  $default_region = 'right';
+
+  // Add, remove or update the lead image pane if needed.
+  $featured_image = !empty($form_state['values']['field_paddle_featured_image']) ? $form_state['values']['field_paddle_featured_image'][LANGUAGE_NONE][0] : array();
+  $lead_image_pane = _paddle_product_get_lead_image_pane($node);
+
+  if (!empty($featured_image['sid'])) {
+    if (!$lead_image_pane) {
+      $lead_image_pane = panels_new_pane('product_lead_image', 'product_lead_image');
+      $display->add_pane($lead_image_pane, $default_region);
+    }
+
+    $lead_image_pane->configuration['paddle_scald_image'] = $featured_image;
+    // We don't need the enabled status, as the presence of the pane is the
+    // status itself.
+    unset($lead_image_pane->configuration['enabled']);
+  }
+  else {
+    if ($lead_image_pane) {
+      _paddle_product_remove_pane_from_display($display, $lead_image_pane);
+    }
+  }
+
+  // Add, update or remove the opening hours pane if needed.
+  if (module_exists('paddle_organizational_unit')) {
+    $organizational_unit = !empty($form_state['values']['field_paddle_responsible_ou']) ? $form_state['values']['field_paddle_responsible_ou'][LANGUAGE_NONE][0]['target_id'] : NULL;
+    $opening_hours_pane = _paddle_product_get_opening_hours_pane($node);
+
+    if (!empty($organizational_unit)) {
+      if (!$opening_hours_pane) {
+        $opening_hours_pane = panels_new_pane('product_opening_hours', 'product_opening_hours');
+        $display->add_pane($opening_hours_pane, $default_region);
+      }
+
+      $opening_hours_pane->configuration['paddle_organizational_unit'] = $organizational_unit;
+      // We don't need the enabled status, as the presence of the pane is the
+      // status itself.
+      unset($opening_hours_pane->configuration['enabled']);
+    }
+    else {
+      if ($opening_hours_pane) {
+        _paddle_product_remove_pane_from_display($display, $opening_hours_pane);
+      }
+    }
+  }
+}
+
+/**
+ * Helper function to extract the lead image pane from a node.
+ *
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return object
+ *   The lead image pane.
+ */
+function _paddle_product_get_lead_image_pane($node) {
+  $lead_image_pane = array();
+  foreach ($node->panelizer['page_manager']->display->content as $pid => $pane) {
+    if ($pane->type == 'product_lead_image') {
+      $lead_image_pane = $pane;
+    }
+  }
+
+  return $lead_image_pane;
+}
+
+/**
+ * Helper function to extract the opening hours pane from a node.
+ *
+ * @param object $node
+ *   The node to parse.
+ *
+ * @return object
+ *   The opening hours pane.
+ */
+function _paddle_product_get_opening_hours_pane($node) {
+  $opening_hours_pane = array();
+  foreach ($node->panelizer['page_manager']->display->content as $pid => $pane) {
+    if ($pane->type == 'product_opening_hours') {
+      $opening_hours_pane = $pane;
+    }
+  }
+
+  return $opening_hours_pane;
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function paddle_product_modules_enabled($modules) {
+  // When the organisational unit is being enabled, make sure the responsible
+  // organisation field is added.
+  if (in_array('paddle_organizational_unit', $modules)) {
+    features_revert_module('paddle_product');
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_product_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_product_opening_hours' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-product-opening-hours',
+    ),
+  );
+}
+
+/**
+ * Removes a pane from a display.
+ *
+ * @param panels_display $display
+ *   The display instance where we want to remove the pane from.
+ * @param object $pane
+ *   The pane object.
+ *
+ * @see panels_display::add_pane()
+ */
+function _paddle_product_remove_pane_from_display(panels_display $display, $pane) {
+  if (isset($display->content[$pane->pid])) {
+    unset($display->content[$pane->pid]);
+
+    // Find the position of this pane in its region.
+    $position = array_search($pane->pid, $display->panels[$pane->panel]);
+    if ($position !== FALSE) {
+      unset($display->panels[$pane->panel][$position]);
+      // Reset position array to avoid missing position numbers.
+      $display->panels[$pane->panel] = array_values($display->panels[$pane->panel]);
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_product_paddle_content_region_content_type_info() {
+  return 'paddle_product';
+}

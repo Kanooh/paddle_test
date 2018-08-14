@@ -1,0 +1,11 @@
+name = Paddle Preview test module
+description = Provides some dummy functionality to facilitate automated testing.
+core = 7.x
+package = Testing
+hidden = TRUE
+
+dependencies[] = paddle_preview
+dependencies[] = ctools
+dependencies[] = paddle_themer
+features[ctools][] = paddle_themer:default_paddle_themer:1
+features[features_api][] = api:1

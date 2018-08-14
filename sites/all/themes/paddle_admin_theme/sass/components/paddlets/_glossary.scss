@@ -1,0 +1,22 @@
+/**
+ * @file
+ * Glossary paddlet styling.
+ */
+
+.paddle-glossary-pager {
+  overflow: hidden;
+  margin-bottom: 30px;
+
+  .views-summary {
+    float: left;
+
+    > a {
+      display: block;
+      width: 35px;
+      height: 35px;
+      line-height: 35px;
+      text-align: center;
+      text-decoration: none;
+    }
+  }
+}

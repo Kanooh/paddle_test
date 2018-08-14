@@ -1,0 +1,30 @@
+name = Rate paddlet
+description = Add the Rate Paddlet to your webpage so visitors can rate the content with 1-5 stars.
+core = 7.x
+package = Paddle
+dependencies[] = authcache_ajax
+dependencies[] = authcache_builtin
+dependencies[] = authcache_field
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = fivestar
+dependencies[] = paddle_apps
+dependencies[] = session_api
+dependencies[] = strongarm
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[field_base][] = field_paddle_enable_rating
+features[field_base][] = field_paddle_rating
+features[variable][] = votingapi_source_callback
+files[] = mock_commerce_cart.test
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_rate"
+datestamp = "1473170441"
+

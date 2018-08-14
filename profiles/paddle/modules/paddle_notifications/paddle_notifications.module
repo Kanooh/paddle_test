@@ -1,0 +1,291 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Notifications feature.
+ */
+
+include_once 'paddle_notifications.features.inc';
+
+/**
+ * Checks if an user has enabled a certain notification type.
+ *
+ * @param object $account
+ *   A fully loaded user account.
+ * @param string $notification
+ *   The notification machine name.
+ *
+ * @return bool
+ *   Whether or not the user has opted in for that notification type.
+ */
+function paddle_notifications_user_has_notification_enabled($account, $notification) {
+  try {
+    $wrapper = entity_metadata_wrapper('user', $account);
+    $values = $wrapper->field_paddle_user_notifications->value();
+
+    return (in_array($notification, $values));
+  }
+  catch (\Exception $e) {
+    return FALSE;
+  }
+}
+
+/**
+ * Implements hook_paddle_content_manager_assignee_set().
+ */
+function paddle_notifications_paddle_content_manager_assignee_set($node, $assignee, $new_state) {
+  global $user;
+
+  $valid_states = array(
+    'to_check',
+    'needs_review',
+  );
+
+  // Send the notification only if:
+  // - the state is valid;
+  // - the event was triggered by a real user;
+  // - the assignee has opted in for this notification type.
+  if (
+    in_array($new_state, $valid_states) &&
+    $user->uid &&
+    $user->uid != $assignee->uid &&
+    paddle_notifications_user_has_notification_enabled($assignee, 'page_assigned')
+  ) {
+    try {
+      $wrapper = entity_property_values_create_entity('message', array(
+        'type' => 'paddle_notifications_page_assigned',
+        'uid' => $assignee->uid,
+        'field_paddle_notifications_node' => $node,
+        'field_paddle_notifications_user' => $user,
+      ));
+      /* @var \EntityDrupalWrapper $wrapper */
+      $wrapper->save();
+
+      // Send the actual mail.
+      message_notify_send_message($wrapper->value());
+    }
+    catch (\Exception $e) {
+      watchdog(
+        'paddle_notifications',
+        'Failed to handle notification. Error was %message',
+        array('%message' => $e->getMessage())
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function paddle_notifications_cron() {
+  // Load the wanted nodes.
+  $start_time = strtotime('today + 14days');
+  $end_time = strtotime('today + 15days');
+
+  // Get the nodes which are scheduled for depublication.
+  $query = db_select('scheduler', 's');
+  $query->join('node', 'n', 's.nid = n.nid');
+  $query->fields('s', array('nid'))
+    ->condition('s.unpublish_on', $start_time, '>=')
+    ->condition('s.unpublish_on', $end_time, '<');
+  $nodes = $query->execute()->fetchAll();
+
+
+  // Load the users with the notification enabled.
+  $users = new EntityFieldQuery();
+  $users = $users
+    ->entityCondition('entity_type', 'user')
+    ->fieldCondition('field_paddle_user_notifications', 'value', 'page_expiration', '=')
+    ->execute();
+
+  if ($nodes && $users) {
+    // Create the messages.
+    foreach ($users['user'] as $uid) {
+      $user = user_load($uid->uid);
+
+      foreach ($nodes as $nid) {
+        $node = node_load($nid->nid);
+
+        try {
+          $wrapper = entity_property_values_create_entity('message', array(
+            'type' => 'paddle_notifications_page_expiration',
+            'uid' => $user->uid,
+            'field_paddle_notifications_node' => $node,
+          ));
+          /* @var \EntityDrupalWrapper $wrapper */
+          $wrapper->save();
+
+          // Send the actual mail.
+          message_notify_send_message($wrapper->value());
+        }
+        catch (\Exception $e) {
+          watchdog(
+            'paddle_notifications',
+            'Failed to handle notification. Error was %message',
+            array('%message' => $e->getMessage())
+          );
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_scheduler_api().
+ */
+function paddle_notifications_scheduler_api($node, $action) {
+  if ($action != 'unpublish') {
+    return;
+  }
+
+  // Find all users that opted for page expired notification.
+  $query = new EntityFieldQuery();
+  $query
+    ->entityCondition('entity_type', 'user')
+    ->fieldCondition('field_paddle_user_notifications', 'value', 'page_expired');
+  $results = $query->execute();
+
+  if (empty($results['user'])) {
+    return;
+  }
+
+  foreach (array_keys($results['user']) as $uid) {
+    try {
+      $wrapper = entity_property_values_create_entity('message', array(
+        'type' => 'paddle_notifications_page_expired',
+        'uid' => $uid,
+        'field_paddle_notifications_node' => $node,
+      ));
+      /* @var \EntityDrupalWrapper $wrapper */
+      $wrapper->save();
+
+      // Send the actual mail.
+      message_notify_send_message($wrapper->value());
+    }
+    catch (\Exception $e) {
+      watchdog(
+        'paddle_notifications',
+        'Failed to handle notification. Error was %message',
+        array('%message' => $e->getMessage())
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function paddle_notifications_node_update($node) {
+  global $user;
+
+  // Check if:
+  // - the node is revisionable;
+  // - it has the responsible author field;
+  // - the current user is not anonymous (it would cause issue with the mail).
+  if (
+    !isset($node->revision) ||
+    !isset($node->field_page_responsible_author) ||
+    !$user->uid
+  ) {
+    return;
+  }
+
+  try {
+    $wrapper = entity_metadata_wrapper('node', $node);
+    $responsible = $wrapper->field_page_responsible_author->value();
+
+    // Send notification only if:
+    // - the user that triggered the change is not the responsible himself;
+    // - the responsible has opted in for this notification type.
+    if (
+      !empty($responsible) &&
+      $responsible->uid != $user->uid &&
+      paddle_notifications_user_has_notification_enabled($responsible, 'node_update_responsible')
+    ) {
+      $wrapper = entity_property_values_create_entity('message', array(
+        'type' => 'paddle_notifications_node_update_responsible',
+        'uid' => $responsible->uid,
+        'field_paddle_notifications_node' => $node,
+        'field_paddle_notifications_user' => $user,
+      ));
+      /* @var \EntityDrupalWrapper $wrapper */
+      $wrapper->save();
+
+      // Send the actual mail.
+      message_notify_send_message($wrapper->value());
+    }
+  }
+  catch (\Exception $e) {
+    watchdog(
+      'paddle_notifications',
+      'Failed to handle notification. Error was %message',
+      array('%message' => $e->getMessage())
+    );
+  }
+}
+
+/**
+ * Implements hook_entity_insert().
+ */
+function paddle_notifications_entity_insert($entity, $type) {
+  global $user;
+
+  $wrapper = entity_metadata_wrapper($type, $entity);
+
+  if ($type != 'message' || $wrapper->getBundle() != 'paddle_editorial_note') {
+    return;
+  }
+
+  try {
+    // Fetch the most recent revision.
+    $node = workbench_moderation_node_current_load($wrapper->field_paddle_editorial_note_ref->value());
+    $node_wrapper = entity_metadata_wrapper('node', $node);
+    $responsible = $node_wrapper->field_page_responsible_author->value();
+
+    if (
+      $responsible &&
+      $responsible->uid != $user->uid &&
+      paddle_notifications_user_has_notification_enabled($responsible, 'note_added_responsible')
+    ) {
+      $wrapper = entity_property_values_create_entity('message', array(
+        'type' => 'paddle_notifications_note_added_responsible',
+        'uid' => $responsible->uid,
+        'field_paddle_notifications_node' => $wrapper->field_paddle_editorial_note_ref->value(),
+        'field_paddle_notifications_user' => $user,
+        'field_paddle_notifications_msg' => $entity,
+      ));
+      /* @var \EntityDrupalWrapper $wrapper */
+      $wrapper->save();
+
+      // Send the actual mail.
+      message_notify_send_message($wrapper->value());
+    }
+
+  }
+  catch (\EntityMetadataWrapperException $e) {
+    watchdog(
+      'paddle_notifications',
+      'Failed to handle notification. Error was %message',
+      array('%message' => $e->getMessage())
+    );
+  }
+}
+
+/**
+ * Retrieve the values for the user notifications field.
+ */
+function paddle_notifications_get_allowed_notifications() {
+  return module_invoke_all('set_allowed_notifications');
+}
+
+/**
+ * Implements hook_set_allowed_notifications().
+ */
+function paddle_notifications_set_allowed_notifications() {
+  return array(
+    'page_assigned' => t('A page is assigned to me'),
+    'page_expiration' => t('Expiration date of a page is within two weeks'),
+    'page_expired' => t('Expiration date of a page has elapsed'),
+    'node_update_responsible' => t('A page I am responsible for been modified'),
+    'note_added_responsible' => t("Editorial note has been added to a node I'm responsible for"),
+  );
+}

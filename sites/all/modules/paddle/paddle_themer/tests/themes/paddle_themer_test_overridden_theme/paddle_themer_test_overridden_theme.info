@@ -1,0 +1,10 @@
+name = Paddle Themer Overridden Test Theme
+description = Paddle Themer overridden sub theme for testing purposes.
+core = 7.x
+base theme = paddle_themer_test_theme
+hidden = TRUE
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_themer"
+datestamp = "1455518250"

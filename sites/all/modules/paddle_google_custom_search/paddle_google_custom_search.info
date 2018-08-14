@@ -1,0 +1,25 @@
+name = Google custom search
+description = Google Custom Search enables you to create a search engine for your website or a collection of websites. You can configure your engine to search both web pages and images. You can fine-tune the ranking, add your own promotions and customise the look and feel of the search results.
+core = 7.x
+package = Paddle
+
+dependencies[] = google_api
+stylesheets[all][] = css/paddle_google_custom_search.css
+
+apps[logo] = apps/logo.png
+
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+apps[paddle][third_party_service] = TRUE
+
+; Information added by drush on 2015-06-02
+version = "7.x-1.0+30-dev"
+project = "paddle_google_custom_search"
+datestamp = "1433239176"
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.0+33-dev"
+core = "7.x"
+project = "paddle_google_custom_search"
+datestamp = "1473170417"
+

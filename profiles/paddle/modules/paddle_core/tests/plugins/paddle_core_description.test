@@ -1,0 +1,80 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCorePaddleStylePluginDescriptionTest.
+ */
+
+/**
+ * Tests the Theme description plugin.
+ */
+class PaddleCorePaddleStylePluginDescriptionTest extends DrupalWebTestCase {
+  protected $profile = 'testing';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Theme description',
+      'description' => 'Test the Theme description Paddle Style plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array('ctools', 'paddle_style', 'paddle_core'));
+  }
+
+  /**
+   * Tests the form() function of the Description plugin without parameters.
+   */
+  public function testDescriptionFormWithoutSettings() {
+    // Instantiate the Description plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_description');
+    $instance = new $plugin['handler']['class']();
+
+    // Test if the default elements are being returned.
+    $form_elements = $instance->form();
+    $this->assertEqual($form_elements['description']['#type'], 'textarea', 'The form() method of the Description plugin returns a text area.');
+    $this->assertFalse($form_elements['description']['#default_value'], 'The text area returned by the form() method of the Description plugin is empty when called without a value.');
+  }
+
+  /**
+   * Tests the form() function of the Description plugin with a $values array.
+   */
+  public function testDescriptionFormWithDefaults() {
+    // Instantiate the Description plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_description');
+    $instance = new $plugin['handler']['class']();
+
+    // Values array to give to the form function.
+    $description = $this->randomString(56);
+    $values = array('description' => $description);
+    $form_elements = $instance->form(array(), $values);
+
+    // Check if the default values are set correctly.
+    $this->assertTrue($form_elements['description']['#default_value'] == $description, 'Default value is set properly for the description.');
+
+    // Validate edge cases: empty description.
+    $values = array('description' => '');
+    $errors = $instance->validate($values);
+
+    // Check if the form validation generates an error.
+    $this->assertEqual(count($errors), 0, 'No errors when submitting empty description.');
+
+    // Validate edge cases: too long description. We rely on $maxNumChars
+    // property of the plugin class.
+    $values = array('description' => $this->randomName($instance->maxNumChars + 1));
+    $errors = $instance->validate($values);
+
+    // Check if the form validation generates an error.
+    $this->assertEqual(count($errors), 1, 'Error when submitting too long description.');
+  }
+
+}

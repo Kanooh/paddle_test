@@ -1,0 +1,413 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Redirect module.
+ */
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_redirect_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_redirect_configuration_form',
+  );
+}
+
+/**
+ * Get the redirects to show in the overview table.
+ *
+ * @param array $header
+ *   The table header.
+ *
+ * @return array
+ *   An array of redirect objects.
+ */
+function paddle_redirect_get_redirects_for_overview_table($header) {
+  // Building the SQL query and load the redirects.
+  $query = db_select('redirect', 'r')->extend('TableSort')->extend('PagerDefault');
+  $query->addField('r', 'rid');
+  $query->condition('r.type', 'redirect');
+  $query->orderByHeader($header);
+  $query->limit(50);
+  $query->addTag('redirect_list');
+  $query->addTag('redirect_access');
+  $rids = $query->execute()->fetchCol();
+  $redirects = redirect_load_multiple($rids);
+
+  return $redirects;
+}
+
+/**
+ * Form callback displaying paddle redirect configuration.
+ */
+function paddle_redirect_configuration_form() {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $header = array(
+    'source' => array(
+      'data' => t('From'),
+      'field' => 'source',
+      'sort' => 'asc',
+      'class' => array(
+        'redirect-from',
+      ),
+    ),
+    'redirect' => array(
+      'data' => t('To'),
+      'field' => 'redirect',
+      'class' => array(
+        'redirect-to',
+      ),
+    ),
+    'status_code' => array(
+      'data' => t('Status'),
+      'field' => 'status_code',
+      'class' => array(
+        'status',
+      ),
+    ),
+    'operations' => array(
+      'data' => t('Actions'),
+      'class' => array(
+        'actions',
+      ),
+    ),
+  );
+
+  $redirect_options = redirect_status_code_options();
+
+  $rows = array();
+
+  $redirects = paddle_redirect_get_redirects_for_overview_table($header);
+
+  foreach ($redirects as $redirect) {
+    $redirect->source_options = array_merge($redirect->source_options, array('alias' => TRUE, 'language' => redirect_language_load($redirect->language)));
+
+    $rid = $redirect->rid;
+
+    $cells = array();
+
+    $source_url = redirect_url($redirect->source, $redirect->source_options);
+    $redirect_url = redirect_url($redirect->redirect, array_merge($redirect->redirect_options, array('alias' => TRUE)));
+    drupal_alter('redirect_url', $redirect->source, $redirect->source_options);
+    drupal_alter('redirect_url', $redirect->redirect, $redirect->redirect_options);
+
+    $cells['source'] = l($source_url, $redirect->source, $redirect->source_options);
+    $cells['redirect'] = l($redirect_url, $redirect->redirect, $redirect->redirect_options);
+
+    $cells['status_code'] = $redirect_options[$redirect->status_code];
+
+    $operation_items = array(
+      ctools_modal_text_button(t('Edit'), 'admin/content/paddle_redirect/nojs/edit/' . $rid, t('Edit the redirect.'), 'ctools-modal-overlay-persist ui-icon ui-icon-edit ui-icon-hiddentext'),
+      ctools_modal_text_button(t('Delete'), 'admin/content/paddle_redirect/nojs/delete/' . $rid, t('Delete the redirect.'), 'ctools-modal-overlay-persist ui-icon ui-icon-delete ui-icon-hiddentext'),
+    );
+
+    $cells['operations'] = theme('item_list', array('items' => $operation_items));
+
+    $row = array(
+      'data' => $cells,
+      'data-redirect-id' => $rid,
+    );
+
+    // Mark redirects that override existing paths with a warning in the table.
+    if (drupal_valid_path($redirect->source)) {
+      $row['class'][] = 'warning';
+      $row['title'] = t('This redirect overrides an existing internal path.');
+    }
+
+    $rows[$rid] = $row;
+  }
+
+  $form['rids'] = array(
+    '#theme' => 'table',
+    '#header' => $header,
+    '#rows' => $rows,
+    '#empty' => t('No URL redirects available. Click on "Create Redirect" to create one. You can also import URLs via a csv file.'),
+    '#attributes' => array(
+      'class' => array(
+        'redirect-list-table',
+      ),
+    ),
+  );
+
+  $form['pager'] = array('#theme' => 'pager');
+
+  if (!empty($form['rids']['#rows'])) {
+    // Add the export to csv button.
+    $form['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Export CSV'),
+      '#attributes' => array(
+        'id' => 'export-csv',
+        'class' => array(
+          'hidden',
+        ),
+      ),
+      '#submit' => array('paddle_redirect_configuration_form_export_csv_submit'),
+    );
+  }
+
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_redirect_add_contextual_actions_configuration_form';
+  }
+
+  return $form;
+}
+
+/**
+ * After-build function of the redirect settings form.
+ */
+function paddle_redirect_add_contextual_actions_configuration_form($form, &$form_state) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $actions = paddle_contextual_toolbar_actions();
+
+  $actions[] = array(
+    'action' => ctools_modal_text_button(t('Create Redirect'), 'admin/content/paddle_redirect/nojs/add', t('Create a new redirect.'), 'ctools-modal-overlay-persist ui-icon fa-plus'),
+    'class' => array('add'),
+    'weight' => 0,
+    'group' => 'content',
+  );
+
+  $actions[] = array(
+    'action' => ctools_modal_text_button(t('Import Redirects'), 'admin/content/paddle_redirect/nojs/import', t('Import redirects from a CSV file.'), 'ctools-modal-overlay-persist ui-icon fa-upload'),
+    'class' => array('add'),
+    'weight' => 0,
+    'group' => 'import',
+  );
+
+  $actions[] = array(
+    'action' => l(t('Export CSV'), '', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-download'),
+        'data-paddle-contextual-toolbar-click' => 'export-csv',
+        'data-repeatable-clicks' => TRUE,
+      ),
+      'html' => TRUE,
+      'external' => TRUE,
+    )),
+    'class' => array('submit'),
+    'weight' => 5,
+    'group' => 'import',
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_redirect_menu() {
+  $items = array();
+
+  $items['admin/content/paddle_redirect/%ctools_js/add'] = array(
+    'title' => 'Create redirect',
+    'page callback' => 'paddle_redirect_configure_redirect',
+    'page arguments' => array(3),
+    'access arguments' => array('administer redirects'),
+    'type' => MENU_CALLBACK,
+    'file' => 'paddle_redirect.pages.inc',
+  );
+
+  $items['admin/content/paddle_redirect/%ctools_js/edit/%redirect'] = array(
+    'title' => 'Edit redirect',
+    'page callback' => 'paddle_redirect_configure_redirect',
+    'page arguments' => array(3, 5),
+    'access arguments' => array('administer redirects'),
+    'type' => MENU_CALLBACK,
+    'file' => 'paddle_redirect.pages.inc',
+  );
+
+  $items['admin/content/paddle_redirect/%ctools_js/delete/%redirect'] = array(
+    'title' => 'Delete redirect',
+    'page callback' => 'paddle_redirect_delete_redirect',
+    'page arguments' => array(3, 5),
+    'access arguments' => array('administer redirects'),
+    'type' => MENU_CALLBACK,
+    'file' => 'paddle_redirect.pages.inc',
+  );
+
+  $items['admin/content/paddle_redirect/%ctools_js/import'] = array(
+    'title' => 'Import redirects',
+    'page callback' => 'paddle_redirect_import',
+    'page arguments' => array(3),
+    'access arguments' => array('administer redirects'),
+    'file' => 'paddle_redirect.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_redirect_form_redirect_edit_form_alter(&$form, &$form_state) {
+  // Set the source field to our needs.
+  $form['source']['#title'] = t('From (original URL)');
+  unset($form['source']['#description']);
+
+  // Set the target field to our needs.
+  $form['redirect']['#title'] = t('To (redirect URL)');
+  unset($form['redirect']['#description']);
+
+  // Set the status code field to our needs.
+  $form['advanced']['#type'] = 'container';
+  unset($form['advanced']['#title']);
+  unset($form['advanced']['#collapsible']);
+  unset($form['advanced']['#collapsed']);
+  $form['advanced']['#status_code']['#title'] = t('Redirect status (optional)');
+  $form['advanced']['status_code']['#default_value'] = 301;
+  unset($form['advanced']['status_code']['#options'][0]);
+
+  // Unset the language.
+  unset($form['language']);
+
+  // Set the correct classes on the form elements.
+  $form['actions']['#attributes']['class'][] = 'form-buttons';
+  $form['source']['#prefix'] = '<div class="form-body">';
+  $form['actions']['#prefix'] = '</div>';
+
+  // Remove the "Cancel" button.
+  unset($form['actions']['cancel']);
+
+  // Set a custom validate handler to remove functionality which we don't need.
+  $form['#validate'] = array(
+    'paddle_redirect_edit_form_validate',
+  );
+}
+
+/**
+ * Get the RID of the redirect.
+ *
+ * @param string $source
+ *   The path in the "from" field of the redirect.
+ *
+ * @return string
+ *   Returns the key of redirect if a redirect was found, FALSE otherwise.
+ */
+function paddle_redirect_get_rid($source) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'redirect')
+    ->propertyCondition('source', $source);
+  $result = $query->execute();
+
+  if (empty($result)) {
+    return FALSE;
+  }
+
+  $redirect = reset($result);
+  return key($redirect);
+}
+
+/**
+ * Validate a redirect.
+ */
+function paddle_redirect_edit_form_validate($form, &$form_state, $redirect) {
+  $redirect = (object) $form_state['values'];
+
+  if (empty($form_state['values']['override'])) {
+    if ($existing = redirect_load_by_source($redirect->source, $redirect->language)) {
+      if ($redirect->rid != $existing->rid && $redirect->language == $existing->language) {
+        // The "from" path should not conflict with another redirect.
+        $form_state['storage']['override_messages']['redirect-conflict'] = t('The base source path %source is already being redirected. Do you want to <a href="@edit-page">edit the existing redirect</a>?', array('%source' => $redirect->source, '@edit-page' => url('admin/config/search/redirect/edit/' . $existing->rid)));
+        $form_state['rebuild'] = TRUE;
+      }
+    }
+  }
+
+  // Check that there are no redirect loops.
+  if (url($redirect->source) == url($redirect->redirect)) {
+    form_set_error('redirect', t('You are attempting to redirect the page to itself. This will result in an infinite loop.'));
+  }
+
+  redirect_hash($redirect);
+  if ($existing = redirect_load_by_hash($redirect->hash)) {
+    if ($redirect->rid != $existing->rid) {
+      form_set_error('source', t('The source path %source is already being redirected', array('%source' => redirect_url($redirect->source, $redirect->source_options))));
+    }
+  }
+
+  // Allow other modules to validate the SSH public key.
+  foreach (module_implements('redirect_validate') as $module) {
+    $function = $module . '_redirect_validate';
+    $function($redirect, $form, $form_state);
+  }
+}
+
+/**
+ * Submit handler for the "export to csv" functionality.
+ */
+function paddle_redirect_configuration_form_export_csv_submit($form, &$form_state) {
+  $efq = new EntityFieldQuery();
+  $result = $efq->entityCondition('entity_type', 'redirect')
+    ->entityCondition('bundle', 'redirect')
+    ->execute();
+
+  if (isset($result['redirect'])) {
+    paddle_redirect_export_redirects($result['redirect']);
+  }
+  else {
+    drupal_set_message('Sorry, no redirects to export available at this moment');
+  }
+}
+
+/**
+ * Generates and sends CSV file with redirects.
+ */
+function paddle_redirect_export_redirects($redirects) {
+  $fp = fopen('php://output', 'w');
+
+  // Add the header to the file.
+  fputcsv($fp, array(
+    t('From (original URL)'),
+    t('To (redirect URL)'),
+    t('Status'),
+  ));
+
+  foreach ($redirects as $redirect) {
+    // Reset the cache so we won't exhaust memory.
+    $redirect = redirect_load($redirect->rid, TRUE);
+    $source = $redirect->source;
+    $redirect_url = $redirect->redirect;
+
+    if (isset($redirect->source_options['query'])) {
+      $source .= '?' . drupal_http_build_query($redirect->source_options['query']);
+    }
+
+    if (empty($redirect_url)) {
+      $redirect_url = '<front>';
+    }
+
+    $line = array($source, $redirect_url);
+    if (!$redirect->status_code) {
+      $redirect->status_code = 301;
+    }
+    $line[] = $redirect->status_code;
+
+    fputcsv($fp, $line);
+  }
+  fclose($fp);
+
+  drupal_add_http_header('Content-Type', 'text/csv');
+  drupal_add_http_header('Content-Disposition', 'attachment;filename=redirects.csv');
+
+  drupal_exit();
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_redirect_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'field_attach_form') {
+    unset($implementations['redirect']);
+  }
+}

@@ -1,0 +1,11 @@
+name = Paddle VUB Theme
+description = Enables functionality for the VUB theme.
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = paddle_rich_footer
+dependencies[] = paddle_themer
+features[ctools][] = paddle_themer:default_paddle_themer:1
+features[features_api][] = api:2
+features[paddle_themer_theme][] = vub_theme

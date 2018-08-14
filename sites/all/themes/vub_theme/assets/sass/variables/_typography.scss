@@ -1,0 +1,38 @@
+// @file
+// TYPOGRAPHY.
+// ---------
+
+$font-family-title: "Adventor";
+$font-family-text: "Roboto";
+
+$font-size-xxxlarge: 65px; // h1
+$font-size-xxlarge:  30px; // h2
+$font-size-xlarge:   26px; // h3
+$font-size-large:    22px; // h4
+$font-size-medium:   20px; // h4
+$font-size-base:          16px; // p
+$font-size-small:    14px; // h5, small, cite
+$font-size-xsmall:   12px; // top menu
+
+// Default border-radius value for input elements,
+// alerts, buttons, images (in <figure>), ...
+
+$line-height-base:   1.7;
+$border-radius: 0px; // 5px @ 16px
+$box-shadow: 0px 2px 0px 0px rgba($border-color-active, 0.2);
+
+$text-color:          #464646; // Base
+$font-color-medium:   #7e8998; // Secondary (eg. image caption)
+$font-color-light:    $light; // Placeholders in forms
+$font-color-disabled: rgba(#1E2F41, 0.30); // Disabled Text
+
+// -------------------------------------------------------------------
+// :: MEDIA QUERIES
+// -------------------------------------------------------------------
+// Major breakpoints should be set in base/_typography.scss
+// Minor breakpoint should be added where needed (inline)
+
+$mobile:     30em; // 480px
+$tablet:     45em; // 720px
+$desktop:    60em; // 960px
+$desktop-xl: 71.25em; // 1140px

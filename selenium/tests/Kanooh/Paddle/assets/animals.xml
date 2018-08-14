@@ -1,0 +1,114 @@
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Animals</title>
+    <link>http://www.example.com/</link>
+    <description>Feed about animals.</description>
+    <language>en-us</language>
+    <pubDate>Tue, 10 Jun 2003 04:00:00 GMT</pubDate>
+    <lastBuildDate>Tue, 5 Jun 2015 09:41:01 GMT</lastBuildDate>
+    <generator>Kanooh</generator>
+    <item>
+      <title>Cat</title>
+      <link>https://en.wikipedia.org/wiki/Cat</link>
+      <description>The domestic cat (Felis catus or Felis silvestris catus) is a small, usually furry, domesticated, and
+        carnivorous mammal. They are often called housecats when kept as an indoor pet or simply cats when there is no
+        need to distinguish them from other felids and felines. Cats are often valued by humans for companionship and
+        their ability to hunt pests.
+
+        Cats are similar in anatomy to the other felids, with strong, flexible bodies, quick reflexes, sharp retractable
+        claws, and teeth adapted to killing small prey. Cat senses fit a crepuscular and predatory ecological niche.
+        Cats can hear sounds too faint or too high in frequency for human ears, such as those made by mice and other
+        small animals. They can see in near darkness. Like most other mammals, cats have poorer color vision and a
+        better sense of smell than humans.
+      </description>
+      <pubDate>Tue, 04 Jun 2013 09:39:21 GMT</pubDate>
+      <guid>https://en.wikipedia.org/wiki/Cat</guid>
+      <media:content media="image" type="image/jpeg" width="5935" height="3898" url="https://upload.wikimedia.org/wikipedia/commons/0/0b/Cat_poster_1.jpg"/>
+    </item>
+    <item>
+      <title>Dog</title>
+      <link>https://en.wikipedia.org/wiki/Dog</link>
+      <description>The domestic dog (Canis lupus familiaris or Canis familiaris) is a domesticated canid which has been
+        selectively bred for millennia for various behaviors, sensory capabilities, and physical attributes.
+
+        Although initially thought to have originated as a manmade variant of an extant canid species (variously
+        supposed as being the dhole, golden jackal, or gray wolf), extensive genetic studies undertaken during the 2010s
+        indicate that dogs are descendants of a now extinct northern Eurasian canid which diverged from gray wolves
+        40,000 years ago. Being the oldest domesticated animals, their long association with people has allowed dogs to
+        be uniquely attuned to human behavior, as well as thrive on a starch-rich diet which would be inadequate for
+        other canid species.
+      </description>
+      <pubDate>Fri, 30 May 2013 11:06:42 GMT</pubDate>
+      <guid>https://en.wikipedia.org/wiki/Dog</guid>
+      <media:content type="image/jpeg" url="https://upload.wikimedia.org/wikipedia/commons/d/d9/Collage_of_Nine_Dogs.jpg">
+        <media:thumbnail url="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Collage_of_Nine_Dogs.jpg/273px-Collage_of_Nine_Dogs.jpg"/>
+      </media:content>
+    </item>
+    <item>
+      <title>Blue whale</title>
+      <link>https://en.wikipedia.org/wiki/Blue_whale</link>
+      <description>The blue whale (Balaenoptera musculus) is a marine mammal belonging to the baleen whales (Mysticeti).
+        At 30 metres (98 ft) in length and 180 tonnes (200 short tons) or more in weight, it is the largest existing
+        animal and the heaviest that has ever existed.
+      </description>
+      <pubDate>Fri, 31 May 2003 12:06:42 GMT</pubDate>
+      <guid>https://en.wikipedia.org/wiki/Blue_whale</guid>
+      <media:thumbnail width="320" height="222" url="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Anim1754_-_Flickr_-_NOAA_Photo_Library.jpg/320px-Anim1754_-_Flickr_-_NOAA_Photo_Library.jpg"/>
+      <media:thumbnail width="640" height="443" url="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Anim1754_-_Flickr_-_NOAA_Photo_Library.jpg/640px-Anim1754_-_Flickr_-_NOAA_Photo_Library.jpg"/>
+    </item>
+    <item>
+      <title>Sperm whale</title>
+      <link>https://en.wikipedia.org/wiki/Sperm_whale</link>
+      <description>The sperm whale (Physeter macrocephalus), or cachalot, is the largest of the toothed whales and the
+        largest toothed predator. It is the only living member of genus Physeter, and one of three extant species in the
+        sperm whale family, along with the pygmy sperm whale and dwarf sperm whale of the genus Kogia.
+
+        Mature males average at 16 metres (52 ft) in length but some may reach 20.5 metres (67 ft), with the head
+        representing up to one-third of the animal's length. The sperm whale feeds primarily on squid. Plunging to 2,250
+        metres (7,380 ft) for prey, it is the second deepest diving mammal, following only the Cuvier's beaked whale.
+        The sperm whale's clicking vocalization, a form of echolocation and communication, may be as loud as 230
+        decibels (re 1 µPa at 1 m) underwater, making it the loudest sound produced by any animal. It has the largest
+        brain of any animal on Earth, more than five times heavier than a human's. Sperm whales can live for more than
+        60 years.
+      </description>
+      <pubDate>Fri, 30 May 2003 13:06:42 GMT</pubDate>
+      <guid>https://en.wikipedia.org/wiki/Sperm_whale</guid>
+      <media:thumbnail width="618" height="434" url="https://commons.wikimedia.org/wiki/File:Pottwal_an_der_Wasseroberfl%C3%A4che.jpg"/>
+    </item>
+    <item>
+      <title>Armadillo</title>
+      <link>https://en.wikipedia.org/wiki/Armadillo</link>
+      <description>Armadillos are New World placental mammals with a leathery armour shell. Dasypodidae is the only
+        surviving family in the order Cingulata, part of the superorder Xenarthra, along with the anteaters and sloths.
+        The word armadillo means "little armoured one" in Spanish. The Aztecs called them āyōtōchtli /aːjoːˈtoːt͡ʃt͡ɬi/,
+        Nahuatl for “turtle-rabbit”: āyōtl /ˈaːjoːt͡ɬ/ (turtle) and tōchtli /ˈtoːt͡ʃt͡ɬi/ (rabbit).
+
+        About 10 extant genera and 20 extant species of armadillo have been described, some of which are distinguished
+        by the number of bands on their armour. Their average length is about 75 cm (30 in), including tail. The giant
+        armadillo grows up to 150 cm (59 in) and weighs up to 54 kg (119 lb), while the pink fairy armadillo is a
+        diminutive species, with an overall length of 13 to 15 cm (5 to 6 in). All species are native to the Americas,
+        where they inhabit a variety of environments.
+      </description>
+      <pubDate>Fri, 31 May 2003 17:06:42 GMT</pubDate>
+      <guid>https://en.wikipedia.org/wiki/Armadillo</guid>
+      <media:content type="image/jpeg" url="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Nine-banded_Armadillo.jpg/1024px-Nine-banded_Armadillo.jpg">
+        <media:thumbnail url="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Nine-banded_Armadillo.jpg/320px-Nine-banded_Armadillo.jpg"/>
+      </media:content>
+    </item>
+    <item>
+      <title>Sponge</title>
+      <link>https://en.wikipedia.org/wiki/Sponge</link>
+      <description>Sponges are animals of the phylum Porifera (/pɒˈrɪfərə/; meaning "pore bearer"). They are
+        multicellular organisms that have bodies full of pores and channels allowing water to circulate through them,
+        consisting of jelly-like mesohyl sandwiched between two thin layers of cells. Sponges have unspecialized cells
+        that can transform into other types and that often migrate between the main cell layers and the mesohyl in the
+        process. Sponges do not have nervous, digestive or circulatory systems. Instead, most rely on maintaining a
+        constant water flow through their bodies to obtain food and oxygen and to remove wastes.
+      </description>
+      <pubDate>Fri, 31 May 2003 23:06:42 GMT</pubDate>
+      <guid>https://en.wikipedia.org/wiki/Sponge</guid>
+      <media:content media="image" type="image/jpeg" width="359" height="480" url="https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Aplysina_archeri_%28Stove-pipe_Sponge-pink_variation%29.jpg/359px-Aplysina_archeri_%28Stove-pipe_Sponge-pink_variation%29.jpg"/>
+    </item>
+  </channel>
+</rss>

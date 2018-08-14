@@ -1,0 +1,39 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleReferenceTrackerNodeReferencePageTest
+ */
+
+/**
+ * Class PaddleReferenceTrackerNodeReferencePageTest.
+ */
+class PaddleReferenceTrackerNodeReferencePageTest extends ReferenceTrackerNodeReferencePageTest {
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $expectedLinkPattern = 'admin/content_manager/node/%nid/view';
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Paddle Reference Tracker: Node Reference Page',
+      'description' => 'Tests the rendering of the Node Reference page in Paddle.',
+      'group' => 'Paddle Reference Tracker',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($modules = array()) {
+    parent::setUp(array('paddle_reference_tracker'));
+
+    // Remove the automatic path pattern to make sure the node references are
+    // discovered by reference tracker module.
+    variable_set('pathauto_node_pattern', '');
+  }
+}

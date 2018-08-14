@@ -1,0 +1,20 @@
+# A sample Guardfile
+# More info at https://github.com/guard/guard#readme
+
+group :development do
+
+  ## Uncomment to clear the screen before every task
+  # clearing :on
+
+  guard 'livereload' do
+    watch(%r{.+\.(css|js)$})
+  end
+
+  require 'sass'
+  require 'sass/globbing'
+
+  require_relative './ruby/Math.rb'
+
+  guard 'sass', :input => 'sass', :output => 'css', :style => :expanded, :sourcemap => :auto, :line_numbers => false
+
+end

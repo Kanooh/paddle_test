@@ -1,0 +1,48 @@
+<?php
+
+/**
+ * @file
+ * Paddle Scald Video Installation
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_scald_video_install() {
+  // Create a field for the subtitles.
+  $field_name = 'paddle_scald_video_subtitles';
+  $field = field_info_field($field_name);
+  if (empty($field)) {
+    $field = array(
+      'field_name' => $field_name,
+      'type' => 'file',
+    );
+    field_create_field($field);
+  }
+
+  // Create the video atom type.
+  paddle_scald_video_create_atom_type();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_scald_video_uninstall() {
+  drupal_load('module', 'scald');
+  // If Scald is disabled, its classes are not autoloaded.
+  module_load_include('inc', 'scald', 'includes/ScaldAtomController');
+
+  ScaldAtomController::removeType('video');
+}
+
+/**
+ * Update the Paddle video atom type description.
+ */
+function paddle_scald_video_update_7000() {
+  db_update('scald_types')
+    ->fields(array(
+      'description' => t('Add video files.'),
+    ))
+    ->condition('type', 'video')
+    ->execute();
+}

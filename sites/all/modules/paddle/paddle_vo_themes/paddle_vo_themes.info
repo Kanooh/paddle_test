@@ -1,0 +1,17 @@
+name = Paddle VO themes
+description = Paddle Themes for the Flemish Government / Vlaamse Overheid
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = paddle_themer
+dependencies[] = widget_block
+features[ctools][] = paddle_themer:default_paddle_themer:1
+features[features_api][] = api:2
+features[paddle_themer_theme][] = vo_standard
+features[paddle_themer_theme][] = vo_standard_non_branded
+features[paddle_themer_theme][] = vo_strict
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_vo_themes"
+datestamp = "1455520435"

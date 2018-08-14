@@ -1,0 +1,14 @@
+site_name: Paddle developer documentation
+theme: readthedocs
+
+pages:
+- Home: index.md
+- Paddle VM: paddle_vm.md
+- Paddle app meta information: meta_information.md
+- App configuration: configuration.md 
+- Permissions: permissions.md
+- Common page type features: common_page_type_features.md
+- Update Paddle apps overview: update_overview.md
+- Install an app: app_installation.md
+- Kanooh Code quality: kanooh/code_quality.md
+- Kanooh Browser compatibility: kanooh/browser_compatibility.md

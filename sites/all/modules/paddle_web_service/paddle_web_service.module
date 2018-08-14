@@ -1,0 +1,49 @@
+<?php
+/**
+ * @file
+ * Code for Paddle web service.
+ */
+
+include_once 'paddle_web_service.features.inc';
+
+/**
+ * Implements hook_query_TAG_alter().
+ */
+function paddle_web_service_query_node_with_term_reference_alter(QueryAlterableInterface $query) {
+  // Alter the query so filtering on multiple terms actually works.
+  $term_count = 0;
+  $term_data = 'taxonomy_term_data';
+  $field_data = 'field_data_field_paddle_general_tags';
+
+  /** @var \Drupal\paddle_web_service\Plugin\resource\DataProvider\DataProviderPage $restful_data_provider */
+  $restful_data_provider = $query->getMetaData('restful_data_provider');
+  $options = $restful_data_provider->getOptions();
+
+  $conditions = &$query->conditions();
+  foreach ($conditions as $key => &$condition) {
+    if ($key !== '#conjunction'
+      && is_string($condition['field'])
+      && substr($condition['field'], 0, strlen($term_data)) === $term_data
+    ) {
+      // No need to alter anything for the first term.
+      if ($term_count) {
+        // Add aliased inner joins because with only 1 pair of inner joins we
+        // get all nodes that are linked to the last term to filter on,
+        // ignoring all other terms we want to filter on.
+        // @see https://www.webomelette.com/query-nodes-which-reference-multiple-terms-drupal-7
+        $field_data_alias = $field_data . '_' . $term_count;
+        $join_condition = 'node.nid = ' . $field_data_alias . '.entity_id';
+        $query->innerJoin($field_data, $field_data_alias, $join_condition);
+        $term_data_alias = $term_data . '_' . $term_count;
+        $join_condition = $field_data_alias . '.field_paddle_general_tags_tid = ' . $term_data_alias . '.tid';
+        $query->innerJoin($term_data, $term_data_alias, $join_condition);
+        $condition['field'] = str_replace($term_data, $term_data_alias, $condition['field']);
+      }
+      if (array_key_exists('entityType', $options)) {
+        // Filter on entity type. Otherwise every entity type will be returned.
+        $query->condition((isset($field_data_alias) ? $field_data_alias : $field_data) . '.entity_type', $options['entityType']);
+      }
+      $term_count++;
+    }
+  }
+}

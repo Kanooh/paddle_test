@@ -1,0 +1,23 @@
+<?php
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the JavaScript app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_custom_javascript_enable() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  module_implements('permission', FALSE, TRUE);
+
+  // Make sure the site managers can manage widgets on Paddle websites.
+  $permissions = array('manage paddle custom javascript');
+
+  $role = user_role_load_by_name('Site Manager');
+  if (!empty($role)) {
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}

@@ -1,0 +1,14 @@
+name = Scald Test
+description = Hooks and dependencies for testing Scald
+package = Scald
+core = 7.x
+hidden = TRUE
+
+dependencies[] = i18n
+dependencies[] = i18n_string
+
+
+; Information added by drush on 2015-05-21
+version = "7.x-1.6"
+project = "scald"
+datestamp = "1432199322"

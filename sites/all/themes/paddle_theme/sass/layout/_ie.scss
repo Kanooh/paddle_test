@@ -1,0 +1,26 @@
+/**
+* @file
+* IE fixes.
+*
+*/
+
+.lt-ie8 #block-paddle-menu-display-first-level .menu.level-1 > li {
+  display: inline;
+}
+.lt-ie9 #paddle-simple-contact-field-contact-form .form-submit:hover,
+.lt-ie9 #paddle-simple-contact-field-contact-form .form-submit:focus {
+  opacity: 0.8;
+}
+.lt-ie8 #block-paddle-menu-display-first-level .menu.level-1 > li {
+  display: inline;
+}
+
+/*
+ * Let's target IE to respect aspect ratios and sizes for img tags containing SVG files
+ * IE10+
+ */
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+  img[src$=".svg"] {
+    width: 100%;
+  }
+}

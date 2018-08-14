@@ -1,0 +1,10 @@
+.codex {
+  border: 1px solid;
+  padding: 10px;
+  margin-bottom: 10px;
+
+  .remove, .remove:hover {
+    background: url(../images/bullet_delete.png) no-repeat top right;
+    float: right;
+  }
+}

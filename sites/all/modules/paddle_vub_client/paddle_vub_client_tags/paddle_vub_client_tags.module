@@ -1,0 +1,145 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle VUB Client Tags feature.
+ */
+
+include_once 'paddle_vub_client_tags.features.inc';
+
+/**
+ * Implements hook_cron().
+ */
+function paddle_vub_client_tags_cron() {
+  /** @var FeedsSource $src */
+  $src = feeds_source('vub_tags_importer');
+  $src->save();
+
+  $server_url = variable_get('paddle_vub_client_server_site', '');
+  $vid = paddle_vub_client_tag_get_taxonomy_vid($server_url);
+
+  if (!empty($vid)) {
+    $config = array('VUBFeedsHTTPFetcher' => array('source' => $server_url . '/taxonomy_term.json?vocabulary[id]=' . $vid));
+    $src->addConfig($config);
+    $src->save();
+
+    try {
+      $src->import();
+      $src->schedule();
+    }
+    catch (Exception $e) {
+      return FALSE;
+    }
+    // Prevent notices from being thrown.
+    $src->state(FEEDS_FETCH);
+    $src->state(FEEDS_PROCESS);
+    $src->state(FEEDS_PROCESS_CLEAR);
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_feeds_after_import().
+ */
+function paddle_vub_client_tags_feeds_after_import(FeedsSource $source) {
+  if (!empty($source) && $source->id == 'vub_tags_importer') {
+    // If the import happened by cron. We want to import once more forcefully
+    // to link parent terms to their children.
+    if ($source->importer->processor->config['skip_hash_check'] == 0) {
+      $config = array('skip_hash_check' => 1);
+      $source->importer->processor->addConfig($config);
+      $source->importer->save();
+      $source->import();
+      $source->schedule();
+    }
+    // Once the forced import has been committed, we want to reset our force
+    // value again.
+    else {
+      $config = array('skip_hash_check' => 0);
+      $source->importer->processor->addConfig($config);
+      $source->importer->save();
+    }
+
+  }
+}
+
+/**
+ * Retrieves the remote server vid of the taxonomy vocabulary 'VUB Tags'.
+ *
+ * @param string $server_url
+ *   The URL of the VUB Server.
+ *
+ * @return int
+ *   The vocabulary ID which is requested.
+ */
+function paddle_vub_client_tag_get_taxonomy_vid($server_url) {
+  if (!empty(variable_get('paddle_vub_client_tags_voc_id', 0))) {
+    return variable_get('paddle_vub_client_tags_voc_id', 0);
+  }
+  else {
+    paddle_vub_client_tag_set_taxonomy_vid($server_url);
+  }
+
+  return variable_get('paddle_vub_client_tags_voc_id', 0);
+}
+
+/**
+ * Sets the remote vid of the taxonomy vocabulary 'VUB Tags'.
+ *
+ * @param string $server_url
+ *   The URL of the VUB Server.
+ */
+function paddle_vub_client_tag_set_taxonomy_vid($server_url) {
+  $ch = curl_init();
+  // Retrieve the X-CSRF-token.
+  $http_x_csrf_token = paddle_vub_client_retrieve_http_x_crsf_token($ch, $server_url);
+
+  // Search the taxonomy vocabulary with the machine_name 'vub_tags'.
+  curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json', 'X-CSRF-Token: ' . $http_x_csrf_token));
+  curl_setopt($ch, CURLOPT_URL, $server_url . '/taxonomy_vocabulary.json?machine_name=vub_tags');
+
+  $data = curl_exec($ch);
+
+  if (!paddle_vub_client_check_for_curl_errors($ch, 'cURL error (@code) @error for retrieving the taxonomy vid from @url')) {
+    $data_array = drupal_json_decode($data);
+    // A machine name is unique so we will only retrieve one result.
+    if (!empty($data_array['list'][0]['vid'])) {
+      variable_set('paddle_vub_client_tags_voc_id', $data_array['list'][0]['vid']);
+    }
+  }
+}
+
+/**
+ * Implements hook_feeds_processor_targets().
+ */
+function paddle_vub_client_tags_feeds_processor_targets($entity_type, $bundle) {
+  $targets = array();
+
+  if ($entity_type == 'taxonomy_term') {
+    $targets['language']['name'] = t('Term language');
+    $targets['language']['description'] = t('The language of the taxonomy term.');
+  }
+
+  return $targets;
+}
+
+/**
+ * Retrieves all the terms from the VUB tags vocabulary.
+ *
+ * @return array
+ *   A list of tags keyed by the tid of the term on the server.
+ */
+function paddle_vub_client_tags_get_term_list_for_server() {
+  $tags = array();
+  $vocabulary = taxonomy_vocabulary_machine_name_load('vub_tags');
+  $terms = entity_load('taxonomy_term', FALSE, array('vid' => $vocabulary->vid));
+  foreach ($terms as $term) {
+    $term_wrapper = entity_metadata_wrapper('taxonomy_term', $term);
+    if (!empty($term_wrapper->field_vub_server_tid) && !empty($term_wrapper->field_vub_server_tid->value())) {
+      $tags[$term_wrapper->field_vub_server_tid->value()] = $term->name . ' [' . $term->language . ']';
+    }
+  }
+
+  return $tags;
+}

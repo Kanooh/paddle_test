@@ -1,0 +1,59 @@
+<?php
+
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Core Test module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_core_test_menu() {
+  $items = array();
+
+  $items['admin/config/admin_page_links_test'] = array(
+    'title' => 'Admin test page with links',
+    'description' => 'Admin test page with links',
+    'page callback' => 'paddle_core_test_links_page',
+    'access arguments' => array('administer site configuration'),
+  );
+
+  $items['normal_page_links_test'] = array(
+    'title' => 'Links normal test page',
+    'description' => 'Links normal test page',
+    'page callback' => 'paddle_core_test_links_page',
+    'access arguments' => array('access content'),
+  );
+
+  return $items;
+}
+
+/**
+ * Menu callback displaying page with links.
+ */
+function paddle_core_test_links_page() {
+  /* The array in the paddle_core_test_links_to_display should look like this:
+   * array(
+   *   'some_url' = array(
+   *     'title' => 'Title of the link',
+   *     'options' => array(...array of options passable to l()),
+   *   ),
+   *   'some_other_url' = array(
+   *     'title' => 'Title of another link',
+   *     'options' => array(...array of options passable to l()),
+   *   ),
+   *   ....
+   * );
+   * These are the links to output on the menu callpack page.
+   */
+  $links = variable_get('paddle_core_test_links_to_display', array());
+
+  $output = '';
+  foreach ($links as $url => $link) {
+    $options = isset($link['options']) ? $link['options'] : array();
+    $output .= l($link['title'], $url, $options);
+  }
+
+  return $output;
+}

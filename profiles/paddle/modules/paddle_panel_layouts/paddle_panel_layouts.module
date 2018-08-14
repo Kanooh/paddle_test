@@ -1,0 +1,16 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Panel Layouts feature.
+ */
+
+include_once 'paddle_panel_layouts.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_panel_layouts_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'panels') {
+    return 'plugins/' . $plugin;
+  }
+}

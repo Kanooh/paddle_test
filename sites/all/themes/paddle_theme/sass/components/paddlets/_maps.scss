@@ -1,0 +1,12 @@
+/**
+ * @file
+ * Maps Paddlet styling.
+ */
+
+// Use the same amount of padding as '.pane-node-body .pane-content' but only
+// when there are no search results and thus no map is shown. That way we can
+// keep giving the map full within its container.
+.pane-block-maps-search-results .pane-content .view-empty {
+  margin: 0 15px 0 15px;
+  padding: 21px 0 14px 0;
+}

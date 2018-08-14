@@ -1,0 +1,8 @@
+name = Paddle Codex Flanders test module
+description = Provides some dummy functionality to facilitate automated testing.
+core = 7.x
+package = Testing
+hidden = TRUE
+
+dependencies[] = paddle_codex_flanders
+dependencies[] = paddle_panes

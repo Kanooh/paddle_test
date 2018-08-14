@@ -1,0 +1,54 @@
+<?php
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Rate.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_rate_install() {
+  // Set all rate settings for existing content types.
+  foreach (node_type_get_types() as $type => $name) {
+    variable_set('paddle_rate' . $type, 0);
+  }
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_rate_enable() {
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions(). Otherwise our new content type is not yet
+  // known.
+  features_revert_module('paddle_rate');
+  node_type_cache_reset();
+
+
+  // Grant permissions to ALL users to rate content.
+  $permissions = array(
+    'rate content',
+  );
+
+  user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $permissions);
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $permissions);
+
+  foreach (node_type_get_types() as $type) {
+    paddle_rate_create_rate_field_instance($type);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_rate_disable() {
+  paddle_apps_remove_field('field_paddle_rating');
+  paddle_apps_remove_field('field_paddle_enable_rating');
+}
+
+/**
+ * Replace the core page caching by AuthCache.
+ */
+function paddle_rate_update_7001() {
+  paddle_apps_enable_authcache();
+}

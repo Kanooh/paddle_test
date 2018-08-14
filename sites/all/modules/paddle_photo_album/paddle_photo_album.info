@@ -1,0 +1,10 @@
+name = Paddle Photo Album
+description = Provides the possibility to add a photo album pane on your page.
+core = 7.x
+package = Paddle
+
+apps[name] = Fotoalbum
+apps[description] = Laat een verzameling van foto's zien op elke willekeurige pagina.
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle

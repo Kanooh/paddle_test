@@ -1,0 +1,440 @@
+<?php
+
+/**
+ * @file
+ * Paddle Scald File is a Scald Atom Provider for Files.
+ */
+
+define('PADDLE_SCALD_FILE_ALLOWED_EXTENSIONS', 'ppt pptx potx pps xls xlsx xlsm xltx doc docm docx dotx odt odp pdf txt csv odg sxw ods rtf zip rar gz 7z tar mdb accdb eot svg otf ttf woff eps');
+
+/**
+ * Renders the HTML for scald files in the CKEditor.
+ *
+ * @param ScaldAtom $atom
+ *   Atom to render as HTML.
+ * @param array $attributes
+ *   Optional array of attributes to add to the element.
+ * @param bool $editor
+ *   Whether or not the HTML will be rendered in the CKEditor.
+ */
+function paddle_scald_file_ckeditor_html($atom, $attributes = array(), $editor = FALSE) {
+  if ($atom->type != 'file' || !isset($atom->paddle_scald_file[LANGUAGE_NONE][0])) {
+    return '';
+  }
+
+  $path = file_create_url($atom->file_source);
+  $file_mime = $atom->paddle_scald_file[LANGUAGE_NONE][0]['filemime'];
+  $file_size = $atom->paddle_scald_file[LANGUAGE_NONE][0]['filesize'];
+
+  // We need to have a class per mime type to have the correct icon.
+  $file_mime_class = drupal_html_class($file_mime);
+  $attributes['class'] = array(
+    'atom-file-container',
+    'atom-id-' . $atom->sid,
+    'atom-file',
+    'file-' . strtolower(pathinfo($atom->file_source, PATHINFO_EXTENSION)),
+    'file-' . $file_mime_class,
+  );
+
+  // Remove possible duplicates in the class array.
+  array_unique($attributes['class']);
+
+  // Make sure the contenteditable attribute is only set in the CKEditor.
+  unset($attributes['contenteditable']);
+  if ($editor) {
+    // This is the value of the attribute, and not the regular FALSE boolean.
+    // Using FALSE would cast the value to an empty string, which would actually
+    // make the content editable.
+    $attributes['contenteditable'] = "false";
+  }
+
+  $link_attributes = array(
+    'href' => $path,
+    'target' => '_blank',
+  );
+
+  // Can't use l() here, because our theme adds an extra <span> tag inside which
+  // screws up the regular expression that looks for atoms in our HTML. See
+  // paddle_scald_update_atoms_in_html(). Also, we NEED the <span> tag around
+  // the <a> tag because if we set the contenteditable attribute to FALSE on the
+  // <a> tag, the users still seem to be able to target the link and use the
+  // link plugin to change the href and so on. To fix this we need a parent
+  // element that has the contenteditable attribute set to false.
+  $html = '<span ' . drupal_attributes($attributes) . '>';
+  $html .= '<a ' . drupal_attributes($link_attributes) . '>';
+  $html .= '<span class="visuallyhidden">' . strtolower(pathinfo($atom->file_source, PATHINFO_EXTENSION)) . ' ' . t('file') . '</span>';
+  $html .= $atom->title . ' (' . paddle_scald_file_format_size($file_size) . ')' . '</a>';
+  $html .= '</span>';
+  return $html;
+}
+
+/**
+ * Enable the contenteditable attribute for span tags in HTMLPurifier.
+ *
+ * @param HTMLPurifier_HTMLDefinition $def
+ *   The HTMLPurifier definition object to alter.
+ */
+function paddle_scald_file_htmlpurifier_html_definition_alter($def) {
+  // Don't use HTMLPurifier_AttrDef_HTML_Bool here, it will interpret any value
+  // set, even false, as if the value should be "contenteditable". Instead use
+  // Text, which allows more flexibility.
+  $def->addAttribute('span', 'contenteditable', 'Text');
+}
+
+/**
+ * Implements hook_scald_atom_providers().
+ */
+function paddle_scald_file_scald_atom_providers() {
+  return array(
+    'file' => 'File upload',
+  );
+}
+
+/**
+ * Implements hook_scald_add_form().
+ */
+function paddle_scald_file_scald_add_form(&$form, &$form_state) {
+  $defaults = scald_atom_defaults('file');
+  $field = field_info_field('paddle_scald_file');
+  $instance = field_info_instance('scald_atom', 'paddle_scald_file', 'file');
+  // These validators are overwritten by the ones from the field instance.
+  $validators = array(
+    'file_validate_extensions' => array(0 => PADDLE_SCALD_FILE_ALLOWED_EXTENSIONS),
+  );
+  if ($field && $instance) {
+    $validators = file_field_widget_upload_validators($field, $instance);
+  }
+  $form['file'] = array(
+    '#type' => $defaults->upload_type,
+    '#title' => t('File'),
+    '#upload_location' => 'public://atoms/files/',
+    '#upload_validators' => $validators,
+  );
+}
+
+/**
+ * Implements hook_scald_presave().
+ */
+function paddle_scald_file_scald_atom_presave($atom) {
+  if ($atom->type !== 'file') {
+    // TODO: change once broader atom support is established.
+    return;
+  }
+  // Check if there is a previous atom loaded in the form.
+  if (isset($atom->file_source)) {
+    $source = $atom->file_source;
+    $atom_wrapper = entity_metadata_wrapper('scald_atom', $atom);
+    $dest_paddle_scald_file = $atom_wrapper->paddle_scald_file->value();
+    $destination_file = file_load($dest_paddle_scald_file['fid']);
+    $path = $destination_file->uri;
+
+    if ($source != $path) {
+      _paddle_scald_file_create_redirect($source, $path);
+    }
+  }
+}
+
+/**
+ * Creates a redirect for a moved file. taken from the File Field module.
+ *
+ * @param string $source
+ *   The path of the source file.
+ * @param string $path
+ *   The path of the moved file.
+ *
+ * @throws Exception
+ */
+function _paddle_scald_file_create_redirect($source, $path) {
+  global $base_path;
+  watchdog('paddle_scald_file', 'Creating redirect from @source to @path', array(
+    '@source' => $source,
+    '@path' => $path
+  ), WATCHDOG_DEBUG);
+
+  $redirect = new stdClass();
+  redirect_object_prepare($redirect);
+
+  $parsed_source = parse_url(file_create_url($source), PHP_URL_PATH);
+  $parsed_path = parse_url(file_create_url($path), PHP_URL_PATH);
+
+  $redirect->source = drupal_substr(urldecode($parsed_source), drupal_strlen($base_path));
+  $redirect->redirect = drupal_substr(urldecode($parsed_path), drupal_strlen($base_path));
+
+  // Files are language neutral.
+  $redirect->language_neutral_source = 1;
+
+  // Check if the redirect exists before saving.
+  $hash = redirect_hash($redirect);
+  if (!redirect_load_by_hash($hash)) {
+    redirect_save($redirect);
+  }
+}
+
+/**
+ * Implements hook_scald_add_atom_count().
+ */
+function paddle_scald_file_scald_add_atom_count(&$form, &$form_state) {
+  if (is_array($form_state['values']['file'])) {
+    return max(count($form_state['values']['file']), 1);
+  }
+  return 1;
+}
+
+/**
+ * Implements hook_scald_add_form_fill().
+ */
+function paddle_scald_file_scald_add_form_fill(&$atoms, $form, $form_state) {
+  foreach ($atoms as $delta => $atom) {
+    if (is_array($form_state['values']['file']) && module_exists('plupload')) {
+      module_load_include('inc', 'scald', 'includes/scald.plupload');
+      $file = scald_plupload_save_file($form_state['values']['file'][$delta]['tmppath'],
+        $form['file']['#upload_location'] . $form_state['values']['file'][$delta]['name']);
+    }
+    else {
+      $file = file_load($form_state['values']['file']);
+    }
+    if (!empty($file)) {
+      $atom->title = $file->filename;
+      $atom->base_id = $file->fid;
+    }
+    $atom->paddle_scald_file[LANGUAGE_NONE][0] = (array) $file;
+  }
+}
+
+/**
+ * Implements hook_scald_fetch().
+ */
+function paddle_scald_file_scald_fetch($atom, $type) {
+  if ($type == 'atom') {
+    $file = file_load($atom->base_id);
+    $atom->base_entity = $file;
+    $atom->file_source = $file->uri;
+    $scald_thumbnail = field_get_items('scald_atom', $atom, 'scald_thumbnail');
+    if (!empty($scald_thumbnail)) {
+      $thumbnail = file_load($scald_thumbnail[0]['fid']);
+      $atom->thumbnail_source = $thumbnail->uri;
+    }
+    else {
+      $atom->thumbnail_source = paddle_scald_file_get_default_icon($file);
+    }
+  }
+}
+
+/**
+ * Get the default icon.
+ *
+ * @param object $file
+ *   The file for which to generate the icon.
+ *
+ * @return string
+ *   The path to the default icon.
+ */
+function paddle_scald_file_get_default_icon($file) {
+  $name = str_replace(array('/', '-'), array('_', '_'), $file->filemime);
+  $path = drupal_get_path('module', 'paddle_scald_file') . '/icons/' . $name . '.png';
+  drupal_alter('paddle_scald_file_icon', $path, $name, $file);
+  return $path;
+}
+
+/**
+ * Synchronisation of paddle_scald_file field with base_id.
+ *
+ * The paddle_scald_file field is also the base entity. We keep them in
+ * synchronisation when user updates that field.
+ */
+function _paddle_scald_file_sync_file($atom) {
+  if ($atom->paddle_scald_file) {
+    $atom->base_id = $atom->paddle_scald_file[LANGUAGE_NONE][0]['fid'];
+  }
+}
+
+/**
+ * Implements hook_scald_update_atom().
+ */
+function paddle_scald_file_scald_update_atom($atom, $mode) {
+  if ($mode == 'atom') {
+    _paddle_scald_file_sync_file($atom);
+  }
+}
+
+/**
+ * Implements hook_scald_register_atom().
+ */
+function paddle_scald_file_scald_register_atom($atom, $mode) {
+  if ($mode == 'atom') {
+    _paddle_scald_file_sync_file($atom);
+  }
+}
+
+/**
+ * Implements hook_scald_prerender().
+ */
+function paddle_scald_file_scald_prerender($atom, $context, $options, $mode) {
+  if ($mode == 'atom') {
+    if ($context === 'sdl_library_item') {
+      $scald_thumbnail = field_get_items('scald_atom', $atom, 'scald_thumbnail');
+      if (empty($scald_thumbnail)) {
+        $atom->rendered->thumbnail_transcoded_url = file_create_url($atom->thumbnail_source);
+      }
+    }
+    else {
+      $config = scald_context_config_load($context);
+      $file = isset($atom->base_entity) ? $atom->base_entity : file_load($atom->base_id);
+      if (isset($config->transcoder[$atom->type]['*']) && $config->transcoder[$atom->type]['*'] !== 'passthrough' && $file->filemime === 'application/pdf') {
+        $transcoder = $config->transcoder[$atom->type]['*'];
+        $theme = preg_match('/^file_field_pdf_/', $transcoder) ? str_replace('file_field_pdf_', 'pdf_formatter_', $transcoder) : 'pdf_formatter_default';
+        $atom->rendered->player = theme($theme, array('file' => $file));
+      }
+      else {
+        $atom->rendered->player = theme('paddle_scald_file_render',
+          array(
+            'vars' => array(
+              'file_id' => $atom->base_id,
+              'file_source' => $atom->file_source,
+              'thumbnail_source' => $atom->thumbnail_source,
+              'file_title' => check_plain($atom->title),
+            ),
+          )
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_scald_file_theme() {
+  return array(
+    'paddle_scald_file_render' => array(
+      'variables' => array('vars' => NULL),
+      'template' => 'paddle_scald_file_render',
+    ),
+  );
+
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function paddle_scald_file_views_api() {
+  return array(
+    'api' => 2,
+    'path' => drupal_get_path('module', 'paddle_scald_file') . '/includes/',
+  );
+}
+
+/**
+ * Implements hook_scald_transcoders().
+ */
+function paddle_scald_file_scald_transcoders() {
+  $transcoders = array();
+  $info = module_invoke_all('field_formatter_info');
+  foreach ($info as $name => $formatter) {
+    if (!preg_match('/^pdf_/', $name)) {
+      continue;
+    }
+
+    $transcoders[$name] = array(
+      'title' => $formatter['label'],
+      'description' => $formatter['label'],
+      'formats' => array('file' => 'passthrough'),
+    );
+  }
+  return $transcoders;
+}
+
+/**
+ * Implements hook_scald_contexts().
+ *
+ * Defines a representation that can be used when an atom reference field
+ * or views contains both images and files.
+ */
+function paddle_scald_file_scald_contexts() {
+  $contexts = array();
+
+  $contexts['file_representation'] = array(
+    'title' => t('File Representation'),
+    'description' => t('The File Representation'),
+    'render_language' => 'XHTML',
+    'parseable' => TRUE,
+    'formats' => array(
+      'image' => array('passthrough'),
+      'file' => array('passthrough'),
+    ),
+  );
+
+  return $contexts;
+}
+
+/**
+ * Implements hook_scald_render().
+ *
+ * Renders a representation that can be used when an atom reference field
+ * or views contains both images and files.
+ */
+function paddle_scald_file_scald_render($atom, $context, $options = array()) {
+  if ($context == 'file_representation') {
+    return theme('paddle_scald_file_render',
+      array(
+        'vars' => array(
+          'file_id' => $atom->base_id,
+          'file_source' => $atom->file_source,
+          'thumbnail_source' => ($atom->type == 'image' ? drupal_get_path('module', 'paddle_scald_file') . '/icons/image_jpeg2000.png' : $atom->thumbnail_source),
+          'file_title' => check_plain($atom->title),
+        ),
+      )
+    );
+  }
+}
+
+/**
+ * Generates a string representation for the given byte count.
+ *
+ * @param int $size
+ *   A size in bytes.
+ * @param string $langcode
+ *   Optional language code to translate to a language other than what is used
+ *   to display the page.
+ *
+ * @return string
+ *   A translated string representation of the size.
+ *
+ * @see format_size()
+ */
+function paddle_scald_file_format_size($size, $langcode = NULL) {
+  // When no size is given, like an external video, then so we won't show it.
+  if (empty($size)) {
+    return NULL;
+  }
+
+  if ($size < DRUPAL_KILOBYTE) {
+    return format_plural($size, '1 byte', '@count bytes', array(), array('langcode' => $langcode));
+  }
+
+  // If size is less than 1 megabyte, format the number with no decimal digits.
+  $size = $size / DRUPAL_KILOBYTE;
+  if ($size < DRUPAL_KILOBYTE) {
+    return t('@size KB', array('@size' => round($size, 0)), array('langcode' => $langcode));
+  }
+
+  $size = $size / DRUPAL_KILOBYTE;
+  $units = array(
+    t('@size MB', array(), array('langcode' => $langcode)),
+    t('@size GB', array(), array('langcode' => $langcode)),
+    t('@size TB', array(), array('langcode' => $langcode)),
+    t('@size PB', array(), array('langcode' => $langcode)),
+    t('@size EB', array(), array('langcode' => $langcode)),
+    t('@size ZB', array(), array('langcode' => $langcode)),
+    t('@size YB', array(), array('langcode' => $langcode)),
+  );
+  foreach ($units as $unit) {
+    if (round($size, 2) >= DRUPAL_KILOBYTE) {
+      $size = $size / DRUPAL_KILOBYTE;
+    }
+    else {
+      break;
+    }
+  }
+  return str_replace('@size', round($size, 2), $unit);
+}

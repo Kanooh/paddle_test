@@ -1,0 +1,12 @@
+name = XML Sitemap
+description = Use this Paddlet to generate an XML sitemap.
+core = 7.x
+package = Paddle
+
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+apps[restorable] = 1
+
+dependencies[] = xmlsitemap
+dependencies[] = xmlsitemap_node

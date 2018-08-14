@@ -1,0 +1,76 @@
+/**
+* @file
+* Styling for paddlets configuration.
+*
+*/
+#field-paddle-title-icon-add-more-wrapper .form-type-select > label {
+  font-size: 1.6em;
+}
+#title-icons-form-wrapper .add-icon,
+#title-icons-form-wrapper .remove-icon,
+.uploaded-icon-image {
+  float: left;
+  margin-right: 10px;
+}
+#title-icons-form-wrapper .icons-list .form-wrapper {
+  clear: both;
+  overflow: hidden;
+  margin: 1em 0;
+}
+#title-icons-form-wrapper .uploaded-icon-image {
+  max-height: 30px;
+  margin-right: 10px;
+}
+#title-icons-form-wrapper .fieldset-wrapper {
+  margin-top: 0;
+}
+#title-icons-form-wrapper .icons-list {
+  margin-top: 3em;
+}
+#icon-selection-dd-placeholder .dd-select {
+  border: 1px solid #b5b6b7;
+  background: #fff !important;
+  position: relative;
+}
+#icon-selection-dd-placeholder .dd-select:before {
+  background: url("../images/select-arrow-down.png") no-repeat scroll right bottom white;
+  content: "";
+  height: 30px;
+  position: absolute;
+  right: 0;
+  width: 30px;
+  z-index: 10;
+}
+#icon-selection-dd-placeholder .dd-selected {
+  padding: 3px;
+}
+.dd-option-text,
+.dd-selected-text {
+  line-height: 1.1 !important;
+  width: auto !important;
+}
+#icon-selection-dd-placeholder .dd-option-image,
+#icon-selection-dd-placeholder .dd-selected-image {
+  display: block;
+  max-height: 20px;
+  height: auto;
+  width: 100%;
+  margin-right: 11px;
+}
+.dd-option-selected {
+  background-color: #ebebe4;
+}
+#icon-selection-dd-placeholder .dd-options {
+  box-shadow: none;
+}
+.dd-options li:first-child {
+  display: none;
+}
+#icon-selection-dd-placeholder .dd-option {
+  padding: 4px 3px;
+}
+.dd-option,
+.dd-option:hover {
+  transition: none;
+  background: none;
+}

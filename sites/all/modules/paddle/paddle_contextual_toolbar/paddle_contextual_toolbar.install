@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Contextual Toolbar.
+ */
+
+/**
+ * Don't cache menu blocks.
+ */
+function paddle_contextual_toolbar_update_7001() {
+  // Explicitly disable caching for the blocks of this module,
+  // so we can globally enable block caching without hiccups.
+  db_update('block')
+    ->fields(array(
+      'cache' => DRUPAL_NO_CACHE,
+    ))
+    ->condition('module', 'paddle_contextual_toolbar', '=')
+    ->execute();
+}

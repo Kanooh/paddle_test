@@ -1,0 +1,26 @@
+name = Embed widget
+description = Show widgets, elements or applications from other websites or from databases on your website. Often used to embed YouTube, Vimeo, Google maps,… or content from a separate external application or a database.
+core = 7.x
+package = Paddle
+
+dependencies[] = entity
+
+files[] = tests/paddle_embed_widget_entity.test
+
+apps[logo] = apps/logo.png
+
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+
+; Information added by drush on 2015-12-15
+version = "7.x-1.x-dev"
+project = "paddle_embed"
+datestamp = "1450169807"
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_embed"
+datestamp = "1473170410"
+

@@ -1,0 +1,60 @@
+/**
+ * @file
+ * Product Paddlet styling.
+ */
+
+.field-name-field-paddle-introduction {
+  margin-top: 15px;
+  margin-bottom: 15px;
+}
+
+.field-name-field-paddle-prod-form {
+  margin: 10px 0 30px 0;
+
+  a {
+    width: auto;
+    height: 50px;
+    padding: 1em 1.6em;
+    border: none;
+    font-size: .9em;
+    font-weight: bold;
+    cursor: pointer;
+    text-decoration: none;
+  }
+}
+
+.region-content {
+  h2.field-h2 {
+    margin-top: 15px;
+    margin-bottom: 15px;
+  }
+}
+
+.paddle-color-palettes-subpalette-0 {
+  .pane-section-body {
+    .product-opening-hours {
+      h2 {
+        margin-bottom: 15px;
+
+        a, a:hover {
+          color: #3AB9BE;
+          text-decoration: none;
+        }
+      }
+
+      .website {
+        a {
+          font-family: "latoregular", "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+        }
+      }
+
+      .opening-hour-status {
+        padding-top: 10px;
+      }
+
+      .current-opening-hour {
+        padding-top: 5px;
+      }
+    }
+  }
+}

@@ -1,0 +1,86 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuManagerSaveMenuItemAcrossMenusTest.
+ */
+
+/**
+ * UI tests for the menu item edit/save across menus.
+ */
+class PaddleMenuManagerSaveMenuItemAcrossMenusTest extends PaddleMenuManagerTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Save menu item across menus'),
+      'description' => t('Move a menu item from one menu to another.'),
+      'group' => t('Paddle Menu Manager'),
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array('paddle_menu_manager'));
+
+    $user = $this->drupalCreateUser(array('manage paddle_menu_manager'));
+    $this->drupalLogin($user);
+  }
+
+  /**
+   * Tests moving a menu item to another menu by using its edit form.
+   */
+  public function testSaveMenuItemAcrossMenus() {
+    // Create two menus and clone them so we have fully functional
+    // menu translation sets.
+    $menu_origin = $this->createMenu('en');
+    paddle_menu_manager_create_menu_translations($menu_origin);
+    $menu_destination = $this->createMenu('en');
+    paddle_menu_manager_create_menu_translations($menu_destination);
+
+    // Save a menu item.
+    $edit = array(
+      'link_title' => $this->randomString(32),
+      'description' => $this->randomString(20),
+      'navigation' => $menu_origin['menu_name'] . ':0',
+    );
+
+    $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu_origin['menu_name'] . '/add', $edit, t('Save'));
+
+    // Test if confirmation message appeared.
+    $this->assertText(t('The menu item has been saved successfully.'), 'Confirmation message displayed.');
+
+    // Test if the menu item was successfully saved.
+    $result_origin = db_select('menu_links', 'ml')
+      ->fields('ml')
+      ->condition('ml.link_title', $edit['link_title'])
+      ->condition('ml.menu_name', $menu_origin['menu_name'])
+      ->condition('ml.language', $menu_origin['language'])
+      ->execute();
+
+    $this->assertEqual(1, $result_origin->rowCount(), 'The menu item was added in the database.');
+
+    $menu_item = $result_origin->fetchAssoc();
+
+    $edit = array(
+      'navigation' => $menu_destination['menu_name'] . ':0',
+    );
+
+    // Save the menu item again, changing its parent.
+    $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu_item['menu_name'] . '/' . $menu_item['mlid'] . '/edit', $edit, t('Save'));
+
+    // Test if the save was successful.
+    $result_destination = db_select('menu_links', 'ml')
+      ->fields('ml')
+      ->condition('ml.mlid', $menu_item['mlid'])
+      ->condition('ml.menu_name', $menu_destination['menu_name'])
+      ->condition('ml.language', $menu_destination['language'])
+      ->execute();
+
+    $this->assertEqual(1, $result_origin->rowCount(), 'The parent of the menu item has been updated.');
+  }
+}

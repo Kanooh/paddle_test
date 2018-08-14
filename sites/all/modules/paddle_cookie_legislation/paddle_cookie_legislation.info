@@ -1,0 +1,11 @@
+name = Paddle cookie legislation
+description = Let visitors to your website give their consent to setting cookies.
+core = 7.x
+package = Paddle
+
+apps[name] = Cookie legislation
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+
+dependencies[] = eu_cookie_compliance

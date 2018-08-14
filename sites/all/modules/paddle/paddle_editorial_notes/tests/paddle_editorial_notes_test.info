@@ -1,0 +1,10 @@
+name = Paddle Editorial Notes Test
+description = Test module for Paddle Editorial Notes
+core = 7.x
+hidden = TRUE
+dependencies[] = paddle_editorial_notes
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_editorial_notes"
+datestamp = "1455504776"

@@ -1,0 +1,290 @@
+<?php
+/**
+ * @file
+ * Code for the paddle_pane_collection feature.
+ */
+
+include_once 'paddle_pane_collection.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_pane_collection_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_pane_collection_configuration_form',
+  );
+}
+
+/**
+ * Paddlet configuration form.
+ */
+function paddle_pane_collection_configuration_form() {
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_pane_collection_add_contextual_actions_configuration_form';
+  }
+
+  $form['contains'] = array(
+    '#markup' => views_embed_view('paddle_pane_collections', 'pane_collections'),
+  );
+
+  return $form;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_pane_collection_entity_info() {
+  $entity_info = array();
+
+  $entity_info['paddle_pane_collection'] = array(
+    'label' => t('Paddle Pane Collection'),
+    'plural label' => t('Paddle Pane Collections'),
+    'description' => t('A configuration entity used by the Paddle Pane Collection module.'),
+    'entity class' => 'Entity',
+    'controller class' => 'EntityAPIController',
+    'base table' => 'paddle_pane_collection',
+    'fieldable' => TRUE,
+    'entity keys' => array(
+      'id' => 'ppcid',
+      'label' => 'title',
+      'language' => 'language',
+    ),
+    'bundles' => array(),
+    'access callback' => 'paddle_pane_collection_access',
+    'module' => 'paddle_pane_collection',
+  );
+
+  return $entity_info;
+}
+
+/**
+ * Access callback for the pane collection entity.
+ *
+ * If a user has access to Paddle Apps, we let them configure Paddle Pane
+ * Collections.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ * @param object $paddle_pane_collection
+ *   The Paddle Pane Collection configuration entity to check for.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ *
+ * @return bool
+ *   Whether access is allowed or not. If the entity type does not specify any
+ *   access information, NULL is returned.
+ *
+ * @see entity_metadata_no_hook_node_access()
+ */
+function paddle_pane_collection_access($op, $paddle_pane_collection = NULL, $account = NULL) {
+  return user_access('manage paddle_apps', $account);
+}
+
+/**
+ * After build function to set the contextual actions for the paddlet config.
+ */
+function paddle_pane_collection_add_contextual_actions_configuration_form($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add an "Add pane collection" button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Add pane collection'), 'admin/paddle-pane-collection/nojs/add', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-plus', 'ctools-use-modal'),
+      ),
+    )),
+    'class' => array('add-pane-collection'),
+    'weight' => 20,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_pane_collection_menu() {
+  $items = array();
+
+  $items['admin/paddle-pane-collection/%ctools_js/add'] = array(
+    'title callback' => 'Create pane collection',
+    'page arguments' => array(2),
+    'page callback' => 'paddle_pane_collection_form_wrapper',
+    'access arguments' => array('manage paddle_apps'),
+    'file' => 'paddle_pane_collection.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/paddle-pane-collection/%ctools_js/edit/%paddle_pane_collection'] = array(
+    'title callback' => 'Edit pane collection',
+    'page arguments' => array(2, 4),
+    'page callback' => 'paddle_pane_collection_form_wrapper',
+    'access arguments' => array('manage paddle_apps'),
+    'file' => 'paddle_pane_collection.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/paddle-pane-collection/%ctools_js/delete/%paddle_pane_collection'] = array(
+    'title' => 'Delete pane collection',
+    'page arguments' => array(2, 4),
+    'page callback' => 'paddle_pane_collection_form_delete_wrapper',
+    'access arguments' => array('manage paddle_apps'),
+    'file' => 'paddle_pane_collection.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Load a pane collection by its title.
+ *
+ * @param string $title
+ *   The title to load the pane collection for.
+ *
+ * @return mixed
+ *   Return the fully loaded entity or FALSE if none found.
+ */
+function paddle_pane_collection_load_by_title($title) {
+  $query = new EntityFieldQuery();
+  $query
+    ->entityCondition('entity_type', 'paddle_pane_collection', '=')
+    ->propertyCondition('title', $title, '=');
+
+  $result = $query->execute();
+
+  if (empty($result)) {
+    return FALSE;
+  }
+
+  // Reset the internal entity cache for the paddle_pane_collection type.
+  // Otherwise you get the old object back (from before editation.)
+  entity_get_controller('paddle_pane_collection')->resetCache();
+
+  $pane_collection = reset($result['paddle_pane_collection']);
+  return entity_load_single('paddle_pane_collection', $pane_collection->ppcid);
+}
+
+/**
+ * Loads a paddle_pane_collection object from the database.
+ *
+ * @param int $paddle_pane_collection_id
+ *   The paddle_pane_collection ID.
+ *
+ * @return Entity|bool
+ *   A fully-populated pane_collection object, or FALSE if the pane_collection
+ *   is not found.
+ */
+function paddle_pane_collection_load($paddle_pane_collection_id = NULL) {
+  return entity_load_single('paddle_pane_collection', $paddle_pane_collection_id);
+}
+
+/**
+ * Retrieves the pane collections to be used in a select list.
+ *
+ * We build an associative array keyed by the
+ * paddle pane collection id. The value of the array
+ * is the title of the pane collection. This array
+ * can be used for a select list.
+ *
+ * @return array
+ *   An associative array of pane collections keyed by ppcid.
+ */
+function paddle_pane_collection_get_list() {
+  $collections = array();
+
+  $entities = entity_load('paddle_pane_collection');
+
+  foreach ($entities as $key => $entity) {
+    $collections[$entity->ppcid] = $entity->title;
+  }
+
+  return $collections;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_pane_collection_ctools_plugin_directory($module, $plugin) {
+  if (in_array($module, array('panelizer', 'ctools', 'page_manager'))) {
+    return 'plugins/' . $plugin;
+  }
+  if ("$module:$plugin" == 'panels:display_renderers') {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ */
+function paddle_pane_collection_paddle_contextual_toolbar_actions_alter(&$actions) {
+  $menu = menu_get_item();
+
+  if ($menu['path'] == 'admin/paddle-pane-collection/edit/%') {
+    // Get the buttons.
+    $actions = array();
+
+    // Add the cancel button.
+    $action_link = l(
+      t('Back'),
+      'admin/paddlet_store/app/paddle_pane_collection/configure',
+      array('attributes' => array('class' => array('ui-icon', 'fa-arrow-left')))
+    );
+    $actions[] = array(
+      'action' => $action_link,
+      'class' => array('cancel', 'cancel-js'),
+      'weight' => 0,
+    );
+
+    // Add the save button.
+    $action_link = l(
+      t('Save'),
+      '',
+      array(
+        'html' => TRUE,
+        'external' => TRUE,
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-check'),
+          'data-paddle-contextual-toolbar-click' => 'panels-ipe-save',
+        ),
+      )
+    );
+    $actions[] = array(
+      'action' => $action_link,
+      'class' => array('save'),
+      'weight' => 5,
+    );
+
+    // Set the buttons.
+    paddle_contextual_toolbar_actions($actions);
+    // Load the click delegator.
+    paddle_contextual_toolbar_add_js('click_delegator');
+
+    if (module_exists('paddle_core')) {
+      drupal_add_js(drupal_get_path('module', 'paddle_core') . '/js/cancel.js');
+    }
+  }
+}
+
+/**
+ * Implements hook_panels_renderer_paddle_allowed_content_types_alter().
+ */
+function paddle_pane_collection_panels_renderer_paddle_allowed_content_types_alter(&$content_types, &$context) {
+  if ($context['panelizer']->plugin == 'entity:paddle_pane_collection') {
+    unset($content_types['paddle_pane_collection']);
+  }
+}
+
+/**
+ * Implements template_preprocess_panels_pane().
+ */
+function paddle_pane_collection_preprocess_panels_pane(&$vars) {
+  if (!empty($vars['pane']) && $vars['pane']->type == 'paddle_pane_collection') {
+    // $vars['pane']->configuration['pane_collection'] contains the entity ID
+    // of the Pane collection entity.
+    $vars['classes_array'][] = 'pane-collection-' . $vars['pane']->configuration['pane_collection'];
+  }
+}

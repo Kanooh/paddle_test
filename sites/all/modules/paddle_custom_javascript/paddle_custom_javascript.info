@@ -1,0 +1,20 @@
+name = Paddle Custom JavaScript
+description = App providing custom JavaScript functionality for the Paddle platform.
+core = 7.x
+package = Paddle
+
+apps[name] = Custom JavaScript
+apps[description] = Maak code beschikbaar op elke pagina van je website.
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+apps[paddle][vendor_link] = http://paddle.be
+apps[paddle][third_party_service] = 0
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_custom_javascript"
+datestamp = "1473170409"
+

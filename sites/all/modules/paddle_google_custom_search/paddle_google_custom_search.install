@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Google Custom Search app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_google_custom_search_enable() {
+  // We need to clear the CTools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  ctools_modules_enabled(array('paddle_google_custom_search'));
+
+  $permissions = array(
+    'edit google_custom_search content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}

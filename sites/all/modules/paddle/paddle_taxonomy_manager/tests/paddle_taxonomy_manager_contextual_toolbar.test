@@ -1,0 +1,52 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleTaxonomyContextualToolbarTestCase.
+ */
+
+/**
+ * Tests the contextual toolbar for the paddle taxonomy manager.
+ */
+class PaddleTaxonomyContextualToolbarTestCase extends PaddleTaxonomyManagerTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Taxonomy manager toolbar',
+      'description' => 'Tests the correct display of the contextual toolbar on the taxonomy manager module.',
+      'group' => 'Paddle Taxonomy Manager',
+    );
+  }
+
+
+  /**
+   * Sets up a Drupal site for running functional and integration tests.
+   */
+  public function setUp() {
+    // Enable required modules.
+    parent::setUp('paddle_taxonomy_manager', 'paddle_contextual_toolbar');
+
+    $this->admin_user = $this->drupalCreateUser(array('manage paddle_taxonomy_manager'));
+    $this->drupalLogin($this->admin_user);
+    variable_set('admin_theme', 'paddle_admin');
+  }
+
+  /**
+   * Tests if the word "Tag" or "Term" is correctly used.
+   */
+  public function testWordingTaxonomyTerm() {
+    $flat_vocabulary = $this->createVocabulary(TRUE);
+
+    // Go to the Flat vocabulary and check the toolbar.
+    $this->drupalGet('admin/structure/taxonomy_manager/' . $flat_vocabulary->vid);
+    $this->assertTrue($this->xpath('//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]//a[@title="Create a new tag."]'), 'The word "Tag" is used for flat vocabularies');
+
+    // Go to the hierarchical vocabulary and check the toolbar.
+    $hierarchical_vocabulary = $this->createVocabulary();
+    $this->drupalGet('admin/structure/taxonomy_manager/' . $hierarchical_vocabulary->vid);
+    $this->assertTrue($this->xpath('//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]//a[@title="Create a new term."]'), 'The word "Term:" is used for hierarchical vocabularies');
+  }
+}

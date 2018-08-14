@@ -1,0 +1,68 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuManagerUnitTest.
+ */
+
+/**
+ * Unit tests for the Paddle Menu Manager module.
+ */
+class PaddleMenuManagerUnitTest extends PaddleMenuManagerTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Unit tests',
+      'description' => 'Test the functions of the Paddle Menu Manager module.',
+      'group' => 'Paddle Menu Manager',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    // Additionally enable i18n_menu module.
+    parent::setUp();
+
+    module_enable(array('i18n_menu', 'paddle_menu_manager'));
+  }
+
+  /**
+   * Tests the paddle_menu_manager_load_language() function.
+   */
+  public function testLoadLanguage() {
+    // Test if the wrapper to load a language works.
+    $lang = paddle_menu_manager_load_language('en');
+    $this->assertTrue($lang->language == 'en', 'The english language exists.');
+
+    $lang = paddle_menu_manager_load_language($this->randomString(8));
+    $this->assertFalse($lang, 'No language was returned.');
+
+    $lang = paddle_menu_manager_load_language();
+    $this->assertTrue($lang->language == 'en', 'The default language was given back.');
+  }
+
+  /**
+   * Tests the paddle_menu_manager_get_menus() function.
+   */
+  public function testGetMenus() {
+    // Create a custom menu.
+    $menu = $this->createMenu();
+    paddle_menu_manager_create_menu_translations($menu);
+
+    // Test when a correct language is given and test when no correct language
+    // is given.
+    $menus = paddle_menu_manager_get_menus('en');
+    $this->assertTrue($menus, 'Menus with the given language code were found in the database.');
+
+    $menus = paddle_menu_manager_get_menus($this->randomString(8));
+    $this->assertFalse($menus, 'No menus were fetched because a wrong language was given.');
+
+    $menus = paddle_menu_manager_get_menus();
+    $this->assertTrue($menus, 'The menus of the default language were given.');
+  }
+}

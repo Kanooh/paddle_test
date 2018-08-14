@@ -1,0 +1,139 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleShowNextLevel.
+ */
+
+/**
+ * Tests for the showing of the next level menu items per content type.
+ */
+class PaddleShowNextLevel extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Paddle Show Next Level',
+      'description' => 'Test the showing of the next level menu items per content type.',
+      'group' => 'Paddle',
+    );
+  }
+
+  /**
+   * Tests the show next level menu display checkbox for basic pages.
+   */
+  public function testShowNextLevelBasicPage() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Run the tests with "show menu items +1 level" checked in the themer.
+    // Verify the default value of the show next level checkbox while adding a
+    // basic page is set correctly.
+    $node = $this->drupalCreateUiNode('basic_page');
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    // Check if the show_level_below checkbox is present.
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a basic page.');
+    $this->assertFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is checked by default.');
+
+    // Create a basic page for testing.
+    $node = $this->createBasicPage();
+
+    // Create a menu link for the basic page.
+    $menu_item = $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node->nid,
+    ));
+    $show_level_below = field_get_items('node', $node, 'field_paddle_show_next_level');
+    $this->assertEqual($show_level_below[0]['value'], '1', 'The show level below checkbox is set to TRUE.');
+
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    // Check if the show_level_below checkbox is present.
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a basic page.');
+    $this->assertFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is checked by default.');
+    $this->drupalPost(NULL, array(), t('Save'));
+    $this->moderateNode($node, 'Publish');
+
+    // Create a second node for testing purposes.
+    $node2 = $this->createBasicPage();
+    $this->moderateNode($node2, 'Publish');
+
+    // Create a menu link for the basic page.
+    $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node2->nid,
+      'navigation' => 'main_menu_nl:' . $menu_item['mlid'],
+    ));
+
+    // Check if the menu + 1 is shown on the page.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('menu-display-current-level-plus-one', 'The level below plus one is shown on the basic page.');
+
+    // Uncheck the checkbox for the level plus one and test that the menu is no
+    // longer shown.
+    $this->drupalPost('node/' . $node->nid . '/edit', array('field_paddle_show_next_level[und]' => FALSE), t('Save'));
+    $this->moderateNode($node, 'Publish');
+
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertNoRaw('menu-display-current-level-plus-one', 'The level below plus one is not shown on the basic page.');
+
+    // Run the tests without "show menu items +1 level" checked in the themer.
+    // Disable the show level below globally.
+    $theme = paddle_themer_enabled_theme();
+    $theme->style['show_level_below_basic_page']['show_level_below_basic_page'] = 0;
+    paddle_themer_save_theme($theme);
+
+    // Verify the default value of the show next level checkbox while adding a
+    // basic page is set correctly.
+    $node = $this->drupalCreateUiNode('basic_page');
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a basic page.');
+    $this->assertNoFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is not checked by default.');
+
+    // Create a basic page for testing.
+    $node = $this->createBasicPage();
+    $menu_item = $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node->nid,
+    ));
+
+    // Check that the newly created basic page has the correct default value
+    // for the show_level_below field.
+    $show_level_below = field_get_items('node', $node, 'field_paddle_show_next_level');
+    $this->assertEqual($show_level_below[0]['value'], '0', 'The show level below checkbox is set to FALSE.');
+
+    // Check if the show_level_below checkbox is present.
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a basic page.');
+    $this->assertNoFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is not checked by default.');
+    $this->drupalPost(NULL, array(), t('Save'));
+    $this->moderateNode($node, 'Publish');
+
+    // Create a second node for testing purposes.
+    $node2 = $this->createBasicPage();
+    $this->moderateNode($node2, 'Publish');
+
+    // Create a menu link for the basic page.
+    $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node2->nid,
+      'navigation' => 'main_menu_nl:' . $menu_item['mlid'],
+    ));
+
+    // Check that the menu is not present on the page.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertNoRaw('menu-display-current-level-plus-one', 'The level below plus one is not shown on the basic page.');
+
+    // Toggle the checkbox for the level plus one and check that the menu is now
+    // shown.
+    $this->drupalPost('node/' . $node->nid . '/edit', array('field_paddle_show_next_level[und]' => TRUE), t('Save'));
+    $this->moderateNode($node, 'Publish');
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('menu-display-current-level-plus-one', 'The level below plus one is shown on the basic page.');
+  }
+
+}

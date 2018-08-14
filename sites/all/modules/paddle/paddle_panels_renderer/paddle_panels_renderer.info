@@ -1,0 +1,10 @@
+name = Paddle IPE
+description = Paddle panels in-place editor.
+core = 7.x
+package = Paddle
+dependencies[] = panels_ipe
+features[features_api][] = api:2
+; Information added by drush on 2015-12-21
+version = "7.x-1.x-dev"
+project = "paddle_panels_renderer"
+datestamp = "1450726872"

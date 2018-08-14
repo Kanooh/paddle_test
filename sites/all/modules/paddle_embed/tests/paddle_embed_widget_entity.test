@@ -1,0 +1,89 @@
+<?php
+
+/**
+ * @file
+ * Tests the creating, saving and loading of the embed widget entity.
+ */
+
+/**
+ * Perform various operations on an embed widget entity.
+ */
+class PaddleEmbedWidgetEntityTestCase extends DrupalWebTestCase {
+
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Paddle Embed: embed widget entity',
+      'description' => 'Tests the creating, saving and loading of the embed widget entity.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($enable_modules = array()) {
+    $enable_modules += array(
+      'paddle_embed',
+    );
+    parent::setUp($enable_modules);
+  }
+
+  /**
+   * Test the creating, editing and deleting of an embed widget entity.
+   */
+  public function testEmbedWidgetEntityCrud() {
+    // Create a new embed widget.
+    $entity_type = 'paddle_embed_widget';
+    $title = $this->randomString(12);
+    $code = $this->randomString(65536);
+
+    $entity = entity_create($entity_type, array(
+      'title' => $title,
+      'embed_code' => $code,
+    ));
+
+    // Save the changes.
+    $saved = entity_save($entity_type, $entity);
+    $this->assertTrue($saved, 'Embed widget entity saved successfully.');
+
+    // Re-load the entity from the database.
+    $entities = entity_load('paddle_embed_widget', array($entity->wid), array(), TRUE);
+    $entity = reset($entities);
+
+    $this->assertEqual($entity->title, $title, 'The saved widget has the same title as was initially set.');
+    $this->assertEqual($entity->embed_code, $code, 'The saved widget has the same embed code as was initially set.');
+
+    // Make changes to the title and code.
+    $new_title = $this->randomString(10);
+    $new_code = $this->randomString(34);
+    $entity->title = $new_title;
+    $entity->embed_code = $new_code;
+    $saved = entity_save($entity_type, $entity);
+
+    // Reload the entity from the database.
+    $entities = entity_load('paddle_embed_widget', array($entity->wid), array(), TRUE);
+    $entity = reset($entities);
+
+    // Make sure the changes were saved correctly.
+    $this->assertTrue($saved, 'Changes to the widget were saved successfully.');
+    $this->assertEqual($entity->title, $new_title, 'The updated widget has the correct title.');
+    $this->assertEqual($entity->embed_code, $new_code, 'The updated widget has the correct embed code.');
+
+    // Delete the widget.
+    $deleted = entity_delete($entity_type, $entity->wid);
+
+    // Try to reload the entity from the database.
+    $entities = entity_load('paddle_embed_widget', array($entity->wid), array(), TRUE);
+
+    // Verify that the widget was really deleted. entity_delete returns FALSE if
+    // it wasn't able to delete the entity, but it doesn't return TRUE if it was
+    // able to delete the entity. So we can't do a simple assertion that
+    // $deleted is TRUE.
+    $this->assertTrue($deleted !== FALSE, 'The widget was deleted successfully.');
+    $this->assertTrue(empty($entities), 'The widget could not be loaded from the database.');
+  }
+
+}

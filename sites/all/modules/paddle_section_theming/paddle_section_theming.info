@@ -1,0 +1,8 @@
+name = Paddle section theming
+description = Arrange the theme of your page by menu.
+core = 7.x
+package = Paddle
+apps[name] = Paddle section theming
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+apps[logo] = apps/logo.png

@@ -1,0 +1,59 @@
+//
+// @file
+// Navigation elements in the main layout.
+// ---------------------------------------
+
+#block-paddle-menu-display-first-level {
+  .level-1 {
+    @include clearfix;
+
+    > .menu-item {
+      &,
+      &:hover {
+        border-top: none;
+      }
+
+      &.active-trail,
+      &:hover,
+      .megadropdown-expanded {
+        border-radius: 10px;
+      }
+    }
+  }
+}
+
+#fake-menu-bg,
+#main-nav {
+  background-color: #FFFFFF;
+}
+
+.menuslider-button {
+  height: 41px;
+  background-color: #EEEEEE;
+
+  > i {
+    color: #565656;
+  }
+}
+
+#menuslider-prev {
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+}
+
+#menuslider-next {
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+
+.menuslider-controls button:hover > i {
+  color: #EEEEEE;
+}
+
+.menuslider-controls button:hover {
+  background-color: #565656;
+}
+
+.panel-pane{} .pane-section-body {
+  border: 1px solid;
+}

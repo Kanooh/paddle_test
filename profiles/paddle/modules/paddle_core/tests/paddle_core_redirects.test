@@ -1,0 +1,36 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCoreRedirectsTest.
+ */
+
+/**
+ * Tests the redirects that need to happen.
+ */
+class PaddleCoreRedirectsTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Redirect tests',
+      'description' => 'Test the redirection of users.',
+      'group' => 'Paddle Core',
+    );
+  }
+
+  /**
+   * Tests if the user is redirected to the correct page.
+   */
+  public function testRedirect() {
+    $this->drupalLogin($this->editor);
+
+    // Test if the user is redirected to the menu manager when visiting
+    // /admin/structure.
+    $this->drupalGet('admin/structure');
+    $this->assertResponse(200, 'The final response code when visiting admin/structure as an editor is 200.');
+    $this->assertUrl('admin/structure/menu_manager/1', array(), 'An editor is redirected to admin/structure/menu_manager/1 when visiting admin/structure.');
+  }
+}

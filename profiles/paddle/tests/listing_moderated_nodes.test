@@ -1,0 +1,109 @@
+<?php
+
+/**
+ * @file
+ * Contains ListingModeratedNodesTest.
+ */
+
+/**
+ * Tests the displaying of nodes with different moderation states in listings.
+ */
+class ListingModeratedNodesTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Listing moderated nodes',
+      'description' => 'Tests the displaying of nodes with different moderation states in listings.',
+      'group' => 'Paddle - Workflow',
+    );
+  }
+
+  /**
+   * Tests the displaying of nodes with different moderation states in listings.
+   */
+  public function testModeratedNodes() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a landing page and a basic page for testing.
+    $landing_page = $this->createLandingPage();
+    $basic_page = $this->drupalCreateUiNode('basic_page', array());
+
+    // Create a Listing pane and add it to the landing page.
+    $pane = panels_new_pane('listing', 'listing');
+    $this->addPaneToNode($pane, $landing_page);
+
+    // The basic page is not yet published, so it should not be visible.
+    $this->assertNodeNotShownInListing($basic_page, $landing_page, 'An unpublished node is not shown in the listing.');
+
+    // Publish the node and test that it is now visible.
+    $this->moderateNode($basic_page, 'Publish');
+    $this->assertNodeShownInListing($basic_page, $landing_page, 'A published node is shown in the listing.');
+
+    // Create a new draft revision with a new title. Check that the original
+    // (published) version of the node is still used in the listing.
+    $published_title = $basic_page->title;
+    $draft_title = $this->randomString();
+    $edit = array('title' => $draft_title);
+    $this->drupalPost('node/' . $basic_page->nid . '/edit', $edit, t('Save'));
+    $this->assertNodeShownInListing($basic_page, $landing_page, 'The previously published node is still shown in the listing after creating a new draft revision.');
+    $this->assertRaw(check_plain($published_title), 'The published node is used in the listing.');
+    $this->assertNoRaw(check_plain(trim($draft_title)), 'The new draft revision of the node is not used in the listing.');
+
+    // Unpublish the node. It should no longer be visible. It is only possible
+    // to unpublish nodes that are currently in 'Published' state.
+    $this->moderateNode($basic_page, 'Publish');
+    $this->moderateNode($basic_page, 'Offline');
+    $this->assertNodeNotShownInListing($basic_page, $landing_page, 'A node that is moderated to unpublished state is no longer shown in the listing.');
+  }
+
+  /**
+   * Check to see if the given node is not shown in a listing on a given node.
+   *
+   * @param object $node
+   *   The node that should not be visible.
+   * @param object $listing_node
+   *   The panelized node that contains the listing which should be devoid of
+   *   $node.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertNodeNotShownInListing($node, $listing_node, $message = '', $group = 'Other') {
+    $message = $message ?: 'The node is not shown in the listing.';
+    $this->drupalGet('node/' . $listing_node->nid);
+    $elements = $this->xpath('//div[contains(@class, "view-paddle-panes-listing")]//div[contains(@class, "node-' . $node->nid . '")]');
+
+    return $this->assertFalse($elements, $message, $group);
+  }
+
+  /**
+   * Check to see if the given node is shown in a listing on a given node.
+   *
+   * @param object $node
+   *   The node that should be visible.
+   * @param object $listing_node
+   *   The panelized node that contains the listing which should contain $node.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertNodeShownInListing($node, $listing_node, $message = '', $group = 'Other') {
+    $message = $message ?: 'The node is shown in the listing.';
+    $this->drupalGet('node/' . $listing_node->nid);
+    $elements = $this->xpath('//div[contains(@class, "view-paddle-panes-listing")]//div[contains(@class, "node-' . $node->nid . '")]');
+
+    return $this->assertTrue($elements, $message, $group);
+  }
+
+}

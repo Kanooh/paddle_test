@@ -1,0 +1,621 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle User module.
+ */
+
+include_once 'paddle_user.features.inc';
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_user_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_user_user_management_block' => array(
+      'variables' => array('links' => array()),
+      'template' => 'templates/user_management_block',
+    ),
+  );
+}
+
+/**
+ * Preprocess function for the user management block template.
+ */
+function template_preprocess_paddle_user_user_management_block(&$variables) {
+  global $user;
+
+  $account = user_load($user->uid);
+  $variables['picture'] = theme('user_picture', array('account' => $account));
+
+  $real_name = field_get_items('user', $account, 'field_paddle_user_real_name');
+  $variables['username'] = !empty($real_name) ? $real_name[0]['safe_value'] : format_username($account);
+
+  $links = $variables['links'];
+
+  $links['user-profile']['href'] = 'user/' . $user->uid . '/edit';
+  $variables['links'] = array(
+    '#theme' => 'links',
+    '#links' => $links,
+  );
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function paddle_user_menu_alter(&$items) {
+  // Hide drupal core user and permission management view.
+  $items['admin/people']['access arguments'] = array('administer site configuration');
+  $items['admin/people/permissions']['access arguments'] = array('administer site configuration');
+
+  // Override 'user' menu callback, whilst preserving the original callback.
+  $user_callback = $items['user']['page callback'];
+  $items['user']['page callback'] = 'paddle_user_user_page_redirect';
+  $items['user']['page arguments'] = array($user_callback);
+
+  $items['user/register']['page callback'] = 'paddle_user_register_page_callback';
+  $items['user/register']['page arguments'] = array();
+
+  $items['user/%user/edit']['access callback'] = 'paddle_user_edit_access';
+}
+
+/**
+ * Page callback for user registering.
+ */
+function paddle_user_register_page_callback() {
+  drupal_access_denied();
+}
+
+/**
+ * Access callback for user account editing.
+ */
+function paddle_user_edit_access($account) {
+  // Don't allow Site Managers to access the user 1 edit form.
+  if ($account->uid == 1 && !user_access('administer site configuration')) {
+    return FALSE;
+  }
+
+  return (($GLOBALS['user']->uid == $account->uid) || user_access('administer users')) && $account->uid > 0;
+}
+
+/**
+ * Checks user access to dashboard, then redirects user.
+ */
+function paddle_user_user_page_redirect($callback) {
+  if (user_access('access administration pages')) {
+    drupal_goto('admin/dashboard');
+  }
+
+  // Return default callback function.
+  return call_user_func($callback);
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_user_menu() {
+  $items = array();
+
+  // Registration and login pages.
+  $items['login'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'drupal_goto',
+    'page arguments' => array('user'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function paddle_user_admin_paths() {
+  $paths = array(
+    'user' => TRUE,
+    'user/login' => TRUE,
+    'user/password' => TRUE,
+  );
+
+  return $paths;
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ *
+ * We override the access callback for user entities, set by the entity module,
+ * so we do not have to assign the 'access user profiles' permission (allowing
+ * access to user/[uid]) to users who just need to be able to view a referenced
+ * user.
+ */
+function paddle_user_entity_info_alter(&$entity_info) {
+  $entity_info['user']['access callback'] = 'paddle_user_user_access';
+}
+
+/**
+ * Access callback for the user entity.
+ */
+function paddle_user_user_access($op, $entity = NULL, $account = NULL, $entity_type = NULL) {
+  $access = ($op == 'view') ? user_access('access users') : FALSE;
+
+  return $access || entity_metadata_user_access($op, $entity, $account, $entity_type);
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function paddle_user_block_info() {
+  $blocks = array();
+
+  $blocks['user_management_block'] = array(
+    'info' => t('User management'),
+    'cache' => DRUPAL_NO_CACHE,
+    'status' => 0,
+    'visibility' => BLOCK_VISIBILITY_NOTLISTED,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function paddle_user_block_view($delta = '') {
+  $block = array();
+
+  switch ($delta) {
+    case 'user_management_block':
+      $block['subject'] = '';
+      $block['content'] = array(
+        '#theme' => 'paddle_user_user_management_block',
+        '#links' => array(
+          'user-profile' => array(
+            'href' => 'user',
+            'title' => t('My profile'),
+          ),
+          'logout' => array(
+            'href' => 'user/logout',
+            'title' => t('Log out') . '<i class="fa fa-sign-out"></i>',
+            'html' => TRUE,
+          ),
+        ),
+        '#attached' => array(
+          'js' => array(
+            drupal_get_path('module', 'paddle_user') . '/js/user_management_block.js',
+          ),
+        ),
+      );
+      break;
+  }
+
+  return $block;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_user_form_user_profile_form_alter(&$form, &$form_state) {
+  $form['account']['mail']['#weight'] = -9;
+  $form['ckeditor']['#access'] = FALSE;
+  $form['locale']['#access'] = FALSE;
+
+  // The real name needs to be required in the user profile form.
+  $form['field_paddle_user_real_name']['und'][0]['value']['#required'] = TRUE;
+
+  // The telephone field needs to be places underneath the email field.
+  $form['account']['field_paddle_user_telephone'] = $form['field_paddle_user_telephone'];
+  unset($form['field_paddle_user_telephone']);
+
+  // Add the "change password" title.
+  $form['account']['password_title_markup'] = array(
+    '#markup' => '<h2>' . t('Change password') . '</h2>',
+    '#weight' => -6,
+  );
+
+  // An array containing the paddle roles.
+  $allowed_roles = paddle_user_paddle_user_roles();
+
+  // Get the user roles and print them.
+  $roles = array_intersect($allowed_roles, $form['#user']->roles);
+  $form['picture']['role_markup'] = array(
+    '#markup' => theme('item_list', array(
+      'items' => array_values($roles),
+      'title' => t('Role'),
+      'attributes' => array('class' => array('user-roles')),
+    )),
+  );
+
+  // Make sure when the user limit has been reached, no more paddle roles can
+  // be assigned to existing users.
+  $store = paddle_user_store();
+
+  $user = $form['#user'];
+  $paddle_roles_assigned = array_intersect($user->roles, $allowed_roles);
+  if (!$store->canAddAnotherUser() && !$paddle_roles_assigned) {
+    drupal_set_message(t('You are on subscription plan "%plan". You cannot create any more accounts. Please disable accounts or upgrade to a higher subscription plan.', array(
+      '%plan' => $store->getHumanReadableName(),
+    )), 'warning');
+
+    // Disable the paddle roles.
+    $roles = paddle_user_paddle_user_roles();
+    foreach ($roles as $rid => $role) {
+      $form['account']['roles'][$rid]['#type'] = 'checkbox';
+      $form['account']['roles'][$rid]['#title'] = $role;
+      $form['account']['roles'][$rid]['#disabled'] = TRUE;
+    }
+  }
+  // User can only be set to active when he is no longer coupled to the paddle
+  // roles.
+  elseif (!$store->canAddAnotherUser() && $paddle_roles_assigned && !$user->status) {
+    drupal_set_message(t('You are on subscription plan "%plan". You cannot activate any more accounts linked to a paddle role. Please disable accounts, upgrade to a higher subscription plan or uncheck the paddle roles.', array(
+      '%plan' => $store->getHumanReadableName(),
+    )), 'warning');
+
+    $roles = paddle_user_paddle_user_roles();
+    foreach ($roles as $rid => $role) {
+      $form['account']['status']['#states']['disabled'][][':input[name="roles[' . $rid . ']"]'] = array('checked' => TRUE);
+    }
+  }
+
+  // Add the contextual actions on the form.
+  $form['#after_build'][] = 'paddle_user_contextual_toolbar_user_profile_after_build';
+
+  // Hide the cancel account button.
+  $form['actions']['cancel']['#access'] = FALSE;
+}
+
+/**
+ * After build handler to add the contextual toolbar on the user form.
+ */
+function paddle_user_contextual_toolbar_user_profile_after_build($form, &$form_state) {
+  if (module_exists('paddle_contextual_toolbar')) {
+    // Hide the save button. It is not needed if there is a contextual toolbar.
+    $form['actions']['submit']['#attributes']['class'][] = 'hidden';
+    paddle_contextual_toolbar_add_js('click_delegator');
+
+    // Add the save button.
+    $actions[] = array(
+      'action' => l(t('Save'), '', array(
+        'attributes' => array(
+          'data-paddle-contextual-toolbar-click' => 'edit-submit',
+          'class' => array('ui-icon', 'fa-check'),
+        ),
+      )),
+      'class' => array('save'),
+      'weight' => 0,
+    );
+
+    paddle_contextual_toolbar_actions($actions);
+  }
+
+  return $form;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_user_form_views_exposed_form_alter(&$form, &$form_state, $form_id) {
+  // Overwrite the filter values on the admin/users page.
+  if ($form['#id'] == 'views-exposed-form-users-overview-page') {
+    $form['status']['#options'][1] = 'Active';
+    $form['status']['#options'][0] = 'Blocked';
+
+    // Show the add user button on the contextual toolbar.
+    if (module_exists('paddle_contextual_toolbar')) {
+      $form['#after_build'][] = 'paddle_user_contextual_toolbar_users_management_page';
+    }
+  }
+}
+
+/**
+ * After-build function of the user create button on user management page.
+ */
+function paddle_user_contextual_toolbar_users_management_page($form, &$form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $actions[] = array(
+    'action' => l(t('Create user'), 'admin/people/create', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-plus'),
+      ),
+    )),
+    'class' => array('add-user'),
+    'weight' => 0,
+  );
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_user_form_user_register_form_alter(&$form, &$form_state, $form_id) {
+  $store = paddle_user_store();
+
+  if (!$store->canAddAnotherUser()) {
+    drupal_set_message(t('You are on subscription plan "%plan". You cannot create any more accounts. Please disable accounts or upgrade to a higher subscription plan.', array(
+      '%plan' => $store->getHumanReadableName(),
+    )), 'warning');
+
+    // Disable the paddle roles.
+    $roles = paddle_user_paddle_user_roles();
+    foreach ($roles as $rid => $role) {
+      $form['account']['roles'][$rid]['#type'] = 'checkbox';
+      $form['account']['roles'][$rid]['#title'] = $role;
+      $form['account']['roles'][$rid]['#disabled'] = TRUE;
+    }
+  }
+  elseif ($store->usersLeft() != -1) {
+    drupal_set_message(t('You are on subscription plan "%plan". You can still create %number account(s)', array(
+      '%number' => $store->usersLeft(),
+      '%plan' => $store->getHumanReadableName(),
+    )), 'warning');
+  }
+  elseif ($store->usersLeft() != -1) {
+    drupal_set_message(t('You are on subscription plan "%plan". You can create as many accounts as you want'), 'warning');
+  }
+
+  // Notify checkbox is checked by default.
+  $form['account']['notify']['#default_value'] = TRUE;
+
+  // Custom submit to redirect back to user management page.
+  $form['#submit'][] = 'paddle_user_user_register_form_submit';
+
+  // Create button on the contextual toolbar.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_user_contextual_toolbar_user_registration_form';
+  }
+}
+
+/**
+ * Custom submit to redirect user back to the user management page.
+ */
+function paddle_user_user_register_form_submit($form, &$form_state) {
+  $form_state['redirect'] = 'admin/users';
+}
+
+/**
+ * After-build function of the user registration form.
+ */
+function paddle_user_contextual_toolbar_user_registration_form($form, &$form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  // Hide the default create button.
+  $form['actions']['submit']['#attributes']['class'][] = 'hidden';
+
+  $actions[] = array(
+    'action' => l(t('Create new account'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-submit',
+        'class' => array('ui-icon', 'fa-plus'),
+      ),
+    )),
+    'class' => array('add-user'),
+    'weight' => 0,
+  );
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_user_permission() {
+  return array(
+    'access users' => array(
+      'title' => t('Access users'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_user_module_implements_alter(&$implementations, $hook) {
+  // Our implementation of hook_entity_info_alter() should come after the
+  // implementation of the entity module.
+  // @see paddle_entity_info_alter()
+  if ($hook == 'entity_info_alter') {
+    // Move our hook implementation to the bottom.
+    $group = $implementations['paddle_user'];
+    unset($implementations['paddle_user']);
+    $implementations['paddle_user'] = $group;
+  }
+
+  // Move paddle_user_menu_site_status_alter() to the beginning of the array so
+  // that the path has not yet changed to user/%/edit as defined in
+  // user_menu_site_status_alter().
+  if ($hook == 'menu_site_status_alter') {
+    unset($implementations['user']);
+  }
+}
+
+/**
+ * Implements hook_menu_site_status_alter().
+ *
+ * We used the from the user module implementation because we want to remove the
+ * "user/register" part from it but keep the rest intact. We do this because we
+ * got our own behaviour for "user/register" when logged in.
+ *
+ * @see user_menu_site_status_alter()
+ */
+function paddle_user_menu_site_status_alter(&$menu_site_status, $path) {
+  if ($menu_site_status == MENU_SITE_OFFLINE) {
+    // If the site is offline, log out unprivileged users.
+    if (user_is_logged_in() && !user_access('access site in maintenance mode')) {
+      module_load_include('pages.inc', 'user', 'user');
+      user_logout();
+    }
+
+    if (user_is_anonymous()) {
+      switch ($path) {
+        case 'user':
+          // Forward anonymous user to login page.
+          drupal_goto('user/login');
+        case 'user/login':
+        case 'user/password':
+          // Disable offline mode.
+          $menu_site_status = MENU_SITE_ONLINE;
+          break;
+
+        default:
+          if (strpos($path, 'user/reset/') === 0) {
+            // Disable offline mode.
+            $menu_site_status = MENU_SITE_ONLINE;
+          }
+          break;
+      }
+    }
+  }
+  if (user_is_logged_in()) {
+    if ($path == 'user/login') {
+      // If user is logged in, redirect to 'user' instead of giving 403.
+      drupal_goto('user');
+    }
+  }
+}
+
+/**
+ * Get the user store.
+ *
+ * @return \Drupal\paddle_user\UserStore
+ *   The user store.
+ */
+function paddle_user_store() {
+  $store =& drupal_static(__FUNCTION__);
+
+  if (!$store) {
+    $subscription_type = variable_get('paddle_store_subscription_type', 'pro');
+    $policy = \Drupal\paddle_subscription\Subscription\PolicyFactory::createAppPolicy($subscription_type);
+
+    $store = new \Drupal\paddle_user\UserStore($policy);
+  }
+
+  return $store;
+}
+
+/**
+ * Get all user roles created by Paddle.
+ *
+ * @return array
+ *   An associative array with the role id as the key and the role name as
+ *   value.
+ */
+function paddle_user_paddle_user_roles() {
+  $paddle_user_role_names = array('Chief Editor', 'Editor', 'Read Only', 'Site Manager');
+  return array_intersect(user_roles(), $paddle_user_role_names);
+}
+
+/**
+ * Get all user roles not created by Paddle or Drupal.
+ *
+ * @return array
+ *   An associative array with the role id as the key and the role name as
+ *   value.
+ */
+function paddle_user_custom_user_roles() {
+  $paddle_user_role_names = paddle_user_paddle_user_roles();
+  $drupal_user_role_names = array('authenticated user', 'anonymous user');
+  $not_custom_user_role_names = array_merge($paddle_user_role_names, $drupal_user_role_names);
+  return array_diff(user_roles(), $not_custom_user_role_names);
+}
+
+/**
+ * Helper function that checks if an roles array contains paddle roles.
+ *
+ * @param array $roles
+ *   Array containing role ids.
+ *
+ * @return bool
+ *   True if any paddle roles are found in the array.
+ */
+function paddle_user_contains_paddle_roles(array $roles) {
+  $paddle_roles = paddle_user_paddle_user_roles();
+
+  // See if new/updated user roles are paddle roles.
+  $result = !empty(array_intersect($roles, array_keys($paddle_roles)));
+
+  return $result;
+}
+
+/**
+ * Implements hook_views_pre_render().
+ */
+function paddle_user_views_pre_render(&$view) {
+  if ($view->name == 'users_overview') {
+    $store = paddle_user_store();
+
+    if (!$store->canAddAnotherUser()) {
+      drupal_set_message(t('You are on subscription plan "%plan". You cannot create any more accounts. Please disable accounts or upgrade to a higher subscription plan.', array(
+        '%plan' => $store->getHumanReadableName(),
+      )), 'warning');
+    }
+  }
+}
+
+/**
+ * Implements hook_views_bulk_operations_form_alter().
+ */
+function paddle_user_views_bulk_operations_form_alter(&$form, &$form_state, $vbo) {
+  // Only allow users to add paddle roles under certain circumstances.
+  if (strpos($form['#action'], 'admin/users') !== FALSE && isset($form['add_roles'])) {
+    $store = paddle_user_store();
+    $roles = paddle_user_paddle_user_roles();
+
+    if (!$store->canAddAnotherUser()) {
+      drupal_set_message(t('You are on subscription plan "%plan". You cannot create any more accounts. Please disable accounts or upgrade to a higher subscription plan.', array(
+        '%plan' => $store->getHumanReadableName(),
+      )), 'warning');
+
+      // Remove the option to add paddle roles.
+      foreach ($roles as $rid => $role) {
+        unset($form['add_roles']['#options'][$rid]);
+      }
+
+      if (empty($form['add_roles']['#options'])) {
+        unset($form['add_roles']);
+      }
+    }
+    elseif ($store->usersLeft() < count($vbo->view->result)) {
+      drupal_set_message(t('You are on subscription plan "%plan". You cannot add paddle roles to the number of users you have selected. Please disable accounts or upgrade to a higher subscription plan.', array(
+        '%plan' => $store->getHumanReadableName(),
+      )), 'warning');
+
+      // Remove the option to add paddle roles.
+      foreach ($roles as $rid => $role) {
+        unset($form['add_roles']['#options'][$rid]);
+      }
+
+      if (empty($form['add_roles']['#options'])) {
+        unset($form['add_roles']);
+      }
+    }
+  }
+}
+
+/**
+ * Removes a specific role from all Paddle users.
+ *
+ * @param string $role_name
+ *   The name of the role to be removed.
+ */
+function paddle_user_remove_role_from_users($role_name) {
+  $role = user_role_load_by_name($role_name);
+  $query = 'SELECT ur.uid
+    FROM {users_roles} AS ur
+    WHERE ur.rid = :rid';
+  $result = db_query($query, array(':rid' => $role->rid));
+  $uids = $result->fetchCol();
+  $users = user_load_multiple($uids);
+
+  foreach ($users as $user) {
+    $new_roles = array();
+    foreach ($user->roles as $id => $name) {
+      if ($id != $role->rid) {
+        $new_roles[$id] = $name;
+      }
+    }
+    user_save($user, array('roles' => $new_roles));
+  }
+}

@@ -1,0 +1,13 @@
+name = Paddle VUB fields
+description = Defines fields which are applied to existing content types in the VUB environment.
+core = 7.x
+package = Paddle
+version = 7.x-1.0
+dependencies[] = features
+dependencies[] = field_instance_sync
+dependencies[] = list
+dependencies[] = options
+features[features_api][] = api:2
+features[field_base][] = field_vub_force_publish
+features[field_instance][] = node-news_item-field_vub_force_publish
+features[field_instance_sync][] = node-news_item-field_vub_force_publish

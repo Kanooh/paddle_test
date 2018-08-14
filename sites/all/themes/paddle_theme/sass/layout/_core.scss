@@ -1,0 +1,54 @@
+/**
+ * Listing tables.
+ */
+.listing.table-listing {
+  width: 100%;
+  margin: 0;
+}
+.listing.table-listing li {
+  border: 0;
+}
+.listing.table-listing a {
+  display: block;
+  text-decoration: none;
+}
+.listing.table-listing a:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  text-decoration: underline;
+}
+.listing.table-listing .item {
+  display: block;
+  border: 0;
+  border-bottom-width: 1px;
+  border-style: solid;
+  border-color: $c-gallery;
+  padding: 8px;
+}
+.listing.table-listing .content {
+  word-wrap: break-word;
+  max-width: 86%;
+}
+.listing.table-listing .content,
+.listing.table-listing .icon {
+  display: inline-block;
+  padding: 10px 0;
+  vertical-align: middle;
+}
+.listing.table-listing .icon.align-right {
+  float: right;
+  max-width: 12%;
+}
+.listing.table-listing .icon.align-left {
+  margin-right: 10px;
+  text-align: center;
+  min-width: 20px;
+  font-size: 1.4em;
+}
+/**
+ * Resets because other selectors are not specific enough.
+ * @todo These should be fixed correctly ASAP during clean-up.
+ */
+.pane-social-media-identity .pane-section-body,
+.pane-download-list .pane-section-body {
+  padding: 0;
+}

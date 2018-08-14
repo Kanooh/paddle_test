@@ -1,0 +1,511 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleContentManagerEditNodeTest.
+ */
+
+/**
+ * Test the editing of nodes for Paddle Content Manager module.
+ */
+class PaddleContentManagerEditNodeTest extends DrupalWebTestCase {
+  protected $contentType;
+  protected $adminUser;
+  protected $editor;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Edit node tests',
+      'description' => 'Test the editing of nodes.',
+      'group' => 'Paddle Content Manager',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp();
+
+    module_enable(array(
+      'date_popup',
+      'paddle_content_manager',
+      'paddle_contextual_toolbar',
+      'scheduler',
+      'scheduler_workbench',
+      'workbench_moderation',
+    ));
+
+    $this->contentType = $this->drupalCreateContentType(array());
+
+    // Add a workbench moderation transition from 'draft' to published. This is
+    // supported in the Paddle distribution.
+    $draft_to_published_transition = (object) array(
+      'from_name' => workbench_moderation_state_none(),
+      'to_name' => workbench_moderation_state_published(),
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($draft_to_published_transition);
+
+    // Add 1 new state, "To check".
+    $state = (object) array(
+      'name' => 'to_check',
+      'label' => 'To check',
+      'description' => '',
+      'weight' => -50,
+    );
+    workbench_moderation_state_save($state);
+
+    $state = (object) array(
+      'name' => 'offline',
+      'label' => 'Offline',
+      'description' => '',
+      'weight' => 80,
+    );
+    workbench_moderation_state_save($state);
+
+    // Add the transitions for the 2 new states.
+    $transition = (object) array(
+      'from_name' => 'draft',
+      'to_name' => 'to_check',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'to_check',
+      'to_name' => 'draft',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'to_check',
+      'to_name' => 'needs_review',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'to_check',
+      'to_name' => 'published',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'needs_review',
+      'to_name' => 'to_check',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'published',
+      'to_name' => 'to_check',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'published',
+      'to_name' => 'offline',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'offline',
+      'to_name' => 'to_check',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'offline',
+      'to_name' => 'needs_review',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    $transition = (object) array(
+      'from_name' => 'offline',
+      'to_name' => 'published',
+      'name' => NULL,
+    );
+    workbench_moderation_transition_save($transition);
+
+    // Reset the static cache of the moderation states and
+    // DrupalWebTestCase::checkPermissions().
+    // Otherwise permissions related to the newly added moderation state
+    // will not be available.
+    drupal_static_reset('workbench_moderation_states');
+    drupal_static_reset('workbench_moderation_transitions');
+    drupal_static_reset('checkPermissions');
+
+    $format = new stdClass();
+    $format->format = 'full_html';
+    $format->name = 'Full HTML';
+    $format->status = 1;
+    $format->cache = 1;
+    $format->weight = -10;
+    filter_format_save($format);
+
+    $this->adminUser = $this->drupalCreateUser(array(
+      'administer menu',
+      'administer content types',
+      'create ' . $this->contentType->type . ' content',
+      'edit any ' . $this->contentType->type . ' content',
+      'create basic_page content',
+      'edit any basic_page content',
+      'manage paddle_content_manager',
+      'override default scheduler time',
+      'schedule publishing of nodes',
+      'view the administration theme',
+      'edit content in state draft',
+      'edit content in state needs_review',
+      'edit content in state offline',
+      'edit content in state published',
+      'edit content in state to_check',
+      'moderate content from draft to needs_review',
+      'moderate content from draft to published',
+      'moderate content from draft to to_check',
+      'moderate content from needs_review to published',
+      'moderate content from needs_review to to_check',
+      'moderate content from offline to needs_review',
+      'moderate content from offline to published',
+      'moderate content from offline to to_check',
+      'moderate content from published to offline',
+      'moderate content from published to to_check',
+      'moderate content from to_check to draft',
+      'moderate content from to_check to needs_review',
+      'moderate content from to_check to published',
+      filter_permission_name($format),
+    ));
+
+    $this->editor = $this->drupalCreateUser(array(
+      'create ' . $this->contentType->type . ' content',
+      'edit any ' . $this->contentType->type . ' content',
+      'create basic_page content',
+      'manage paddle_content_manager',
+      'edit any basic_page content',
+      'view the administration theme',
+      'edit content in state draft',
+      'edit content in state offline',
+      'edit content in state published',
+      'edit content in state to_check',
+      'moderate content from draft to needs_review',
+      'moderate content from draft to to_check',
+      'moderate content from to_check to needs_review',
+      filter_permission_name($format),
+    ));
+
+    $this->drupalLogin($this->adminUser);
+    // Configure the content type to use moderation and scheduling.
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType->type);
+    $edit = array(
+      'node_options[revision]' => TRUE,
+      'node_options[moderation]' => TRUE,
+      'scheduler_publish_enable' => TRUE,
+      'scheduler_unpublish_enable' => TRUE,
+    );
+    $this->drupalPost(NULL, $edit, t('Save content type'));
+  }
+
+  /**
+   * Tests if the contextual toolbar is set correctly.
+   */
+  public function testContextualToolbar() {
+    $base_xpath = '//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]//ul[@id="contextual-actions-list"]';
+    $buttons = array(
+      'Save' => $base_xpath . '//li[contains(normalize-space(@class), "submit")]//a[@data-paddle-contextual-toolbar-click="edit-submit"]',
+      'Preview' => $base_xpath . '//li[contains(normalize-space(@class), "preview")]//a',
+      'To chief editor' => $base_xpath . '//li[contains(normalize-space(@class), "moderate-to-needs-review")]//a[@data-paddle-contextual-toolbar-click="edit-moderate-to-needs-review"]',
+      'Published' => $base_xpath . '//li[contains(normalize-space(@class), "moderate-to-published")]//a[@data-paddle-contextual-toolbar-click="edit-moderate-to-published"]',
+      'To editor' => $base_xpath . '//li[contains(normalize-space(@class), "moderate-to-to-check")]//a[@data-paddle-contextual-toolbar-click="edit-moderate-to-to-check"]',
+      'Online version' => $base_xpath . '//li[contains(normalize-space(@class), "online-version")]',
+    );
+    // Run the tests for the admin user.
+    $this->drupalLogin($this->adminUser);
+    $node = $this->drupalCreateUiNode($this->contentType->type);
+    $buttons['Cancel'] = $base_xpath . '//li[contains(normalize-space(@class), "cancel")]//a[contains(@href, "admin/content_manager/node/' . $node->nid . '/view")]';
+
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertRaw('block-paddle-contextual-toolbar-contextual-toolbar', 'The contextual toolbar is shown on the node add page.');
+    $this->assertTrue($this->xpath($buttons['Cancel'], array(':node' => $node->nid)), 'The cancel button is shown in the contextual toolbar for an administrator.');
+    $this->assertTrue($this->xpath($buttons['Save']), 'The save button is shown in the contextual toolbar for an administrator.');
+    $this->assertFalse($this->xpath($buttons['Preview']), 'The preview button is not shown in the contextual toolbar for an administrator.');
+    $this->assertFalse($this->xpath($buttons['To chief editor']), 'The moderate to needs_review button is not shown in the contextual toolbar for an administrator.');
+    $this->assertFalse($this->xpath($buttons['Published']), 'The moderate to published button is not shown in the contextual toolbar for an administrator.');
+    $this->assertFalse($this->xpath($buttons['To editor']), 'The moderate to to_check button is not shown in the contextual toolbar for an administrator.');
+    $this->assertFalse($this->xpath($buttons['Online version']), 'The "online version" button is not shown in the contextual toolbar for an administrator.');
+
+    // Run the tests for the editor user.
+    $this->drupalLogin($this->editor);
+    $node = $this->drupalCreateUiNode($this->contentType->type);
+    $buttons['Cancel'] = $base_xpath . '//li[contains(normalize-space(@class), "cancel")]//a[contains(@href, "admin/content_manager/node/' . $node->nid . '/view")]';
+
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertRaw('block-paddle-contextual-toolbar-contextual-toolbar', 'The contextual toolbar is shown on the node add page.');
+    $this->assertTrue($this->xpath($buttons['Cancel'], array(':node' => $node->nid)), 'The cancel button is shown in the contextual toolbar for an editor.');
+    $this->assertTrue($this->xpath($buttons['Save']), 'The save button is shown in the contextual toolbar for an editor.');
+    $this->assertFalse($this->xpath($buttons['Preview']), 'The preview button is not shown in the contextual toolbar for an editor.');
+    $this->assertFalse($this->xpath($buttons['To chief editor']), 'The moderate to needs_review check button is not shown in the contextual toolbar for an editor.');
+    $this->assertFalse($this->xpath($buttons['Published']), 'The moderate to published button is not shown in the contextual toolbar for an editor.');
+    $this->assertFalse($this->xpath($buttons['To editor']), 'The moderate to to_check button is not shown in the contextual toolbar for an editor.');
+    $this->assertFalse($this->xpath($buttons['Online version']), 'The "Online version" button is not shown in the contextual toolbar for an editor.');
+
+    // Put a node in a state in which the editor cannot edit it.
+    foreach (array('Needs Review') as $button_title) {
+      $this->drupalLogin($this->adminUser);
+      $edit = array(
+        'title' => $this->randomName(),
+      );
+      $node = $this->drupalCreateUiNode($this->contentType->type, $edit);
+      $this->drupalPost('admin/content_manager/node/' . $node->nid . '/view', array(), $button_title);
+
+      // The editor should see only the "Preview" button.
+      $this->drupalLogin($this->editor);
+      $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+      $this->assertRaw('block-paddle-contextual-toolbar-contextual-toolbar', 'The contextual toolbar is shown on the node edit page.');
+      $this->assertEqual(count($this->xpath($base_xpath . '//li')), 1, "Only the allowed buttons in the contextual button are shown when node in state $button_title for editor.");
+      $this->assertTrue($this->xpath($buttons['Preview']), 'The preview button is shown in the contextual toolbar for an editor.');
+    }
+  }
+
+  /**
+   * Test the revision history pane.
+   */
+  public function testRevisionHistory() {
+    // Log in as editor.
+    $this->drupalLogin($this->editor);
+
+    // Check that the revision history is not shown when creating a node of type
+    // 'Basic page'.
+    $node = $this->drupalCreateUiNode('basic_page');
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertRaw(t('Revision history'), 'The revision history is shown when creating content.');
+
+    // Enter a random title and body text for the Basic Page and save the page.
+    $edit = array(
+      'title' => $this->randomString(),
+      'body[und][0][value]' => $this->randomString(50),
+    );
+    $node = $this->drupalCreateUiNode('basic_page', $edit);
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $node = $this->drupalGetNodeByTitle($edit['title']);
+    $this->assertTrue($node, 'The node has been saved successfully to the database.');
+
+    // Edit the newly created node, and verify that revision information is
+    // shown in the form "Draft on DD/MM/YYYY by {username}". The username
+    // should link to the user profile.
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertText(t('Draft on'), 'A "Draft" revision note exists.');
+    $this->assertNoLinkByHref('node/' . $node->nid . '/revisions/' . $node->vid . '/view', 0, 'A link to the current revision exists.');
+    $this->assertRaw(date('d/m/Y H:i', $node->created), 'The node creation date is shown.');
+    $this->assertLink($this->editor->name, 0, 'A link exists containing the editor\'s name.');
+    $this->assertLinkByHref('users/' . strtolower($this->editor->name), 0, 'A link exists to the editor\'s profile page.');
+
+    // Log in as editor-in-chief.
+    $this->drupalLogin($this->adminUser);
+
+    // Make some changes to the content and save it so a new revision is made.
+    // Repeat this four times, then check if the "More"-link appears.
+    for ($i = 0; $i < 4; $i++) {
+      $this->assertNoLinkByHref('node/' . $node->nid . '/moderation', 0, format_string('The "See more" link is not available when there are @count revisions.', array('@count' => $i + 3)));
+      $edit = array('body[und][0][value]' => $this->randomString(50));
+      $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+      $this->drupalGet('node/' . $node->nid . '/edit');
+    }
+    $url = url('node/' . $node->nid . '/moderation');
+    $this->assertLinkByHref($url, 0, 'The "See more" link is available when there are 6 revisions.');
+  }
+
+  /**
+   * Test node edit permissions.
+   */
+  public function testEditPermissions() {
+    // Define a permission matrix. Chief editors may edit all moderation states.
+    // Editors may not edit content in moderation state 'needs_review'.
+    $user_permissions = array(
+      'editor' => array(
+        'user' => $this->editor,
+        'states' => array(
+          'draft' => TRUE,
+          'needs_review' => FALSE,
+          'offline' => TRUE,
+          'published' => TRUE,
+          'to_check' => TRUE,
+        ),
+      ),
+      'chief editor' => array(
+        'user' => $this->adminUser,
+        'states' => array(
+          'draft' => TRUE,
+          'needs_review' => TRUE,
+          'offline' => TRUE,
+          'published' => TRUE,
+          'to_check' => TRUE,
+        ),
+      ),
+    );
+
+    // Create a test node.
+    $node = $this->drupalCreateNode(array('type' => $this->contentType->type));
+
+    // Loop over the matrix and check if the edit permissions are correct.
+    foreach ($user_permissions as $user => $permissions) {
+      $this->drupalLogin($permissions['user']);
+      foreach ($permissions['states'] as $state => $permission) {
+        // Set the moderation state of the node.
+        workbench_moderation_moderate($node, $state);
+        // Check if user can edit the node.
+        $this->drupalGet('node/' . $node->nid . '/edit');
+        $response = $permission ? 200 : 403;
+        $msg_args = array(
+          '%user' => $user,
+          '@permission' => $permission ? 'has' : 'does not have',
+          '%state' => $state,
+        );
+        $msg = format_string('The user %user @permission permission to edit content with the moderation state %state.', $msg_args);
+        $this->assertResponse($response, $msg);
+      }
+    }
+  }
+
+  /**
+   * Test menu items get managed correctly when creating content.
+   *
+   * @todo This code no longer applies because we have changed how the adding
+   * of menu items trough the node edit interface works. This should be changed
+   * again so that this test code works. Because we now use a pane to handle
+   * this which comes from paddle_menu_manager but there should not be a hard
+   * dependency on paddle_menu_manager.
+   */
+  public function testNodeMenuItem() {
+//
+//    // Log in as administrator.
+//    $this->drupalLogin($this->adminUser);
+//
+//    // Check that the "Provide a menu link" checkbox is hidden on node add/edit
+//    // pages.
+//    $node = $this->drupalCreateUiNode($this->contentType->type);
+//    $this->drupalGet('node/' . $node->nid . '/edit');
+//    $this->assertNoRaw('edit-menu-enabled', 'The "Provide a menu link" checkbox is hidden on node edit pages.');
+//
+//    // Delete any existing menu items.
+//    $menu_name = 'main-menu';
+//    menu_delete_links($menu_name);
+//
+//    // Create a node that is not attached to a menu.
+//    $node_title = $this->randomName();
+//    $language = LANGUAGE_NONE;
+//    $edit = array(
+//      "title" => $node_title,
+//      "body[$language][0][value]" => $this->randomString(),
+//    );
+//    $node = $this->drupalCreateUiNode($this->contentType->type, $edit);
+//
+//    // Check menu item does not exists.
+//    $menu = menu_load_links($menu_name);
+//    $this->assertFalse(isset($menu[0]), 'Menu item does not exists.');
+//
+//    // Edit the node and add menu link title.
+//    $edit = array(
+//      'menu[link_title]' => $node_title,
+//    );
+//    $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+//
+//    // Check menu item exists and links to correct node.
+//    $menu = menu_load_links($menu_name);
+//    $this->assertEqual($menu[0]['link_title'], $node_title, 'Menu item with title ' . $node->title . ' exists.');
+//    $this->assertEqual($menu[0]['link_path'], 'node/' . $node->nid, 'Menu item is linked to the correct node.');
+//
+//    // Add a weight to the menu item.
+//    $weight = rand(0, 50);
+//    $menu[0]['weight'] = $weight;
+//    menu_link_save($menu[0]);
+//
+//    // Edit the menu link title.
+//    $edit = array(
+//      'menu[link_title]' => $node_title . " changed",
+//    );
+//    $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+//
+//    // Make sure the menu weight did not change back to 0.
+//    $menu = menu_load_links($menu_name);
+//    $this->assertEqual($menu[0]['weight'], $weight, 'Menu weight not changed on update.');
+//
+//    // Edit the node and remove title from menu link.
+//    $edit = array(
+//      'menu[link_title]' => '',
+//    );
+//    $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+//
+//    // Check menu item does not exists.
+//    $menu = menu_load_links($menu_name);
+//    $this->assertFalse(isset($menu[0]), 'Menu item does not exists.');
+  }
+
+  /**
+   * Creates a node through the user interface.
+   *
+   * @param string $type
+   *   The node type of the node that should be created.
+   * @param array $edit
+   *   Field data in an associative array, as in drupalPost(). If omitted a
+   *   random title will be used, with some special characters thrown in.
+   *
+   * @return object
+   *   The fully populated node object, or FALSE if the node could not be
+   *   created.
+   */
+  protected function drupalCreateUiNode($type, $edit = array()) {
+    // Default to a random title with some special characters that help in
+    // detecting malformed HTML and XSS vulnerabilities.
+    if (!isset($edit['title'])) {
+      $edit['title'] = $this->randomString();
+    }
+
+    // Create the node using the usual modal path without 'ajax' param as we no
+    // longer have access to "node/add".
+    $this->drupalPost('admin/content_manager/nojs/' . $type . '/add', array('title' => $edit['title']), t('Save'));
+    $this->assertResponse(200, format_string('Logged in user %name is allowed to edit node of type %type.', array('%name' => $this->loggedInUser->name, '%type' => $type)));
+
+    // Attempt to find the node that has just been created.
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', $type)
+      ->propertyCondition('title', $edit['title'])
+      ->range(0, 1);
+    $result = $query->execute();
+
+    $node = FALSE;
+    if (!empty($result['node'])) {
+      $node = reset($result['node']);
+      $node = node_load($node->nid);
+
+      // Reset the statically cached path alias.
+      drupal_clear_path_cache('node/' . $node->nid);
+    }
+    $this->assertTrue($node, format_string('The node with title %title has been found in the database.', array('%title' => $edit['title'])));
+
+    if (count($edit) > 1) {
+      // Since we create the node with title only a bit further up we need to
+      // fill in the other fields now.
+      $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+      $node = node_load($node->nid, NULL, TRUE);
+    }
+
+    // Redirect to admin node view as it happens using the ajax node create if
+    // there are no errors.
+    if (!$this->xpath('//div[@id="messages"]/div[contains(@class,"error")]')) {
+      $this->drupalGet('admin/content_manager/node/' . $node->nid . '/view');
+    }
+
+    return $node;
+  }
+}

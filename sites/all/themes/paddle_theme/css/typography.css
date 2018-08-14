@@ -1,0 +1,324 @@
+@charset "UTF-8";
+/**
+* @file
+* VO theme typography.
+*
+* Contains all typographic styling of the VO Theme (no branding fonts included).
+* Font styles, line-height, text styles (decoration, transform,...), margins.
+* @TO DO:
+* Use rem units with px fall back for IE8.
+*/
+body {
+  font-family: "latoregular", "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+  color: #333;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.header-title {
+  line-height: 1;
+}
+
+/* @headings */
+.region-content h2,
+.region-content h3,
+.region-content h4,
+.region-content h5,
+.region-content h6 {
+  text-rendering: optimizeLegibility;
+}
+
+.region-content h2 a,
+.region-content h3 a,
+.region-content h4 a,
+.region-content h5 a,
+.region-content h6 a {
+  font-size: inherit;
+  color: inherit;
+}
+
+.region-content h2 a:hover,
+.region-content h3 a:hover,
+.region-content h4 a:hover,
+.region-content h5 a:hover,
+.region-content h6 a:hover {
+  font-size: inherit;
+}
+
+.region-content h2 {
+  margin-top: 25px;
+}
+
+.region-content h2,
+.region-content h3,
+.region-content h4,
+.region-content h5 {
+  margin-top: 15px;
+}
+
+.region-content h3 + p,
+.region-content h3 + ol,
+.region-content h3 + ul,
+.region-content h3 + blockquote {
+  margin-top: 10px;
+}
+
+.region-content h2:first-child,
+.region-content h3:first-child,
+.region-content h4:first-child,
+.region-content h5:first-child,
+.region-content h2 + h3,
+.region-content h3 + h4,
+.region-content h4 + h5,
+.region-content h4 + p,
+.region-content h5 + p,
+.region-content h4 + ol,
+.region-content h5 + ol,
+.region-content h4 + ul,
+.region-content h5 + ul,
+.region-content h4 + blockquote,
+.region-content h5 + blockquote {
+  margin-top: 0;
+}
+
+/* @lists */
+.pane-content ul,
+.region-content ul,
+.paddle-mega-dropdown ul {
+  padding: 0;
+  margin: 15px 0 0 15px;
+}
+
+.region-content ol,
+.paddle-mega-dropdown ol {
+  padding: 0;
+  margin: 15px 0 0 30px;
+}
+
+.region-content ul li > ul,
+.region-content ol li > ol {
+  margin-top: 2px;
+  margin-bottom: 8px;
+}
+
+.paddle-mega-dropdown ol:first-child,
+.paddle-mega-dropdown ul:first-child {
+  margin-top: 0;
+}
+
+.region-content li {
+  line-height: 1.5em;
+}
+
+/* @quotes */
+.region-content blockquote {
+  margin: 10px 0 0 0;
+  padding: 0;
+  quotes: "“" "”" "‘" "’";
+  word-wrap: break-word;
+}
+
+.region-content blockquote:before,
+.region-content blockquote:after {
+  margin-right: 0;
+  vertical-align: -2px;
+  font-size: 1.1em;
+}
+
+.region-content blockquote:before {
+  content: open-quote;
+}
+
+.region-content blockquote:after {
+  content: close-quote;
+}
+
+/* @not configurable*/
+.region-content a,
+.region-content li {
+  word-wrap: break-word;
+}
+
+.region-content table {
+  margin-top: 15px;
+}
+
+.region-content p {
+  margin: 15px 0 0 0;
+  line-height: 1.5em;
+  word-wrap: break-word;
+}
+
+.region-content p:first-child {
+  margin-top: 0;
+}
+
+/* @servicelinks */
+.region-service-links .menu-item a {
+  text-decoration: underline;
+}
+
+/* @breadcrumbs */
+#breadcrumb li a {
+  text-decoration: underline;
+}
+
+/* @navigation types */
+.block-paddle-menu-display .menu-item a {
+  text-decoration: none;
+}
+
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a {
+  text-decoration: none;
+}
+
+/*@menu current level + one up */
+#block-paddle-menu-display-current-level-plus-one .menu-item a {
+  text-decoration: none;
+}
+
+#block-paddle-menu-display-current-level-plus-one .menu-item a:hover {
+  text-decoration: underline;
+}
+
+.submitted {
+  font-size: 0.8em;
+  margin: 5px 0;
+}
+
+.submitted a {
+  font-size: 1em;
+}
+
+/* Flat file icons */
+@font-face {
+  font-family: "Flaticon";
+  src: url("../fonts/flaticon.eot");
+  src: url("../fonts/flaticon.eot#iefix") format("embedded-opentype"), url("../fonts/flaticon.woff") format("woff"), url("../fonts/flaticon.ttf") format("truetype"), url("../fonts/flaticon.svg") format("svg");
+  font-weight: normal;
+  font-style: normal;
+}
+.file:before,
+.atom-file:before {
+  content: "\e001";
+  font-family: Flaticon;
+  font-size: 1.6em;
+  font-style: normal;
+  display: inline-block;
+  margin-left: 5px;
+  margin-right: 2px;
+}
+
+.atom-file.file-application-vndopenxmlformats-officedocumentwordprocessingmldocument:before,
+.file-docx:before {
+  content: "\e005";
+}
+
+.atom-file.file-application-msword:before,
+.file-doc:before,
+.file-dotx:before {
+  content: "\e004";
+}
+
+.atom-file.file-application-pdf:before,
+.file-pdf:before {
+  content: "\e00f";
+}
+
+.atom-file.file-application-vndopenxmlformats-officedocumentpresentationmlpresentation:before,
+.file-pptx:before {
+  content: "\e012";
+}
+
+.atom-file.file-application-vndms-powerpoint:before,
+.file-ppt:before,
+.file-potx:before,
+.file-pps:before {
+  content: "\e011";
+}
+
+.atom-file.file-application-vndopenxmlformats-officedocumentspreadsheetmlsheet:before,
+.file-xlsx:before {
+  content: "\e01a";
+}
+
+.atom-file.file-application-vndms-excel:before,
+.file-xls:before {
+  content: "\e019";
+}
+
+.atom-file.file-application-zip:before,
+.file-zip:before {
+  content: "\e01b";
+}
+
+.atom-file.file-application-vndoasisopendocumenttext:before,
+.file-odt:before {
+  content: "\e00d";
+}
+
+.atom-file.file-application-rtf:before,
+.file-rtf:before {
+  content: "\e013";
+}
+
+.atom-file.file-application-octet-stream:before,
+.file-gz:before {
+  content: "\e007";
+}
+
+.atom-file.file-application-x-tar:before,
+.file-tar:before {
+  content: "\e015";
+}
+
+.atom-file.file-application-vndoasisopendocumentspreadsheet:before,
+.file-ods:before {
+  content: "\e00c";
+}
+
+.atom-file.file-application-x-7z-compressed:before,
+.file-7z:before {
+  content: "\e002";
+}
+
+.atom-file.file-text-csv:before,
+.file-csv:before {
+  content: "\e003";
+}
+
+.atom-file.file-text-plain:before,
+.file-txt:before {
+  content: "\e017";
+}
+
+.file-image-png:before,
+.file-png:before {
+  content: "\e010";
+}
+
+.file-image-gif:before,
+.file-gif:before {
+  content: "\e006";
+}
+
+.file-image-jpeg:before,
+.file-jpg:before {
+  content: "\e009";
+}
+
+.file-mp4:before {
+  content: "\e00b";
+}
+
+.file-tif:before {
+  content: "\e016";
+}
+
+.file-svg:before {
+  content: "\e014";
+}
+
+.file-eps:before {
+  content: "\e01c";
+}

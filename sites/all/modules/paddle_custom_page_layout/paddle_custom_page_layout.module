@@ -1,0 +1,286 @@
+<?php
+
+/**
+ * @file
+ * Main code for the Paddle Custom Page Layout paddlet.
+ */
+
+include_once 'paddle_custom_page_layout.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_custom_page_layout_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_custom_page_layout_configuration_form',
+  );
+}
+
+/**
+ * Paddlet configuration form.
+ */
+function paddle_custom_page_layout_configuration_form($form, &$form_state) {
+  $form = array();
+
+  drupal_set_title(t('Custom page layout paddlet'));
+
+  ctools_include('export');
+  $items = ctools_export_crud_load_all('panels_layout');
+  $header = array(t('Name'), t('Actions'));
+  $rows = array();
+  // We define a list of default layouts. The original default one, provided
+  // by the layout module, and a default layout which is defined for paddle
+  // pages.
+  $default_layouts = array('default', 'default_paddle');
+
+  if (!empty($items)) {
+    foreach ($items as $item) {
+      $name = $item->name;
+
+      // We do not want the default layouts to be editable.
+      if (!in_array($name, $default_layouts)) {
+        $rows[] = array(
+          $name,
+          array(
+            'data' => l(t('Edit'),
+              "admin/structure/panels/layouts/list/$item->name/edit"),
+            'class' => 'links',
+          ),
+        );
+      }
+    }
+  }
+
+  $table = theme('table', array('header' => $header, 'rows' => $rows));
+
+  $form['layouts_table'] = array(
+    '#markup' => $table,
+  );
+
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_custom_page_layout_configuration_form_add_contextual_actions';
+  }
+  return $form;
+}
+
+/**
+ * After build function to set the contextual actions for the paddlet config.
+ */
+function paddle_custom_page_layout_configuration_form_add_contextual_actions($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add an "add custom page layout" button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Add a custom page layout'),
+      'admin/structure/panels/layouts/add-responsive', array(
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-plus'),
+        ),
+      )),
+    'class' => array('add-custom-page-layout'),
+    'weight' => 20,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * After build function to set the contextual actions for the layout forms.
+ */
+function paddle_custom_page_layout_layout_form_add_contextual_actions($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  $actions[] = array(
+    'action' => l(t('Back'),
+      'admin/paddlet_store/app/paddle_custom_page_layout/configure', array(
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-arrow-left'),
+        ),
+      )),
+    'class' => array('cancel'),
+    'weight' => 1,
+  );
+
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-submit',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 2,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_custom_page_layout_permission() {
+  return array(
+    'create custom page layouts' => array(
+      'title' => t('Creating custom page layouts'),
+      'description' => t('Adding a custom layout which could be used in any of the Paddle Landing pages.'),
+    ),
+    'edit custom page layouts' => array(
+      'title' => t('Editing custom page layouts'),
+      'description' => t('Editing a custom layout which could be used in any of the Paddle Landing pages.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function paddle_custom_page_layout_menu_alter(&$items) {
+  if (isset($items['admin/structure/panels/layouts/add-responsive'])) {
+    $items['admin/structure/panels/layouts/add-responsive']['access arguments'] = array('create custom page layouts');
+    $items['admin/structure/panels/layouts/add-responsive']['access callback'] = 'user_access';
+    $items['admin/structure/panels/layouts/add-responsive']['page callback'] = 'paddle_custom_page_layout_ctools_export_ui_switcher_page';
+  }
+
+  if (isset($items['admin/structure/panels/layouts/list/%ctools_export_ui/edit'])) {
+    $items['admin/structure/panels/layouts/list/%ctools_export_ui/edit']['access arguments'] = array('edit custom page layouts');
+    $items['admin/structure/panels/layouts/list/%ctools_export_ui/edit']['access callback'] = 'user_access';
+    $items['admin/structure/panels/layouts/list/%ctools_export_ui/edit']['page callback'] = 'paddle_custom_page_layout_ctools_export_ui_switcher_page';
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_custom_page_layout_form_ctools_export_ui_edit_item_form_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form_state['plugin']['name']) && $form_state['plugin']['name'] == 'panels_layouts') {
+    if (module_exists('paddle_contextual_toolbar')) {
+      $form['#after_build'][] = 'paddle_custom_page_layout_layout_form_add_contextual_actions';
+    }
+  }
+}
+
+/**
+ * Overrides the ctools_export_ui_switcher_page function to change the redirect.
+ *
+ * We basically copy the function and add a little extra.
+ *
+ * @see ctools_export_ui_switcher_page()
+ */
+function paddle_custom_page_layout_ctools_export_ui_switcher_page($plugin_name, $op) {
+  $args = func_get_args();
+  $js = !empty($_REQUEST['js']);
+
+  // Load the $plugin information.
+  ctools_include('export-ui');
+  $plugin = ctools_get_export_ui($plugin_name);
+  $handler = ctools_export_ui_get_handler($plugin);
+
+  if ($handler) {
+    // BEGIN CUSTOM PART.
+    foreach ($handler->plugin['redirect'] as $key => $path) {
+      if ($key == 'add' || $key == 'edit') {
+        $handler->plugin['redirect'][$key] = 'admin/paddlet_store/app/paddle_custom_page_layout/configure';
+      }
+    }
+    // END CUSTOM PART.
+    $method = $op . '_page';
+    if (method_exists($handler, $method)) {
+      $args[0] = $js;
+      $args[1] = $_POST;
+      return call_user_func_array(array($handler, $method), $args);
+    }
+  }
+  else {
+    return t('Configuration error. No handler found.');
+  }
+}
+
+/**
+ * Implements hook_library_alter().
+ */
+function paddle_custom_page_layout_library_alter(&$javascript, $module) {
+  $paths = paddle_custom_page_layout_retrieve_layout_specific_paths();
+  if ($module === 'system' && drupal_match_path(current_path(), $paths)) {
+    // Make sure we inject the minified or uncompressed version as desired.
+    $min = variable_get('jquery_update_compression_type', 'min') == 'none' ? '' : '.min';
+    $cdn = variable_get('jquery_update_jquery_cdn', 'none');
+    $path = drupal_get_path('module', 'jquery_update');
+
+    $version = '1.7';
+
+    jquery_update_jquery_replace($javascript, $cdn, $path, $min, $version);
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_custom_page_layout_module_implements_alter(&$implementations, $hook) {
+  /* We need to overwrite the library_alter function applied in the
+   * jQuery Update module since that module does not differentiate between
+   * different pages (which we would like here). In this module we would only
+   * like to use jQuery 1.7 for the custom page layout specific pages.
+   * The other pages can use Drupal its default jQuery version as defined in
+   * the jQuery Update strongarm parameter jquery_update_jquery_admin_version.
+   */
+  if ($hook == 'library_alter') {
+    $group = $implementations['paddle_custom_page_layout'];
+    unset($implementations['paddle_custom_page_layout']);
+    $implementations['paddle_custom_page_layout'] = $group;
+  }
+}
+
+/**
+ * Returns paths where the layout module requires a newer jQuery version.
+ *
+ * @return string
+ *   A list of paths.
+ */
+function paddle_custom_page_layout_retrieve_layout_specific_paths() {
+  $patterns = array(
+    'admin/structure/panels/layouts/add-responsive',
+    'admin/structure/panels/layouts/list/*/edit',
+  );
+
+  return implode(PHP_EOL, $patterns);
+}
+
+/**
+ * Implements hook_default_panels_layout().
+ *
+ * Provide the Paddle default layout.
+ */
+function paddle_custom_page_layout_default_panels_layout() {
+  $export = array();
+
+  $layout = new stdClass();
+  $layout->disabled = FALSE; /* Edit this to true to make a default layout disabled initially */
+  $layout->api_version = 1;
+  $layout->name = 'default_paddle';
+  $layout->admin_title = 'Default responsive Paddle layout';
+  $layout->admin_description = '';
+  $layout->category = '';
+  $layout->plugin = 'responsive';
+  $layout->settings = array(
+    'regions' => array(
+      'a' => 'a',
+      'b' => 'b',
+      'c' => 'c',
+      'd' => 'd',
+      'e' => 'e',
+    ),
+    'overrides' => array(
+      'smartphone_device' => array(),
+      'tablet_portrait_modus' => array(),
+      'tablet_landscape_modus' => array(),
+      'desktop' => array(),
+    ),
+  );
+  $export['default_paddle'] = $layout;
+
+  return $export;
+}

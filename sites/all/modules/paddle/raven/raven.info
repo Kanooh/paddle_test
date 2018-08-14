@@ -1,0 +1,13 @@
+name = "Raven"
+description = "Raven is an exception logging client for Sentry (sentry.io)."
+core = 7.x
+package = Development
+dependencies[] = libraries (2.x)
+dependencies[] = xautoload (5.x)
+configure = admin/config/development/raven
+files[] = raven.test
+
+; Information added by drush on 2017-10-18
+version = "7.x-2.5"
+project = "raven"
+datestamp = "1508299590"

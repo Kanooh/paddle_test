@@ -1,0 +1,4735 @@
+<?php
+/**
+ * @file
+ * Install code for the Paddle installation profile.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_install() {
+  // Create roles before reverting features because features can contain
+  // content types which can be panelized for which we could want to grant
+  // permissions for certain roles.
+  //
+  // Create the site manager role.
+  $manager_role = new stdClass();
+  $manager_role->name = 'Site Manager';
+  user_role_save($manager_role);
+
+  // Create the editor role.
+  $editor_role = new stdClass();
+  $editor_role->name = 'Editor';
+  user_role_save($editor_role);
+
+  // Create the chief editor role.
+  $chief_editor_role = new stdClass();
+  $chief_editor_role->name = 'Chief Editor';
+  user_role_save($chief_editor_role);
+
+  // Create the read only role.
+  $read_only_role = new stdClass();
+  $read_only_role->name = 'Read Only';
+  user_role_save($read_only_role);
+
+  // Revert all features.
+  features_include_defaults(NULL, TRUE);
+  features_revert();
+
+  // Set the i18n_string source language to English.
+  variable_set('i18n_string_source_language', 'en');
+  variable_set('logintoboggan_immediate_login_on_register', FALSE);
+  variable_set('site_403', 'toboggan/denied');
+
+  // Enable and set the default theme.
+  $default_theme = 'paddle_theme';
+  $paddle_theme = 'vo_standard_non_branded';
+  $admin_theme = 'paddle_admin_theme';
+
+  $themes = list_themes();
+
+  ctools_include('export');
+
+  // If the branded theme is available, use it instead of the
+  // non-branded version.
+  if (isset($themes['paddle_theme_branded'])) {
+    $default_theme = 'paddle_theme_branded';
+    $paddle_theme = 'vo_standard';
+
+    // Disable the Paddle Theme of the non-branded theme.
+    ctools_export_crud_disable('paddle_themer_theme',
+      paddle_themer_load('vo_standard_non_branded'));
+  }
+  else {
+    // Disable the Paddle Theme of the branded theme.
+    ctools_export_crud_disable('paddle_themer_theme',
+      paddle_themer_load('vo_standard'));
+  }
+
+  $themes_to_enable = array(
+    $default_theme,
+    'paddle_theme',
+    $admin_theme,
+  );
+
+  theme_enable($themes_to_enable);
+
+  variable_set('theme_default', $default_theme);
+
+  // Set the admin theme.
+  variable_set('admin_theme', $admin_theme);
+
+  // Use the administration theme when editing or creating content.
+  variable_set('node_admin_theme', TRUE);
+
+  // Enable Paddle Theme.
+  if (isset($paddle_theme)) {
+    variable_set('paddle_theme', $paddle_theme);
+  }
+
+  // Enable 3 languages in addition to English, with Dutch as default.
+  foreach (array('de', 'fr') as $langcode) {
+    locale_add_language($langcode);
+  }
+  locale_add_language('nl', NULL, NULL, LANGUAGE_LTR, '', '', TRUE, TRUE);
+
+  // Need to run the install hook of paddle_multilingual again here,
+  // because at the time it was enabled we did not have any
+  // additional languages installed yet and thus language negotiation
+  // could not be enabled.
+  include_once DRUPAL_ROOT . '/includes/language.inc';
+  paddle_multilingual_install();
+
+  // Define and create menus.
+  $menu_definitions = array(
+    array(
+      'base_name' => 'main_menu',
+      'title' => array(
+        'en' => 'Main menu',
+        'nl' => 'Hoofdnavigatie',
+      ),
+      'description' => array(
+        'en' => 'Main navigation menu',
+        'nl' => 'Hoofdnavigatie menu',
+      ),
+    ),
+    array(
+      'base_name' => 'footer_menu',
+      'title' => array(
+        'en' => 'Footer menu',
+        'nl' => 'Footernavigatie',
+      ),
+      'description' => array(
+        'en' => 'Footer navigation menu',
+        'nl' => 'Footernavigatie menu',
+      ),
+    ),
+    array(
+      'base_name' => 'top_menu',
+      'title' => array(
+        'en' => 'Top menu',
+        'nl' => 'Topnavigatie',
+      ),
+      'description' => array(
+        'en' => 'Top navigation menu',
+        'nl' => 'Topnavigatie menu',
+      ),
+    ),
+    array(
+      'base_name' => 'disclaimer_menu',
+      'title' => array(
+        'en' => 'Disclaimer menu',
+        'nl' => 'Disclaimer menu',
+      ),
+      'description' => array(
+        'en' => 'Disclaimer navigation menu',
+        'nl' => 'Disclaimer menu',
+      ),
+    ),
+  );
+  paddle_create_menus($menu_definitions);
+
+  // Activate Paddle Path by Menu for the main menus.
+  $path_by_menu_menu_names = array();
+  foreach ($menu_definitions as $menu_definition) {
+    if ($menu_definition['base_name'] == 'main_menu' && isset($menu_definition['saved_menus'])) {
+      foreach ($menu_definition['saved_menus'] as $menu) {
+        $path_by_menu_menu_names[] = $menu['menu_name'];
+      }
+    }
+  }
+  variable_set('paddle_path_by_menu_menus', $path_by_menu_menu_names);
+
+  // Create the menu displays.
+  $root_paths = array(
+    array(
+      'path' => 'admin',
+      'root_item' => 'admin/dashboard',
+    ),
+    array(
+      'path' => 'node/add',
+      'root_item' => 'admin/content_manager/add',
+    ),
+    array(
+      'path' => 'node/add/%',
+      'root_item' => 'admin/content_manager/add',
+    ),
+    array(
+      'path' => 'node/%/edit',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/delete',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/moderation',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/moderation/diff',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/moderation/diff/view',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/revisions/%/revert',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/webform/webform2pdf',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/view',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/themes/%',
+      'root_item' => 'admin/themes',
+    ),
+    array(
+      'path' => 'admin/content_manager/list/export/csv',
+      'root_item' => 'admin/content_manager/list/search',
+    ),
+    array(
+      'path' => 'admin/content_manager/list/export/xls',
+      'root_item' => 'admin/content_manager/list/search',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/panels_content',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/content_manager/entity/%/panels_content',
+      'root_item' => 'admin/structure/content_region',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/layout',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/paddlet_store/app/%/configure',
+      'root_item' => 'admin/paddlet_store',
+    ),
+    array(
+      'path' => 'admin/paddlet_store/app/%',
+      'root_item' => 'admin/paddlet_store',
+    ),
+    array(
+      'path' => 'admin/site-settings',
+      'root_item' => 'admin',
+    ),
+    array(
+      'path' => 'user/%/edit',
+      'root_item' => 'admin',
+    ),
+    array(
+      'path' => 'admin/content_manager/nojs/node/%/clone/confirm',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/references',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/paddle_scald/%/references',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/users',
+      'root_item' => 'admin/users',
+    ),
+  );
+
+  // Create Menu Display blocks.
+  $record = array(
+    'title' => 'Management level 2',
+    'name' => 'management_level_2',
+    'description' => 'Displayed on the left level 2-3',
+    'menu_name' => 'management',
+    'follow_active_trail' => 1,
+    'from_level' => '2',
+    'to_level' => '3',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu clearfix max-width',
+      'li_class' => '',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize($root_paths),
+  );
+  drupal_write_record('menu_displays', $record);
+
+  $record = array(
+    'title' => 'Management level 4',
+    'name' => 'management_level_4',
+    'description' => 'Displayed on the left level 4',
+    'menu_name' => 'management',
+    'root_path' => '',
+    'follow_active_trail' => 1,
+    'from_level' => '4',
+    'to_level' => '4',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => '',
+      'li_class' => '',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize($root_paths),
+  );
+  drupal_write_record('menu_displays', $record);
+
+  // Create Menu Displays for the front-end.
+  $record = array(
+    'title' => 'First level',
+    'name' => 'first_level',
+    'description' => 'First level menu display for the front-end',
+    'menu_name' => 'main_menu_nl',
+    'root_path' => '',
+    'follow_active_trail' => 0,
+    'from_level' => '1',
+    'to_level' => '1',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize($root_paths),
+    '404_root_path' => '',
+  );
+  drupal_write_record('menu_displays', $record);
+
+  $record = array(
+    'title' => 'Full vertical',
+    'name' => 'full_vertical',
+    'description' => 'Full vertical menu display for the front-end',
+    'menu_name' => 'main_menu_nl',
+    'root_path' => '',
+    'follow_active_trail' => 1,
+    'from_level' => '1',
+    'to_level' => 'curr_lvl_plus_1',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize($root_paths),
+    '404_root_path' => '',
+  );
+  drupal_write_record('menu_displays', $record);
+
+  $record = array(
+    'title' => 'Current level + 1',
+    'name' => 'current_level_plus_one',
+    'description' => 'Current level + 1 menu display for the front-end',
+    'menu_name' => 'main_menu_nl',
+    'follow_active_trail' => 1,
+    'from_level' => 'curr_lvl_plus_1',
+    'to_level' => 'curr_lvl_plus_1',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize($root_paths),
+    '404_root_path' => '',
+  );
+  drupal_write_record('menu_displays', $record);
+
+  // The header menu.
+  $record = array(
+    'title' => 'Header menu',
+    'name' => 'top_menu',
+    'description' => 'Header menu display for the front-end',
+    'menu_name' => 'top_menu_nl',
+    'from_level' => '1',
+    'to_level' => '1',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize(array()),
+    '404_root_path' => '',
+  );
+  drupal_write_record('menu_displays', $record);
+
+  // The footer menu.
+  $record = array(
+    'title' => 'Footer menu',
+    'name' => 'footer_menu',
+    'description' => 'Footer menu display for the front-end',
+    'menu_name' => 'footer_menu_nl',
+    'root_path' => '',
+    'follow_active_trail' => 0,
+    'from_level' => '1',
+    'to_level' => '1',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize(array()),
+    '404_root_path' => '',
+  );
+  drupal_write_record('menu_displays', $record);
+
+  // The disclaimer menu display.
+  $record = array(
+    'title' => 'Disclaimer menu',
+    'name' => 'disclaimer_menu',
+    'description' => 'Disclaimer menu display for the front-end',
+    'menu_name' => 'disclaimer_menu_nl',
+    'root_path' => '',
+    'follow_active_trail' => 0,
+    'from_level' => '1',
+    'to_level' => '1',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize(array()),
+    '404_root_path' => '',
+  );
+  drupal_write_record('menu_displays', $record);
+
+  // Place the contextual toolbar block in the featured area.
+  _block_rehash($default_theme);
+  _block_rehash($admin_theme);
+
+  db_update('block')
+    ->fields(array(
+      'region' => 'header_bottom',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $admin_theme,
+    ))
+    ->condition('module', 'paddle_contextual_toolbar')
+    ->condition('delta', 'contextual_toolbar')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  // Place the paddle_menu_display with the 2nd and 3rd level of the management
+  // menu in the header area.
+  db_update('block')
+    ->fields(array(
+      'region' => 'header_top',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $admin_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'management_level_2')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  $pages = "admin/content_manager/list/search\nadmin/paddle_scald/*";
+
+  // Place the paddle_menu_display with the 4th level of the management menu
+  // in the sidebar_first area.
+  db_update('block')
+    ->fields(array(
+      'region' => 'sidebar_first',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $admin_theme,
+      'title' => '<none>',
+      'visibility' => BLOCK_VISIBILITY_NOTLISTED,
+      'pages' => $pages,
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'management_level_4')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  // Place the paddle_menu_display with the 1st level of the main menu
+  // in the content top area.
+  db_update('block')
+    ->fields(array(
+      'region' => 'header_bottom',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $default_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'first_level')
+    ->condition('theme', $default_theme)
+    ->execute();
+
+  // Place the paddle_menu_display with the 4th level of the management menu
+  // in the sidebar_first area.
+  db_update('block')
+    ->fields(array(
+      'region' => 'content_sub_top',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $default_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'current_level_plus_one')
+    ->condition('theme', $default_theme)
+    ->execute();
+
+  // Place the paddle_menu_display with the 1st level of the top menu
+  // in the service_links region.
+  db_update('block')
+    ->fields(array(
+      'region' => 'service_links',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $default_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'top_menu')
+    ->condition('theme', $default_theme)
+    ->execute();
+
+  // Place the paddle_menu_display with the 1th level of the footer menu
+  // in the footer region.
+  db_update('block')
+    ->fields(array(
+      'region' => 'footer',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $default_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'footer_menu')
+    ->condition('theme', $default_theme)
+    ->execute();
+
+  // Place the paddle menu display with the 1th level of the disclaimer menu
+  // in the disclaimer region.
+  db_update('block')
+    ->fields(array(
+      'region' => 'disclaimer',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $default_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'disclaimer_menu')
+    ->condition('theme', $default_theme)
+    ->execute();
+
+  // Place the Login block in the sidebar of the frontend theme.
+  db_update('block')
+    ->fields(array(
+      'region' => 'sidebar_first',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $default_theme,
+    ))
+    ->condition('module', 'user')
+    ->condition('delta', 'login')
+    ->condition('theme', $default_theme)
+    ->execute();
+
+  // Allow visitor account creation, but with administrative approval.
+  variable_set('user_register', USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL);
+
+  // Permissions for anonymous users.
+  $anonymous_permissions = array(
+    'access content',
+    'view the administration theme',
+    'view any atom',
+    'use search_api_sorts',
+  );
+
+  // Enable default permissions for system roles. Authenticated users that do
+  // not have a role assigned should not exist, but if they do they should at
+  // least have the same permissions as an anonymous user.
+  user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $anonymous_permissions);
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $anonymous_permissions);
+
+  // Add 4 new workbench moderation states: "To check", "Offline" and
+  // "Scheduled".
+  $state = (object) array(
+    'name' => 'to_check',
+    'label' => 'To check',
+    'description' => '',
+    'weight' => -50,
+  );
+  workbench_moderation_state_save($state);
+
+  $state = (object) array(
+    'name' => 'offline',
+    'label' => 'Offline',
+    'description' => '',
+    'weight' => 80,
+  );
+  workbench_moderation_state_save($state);
+
+  $state = (object) array(
+    'name' => 'scheduled',
+    'label' => 'Scheduled',
+    'description' => '',
+    'weight' => 81,
+  );
+  workbench_moderation_state_save($state);
+
+  $state = (object) array(
+    'name' => 'archived',
+    'label' => 'Archived',
+    'description' => '',
+    'weight' => 90,
+  );
+  workbench_moderation_state_save($state);
+
+  // Add the workbench moderation transitions.
+  $transitions = array(
+    'draft' => array(
+      'to_check',
+      // Transition to needs_review comes out of the box.
+      'published',
+      'scheduled',
+      'archived',
+    ),
+    'to_check' => array(
+      'to_check',
+      'needs_review',
+      'published',
+      'scheduled',
+      'archived',
+    ),
+    'needs_review' => array(
+      'to_check',
+      'needs_review',
+      'scheduled',
+      'archived',
+      // Transition to published comes out of the box.
+    ),
+    'scheduled' => array(
+      'published',
+      'archived',
+    ),
+    'published' => array(
+      'offline',
+      'archived',
+    ),
+    'offline' => array(
+      'to_check',
+      'needs_review',
+      'published',
+      'scheduled',
+      'archived',
+    ),
+    'archived' => array(
+      'draft',
+    ),
+  );
+
+  foreach ($transitions as $from => $target_states) {
+    foreach ($target_states as $to) {
+      $transition = (object) array(
+        'from_name' => $from,
+        'to_name' => $to,
+        'name' => $from . '-' . $to,
+      );
+
+      workbench_moderation_transition_save($transition);
+    }
+  }
+
+  // Reset the static cache of the moderation states and transitions, otherwise
+  // permissions related to the newly added moderation states and transitions
+  // will not be available and user_role_grant_permissions() will fail with a
+  // PDOException. Requires patch for http://drupal.org/node/1911782.
+  drupal_static_reset('workbench_moderation_states');
+  drupal_static_reset('workbench_moderation_transitions');
+
+  // Update the labels of draft and published.
+  db_update('workbench_moderation_states')
+    ->fields(array(
+      'label' => 'Concept',
+    ))
+    ->condition('name', 'draft', '=')
+    ->execute();
+
+  db_update('workbench_moderation_states')
+    ->fields(array(
+      'label' => 'In review',
+    ))
+    ->condition('name', 'needs_review', '=')
+    ->execute();
+
+  db_update('workbench_moderation_states')
+    ->fields(array(
+      'label' => 'Online',
+    ))
+    ->condition('name', 'published', '=')
+    ->execute();
+
+  // Clear the statically cached Panelizer handlers. When these were originally
+  // initialized not all entity bundles were yet created, causing Panelizer to
+  // fail to report all its available permissions.
+  drupal_static_reset('panelizer_entity_plugin_get_handler');
+
+  $landing_page_permissions = _paddle_user_permissions_landing_page();
+  $content_region_permissions = _paddle_user_permissions_content_region();
+  $scald_permissions = _paddle_user_permissions_scald();
+  $overview_page_permissions = _paddle_user_permissions_overview_page();
+
+  // Make sure the overview page is panelized so that the permissions are set.
+  drupal_load('module', 'paddle_overview_page');
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_overview_page');
+  node_type_cache_reset();
+  drupal_static_reset();
+
+  paddle_content_region_panelize_node_type('paddle_overview_page');
+  paddle_content_region_grant_node_type_permissions('paddle_overview_page');
+
+  // Removes the content lock permissions for authenticated users
+  // which are granted at the install of the content_lock module.
+  user_role_revoke_permissions(DRUPAL_AUTHENTICATED_RID, array('check out documents'));
+
+  // Grant read only user permissions.
+  $read_only_permissions = array(
+    'access administration pages',
+    'access paddle dashboard',
+    'access users',
+    'manage paddle_content_manager',
+    'use paddle preview',
+    'view all unpublished content',
+    'view moderation history',
+    'view the administration theme',
+    'view revisions',
+    'change own username',
+    'use search_api_sorts',
+  );
+  user_role_grant_permissions($read_only_role->rid, $read_only_permissions);
+
+  // Grant site manager permissions.
+  $manager_permissions = array(
+    'access administration pages',
+    'access structure menu',
+    'view the administration theme',
+    'manage paddle_themer',
+    'manage paddle_menu_manager',
+    'manage paddle_taxonomy_manager',
+    'use paddle_editorial_notes',
+    'delete paddle_editorial_notes',
+    'create messages',
+    'use paddle preview',
+    'paddle_core configure site settings',
+    'manage paddle_apps',
+    'use text format full_html',
+    'view revisions',
+    'revert revisions',
+    'change own username',
+    'use search_api_sorts',
+    'administer users',
+    'administer permissions',
+    'access user profiles',
+    'execute user_block_user_action',
+    'execute user_unblock_user_action',
+    'execute views_bulk_operations_user_cancel_action',
+    'execute views_bulk_operations_user_roles_action',
+    'check out documents',
+    'execute paddle_content_manager_restore_node_action',
+    'execute paddle_content_manager_set_page_responsible_author',
+    'execute paddle_content_manager_set_workbench_moderation_state',
+    'execute views_bulk_operations_delete_item',
+  );
+  user_role_grant_permissions($manager_role->rid, $manager_permissions);
+
+  // Grant editor permissions.
+  $editor_permissions = array(
+    'access users',
+    'access administration pages',
+    'access paddle dashboard',
+    'access structure menu',
+    'clone node',
+    'view the administration theme',
+    'manage paddle_menu_manager',
+    'manage paddle_content_manager',
+    'manage paddle_taxonomy_manager',
+    'use paddle_editorial_notes',
+    'delete own paddle_editorial_notes',
+    'create messages',
+    'view moderation history',
+    'moderate content from draft to needs_review',
+    'moderate content from draft to to_check',
+    'moderate content from to_check to to_check',
+    'moderate content from to_check to needs_review',
+    'moderate content from draft to archived',
+    'moderate content from to_check to archived',
+    'moderate content from archived to draft',
+    'create basic_page content',
+    'edit any basic_page content',
+    'delete any basic_page content',
+    'view all unpublished content',
+    'create url aliases',
+    'edit content in state draft',
+    'edit content in state offline',
+    'edit content in state published',
+    'edit content in state scheduled',
+    'edit content in state to_check',
+    'have content assigned in state to_check',
+    'schedule publishing of nodes',
+    'override default scheduler time',
+    'use paddle preview',
+    'access ckeditor link',
+    'use text format full_html',
+    'manage_menu_link_to_published_nodes',
+    'view revisions',
+    'revert revisions',
+    'change own username',
+    'use search_api_sorts',
+    'administer panelizer node basic_page layout',
+    'administer panelizer node basic_page content',
+    'administer panelizer node paddle_overview_page layout',
+    'administer panelizer node paddle_overview_page content',
+    'administer panelizer node landing_page layout',
+    'administer panelizer node landing_page content',
+    'administer panels styles',
+    'administer panels region styles',
+    'check out documents',
+    'execute paddle_content_manager_restore_node_action',
+    'execute paddle_content_manager_set_page_responsible_author',
+    'execute paddle_content_manager_set_workbench_moderation_state',
+    'execute views_bulk_operations_delete_item',
+  );
+
+  $editor_permissions = array_merge($editor_permissions, $landing_page_permissions, $content_region_permissions, $scald_permissions, $overview_page_permissions);
+  user_role_grant_permissions($editor_role->rid, $editor_permissions);
+
+  // Grant chief editor permissions.
+  $chief_editor_permissions = array(
+    'access users',
+    'access administration pages',
+    'access paddle dashboard',
+    'access paddle in review dashboard',
+    'access structure menu',
+    'clone node',
+    'view the administration theme',
+    'manage paddle_menu_manager',
+    'manage paddle_content_manager',
+    'manage paddle_taxonomy_manager',
+    'use paddle_editorial_notes',
+    'delete paddle_editorial_notes',
+    'create messages',
+    'view moderation history',
+    'moderate content from draft to needs_review',
+    'moderate content from draft to published',
+    'moderate content from draft to scheduled',
+    'moderate content from draft to to_check',
+    'moderate content from to_check to to_check',
+    'moderate content from to_check to needs_review',
+    'moderate content from to_check to published',
+    'moderate content from to_check to scheduled',
+    'moderate content from needs_review to to_check',
+    'moderate content from needs_review to needs_review',
+    'moderate content from needs_review to published',
+    'moderate content from needs_review to scheduled',
+    'moderate content from scheduled to published',
+    'moderate content from published to offline',
+    'moderate content from offline to to_check',
+    'moderate content from offline to needs_review',
+    'moderate content from offline to published',
+    'moderate content from offline to scheduled',
+    'moderate content from draft to archived',
+    'moderate content from to_check to archived',
+    'moderate content from needs_review to archived',
+    'moderate content from scheduled to archived',
+    'moderate content from published to archived',
+    'moderate content from offline to archived',
+    'moderate content from archived to draft',
+    'unpublish published content',
+    'create basic_page content',
+    'edit any basic_page content',
+    'delete any basic_page content',
+    'view all unpublished content',
+    'create url aliases',
+    'administer checked out documents',
+    'edit content in state draft',
+    'edit content in state needs_review',
+    'edit content in state offline',
+    'edit content in state published',
+    'edit content in state scheduled',
+    'edit content in state to_check',
+    'have content assigned in state needs_review',
+    'schedule publishing of nodes',
+    'override default scheduler time',
+    'use paddle preview',
+    'manage_menu_link_to_published_nodes',
+    'access ckeditor link',
+    'use text format full_html',
+    'manage paddle_apps',
+    'administer panelizer paddle_content_region paddle_content_region content',
+    'view revisions',
+    'revert revisions',
+    'change own username',
+    'use search_api_sorts',
+    'administer panelizer node basic_page layout',
+    'administer panelizer node basic_page content',
+    'administer panelizer node paddle_overview_page layout',
+    'administer panelizer node paddle_overview_page content',
+    'administer panelizer node landing_page layout',
+    'administer panelizer node landing_page content',
+    'administer panels styles',
+    'administer panels region styles',
+    'check out documents',
+    'execute paddle_content_manager_restore_node_action',
+    'execute paddle_content_manager_set_page_responsible_author',
+    'execute paddle_content_manager_set_workbench_moderation_state',
+    'execute views_bulk_operations_delete_item',
+  );
+
+  $chief_editor_permissions = array_merge($chief_editor_permissions, $landing_page_permissions, $content_region_permissions, $scald_permissions, $overview_page_permissions);
+  user_role_grant_permissions($chief_editor_role->rid, $chief_editor_permissions);
+
+  // Remove the vocabularies added by Scald.
+  _paddle_taxonomy_vocabulary_machine_name_delete('scald_tags');
+  _paddle_taxonomy_vocabulary_machine_name_delete('scald_authors');
+
+  // Reset the auto increment counter on the vocabularies table. Vocabularies
+  // have numeric IDs, and we have to maintain parity with the sites that were
+  // launched before Scald was introduced, which start from number 1.
+  db_query('ALTER TABLE {taxonomy_vocabulary} AUTO_INCREMENT = 1')->execute();
+
+  // Create the flat and non-flat vocabularies.
+  $vocabularies = array(
+    'paddle_tags' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Tags',
+          'nl' => 'Trefwoorden (tags)',
+        ),
+        'description' => array(
+          'en' => 'Description for Tags',
+          'nl' => 'Description for Trefwoorden (tags)',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+    'paddle_general' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'General vocabulary',
+          'nl' => 'Algemene woordenlijst',
+        ),
+        'description' => array(
+          'en' => 'Description for General vocabulary',
+          'nl' => 'Description for Algemene woordenlijst',
+        ),
+      ),
+      'is_flat' => FALSE,
+    ),
+  );
+
+  foreach ($vocabularies as $machine_name => $vocab) {
+    $voc_test = taxonomy_vocabulary_machine_name_load($machine_name);
+    if ($voc_test == FALSE) {
+      $vocabulary = (object) array(
+        'name' => $vocab['properties']['name']['en'],
+        'description' => $vocab['properties']['description']['en'],
+        'machine_name' => $machine_name,
+        // Different terms will be allowed for each language.
+        'i18n_mode' => I18N_MODE_TRANSLATE,
+      );
+      taxonomy_vocabulary_save($vocabulary);
+
+      foreach ($vocab['properties'] as $property_name => $prop_values) {
+        foreach ($prop_values as $language => $value) {
+          // Save the vocabulary name translation.
+          if ($language != 'en') {
+            i18n_string_translation_update(
+              array('taxonomy', 'vocabulary', $vocabulary->vid, $property_name),
+              $value,
+              $language,
+              $vocab['properties'][$property_name]['en']
+            );
+          }
+        }
+      }
+    }
+
+    // Mark it as "flat" if it is.
+    if ($vocab['is_flat']) {
+      variable_set('taxonomy_vocabulary_' . $machine_name . '_type', 'flat');
+    }
+  }
+
+  // Setup the content_lock module. Remove cancel button.
+  variable_set('content_lock_admin_cancelbutton', FALSE);
+  // Set the lock time to 8h - 480 mins.
+  variable_set('content_lock_timeout_minutes', 480);
+
+  // Add Login destination settings.
+  $login_destination_record = array(
+    'triggers' => serialize(array(
+      'login' => 'login',
+    )),
+    'roles' => serialize(drupal_map_assoc(array_keys(paddle_user_paddle_user_roles()))),
+    'pages_type' => 0,
+    'pages' => '',
+    'destination_type' => 0,
+    'destination' => 'admin',
+    'weight' => 0,
+  );
+
+  drupal_write_record('login_destination', $login_destination_record);
+
+  // Set up scheduling for the Basic Page content type.
+  variable_set('scheduler_allow_date_only', 1);
+  variable_set('scheduler_field_type', 'date_popup');
+  variable_set('scheduler_publish_allow_state_basic_page', 'scheduled');
+  variable_set('scheduler_publish_enable_basic_page', 1);
+  variable_set('scheduler_publish_moderation_state_basic_page', 'published');
+  variable_set('scheduler_publish_past_date_basic_page', 'publish');
+  variable_set('scheduler_publish_revision_basic_page', 1);
+  variable_set('scheduler_unpublish_enable_basic_page', 1);
+  variable_set('scheduler_unpublish_moderation_state_basic_page', 'offline');
+
+  // Make the theme dialog hidden by default for paddle_preview module.
+  variable_set('paddle_themer_show_js_dialog_on_preview', FALSE);
+
+  // Don't allow users to specify their own timezone, for now.
+  variable_set('configurable_timezones', 0);
+  // Set the first day of the week to Monday by default.
+  variable_set('date_first_day', 1);
+
+  // Update the inline form errors table to enable it on the user login.
+  db_merge('ife')
+    ->key(array('form_id' => 'user_login'))
+    ->fields(array(
+      'status' => 1,
+      'display' => 2,
+    ))
+    ->execute();
+
+  // Enable search.
+  module_enable(array('paddle_search'));
+
+  // Now that everything is in place, revert our features. This makes sure all
+  // exported components are available.
+  features_revert();
+
+  // Configure the Search API and Solr.
+  paddle_configure_solr();
+
+  // Place the search_api block in the region specified.
+  _block_rehash($default_theme);
+  db_update('block')
+    ->fields(array(
+      'region' => 'service_links',
+      'status' => 1,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'search_api_page')
+    ->condition('theme', $default_theme)
+    ->condition('delta', 'search')
+    ->execute();
+
+  // Setup the date formats to be European.
+  _paddle_set_date_formats();
+
+  // Enable caching by default without requiring manual configuration.
+  _paddle_configure_cache();
+
+  // Set the frontpage to /placeholder.
+  variable_set('site_frontpage', 'placeholder');
+
+  // Allow users to log in using either their username or their e-mail address.
+  variable_set('logintoboggan_login_with_email', 1);
+
+  // Disable the secondary menu, we're not displaying it.
+  variable_set('toggle_secondary_menu', FALSE);
+
+  // Configure cron optimally.
+  _paddle_configure_cron();
+
+  // Enable the mediaelement.js library on all pages.
+  variable_set('mediaelement_sitewide', 1);
+
+  // Clear the cache after everything is done.
+  drupal_flush_all_caches();
+
+  // Do not ignore words to generate path aliases.
+  variable_set('pathauto_ignore_words', '');
+
+  // Add the new "Content Search" block to the header_top region.
+  db_update('block')
+    ->fields(array(
+      'region' => 'header_top',
+      'status' => 1,
+      'weight' => -21,
+      'theme' => $admin_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_core')
+    ->condition('delta', 'content_search')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  // Prevent webform module to create its default content type.
+  variable_set('webform_install_create_content_type', FALSE);
+
+  // Enable child themes of the paddle_theme base theme after all default
+  // blocks have been set.
+  theme_enable(array(
+    'vo_theme',
+    'kanooh_theme_v2',
+    'kanooh_theme_v2_page_wide',
+    'kanooh_theme_v2_vertical_navigation',
+  ));
+
+  // Enables the page wide theme module.
+  module_enable(array('paddle_page_wide_theme'));
+
+  // Enable user pictures and set the default one.
+  variable_set('user_pictures', TRUE);
+  variable_set('user_picture_default', drupal_get_path('module', 'paddle_core') . '/images/placeholder.png');
+
+  // Set the helpdesk url.
+  variable_set('paddle_helpdesk_url', 'http://support.kanooh.be/');
+
+  // Set our "maintenance mode" to 'on' by default for new websites.
+  variable_set('paddle_maintenance_mode', 1);
+
+  // Disable content types if you disable the aligned module.
+  variable_set('features_disable_content_types', 1);
+}
+
+/**
+ * Helper function to configure the cron optimally for use with Elysia cron.
+ */
+function _paddle_configure_cron() {
+  // Enable elysia_cron module.
+  module_enable(array('elysia_cron'));
+
+  // Disable Drupal 7's built-in version of "Poor man's cron".
+  variable_set('cron_safe_threshold', 0);
+}
+
+/**
+ * Helper function for creating menu translation sets.
+ *
+ * @param array $menu_definitions
+ *   Associative array containing menu definitions.
+ * @param string $base_lang
+ *   Base language to use in case a menu definition lacks language-specific
+ *   properties like 'title' or 'description'.
+ *
+ * @return array
+ *   An array containing the menus the function saved.
+ *
+ * We get the $menu_definitions by reference so that we can add the saved menus
+ * and use them afterwords.
+ */
+function paddle_create_menus(&$menu_definitions, $base_lang = 'nl') {
+  $language_list = language_list('enabled');
+
+  $protected_menus = array();
+
+  foreach ($menu_definitions as $index => $menu_definition) {
+    // To return the saved menus so they can be used.
+    $menu_definitions[$index]['saved_menus'] = array();
+    $translation_set = i18n_translation_set_create('paddle_menu_manager');
+    $protected_menus[] = $translation_set->tsid;
+
+    foreach ($language_list[1] as $language_code => $language) {
+      // Initialize defaults for this language in the passed
+      // definition array.
+      $menu_definition['title'] += array(
+        $language_code => NULL,
+      );
+
+      $menu_definition['description'] += array(
+        $language_code => NULL,
+      );
+
+      $menu = array(
+        'menu_name' => $menu_definition['base_name'] . '_' . $language_code,
+        'title' => $menu_definition['title'][$language_code] ?: $menu_definition['title'][$base_lang],
+        'description' => $menu_definition['description'][$language_code] ?: $menu_definition['description'][$base_lang],
+        'language' => $language_code,
+        'i18n_mode' => I18N_MODE_LANGUAGE,
+        'i18n_tsid' => $translation_set->tsid,
+      );
+      menu_save($menu);
+      $menu_definitions[$index]['saved_menus'][] = $menu;
+    }
+  }
+
+  variable_set('paddle_menu_manager_protected_menus', $protected_menus);
+
+  menu_rebuild();
+}
+
+/**
+ * Returns the permissions that are needed for editing landing pages.
+ *
+ * @return array
+ *   An array containing user permissions.
+ */
+function _paddle_user_permissions_landing_page() {
+  return array(
+    'administer panelizer node landing_page content',
+    'change layouts in place editing',
+    'create landing_page content',
+    'delete any landing_page content',
+    'edit any landing_page content',
+    'use ipe with page manager',
+    'use panels in place editing',
+    'edit add_menu_structure content in landing pages',
+    'edit free_content content in landing pages',
+    'edit node_content content in landing pages',
+    'edit add_image content in landing pages',
+    'edit listing content in landing pages',
+    'edit add_video content in landing pages',
+    'edit download_list content in landing pages',
+  );
+}
+
+/**
+ * Returns the permissions that are needed for Paddle Content Regions.
+ *
+ * @return array
+ *   An array containing user permissions.
+ */
+function _paddle_user_permissions_content_region() {
+  return array(
+    'edit content_region content in landing pages',
+  );
+}
+
+/**
+ * Returns the permissions that are needed for Scald modules.
+ *
+ * @return array
+ *   An array containing user permissions.
+ */
+function _paddle_user_permissions_scald() {
+  return array(
+    'access scald library',
+    'create atom of any type',
+    'create atom of any type',
+    'delete any atom',
+    'edit any atom',
+    'fetch any atom',
+    'insert any atom',
+    'view any atom',
+  );
+}
+
+/**
+ * Returns the permissions for the Paddle overview page content type.
+ *
+ * @return array
+ *   An array containing user permissions.
+ */
+function _paddle_user_permissions_overview_page() {
+  return array(
+    'edit any paddle_overview_page content',
+  );
+}
+
+/**
+ * Helper function for configuring cache.
+ */
+function _paddle_configure_cache() {
+  // Cache pages for anonymous users.
+  variable_set('cache', 1);
+  // Enable block caching.
+  variable_set('block_cache', 1);
+  // Set expiration of cached pages to 1 day.
+  variable_set('page_cache_maximum_age', 86400);
+  // Set minimum cache lifetime to none.
+  variable_set('cache_lifetime', 0);
+  // Enable CSS aggregation.
+  variable_set('preprocess_css', 1);
+  // Enable Javascript aggregation.
+  variable_set('preprocess_js', 1);
+}
+
+/**
+ * Helper function for setting Paddle date formats.
+ */
+function _paddle_set_date_formats() {
+  // Set the core date formats for the default language (English).
+  variable_set('date_format_long', 'l, j F, Y - H:i');
+  variable_set('date_format_medium', 'D, d/m/Y - H:i');
+  variable_set('date_format_short', 'd/m/Y - H:i');
+
+  // Create the localizations of the core date formats.
+  $date_formats = array(
+    'long' => array(
+      'nl' => 'l j F Y - H:i',
+    ),
+    'medium' => array(
+      'nl' => 'D d/m/Y - H:i',
+    ),
+    'short' => array(
+      'nl' => 'd/m/Y - H:i',
+    ),
+  );
+
+  foreach ($date_formats as $type => $formats) {
+    foreach ($formats as $language => $format) {
+      // Check if the date format is already present in the database.
+      $sql = 'SELECT 1 FROM {date_formats} WHERE format = :format AND type = :type';
+      $params = array(':format' => $format, ':type' => $type);
+      $date_format_exists = (bool) db_query_range($sql, 0, 1, $params)->fetchField();
+
+      $date_format = array(
+        'format' => $format,
+        'type' => $type,
+        'locked' => TRUE,
+        'is_new' => !$date_format_exists,
+      );
+      system_date_format_save($date_format);
+      locale_date_format_save($language, $type, $format);
+    }
+  }
+
+  // Set the localizations for the Paddle specific date formats. The formats
+  // themselves have been provided in Paddle Core.
+  // @see paddle_core_date_format_types()
+  // @see paddle_core_date_formats()
+  variable_set('date_format_paddle_core_date_long', 'l, F j, Y');
+  variable_set('date_format_paddle_core_date_medium', 'F j, Y');
+  variable_set('date_format_paddle_core_date_short', 'Y/m/d');
+  locale_date_format_save('nl', 'paddle_core_date_long', 'l j F Y');
+  locale_date_format_save('nl', 'paddle_core_date_medium', 'j F Y');
+  locale_date_format_save('nl', 'paddle_core_date_short', 'd-m-Y');
+
+  // Set date formats for Scheduler.
+  variable_set('scheduler_date_format', 'd/m/Y H:i:s');
+  variable_set('scheduler_date_only_format', 'd/m/Y');
+}
+
+/**
+ * Helper function for adding new path roots to a display menu.
+ */
+function _paddle_add_menu_display_path_roots($menu_display_name, $path_roots) {
+  $existing = db_select('menu_displays', 'm')
+    ->fields('m', array('path_roots'))
+    ->condition('name', $menu_display_name, '=')
+    ->execute()
+    ->fetchAssoc();
+  $existing = (empty($existing)) ? array() : unserialize($existing['path_roots']);
+
+  $path_roots = array_merge($existing, $path_roots);
+
+  db_update('menu_displays')
+    ->fields(array(
+      'path_roots' => serialize($path_roots),
+    ))
+    ->condition('name', $menu_display_name, '=')
+    ->execute();
+}
+
+/**
+ * Helper function for configuring the Solr Search using Search API module.
+ */
+function paddle_configure_solr() {
+  // Give search permissions.
+  foreach (array(DRUPAL_ANONYMOUS_RID, DRUPAL_AUTHENTICATED_RID) as $rid) {
+    user_role_grant_permissions($rid, array('access search_api_page'));
+  }
+}
+
+/**
+ * Helper function to delete a taxonomy vocabulary by machine name.
+ *
+ * @param string $machine_name
+ *   The machine name of the taxonomy vocabulary.
+ *
+ * @return bool
+ *   TRUE if the vocabulary was deleted, FALSE if not.
+ */
+function _paddle_taxonomy_vocabulary_machine_name_delete($machine_name) {
+  $vocabulary = taxonomy_vocabulary_machine_name_load($machine_name);
+
+  if (empty($vocabulary->vid)) {
+    return FALSE;
+  }
+
+  try {
+    return taxonomy_vocabulary_delete($vocabulary->vid);
+  } catch (Exception $e) {
+    return FALSE;
+  }
+}
+
+/**
+ * Parse all the existing nodes for references.
+ *
+ * @param array $sandbox
+ *   An array holding data for the batch process.
+ */
+function _paddle_reference_tracker_parse_existing_nodes(&$sandbox) {
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      $query = new EntityFieldQuery();
+      $query->entityCondition('entity_type', 'node')
+        ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT');
+      $results = $query->execute();
+
+      return !empty($results['node']) ? count($results['node']) : 0;
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      $query = new EntityFieldQuery();
+      $query->entityCondition('entity_type', 'node')
+        ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT')
+        ->range($offset, $limit);
+      $results = $query->execute();
+
+      return !empty($results['node']) ? entity_load('node', array_keys($results['node'])) : array();
+    },
+    // Single item update callback.
+    function ($item, &$sandbox) {
+      reference_tracker_parse_entity('node', $item);
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+
+      $id_string = "Node {$item->nid} rev {$item->vid} lang {$item->language}";
+
+      return $id_string;
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Updates the db.
+ *
+ * Creates two menu display records in the db one for the footer one for the
+ * top menu and updates the blocks for them.
+ */
+function paddle_update_7000() {
+  $default_theme = variable_get('theme_default', 'paddle_theme');
+  // Insert the menu display for the header menu.
+  $record = array(
+    'title' => 'Header menu',
+    'name' => 'top_menu',
+    'description' => 'Header menu display for the front-end',
+    'menu_name' => 'top_menu_nl',
+    'from_level' => '1',
+    'to_level' => '1',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize(array()),
+  );
+
+  drupal_write_record('menu_displays', $record);
+
+  // Insert the menu display for the footer menu.
+  $record = array(
+    'title' => 'Footer menu',
+    'name' => 'footer_menu',
+    'description' => 'Footer menu display for the front-end',
+    'menu_name' => 'footer_menu_nl',
+    'from_level' => '1',
+    'to_level' => '1',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize(array()),
+  );
+
+  drupal_write_record('menu_displays', $record);
+
+  _block_rehash($default_theme);
+
+  // Place the paddle_menu_display with the 1st level of the top menu
+  // in the service_links region.
+  db_update('block')
+    ->fields(array(
+      'region' => 'service_links',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $default_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'top_menu')
+    ->condition('theme', $default_theme)
+    ->execute();
+
+  // Place the paddle_menu_display with the 1th level of the footer menu
+  // in the footer region.
+  db_update('block')
+    ->fields(array(
+      'region' => 'footer',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $default_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'footer_menu')
+    ->condition('theme', $default_theme)
+    ->execute();
+
+  // Array containing all the permissions to update.
+  $permissions_to_update = array(
+    'edit add_menu_structure content in landing pages' => 1,
+    'edit node_content content in landing pages' => 1,
+    'edit free_content content in landing pages' => 1,
+  );
+
+  $editor_role = user_role_load_by_name('Editor');
+
+  // Only update the changed permissions.
+  user_role_change_permissions($editor_role->rid, $permissions_to_update);
+
+  $chief_editor_role = user_role_load_by_name('Chief Editor');
+
+  // Only update the changed permissions.
+  user_role_change_permissions($chief_editor_role->rid, $permissions_to_update);
+}
+
+/**
+ * Updates the db.
+ *
+ * - Enables the Apps module and give the correct permission to the site manager
+ * - Give Site Managers and Chief Editors permission to change active homepage.
+ */
+function paddle_update_7001() {
+  // Enables the Apps module and give the correct permission to the site
+  // manager.
+  module_enable(array('apps'));
+
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, array('administer apps'));
+}
+
+/**
+ * Updates the db.
+ *
+ * Updates the footer_menu menu display.
+ */
+function paddle_update_7002() {
+  db_update('menu_displays')
+    ->fields(array(
+      'root_path' => '<none>',
+    ))
+    ->condition('name', 'footer_menu')
+    ->condition('menu_name', 'footer_menu_nl')
+    ->execute();
+}
+
+/**
+ * Updates the db.
+ *
+ * Updates the main_menu menu display.
+ */
+function paddle_update_7003() {
+  db_update('menu_displays')
+    ->fields(array(
+      'root_path' => '<none>',
+    ))
+    ->condition('name', 'first_level')
+    ->condition('menu_name', 'main_menu_nl')
+    ->execute();
+}
+
+/**
+ * Updates the db.
+ *
+ * - Enables the Apps module and give the correct permission to the site manager
+ * - Give Site Managers and Chief Editors permission to change active homepage.
+ */
+function paddle_update_7004() {
+  // Enables the Apps module and give the correct permission to the site
+  // manager.
+  module_enable(array('paddle_apps'));
+
+  // Give Site Managers and Chief Editors permission to change active homepage
+  // and install / enable / disable / configure apps.
+  foreach (array('Chief Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array(
+      'manage paddle_apps',
+      'administer apps'
+    ));
+  }
+}
+
+/**
+ * Updates the db.
+ */
+function paddle_update_7005() {
+  $record = array(
+    'title' => 'Full vertical',
+    'name' => 'full_vertical',
+    'description' => 'Full vertical menu display for the front-end',
+    'menu_name' => 'main_menu_nl',
+    'root_path' => '',
+    'from_level' => '1',
+    'to_level' => '7',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize(array()),
+  );
+
+  drupal_write_record('menu_displays', $record);
+}
+
+/**
+ * Install / update solr.
+ */
+function paddle_update_7006() {
+  // Configure the Search API and Solr.
+  module_enable(array('search_api', 'search_api_page', 'search_api_solr'));
+  paddle_configure_solr();
+}
+
+/**
+ * Give Site Managers the correct permission to use the full_html text format.
+ */
+function paddle_update_7007() {
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, array('use text format full_html'));
+}
+
+/**
+ * Allow editors and chief editors to add images into landing pages.
+ */
+function paddle_update_7008() {
+  node_type_cache_reset();
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, array('edit add_image content in landing pages'));
+  }
+}
+
+/**
+ * Revoke the administer apps permission because we use our own.
+ */
+function paddle_update_7009() {
+  foreach (array('Chief Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_revoke_permissions($role->rid, array('administer apps'));
+  }
+}
+
+/**
+ * Replace custom definition of Search API entities with exportable entities.
+ */
+function paddle_update_7010() {
+  $tables = array(
+    'search_api_item',
+    'search_api_page',
+    'search_api_index',
+    'search_api_server',
+  );
+  foreach ($tables as $table) {
+    db_delete($table)->execute();
+  }
+
+  features_revert();
+
+  module_disable(array('kanooh_config'));
+  module_enable(array('paddle_search'));
+
+  paddle_configure_solr();
+
+  $default_theme = 'paddle_theme';
+
+  $themes = list_themes();
+
+  // If the branded theme is available, use it instead of the
+  // non-branded version.
+  if (isset($themes['paddle_theme_branded'])) {
+    $default_theme = 'paddle_theme_branded';
+  }
+
+  // Place the search_api block in the region specified.
+  _block_rehash($default_theme);
+  db_update('block')
+    ->fields(array(
+      'region' => 'service_links',
+      'status' => 1,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'search_api_page')
+    ->condition('theme', $default_theme)
+    ->condition('delta', 'search')
+    ->execute();
+}
+
+/**
+ * Correct the Paddle Menu Display settings for 404 pages.
+ */
+function paddle_update_7011() {
+  $front_end_menus = array(
+    'current_level_plus_one',
+    'first_level',
+    'footer_menu',
+    'full_vertical',
+    'top_menu',
+  );
+  db_update('menu_displays')
+    ->fields(array('404_root_path' => ''))
+    ->condition('name', $front_end_menus, 'IN')
+    ->execute();
+
+  db_update('menu_displays')
+    ->fields(array('to_level' => 'curr_lvl_plus_1'))
+    ->condition('name', 'full_vertical')
+    ->execute();
+}
+
+/**
+ * Update publication status of Offline pages.
+ */
+function paddle_update_7012() {
+  // Retrieve all published nodes with the publication state 'Offline'.
+  $query = db_select('node', 'n');
+  $query->join('workbench_moderation_node_history', 'h', 'n.nid = h.nid');
+  $query->leftJoin('node_revision', 'nr', 'nr.vid = n.vid');
+  $query->addField('n', 'nid');
+  $query->addField('nr', 'vid');
+  $results = $query->condition('h.current', 1)
+    ->condition('h.state', 'offline')
+    ->condition('n.status', 1)
+    ->execute();
+
+  $node_infos = $results->fetchAllAssoc('nid');
+
+  echo "Number of nodes set to offline: " . $results->rowCount() . PHP_EOL;
+  foreach ($node_infos as $node_info) {
+    // Update the publication status.
+    db_update('node')
+      ->fields(array('status' => 0))
+      ->condition('nid', $node_info->nid)
+      ->execute();
+
+    // Also update the node revision table since this also contains the status.
+    db_update('node_revision')
+      ->fields(array('status' => 0))
+      ->condition('vid', $node_info->vid)
+      ->execute();
+  }
+
+  // Unset the setting that was causing the problem initially.
+  variable_set('scheduler_unpublish_revision_basic_page', 0);
+}
+
+/**
+ * Update configuration values in custom Paddle Themer themes.
+ */
+function paddle_update_7013() {
+  ctools_include('export');
+  $themes = ctools_export_load_object('paddle_themer_theme');
+
+  foreach ($themes as $theme) {
+    if ($theme->export_type & EXPORT_IN_CODE) {
+      continue;
+    }
+
+    $changed = FALSE;
+    unset($show_logo);
+
+    foreach ($theme->style as &$set) {
+      foreach ($set as $selector => &$styles) {
+        foreach ($styles as &$style_item) {
+          if ('paddle_core_header' == $style_item['plugin'] && isset($style_item['value']['header_show_logo'])) {
+            $show_logo = $style_item['value']['header_show_logo'];
+            break 3;
+          }
+        }
+      }
+    }
+
+    if (!isset($show_logo)) {
+      $show_logo = 1;
+    }
+
+    foreach ($theme->style as &$set) {
+      foreach ($set as $selector => &$styles) {
+        foreach ($styles as &$style_item) {
+          if ('paddle_core_branding' == $style_item['plugin']) {
+            $style_item['value']['header_show_logo'] = $show_logo;
+            $changed = TRUE;
+          }
+        }
+      }
+    }
+
+    if (in_array($theme->theme, array(
+      'paddle_theme',
+      'paddle_theme_branded'
+    ))) {
+      // The following elements changed but an upgrade path is not possible:
+      // New in header: '#menu-display-top-menu a'.
+      // New in grid: '#menu-display-first-level .menu.level-2 > li > a',
+      // '#menu-display-first-level .menu.level-3 > li > a'.
+      // Removed from styling: '#top_navigation', #level_1_navigation,
+      // '#level_plud_one_navigation', '#footer_navigation'.
+      $moved_selectors = array(
+        '#block-paddle-menu-display-first-level .menu.level-1 > li > a' => array(
+          'from' => 'header',
+          'to' => 'grid',
+          'new_selector' => '#menu-display-first-level .menu.level-1 > li > a',
+        ),
+        '#block-paddle-menu-display-first-level .menu.level-2 > li > a' => array(
+          'from' => 'header',
+          'to' => 'grid',
+          'new_selector' => '#menu-display-first-level .menu-depth-2 .menu.level-2 > li > a',
+        ),
+      );
+
+      foreach ($moved_selectors as $selector => $move) {
+        if (isset($theme->style[$move['from']][$selector])) {
+          if (isset($move['to'])) {
+            $new_selector = isset($move['new_selector']) ? $move['new_selector'] : $selector;
+            $theme->style[$move['to']][$new_selector] = $theme->style[$move['from']][$selector];
+          }
+          unset($theme->style[$move['from']][$selector]);
+          $changed = TRUE;
+        }
+      }
+    }
+
+    if ($changed) {
+      ctools_export_crud_save('paddle_themer_theme', $theme);
+      $theme->style;
+    }
+  }
+}
+
+/**
+ * Update the url aliases of content.
+ */
+function paddle_update_7014() {
+  $q = db_select('url_alias')
+    ->fields('url_alias', array('pid'))
+    ->where("alias LIKE 'content/%'");
+
+  $results = $q->execute();
+
+  foreach ($results as $result) {
+    $alias = path_load($result->pid);
+
+    $new_alias = preg_replace('@^content/@', '', $alias['alias']);
+
+    // Check if new alias exists already or not.
+    $query = db_select('url_alias')
+      ->condition('alias', $new_alias)
+      ->condition('language', $alias['language']);
+
+    $query->addExpression('1');
+    $query->range(0, 1);
+
+    // If the new alias exists already, just leave the old one untouched.
+    if ($query->execute()->fetchField()) {
+      echo 'Alias ' . $new_alias . ' exists already, leaving ' . $alias['alias'] . ' untouched' . PHP_EOL;
+      continue;
+    }
+
+    // Otherwise, delete old alias.
+    path_delete($alias['pid']);
+
+    // And insert new alias.
+    $new_path = array(
+      'alias' => $new_alias,
+      'language' => $alias['language'],
+      'source' => $alias['source'],
+    );
+
+    path_save($new_path);
+  }
+}
+
+/**
+ * Add the disclaimer menu, menu display for it and place its block.
+ */
+function paddle_update_7015() {
+  // The disclaimer menu.
+  $menu_definition = array(
+    array(
+      'base_name' => 'disclaimer_menu',
+      'title' => array(
+        'en' => 'Disclaimer menu',
+        'nl' => 'Disclaimer menu',
+      ),
+      'description' => array(
+        'en' => 'Disclaimer navigation menu',
+        'nl' => 'Disclaimer menu',
+      ),
+    ),
+  );
+  paddle_create_menus($menu_definition);
+  // The disclaimer menu display.
+  $record = array(
+    'title' => 'Disclaimer menu',
+    'name' => 'disclaimer_menu',
+    'description' => 'Disclaimer menu display for the front-end',
+    'menu_name' => 'disclaimer_menu_nl',
+    'root_path' => '<none>',
+    'from_level' => '1',
+    'to_level' => '1',
+    'tag_classes' => serialize(array(
+      'div_class' => 'menu_wrapper',
+      'ul_class' => 'menu',
+      'li_class' => 'menu-item',
+      'a_class' => '',
+    )),
+    'path_roots' => serialize(array()),
+    '404_root_path' => '',
+  );
+  drupal_write_record('menu_displays', $record);
+
+  // Get the current front-end theme.
+  $default_theme = variable_get('theme_default', 'paddle_theme');
+
+  // Set the block for the menu display in the disclaimer region.
+  _block_rehash($default_theme);
+  db_update('block')
+    ->fields(array(
+      'region' => 'disclaimer',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => $default_theme,
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'disclaimer_menu')
+    ->condition('theme', $default_theme)
+    ->execute();
+}
+
+/**
+ * Enable Paddle Color Palettes.
+ */
+function paddle_update_7016() {
+  module_enable(array('paddle_color_palettes'));
+}
+
+/**
+ * Update landing page panes to the new pane structure.
+ *
+ * Convert pane titles into section top titles.
+ */
+function paddle_update_7017() {
+  // Pane types to update.
+  $pane_types = array('node_content', 'free_content', 'add_menu_structure');
+  // First get all the display IDs.
+  $result = db_select('panels_display', 'pd')
+    ->fields('pd', array('did'))
+    ->execute();
+  $dids = array_keys($result->fetchAllAssoc('did'));
+  // Get the displays.
+  if (!empty($dids)) {
+    $displays = panels_load_displays($dids);
+    foreach ($displays as $did => $display) {
+      if (strpos($display->layout, 'paddle') !== FALSE) {
+        foreach ($display->content as &$display_content) {
+          if (in_array($display_content->type, $pane_types) && $display_content->subtype == $display_content->type) {
+            // Determine the title.
+            $title = '';
+            if (!empty($display_content->configuration['override_title']) && !empty($display_content->configuration['override_title_text'])) {
+              $title = $display_content->configuration['override_title_text'];
+            }
+            elseif (!empty($display_content->configuration['title'])) {
+              $title = $display_content->configuration['title'];
+            }
+            elseif (!empty($display_content->configuration['pane_title'])) {
+              $title = $display_content->configuration['pane_title'];
+            }
+            // Determine the link title.
+            $title_link = '';
+            if (!empty($display_content->configuration['pane_title_link']) && !empty($display_content->configuration['node'])) {
+              $title_link = $display_content->configuration['node'];
+            }
+
+            if ($title) {
+              // Enable the top section.
+              $display_content->configuration['top'] = array();
+              $display_content->configuration['top']['enable_section'] = 1;
+              $display_content->configuration['top']['section_text'] = $title;
+              if ($title_link) {
+                $display_content->configuration['top']['section_text_'] = $title_link;
+              }
+              panels_save_display($display);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Install flexslider.
+ */
+function paddle_update_7018() {
+  module_enable(array('flexslider'));
+}
+
+/**
+ * Allow editors and chief editors to see content moderation revisions.
+ */
+function paddle_update_7019() {
+  node_type_cache_reset();
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, array('view moderation history'));
+  }
+}
+
+/**
+ * Add moderation states on existing landing pages.
+ */
+function paddle_update_7020() {
+  // Ensure all features are reverted.
+  // @todo Try to minimize this to only the features that really need a revert
+  // for the update to succeed.
+  features_revert();
+
+  $query = new EntityFieldQuery();
+  $query
+    ->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'landing_page');
+
+  $results = $query->execute();
+
+  if ($results['node']) {
+    foreach (array_keys($results['node']) as $nid) {
+      $node = node_load($nid);
+
+      if ($node->status == 1) {
+        $state = workbench_moderation_state_published();
+      }
+      elseif (isset($node->publish_on) && $node->publish_on) {
+        $state = 'scheduled';
+      }
+      else {
+        $state = workbench_moderation_state_none();
+      }
+
+      // Build a history record.
+      $history = (object) array(
+        'from_state' => workbench_moderation_state_none(),
+        'state' => $state,
+        'nid' => $node->nid,
+        'vid' => $node->vid,
+        'uid' => $node->uid,
+        'current' => TRUE,
+        'published' => ($state == workbench_moderation_state_published()),
+        'stamp' => $node->changed,
+      );
+
+      // Save the node history record.
+      drupal_write_record('workbench_moderation_node_history', $history);
+    }
+  }
+}
+
+/**
+ * Allow editors and chief editors to add listings to landing pages.
+ */
+function paddle_update_7021() {
+  node_type_cache_reset();
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, array('edit listing content in landing pages'));
+  }
+}
+
+/**
+ * The "Current level + 1" menu display should "follow the active trail".
+ */
+function paddle_update_7022() {
+  db_update('menu_displays')
+    ->fields(array('follow_active_trail' => 1))
+    ->condition('name', 'current_level_plus_one')
+    ->execute();
+}
+
+/**
+ * Set the management level 2 menu to show on admin/themes/%.
+ */
+function paddle_update_7023() {
+  // Create the paths.
+  $root_paths = array(
+    array(
+      'path' => 'admin',
+      'root_item' => 'admin/dashboard',
+    ),
+    array(
+      'path' => 'node/add',
+      'root_item' => 'admin/content_manager/add',
+    ),
+    array(
+      'path' => 'node/add/%',
+      'root_item' => 'admin/content_manager/add',
+    ),
+    array(
+      'path' => 'node/%/edit',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/delete',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/view',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/themes/%',
+      'root_item' => 'admin/themes',
+    ),
+  );
+
+  // Update the management_level_2 menu with the admin/themes root path.
+  db_update('menu_displays')
+    ->fields(array(
+      'path_roots' => serialize($root_paths),
+    ))
+    ->condition('name', 'management_level_2', '=')
+    ->execute();
+}
+
+/**
+ * Update the landing pages with the "show next level" checkbox set to TRUE.
+ */
+function paddle_update_7024() {
+  // Load all landing pages.
+  $nodes = node_load_multiple(array(), array('type' => 'landing_page'));
+
+  // Get the default value of the set theme.
+  $show_level_below = paddle_themer_get_default_values('show_level_below');
+
+  // Set the field correctly for all landing pages.
+  foreach ($nodes as $node) {
+    $node->field_paddle_show_next_level[LANGUAGE_NONE][0]['value'] = $show_level_below['show_level_below'];
+    node_save($node);
+  }
+}
+
+/**
+ * Replace the old placeholder menu items with links to the frontpage.
+ */
+function paddle_update_7025() {
+  $mlids = db_select('menu_links', 'ml')
+    ->fields('ml', array('mlid'))
+    ->condition('link_path', 'menu-placeholder')
+    ->execute()
+    ->fetchCol();
+  foreach ($mlids as $mlid) {
+    $menu_link = menu_link_load($mlid);
+    $menu_link['link_path'] = '<front>';
+    menu_link_save($menu_link);
+  }
+}
+
+/**
+ * Enable new dependencies for the paddle_content_manager module.
+ *
+ * Add the export pages to the admin menu.
+ */
+function paddle_update_7026() {
+  module_enable(array('better_exposed_filters', 'views_data_export'));
+
+  $path_roots = array(
+    array(
+      'path' => 'admin/content_manager/list/export/csv',
+      'root_item' => 'admin/content_manager/list/search',
+    ),
+    array(
+      'path' => 'admin/content_manager/list/export/xls',
+      'root_item' => 'admin/content_manager/list/search',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+}
+
+/**
+ * Enable pathauto_persist.
+ */
+function paddle_update_7027() {
+  // Pathauto Persist has been added to the installation profile but it was not
+  // yet enabled for existing installations.
+  module_enable(array('pathauto_persist'));
+}
+
+/**
+ * Setup the date formats to be European.
+ */
+function paddle_update_7028() {
+  _paddle_set_date_formats();
+}
+
+/**
+ * Set the frontpage to the new placeholder page.
+ */
+function paddle_update_7029() {
+  // Set the frontpage to /placeholder if it has not yet been customized.
+  if (in_array(variable_get('site_frontpage'), array('node', NULL))) {
+    variable_set('site_frontpage', 'placeholder');
+  }
+}
+
+/**
+ * Add the LP content edit page to the navigation.
+ */
+function paddle_update_7030() {
+  $path_roots = array(
+    array(
+      'path' => 'admin/content_manager/node/%/panels_content',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+}
+
+/**
+ * Allow users to login either with their username OR their e-mail address.
+ */
+function paddle_update_7031() {
+  variable_set('logintoboggan_login_with_email', 1);
+}
+
+/**
+ * Add transitions from to_check to to_check, and needs_review to needs_review.
+ *
+ * This is done so that assignees can re-assign it to someone else.
+ */
+function paddle_update_7032() {
+  $to_check = (object) array(
+    'from_name' => 'to_check',
+    'to_name' => 'to_check',
+    'name' => NULL,
+  );
+  workbench_moderation_transition_save($to_check);
+
+  $needs_review = (object) array(
+    'from_name' => 'needs_review',
+    'to_name' => 'needs_review',
+    'name' => NULL,
+  );
+  workbench_moderation_transition_save($needs_review);
+
+  $editor_permissions = array(
+    'moderate content from to_check to to_check',
+  );
+  $chief_editor_permissions = array(
+    'moderate content from to_check to to_check',
+    'moderate content from needs_review to needs_review',
+  );
+
+  $editor_role = user_role_load_by_name('Editor');
+  $chief_editor_role = user_role_load_by_name('Chief Editor');
+
+  user_role_grant_permissions($editor_role->rid, $editor_permissions);
+  user_role_grant_permissions($chief_editor_role->rid, $chief_editor_permissions);
+}
+
+/**
+ * Enable i18n_field.
+ */
+function paddle_update_7033() {
+  // Enable i18n_field so that field labels are translatable.
+  module_enable(array('i18n_field'));
+}
+
+/**
+ * Install paddle_content_region and set permissions.
+ */
+function paddle_update_7034() {
+  module_enable(array('paddle_content_region'));
+
+  // Reset the Panelizer entity cache so the permissions become available.
+  drupal_static_reset('panelizer_entity_plugin_get_handler');
+
+  // Allow editors and chief editors to edit content region panels content.
+  // @see _paddle_user_permissions_landing_page()
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, array('administer panelizer paddle_content_region paddle_content_region content'));
+  }
+}
+
+/**
+ * Add root paths for the content region configuration pages to the admin menu.
+ */
+function paddle_update_7035() {
+  $path_roots = array(
+    array(
+      'path' => 'admin/content_manager/entity/%/panels_content',
+      'root_item' => 'admin/structure/content_region',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+}
+
+/**
+ * Grant permission for editing region panes to editors and chief editors.
+ */
+function paddle_update_7036() {
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, array('edit content_region content in landing pages'));
+  }
+}
+
+/**
+ * Revoke permission for editing region panes to editor.
+ */
+function paddle_update_7037() {
+  $role = user_role_load_by_name('Editor');
+  user_role_revoke_permissions($role->rid, array('administer panelizer paddle_content_region paddle_content_region content'));
+}
+
+/**
+ * Disable Drupal 7's built-in version of "Poor man's cron".
+ */
+function paddle_update_7038() {
+  variable_set('cron_safe_threshold', 0);
+}
+
+/**
+ * Panelize basic pages.
+ */
+function paddle_update_7039() {
+  // Ensure the basic_page node type is panelized and the proper permissions are
+  // granted.
+  paddle_content_region_panelize_node_type('basic_page');
+  paddle_content_region_grant_node_type_permissions('basic_page');
+}
+
+/**
+ * Attach a panels display to existing nodes.
+ */
+function paddle_update_7040(&$sandbox) {
+  $drush = function_exists('drush_main');
+
+  if (!isset($sandbox['max'])) {
+    $query = new EntityFieldQuery();
+    $query
+      ->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', 'landing_page', '<>');
+    $query->count();
+    $max = $query->execute();
+
+    $sandbox['progress'] = 0;
+    $sandbox['max'] = $max;
+    $sandbox['current_nid'] = 0;
+  }
+
+  // Work around an endless loop in drush by panelizing all nodes at once rather
+  // than using batch processing if the update process is invoked with drush.
+  if ($drush) {
+    $left_zero_padding_len = strlen($sandbox['max']);
+
+    while ($sandbox['progress'] < $sandbox['max']) {
+      $previous_progress = $sandbox['progress'];
+
+      // We pass limit 1 as we want to output a status message for each node
+      // that was processed.
+      paddle_update_7040_process_range(1, $sandbox);
+
+      if ($sandbox['progress'] == $previous_progress) {
+        throw new DrupalUpdateException('Did not make any progress, possible mistake in the update process.');
+      }
+
+      $progress_indicator = str_pad($sandbox['progress'], $left_zero_padding_len, '0', STR_PAD_LEFT) . '/' . $sandbox['max'];
+      if ($sandbox['revisions'] == 0) {
+        $status_message = "{$progress_indicator} .... node {$sandbox['current_nid']}: SKIPPED (bundle not panelized)";
+      }
+      else {
+        $status_message = "{$progress_indicator} .... node {$sandbox['current_nid']} [revisions: {$sandbox['revisions']}]";
+      }
+      drush_print($status_message);
+    }
+  }
+  else {
+    paddle_update_7040_process_range(2, $sandbox);
+  }
+
+  $sandbox['#finished'] = empty($sandbox['max']) ? 1 : ($sandbox['progress'] / $sandbox['max']);
+}
+
+/**
+ * Helper function for paddle_update_7040().
+ *
+ * Panelizes a specified number of nodes.
+ *
+ * @param int $limit
+ *   The amount of nodes to process.
+ * @param array $sandbox
+ *   The sandbox to store progress info in, which is needed in consecutive
+ *   calls of this function.
+ */
+function paddle_update_7040_process_range($limit, &$sandbox) {
+  $current_nid = $sandbox['current_nid'];
+
+  $query = new EntityFieldQuery();
+  $query
+    ->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'landing_page', '<>');
+
+  $query
+    ->propertyCondition('nid', $current_nid, '>')
+    ->range(0, $limit);
+
+  $results = $query->execute();
+
+  $nodes = $results['node'] ?: array();
+
+  /* @var PanelizerEntityDefault $entity_plugin */
+  $entity_plugin = panelizer_entity_plugin_get_handler('node');
+
+  foreach ($nodes as $node_id => $node) {
+    $sandbox['revisions'] = 0;
+
+    if ($entity_plugin->is_panelized($node->type)) {
+      // Now get all revisions of the nodes and panelize them.
+      $revisions = node_revision_list($node);
+
+      foreach ($revisions as $revision_id => $revision) {
+        $node = node_load($node_id, $revision_id, TRUE);
+        $panelizer_default = "node:{$node->type}:default";
+        $panelizer = ctools_export_crud_load('panelizer_defaults', $panelizer_default);
+
+        // Save a panelizer display for this revision of the node.
+        // See PanelizerEntityDefault::hook_entity_insert().
+        $panelizer = $entity_plugin->clone_panelizer($panelizer, $node);
+        panels_save_display($panelizer->display);
+        $panelizer->did = $panelizer->display->did;
+        if (empty($panelizer->view_mode)) {
+          $panelizer->view_mode = 'page_manager';
+        }
+        drupal_write_record('panelizer_entity', $panelizer);
+
+        $sandbox['revisions']++;
+      }
+    }
+
+    $sandbox['progress']++;
+    $sandbox['current_nid'] = $node->nid;
+  }
+}
+
+/**
+ * Add the node layout page to the navigation.
+ */
+function paddle_update_7041() {
+  $path_roots = array(
+    array(
+      'path' => 'admin/content_manager/node/%/layout',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+}
+
+/**
+ * Add the file-icon class on media file icons in field_data_body.
+ */
+function paddle_update_7042(&$sandbox) {
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      $q = db_select('field_data_body', 'b')->countQuery();
+      return $q->execute()->fetchField();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      $q = db_select('field_data_body', 'b');
+      $q->fields('b', array());
+      $q->range($offset, $limit);
+
+      $results = $q->execute();
+
+      return $results;
+    },
+    // Single item update callback.
+    function ($item, &$sandbox) {
+      $dirty = FALSE;
+      $value = paddle_update_add_file_icon_class($item->body_value);
+      $summary = paddle_update_add_file_icon_class($item->body_summary);
+
+      if ($value != $item->body_value) {
+        $item->body_value = $value;
+        $dirty = TRUE;
+      }
+
+      if ($summary != $item->body_summary) {
+        $item->body_summary = $summary;
+        $dirty = TRUE;
+      }
+
+      if ($dirty) {
+        $primary_key = array(
+          'entity_type',
+          'entity_id',
+          'deleted',
+          'language',
+          'delta',
+        );
+        drupal_write_record('field_data_body', $item, $primary_key);
+      }
+
+      return $dirty;
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "{$item->entity_type} {$item->entity_id} rev {$item->revision_id} lang {$item->language} delta {$item->delta}";
+
+      if ($updated) {
+        return $id_string;
+      }
+      else {
+        return "{$id_string} SKIPPED";
+      }
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Add the file-icon class on media file icons in field_revision_body.
+ */
+function paddle_update_7043(&$sandbox) {
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      $q = db_select('field_revision_body', 'b')->countQuery();
+      return $q->execute()->fetchField();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      $q = db_select('field_revision_body', 'b');
+      $q->fields('b', array());
+      $q->range($offset, $limit);
+
+      $results = $q->execute();
+
+      return $results;
+    },
+    // Single item update callback.
+    function ($item, &$sandbox) {
+      $dirty = FALSE;
+      $value = paddle_update_add_file_icon_class($item->body_value);
+      $summary = paddle_update_add_file_icon_class($item->body_summary);
+
+      if ($value != $item->body_value) {
+        $item->body_value = $value;
+        $dirty = TRUE;
+      }
+
+      if ($summary != $item->body_summary) {
+        $item->body_summary = $summary;
+        $dirty = TRUE;
+      }
+
+      if ($dirty) {
+        $primary_key = array(
+          'entity_type',
+          'entity_id',
+          'deleted',
+          'revision_id',
+          'language',
+          'delta',
+        );
+        drupal_write_record('field_revision_body', $item, $primary_key);
+      }
+
+      return $dirty;
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "{$item->entity_type} {$item->entity_id} rev {$item->revision_id} lang {$item->language} delta {$item->delta}";
+
+      if ($updated) {
+        return $id_string;
+      }
+      else {
+        return "{$id_string} SKIPPED";
+      }
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Add the file-icon class on media file icons in custom content panels panes.
+ */
+function paddle_update_7044(&$sandbox) {
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      $q = db_select('panels_pane', 'p')
+        ->condition('p.type', 'free_content')
+        ->condition('p.subtype', 'free_content')
+        ->countQuery();
+      return $q->execute()->fetchField();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      $q = db_select('panels_pane', 'p')
+        ->fields('p', array())
+        ->condition('p.type', 'free_content')
+        ->condition('p.subtype', 'free_content');
+
+      $q->range($offset, $limit);
+
+      $results = $q->execute();
+
+      return $results;
+    },
+    // Single item update callback.
+    function ($item, &$sandbox) {
+      $dirty = FALSE;
+      $item->configuration = unserialize($item->configuration);
+
+      $text = paddle_update_add_file_icon_class($item->configuration['free_content']['value']);
+
+      if ($item->configuration['free_content']['value'] !== $text) {
+        $item->configuration['free_content']['value'] = $text;
+
+        $dirty = TRUE;
+      }
+
+      if ($dirty) {
+        drupal_write_record('panels_pane', $item, 'pid');
+      }
+
+      return $dirty;
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "pane {$item->pid}";
+
+      if ($updated) {
+        return $id_string;
+      }
+      else {
+        return "{$id_string} SKIPPED";
+      }
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Adds the file icon class wherever necessary in the given text.
+ *
+ * @param string $text
+ *   The text to modify.
+ *
+ * @return string
+ *   The original text with the necessary replacements.
+ */
+function paddle_update_add_file_icon_class($text) {
+  // @codingStandardsIgnoreStart
+  $text = preg_replace_callback('@<img [^>]*src="[^"]*modules/file/icons/[^"]*"[^>]*/>@', function ($matches) {
+    $img_tag = $matches[0];
+
+    // Add the class attribute if it's not there.
+    if (FALSE === strpos('class="', $img_tag)) {
+      $img_tag = substr_replace($img_tag, 'class="file-icon" ', -2, 0);
+    }
+
+    return $img_tag;
+  }, $text);
+  // @codingStandardsIgnoreEnd
+
+  return $text;
+}
+
+/**
+ * Update configuration values in custom Paddle Themer themes.
+ */
+function paddle_update_7045() {
+  ctools_include('export');
+  $themes = ctools_export_load_object('paddle_themer_theme');
+
+  $drush = function_exists('drush_print');
+
+  foreach ($themes as $theme) {
+    $in_code = $theme->export_type & EXPORT_IN_CODE;
+    $inherits_from_paddle_theme = in_array($theme->theme, array(
+      'paddle_theme',
+      'paddle_theme_branded'
+    ));
+
+    // Only target 'custom' themes that do not live in code, and inherit from
+    // our paddle (branded) theme.
+    if (!$in_code && $inherits_from_paddle_theme) {
+      if (isset($theme->style['show_level_below']['show_level_below'])) {
+        $theme->style['show_level_below_landing_page']['show_level_below_landing_page'] = $theme->style['show_level_below']['show_level_below'];
+        unset($theme->style['show_level_below']);
+        ctools_export_crud_save('paddle_themer_theme', $theme);
+
+        if ($drush) {
+          drush_print("Updated theme {$theme->human_name} ({$theme->name})");
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Grant chief editors permission to unpublish the live revision of a page.
+ */
+function paddle_update_7046() {
+  $role = user_role_load_by_name('Chief Editor');
+  user_role_grant_permissions($role->rid, array('unpublish published content'));
+}
+
+/**
+ * Remove the public author field.
+ */
+function paddle_update_7047() {
+  $bundles = array(
+    'landing_page',
+    'basic_page',
+    'simple_contact_form',
+  );
+
+  foreach ($bundles as $bundle) {
+    $public_author_field_instance = field_info_instance('node', 'field_paddle_author', $bundle);
+    field_delete_instance($public_author_field_instance);
+  }
+}
+
+/**
+ * Grant access to users to (chief) editors.
+ */
+function paddle_update_7048() {
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array('access users'));
+  }
+}
+
+/**
+ * Configure cron optimally.
+ */
+function paddle_update_7049() {
+  _paddle_configure_cron();
+}
+
+/**
+ * Show breadcrumbs on all nodes that don't have field_show_breadcrumb yet.
+ */
+function paddle_update_7050(&$sandbox) {
+  // Based on paddle_update_7044().
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      $query_with_field = db_select('field_revision_field_show_breadcrumb')
+        ->fields('field_revision_field_show_breadcrumb', array('revision_id'));
+
+      $result = db_select('node_revision')
+        ->fields('node_revision', array('vid'))
+        ->condition('vid', $query_with_field, 'NOT IN')
+        ->execute();
+
+      return $result->rowCount();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $query_with_field = db_select('field_revision_field_show_breadcrumb')
+        ->fields('field_revision_field_show_breadcrumb', array('revision_id'));
+
+      return db_select('node_revision')
+        ->fields('node_revision', array('nid', 'vid'))
+        ->condition('vid', $query_with_field, 'NOT IN')
+        ->range(0, $limit)
+        ->execute()
+        ->fetchAllAssoc('vid');
+    },
+    // Single item update callback.
+    function ($item, &$sandbox) {
+      $node = node_load($item->nid, $item->vid);
+      // Breadcrumbs were always shown before this option was introduced, so
+      // let's respect that.
+      $node->field_show_breadcrumb[LANGUAGE_NONE][0]['value'] = 1;
+      try {
+        // Based on code from node_save(). Save fields.
+        field_attach_update('node', $node);
+        return TRUE;
+      } catch (Exception $e) {
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "node revision {$item->vid}";
+
+      if ($updated) {
+        return $id_string;
+      }
+      else {
+        return "{$id_string} SKIPPED";
+      }
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Show next level navigation items on all revisions without that setting.
+ */
+function paddle_update_7051(&$sandbox) {
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      $query_with_field = db_select('field_revision_field_paddle_show_next_level')
+        ->fields('field_revision_field_paddle_show_next_level', array('revision_id'));
+
+      $result = db_select('node_revision')
+        ->fields('node_revision', array('vid'))
+        ->condition('vid', $query_with_field, 'NOT IN')
+        ->execute();
+
+      return $result->rowCount();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $query_with_field = db_select('field_revision_field_paddle_show_next_level')
+        ->fields('field_revision_field_paddle_show_next_level', array('revision_id'));
+
+      return db_select('node_revision')
+        ->fields('node_revision', array('nid', 'vid'))
+        ->condition('vid', $query_with_field, 'NOT IN')
+        ->range(0, $limit)
+        ->execute()
+        ->fetchAllAssoc('vid');
+    },
+    // Single item update callback.
+    function ($item, &$sandbox) {
+      $node = node_load($item->nid, $item->vid);
+      // Next level menu items were always shown before this option was
+      // introduced, so let's respect that.
+      $node->field_paddle_show_next_level[LANGUAGE_NONE][0]['value'] = 1;
+      try {
+        // Based on code from node_save(). Save fields.
+        field_attach_update('node', $node);
+        return TRUE;
+      } catch (Exception $e) {
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "node revision {$item->vid}";
+
+      if ($updated) {
+        return $id_string;
+      }
+      else {
+        return "{$id_string} SKIPPED";
+      }
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Restore the correct revision in the field tables.
+ */
+function paddle_update_7052() {
+  $drush = function_exists('drush_print');
+
+  // 1. Restore published status in history table for nodes that were
+  // unpublished through scheduling and not published again.
+  $offline_nodes = db_select('node', 'n')
+    ->fields('n', array('nid'))
+    ->condition('status', 0, '=');
+  db_update('workbench_moderation_node_history')
+    ->fields(array('published' => 0))
+    ->condition('nid', $offline_nodes, 'IN')
+    ->execute();
+  if ($drush) {
+    drush_print("Offline nodes sanitized.");
+  }
+
+  // 2. Restore all data tables
+  // Get all data revisions to check.
+  $all_data_revisions = array();
+  $all_current_revisions = db_select('workbench_moderation_node_history', 'wmnh')
+    ->fields('wmnh', array('nid', 'vid'))
+    ->condition('current', 1, '=')
+    ->execute()
+    ->fetchAllAssoc('nid');
+  foreach ($all_current_revisions as $nid => $vid) {
+    $all_data_revisions[$nid] = $vid->vid;
+  }
+  $all_published_revisions = db_select('workbench_moderation_node_history', 'wmnh')
+    ->fields('wmnh', array('nid', 'vid'))
+    ->condition('published', 1, '=')
+    ->execute()
+    ->fetchAllAssoc('nid');
+  // Give priority to published revisions.
+  foreach ($all_published_revisions as $nid => $vid) {
+    $all_data_revisions[$nid] = $vid->vid;
+  }
+
+  if (count($all_data_revisions)) {
+    // Editorial notes don't need to be restored. And they have a non-standard
+    // usage of the field tables, so we can't treat them like the rest.
+    $exclude_fields = array(
+      'message_text',
+      'field_paddle_editorial_note',
+      'field_paddle_editorial_note_ref',
+      'field_paddle_editorial_note_vis',
+    );
+
+    // Loop all fields, except editorial notes.
+    foreach (array_keys(field_info_field_map()) as $field) {
+      if (in_array($field, $exclude_fields)) {
+        $affected_rows = 0;
+      }
+      else {
+        $data_table = 'field_data_' . $field;
+        $revision_table = 'field_revision_' . $field;
+
+        // First truncate.
+        db_truncate($data_table)->execute();
+        // Then insert into data from revision.
+        $affected_rows = db_query("
+          INSERT INTO {$data_table}
+          SELECT * FROM {$revision_table}
+          WHERE {$revision_table}.revision_id IN (" . implode(',', $all_data_revisions) . ")
+        ")->rowCount();
+      }
+
+      if ($drush) {
+        if ($affected_rows) {
+          drush_print("$field restored.");
+        }
+        else {
+          drush_print("$field was already fine.");
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Allow editors to manage menu links that point to published nodes.
+ */
+function paddle_update_7053() {
+  $role = user_role_load_by_name('Editor');
+  user_role_grant_permissions($role->rid, array('manage_menu_link_to_published_nodes'));
+}
+
+/**
+ * Create the 'Read only' user role.
+ */
+function paddle_update_7054() {
+  // Create the read only role and grant permissions.
+  $role = new stdClass();
+  $role->name = 'Read Only';
+  user_role_save($role);
+
+  $permissions = array(
+    'access administration pages',
+    'access paddle dashboard',
+    'manage paddle_content_manager',
+    'use paddle preview',
+    'view all unpublished content',
+    'view moderation history',
+    'view the administration theme',
+  );
+  user_role_grant_permissions($role->rid, $permissions);
+
+  // Grant new permissions that were needed to limit access for the read only
+  // user to the existing roles.
+  foreach (array('Site Manager', 'Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array(
+      'access paddle dashboard',
+      'access structure menu',
+    ));
+  }
+
+  // Update Login destination settings.
+  $login_destination_record = array(
+    'triggers' => serialize(array('login' => 'login')),
+    'roles' => serialize(array($role->rid => $role->rid)),
+    'pages_type' => 0,
+    'pages' => '',
+    'destination_type' => 0,
+    'destination' => 'admin',
+    'weight' => 0,
+  );
+  drupal_write_record('login_destination', $login_destination_record);
+}
+
+/**
+ * Disable the secondary menu, it is not used.
+ */
+function paddle_update_7055() {
+  variable_set('toggle_secondary_menu', FALSE);
+}
+
+
+/**
+ * Correct the workbench moderation state of scheduled nodes that were edited.
+ */
+function paddle_update_7056() {
+  $query = db_update('workbench_moderation_node_history')
+    ->condition('from_state', 'scheduled')
+    ->condition('state', '')
+    ->fields(array('state' => 'scheduled'));
+
+  $amount_of_rows_updated = $query->execute();
+
+  $drush = function_exists('drush_print');
+  if ($drush) {
+    drush_print("Updated {$amount_of_rows_updated} rows.");
+  }
+}
+
+/**
+ * Install Scald modules and set permissions.
+ */
+function paddle_update_7057() {
+  module_enable(array(
+    'paddle_scald',
+    'paddle_scald_file',
+    'paddle_scald_image',
+    'scald',
+  ));
+
+  // Remove the vocabularies added by Scald.
+  _paddle_taxonomy_vocabulary_machine_name_delete('scald_tags');
+  _paddle_taxonomy_vocabulary_machine_name_delete('scald_authors');
+
+  // Allow editors and chief editors to work with Scald.
+  // @see _paddle_user_permissions_scald()
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, _paddle_user_permissions_scald());
+  }
+
+  // Allow all users to view atoms.
+  user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('view any atom'));
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('view any atom'));
+}
+
+/**
+ * Update panel panes to use Scald atoms instead of files.
+ */
+function paddle_update_7058() {
+  // Reset the cache for the scald types, as scald doesn't want to create an
+  // atom if it doesn't recognize the atom's type.
+  scald_types(TRUE);
+
+  $limit = 5;
+  // Track which file_managed have been processed.
+  $sandbox['processed_files'] = array();
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      $q = db_select('panels_pane', 'p')
+        ->countQuery();
+      return $q->execute()->fetchField();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      $q = db_select('panels_pane', 'p')
+        ->fields('p', array());
+
+      $q->range($offset, $limit);
+
+      $results = $q->execute();
+
+      return $results;
+    },
+    // Single item update callback.
+    function ($db_item, &$sandbox) {
+      if (!isset($sandbox['processed_files'])) {
+        $sandbox['processed_files'] = array();
+      }
+
+      // Ensure we unserialize all serialized fields with
+      // ctools_export_unpack_object(). Fields that are not unserialized,
+      // would otherwise become double-serialized when saving them again.
+      // See panels_load_displays().
+      ctools_include('export');
+      $item = ctools_export_unpack_object('panels_pane', $db_item);
+
+      $dirty = FALSE;
+
+      if ($item->type == 'add_image') {
+        $managed_file_id = $item->configuration['image_file'];
+        $file = file_load($managed_file_id);
+
+        unset($item->configuration['image_file']);
+
+        if (!empty($file)) {
+          // Import the file as an atom if it exists.
+          if (!isset($sandbox['processed_files'][$managed_file_id])) {
+            $sandbox['processed_files'][$managed_file_id] = paddle_update_create_atom($file);
+          }
+
+          $item->configuration['image_scald'] = $sandbox['processed_files'][$managed_file_id];
+
+          file_usage_delete($file, 'paddle_landing_page', 'add_image', $managed_file_id);
+        }
+        else {
+          // It's possible that the file was deleted, in this case set the
+          // default value for the pane config.
+          $item->configuration['image_scald'] = 0;
+        }
+
+        $dirty = TRUE;
+      }
+
+      if (isset($item->configuration['top']) &&
+        isset($item->configuration['top']['section_image']) &&
+        !empty($item->configuration['top']['section_image'])
+      ) {
+        $managed_file_id = $item->configuration['top']['section_image'];
+        $alt_text = $item->configuration['top']['section_text'];
+        $item->configuration['top']['section_text'] = '';
+
+        $file = file_load($managed_file_id);
+
+        if (!isset($sandbox['processed_files'][$managed_file_id])) {
+          $sandbox['processed_files'][$managed_file_id] = paddle_update_create_atom(
+            $file,
+            array('alt_text' => $alt_text)
+          );
+        }
+
+        $item->configuration['top']['section_image'] = $sandbox['processed_files'][$managed_file_id];
+
+        // For some unknown reason, usage is registered as well for
+        // pane_section_bottom although the file is located in the top section.
+        // This seems to be a bug. Let's remove that usage record as well here.
+        file_usage_delete($file, 'paddle_landing_page', 'pane_section_top', $managed_file_id);
+        file_usage_delete($file, 'paddle_landing_page', 'pane_section_bottom', $managed_file_id);
+
+        $dirty = TRUE;
+      }
+
+      if ($dirty) {
+        drupal_write_record('panels_pane', $item, 'pid');
+      }
+
+      return $dirty;
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "pane {$item->pid}";
+
+      if ($updated) {
+        return $id_string;
+      }
+      else {
+        return "{$id_string} SKIPPED";
+      }
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Creates a new Scald atom from a managed file.
+ *
+ * @param object $file
+ *   The file object which should be converted to Scald atom.
+ * @param array $options
+ *   Array of possible values to attach to the new atom. For the moment we have:
+ *     - alt text - <img> attribute
+ *     - caption - <img> attribute
+ *     - description - <img> attribute
+ *
+ * @return int
+ *   The atom ID.
+ */
+function paddle_update_create_atom($file, $options = array()) {
+  if ($file->type == 'image') {
+    $atom = new ScaldAtom('image', 'paddle_scald_image');
+  }
+  else {
+    $atom = new ScaldAtom('file', 'paddle_scald_file');
+  }
+
+  if (!empty($options['alt_text'])) {
+    $atom->field_scald_alt_tag[LANGUAGE_NONE][0]['value'] = $options['alt_text'];
+  }
+
+  if (!empty($options['caption'])) {
+    $atom->field_scald_caption[LANGUAGE_NONE][0]['value'] = $options['caption'];
+  }
+
+  if (!empty($options['description'])) {
+    $atom->field_scald_description[LANGUAGE_NONE][0]['value'] = $options['description'];
+  }
+
+  $atom->file_source = $file->uri;
+  $atom->title = $file->filename;
+  $atom->base_id = $file->fid;
+
+  if ($file->type == 'image') {
+    $atom->scald_thumbnail[LANGUAGE_NONE][0] = (array) $file;
+  }
+  else {
+    $file->display = 1;
+    $atom->paddle_scald_file[LANGUAGE_NONE][0] = (array) $file;
+  }
+
+  $atom->actions = 15;
+  $atom->published = 1;
+
+  // Publisher seems to be required, otherwise the atom won't show up in the
+  // frontend. Set it to 1, as if the admin created them.
+  $atom->publisher = 1;
+
+  // Save the atom.
+  return scald_atom_save($atom);
+}
+
+/**
+ * Get all Media files and transform them to scald atoms.
+ */
+function paddle_update_7059() {
+  // Reset the cache for the scald types, as scald doesn't want to create an
+  // atom if it doesn't recognize the atom's type.
+  scald_types(TRUE);
+
+  $limit = 5;
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      $q = db_select('file_managed', 'fm');
+      $q->leftjoin('file_usage', 'fu', 'fu.fid = fm.fid');
+      $q->fields('fm', array())
+        ->isNull('fu.fid')
+        ->condition('fm.uid', 0, '<>')
+        ->condition('fm.type', array('default', 'image'), 'IN');
+      return $q->countQuery()->execute()->fetchField();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      $q = db_select('file_managed', 'fm');
+      $q->leftjoin('file_usage', 'fu', 'fu.fid = fm.fid');
+      $q->fields('fm', array())
+        ->isNull('fu.fid')
+        ->condition('fm.uid', 0, '<>')
+        ->condition('fm.type', array('default', 'image'), 'IN');
+
+      $q->range(0, $limit);
+
+      $results = $q->execute();
+      return $results;
+    },
+    // Single item update callback.
+    function ($db_item, &$sandbox) {
+      // Load the file object.
+      $result = FALSE;
+      $file = file_load($db_item->fid);
+      if ($file) {
+        $options = array();
+        $options['alt_text'] = !empty($file->field_media_alt_tag[LANGUAGE_NONE][0]['value']) ? $file->field_media_alt_tag[LANGUAGE_NONE][0]['value'] : '';
+        $options['caption'] = !empty($file->field_media_caption[LANGUAGE_NONE][0]['value']) ? $file->field_media_caption[LANGUAGE_NONE][0]['value'] : '';
+        $options['description'] = !empty($file->field_media_description[LANGUAGE_NONE][0]['value']) ? $file->field_media_description[LANGUAGE_NONE][0]['value'] : '';
+        paddle_update_create_atom($file, $options);
+
+        $result = TRUE;
+      }
+
+      return $result;
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "file_managed {$item->fid}";
+
+      if ($updated) {
+        return $id_string;
+      }
+      else {
+        return "{$id_string} SKIPPED";
+      }
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Remove the old atom field image style, because it has been renamed.
+ */
+function paddle_update_7060() {
+  // Delete the old image style, and move the previous generated thumbnails to
+  // the new style.
+  image_style_delete(image_style_load('paddle_scald_atom_field_preview'), 'paddle_scald_atom_element_preview');
+}
+
+/**
+ * Enable the Paddle Overview Page module and add permissions for it.
+ */
+function paddle_update_7061() {
+  module_enable(array('paddle_overview_page'));
+
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions. Otherwise our new content type is not yet
+  // known.
+  drupal_load('module', 'paddle_overview_page');
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_overview_page');
+  node_type_cache_reset();
+  drupal_static_reset();
+
+  paddle_content_region_panelize_node_type('paddle_overview_page');
+  paddle_content_region_grant_node_type_permissions('paddle_overview_page');
+
+  // Allow editors and chief editors to edit overview pages.
+  // @see _paddle_user_permissions_overview_page()
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, _paddle_user_permissions_overview_page());
+  }
+}
+
+/**
+ * Update the date formats.
+ */
+function paddle_update_7062() {
+  _paddle_set_date_formats();
+}
+
+/**
+ * Enable the Override Node Options module.
+ */
+function paddle_update_7063() {
+  module_enable(array('override_node_options'));
+}
+
+/**
+ * Do not ignore words to generate path aliases.
+ */
+function paddle_update_7064() {
+  variable_set('pathauto_ignore_words', '');
+}
+
+/**
+ * Enable the mediaelement module.
+ */
+function paddle_update_7065() {
+  module_enable(array('mediaelement'));
+  variable_set('mediaelement_sitewide', 1);
+}
+
+/**
+ * Enable the video provider modules.
+ */
+function paddle_update_7066() {
+  module_enable(array(
+    'paddle_scald_video',
+    'paddle_scald_video_file',
+    'paddle_scald_youtube',
+  ));
+}
+
+/**
+ * Allow editors and chief editors to use the download list pane.
+ */
+function paddle_update_7067() {
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array(
+      'edit download_list content in landing pages',
+    ));
+  }
+}
+
+/**
+ * Add permission to create video panes.
+ */
+function paddle_update_7068() {
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, array('edit add_video content in landing pages'));
+  }
+}
+
+/**
+ * Lock the "additional panes" pane on overview pages.
+ */
+function paddle_update_7069() {
+  $locks = array(
+    'type' => 'immovable',
+    'regions' => array(
+      'bottom' => 'bottom',
+    ),
+  );
+  $updated = db_update('panels_pane')
+    ->fields(array(
+      'locks' => serialize($locks),
+    ))
+    ->condition('uuid', '42812249-4ab1-41b0-8b96-8639f6e5562f')
+    ->execute();
+}
+
+/**
+ * Set the "follow_active_trail" correctly for the first level menu.
+ */
+function paddle_update_7070() {
+  db_update('menu_displays')
+    ->fields(array('follow_active_trail' => 0))
+    ->condition('name', 'first_level', '=')
+    ->execute();
+}
+
+/**
+ * If the mega dropdown has been installed, set the menu style to mega dropdown.
+ */
+function paddle_update_7071() {
+  if (module_exists('paddle_mega_dropdown')) {
+    variable_set('paddle_menu_style', 'mega_dropdown');
+  }
+}
+
+/**
+ * Enable the field instance sync module, if this has not yet been done.
+ */
+function paddle_update_7072() {
+  if (!module_exists('field_instance_sync')) {
+    module_enable(array('field_instance_sync'));
+  }
+}
+
+/**
+ * Refresh the translation strings of the Workbench Moderation module.
+ */
+function paddle_update_7073() {
+  module_load_include('inc', 'i18n_string', 'i18n_string.admin');
+  i18n_string_refresh_group('workbench_moderation');
+}
+
+/**
+ * Remove broken file links from media library.
+ */
+function paddle_update_7074() {
+  // Remove the Scald atoms without base_id because they are unusable. They
+  // probably got introduced by paddle_update_7058().
+  $result = db_select('scald_atoms', 'sa')
+    ->fields('sa', array('sid'))
+    ->isNull('base_id')
+    ->execute();
+  $sids = array();
+  while ($record = $result->fetchAssoc()) {
+    $sids[] = $record['sid'];
+  }
+  if (count($sids)) {
+    scald_atom_delete_multiple($sids);
+  }
+}
+
+/**
+ * Set the back-end menu to show on admin/paddle_store/app/%/configure.
+ */
+function paddle_update_7075() {
+  $root_paths = array(
+    array(
+      'path' => 'admin/paddlet_store/app/%/configure',
+      'root_item' => 'admin/paddlet_store',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $root_paths);
+}
+
+/**
+ * Correct previously messed up root paths.
+ */
+function paddle_update_7076() {
+  $root_paths = array(
+    array(
+      'path' => 'admin',
+      'root_item' => 'admin/dashboard',
+    ),
+    array(
+      'path' => 'node/add',
+      'root_item' => 'admin/content_manager/add',
+    ),
+    array(
+      'path' => 'node/add/%',
+      'root_item' => 'admin/content_manager/add',
+    ),
+    array(
+      'path' => 'node/%/edit',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/delete',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/view',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/themes/%',
+      'root_item' => 'admin/themes',
+    ),
+    array(
+      'path' => 'admin/content_manager/list/export/csv',
+      'root_item' => 'admin/content_manager/list/search',
+    ),
+    array(
+      'path' => 'admin/content_manager/list/export/xls',
+      'root_item' => 'admin/content_manager/list/search',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/panels_content',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/content_manager/entity/%/panels_content',
+      'root_item' => 'admin/structure/content_region',
+    ),
+    array(
+      'path' => 'admin/content_manager/node/%/layout',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/paddlet_store/app/%/configure',
+      'root_item' => 'admin/paddlet_store',
+    ),
+  );
+
+  // Update the management_level_2 menu with the wanted root paths.
+  db_update('menu_displays')
+    ->fields(array(
+      'path_roots' => serialize($root_paths),
+    ))
+    ->condition('name', 'management_level_2', '=')
+    ->execute();
+}
+
+/**
+ * Update cache settings.
+ */
+function paddle_update_7077() {
+  _paddle_configure_cache();
+}
+
+/**
+ * Set the correct admin theme and set the blocks correctly.
+ */
+function paddle_update_7078() {
+  variable_set('admin_theme', 'paddle_admin_theme');
+
+  _block_rehash('paddle_admin_theme');
+  db_update('block')
+    ->fields(array(
+      'region' => 'header_top',
+      'status' => 1,
+      'weight' => 0,
+      'theme' => 'paddle_admin_theme',
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_core')
+    ->condition('delta', 'content_search')
+    ->condition('theme', 'paddle_admin_theme')
+    ->execute();
+
+  db_update('block')
+    ->fields(array(
+      'region' => 'sidebar_first',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => 'paddle_admin_theme',
+      'title' => '<none>',
+      'visibility' => BLOCK_VISIBILITY_NOTLISTED,
+      'pages' => 'admin/content_manager/list/search',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'management_level_4')
+    ->condition('theme', 'paddle_admin_theme')
+    ->execute();
+
+  db_update('block')
+    ->fields(array(
+      'region' => 'header_bottom',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => 'paddle_admin_theme',
+    ))
+    ->condition('module', 'paddle_contextual_toolbar')
+    ->condition('delta', 'contextual_toolbar')
+    ->condition('theme', 'paddle_admin_theme')
+    ->execute();
+
+  // Place the paddle_menu_display with the 2nd and 3rd level of the management
+  // menu in the header area.
+  db_update('block')
+    ->fields(array(
+      'region' => 'header_top',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => 'paddle_admin_theme',
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'management_level_2')
+    ->condition('theme', 'paddle_admin_theme')
+    ->execute();
+}
+
+/**
+ * Sets all current revisions from On Hold to Concept and removes the On Hold.
+ */
+function paddle_update_7079(&$sandbox) {
+  // All current revisions, which are in the in "On hold" state, need to be
+  // switched to "Concept".
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      // Get the number of current revisions for all nodes where the current one
+      // is in the on_hold state.
+      $query = db_select('workbench_moderation_node_history', 'nh')
+        ->fields('nh')
+        ->condition('current', 1, '=')
+        ->condition('published', 0, '=')
+        ->condition('state', 'on_hold')
+        ->execute();
+
+      return $query->rowCount();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $query = db_select('workbench_moderation_node_history', 'nh')
+        ->fields('nh')
+        ->condition('current', 1, '=')
+        ->condition('published', 0, '=')
+        ->condition('state', 'on_hold');
+
+      $query->range(0, $limit);
+
+      return $query->execute();
+    },
+    // Single item update callback.
+    function ($item, &$sandbox) {
+      $node = node_load($item->nid, $item->vid);
+
+      try {
+        // Based on code from node_save(). Save fields.
+        workbench_moderation_moderate($node, 'draft');
+        return TRUE;
+      } catch (Exception $e) {
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "node revision {$item->vid}";
+
+      if ($updated) {
+        return $id_string;
+      }
+      else {
+        return "{$id_string} SKIPPED";
+      }
+    }
+  );
+  // @codingStandardsIgnoreEnd
+
+  // Load the moderation state object and delete it.
+  $state = workbench_moderation_state_load('on_hold');
+  workbench_moderation_state_delete($state);
+}
+
+/**
+ * Move the content_search block on top of the navigation one.
+ */
+function paddle_update_7080() {
+  _block_rehash('paddle_admin_theme');
+  db_update('block')
+    ->fields(array(
+      'region' => 'header_top',
+      'status' => 1,
+      'weight' => -21,
+      'theme' => 'paddle_admin_theme',
+      'title' => '<none>',
+    ))
+    ->condition('module', 'paddle_core')
+    ->condition('delta', 'content_search')
+    ->condition('theme', 'paddle_admin_theme')
+    ->execute();
+}
+
+/**
+ * Revert the ckeditor profile for the SCAYT button.
+ */
+function paddle_update_7081() {
+  features_revert_module('paddle_ckeditor_profiles');
+}
+
+/**
+ * Make sure that the more links on the dashboard are rendered correctly.
+ */
+function paddle_update_7082() {
+  features_revert_module('paddle_dashboard');
+  cache_clear_all('ctools_export:views_view:paddle_dashboard_status', 'cache_views');
+}
+
+/**
+ * Add the paddlet info page to the navigation.
+ */
+function paddle_update_7083() {
+  $path_roots = array(
+    array(
+      'path' => 'admin/paddlet_store/app/%',
+      'root_item' => 'admin/paddlet_store',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+}
+
+/**
+ * Prevent webform module to create its default content type.
+ */
+function paddle_update_7084() {
+  variable_set('webform_install_create_content_type', FALSE);
+}
+
+/**
+ * Disable the apps module.
+ */
+function paddle_update_7085() {
+  module_disable(array('apps'));
+}
+
+/**
+ * Enable diff module and configure permissions.
+ */
+function paddle_update_7086() {
+  module_enable(array('diff'));
+
+  // Allow read only role to view revisions.
+  $read_only_role = user_role_load_by_name('Read Only');
+  user_role_grant_permissions($read_only_role->rid, array('view revisions'));
+
+  // Allow editors, chief editors and site manager to view and revert revisions.
+  $roles = array(
+    'Editor',
+    'Chief Editor',
+    'Site Manager',
+  );
+  foreach ($roles as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array(
+      'view revisions',
+      'revert revisions',
+    ));
+  }
+
+  // Update the management_level_2 menu with the wanted root paths.
+  $root_paths = array(
+    array(
+      'path' => 'node/%/moderation',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/moderation/diff',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/moderation/diff/view',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'node/%/revisions/%/revert',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $root_paths);
+}
+
+/**
+ * Enable Search API Autocomplete module.
+ */
+function paddle_update_7087() {
+  module_enable(array('search_api_autocomplete'));
+}
+
+/**
+ * Set the first day of the week to Monday by default.
+ */
+function paddle_update_7088() {
+  variable_set('date_first_day', 1);
+}
+
+/**
+ * Give the Chief editors specific permission to access the extended dashboard.
+ */
+function paddle_update_7089() {
+  $role = user_role_load_by_name('Chief editor');
+  user_role_grant_permissions($role->rid, array('access paddle in review dashboard'));
+}
+
+/**
+ * Enable Plupload module.
+ */
+function paddle_update_7090() {
+  module_enable(array('plupload'));
+}
+
+/**
+ * Enable user pictures and set default image and helpdesk url.
+ */
+function paddle_update_7091() {
+  variable_set('user_pictures', TRUE);
+  variable_set('user_picture_default', drupal_get_path('module', 'paddle_core') . '/images/placeholder.png');
+  variable_set('paddle_helpdesk_url', 'http://kanooh.be/helpdesk');
+}
+
+/**
+ * Transform the "Active homepage" into a "Site settings" page.
+ */
+function paddle_update_7092() {
+  // Revoke the permission to change active homepage from Site Managers and
+  // Chief Editors.
+  foreach (array('Chief Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_revoke_permissions($role->rid, array('paddle_core_active_homepage_form'));
+  }
+
+  // Add the Site settings page to the menu root items.
+  $root_paths = array(
+    array(
+      'path' => 'admin/site-settings',
+      'root_item' => 'admin',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $root_paths);
+
+  // Users are allowed to change their username.
+  foreach (array(
+             'Chief Editor',
+             'Site Manager',
+             'Editor',
+             'Read Only'
+           ) as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array('change own username'));
+  }
+
+  // Enable the Paddle Notifications module.
+  module_enable(array('paddle_notifications'));
+
+  // Enable the "A page is assigned to me" notification for all users.
+  $accounts = entity_load('user');
+  foreach ($accounts as $account) {
+    if ($account->name) {
+      try {
+        $wrapper = entity_metadata_wrapper('user', $account);
+        $wrapper->field_paddle_user_notifications->set(array('page_assigned'));
+        $wrapper->save();
+      } catch (\Exception $exception) {
+        watchdog('paddle_notifications', 'Failed to enable the "A page is assigned to me" notification for all the users');
+      }
+    }
+  }
+}
+
+/**
+ * Add the menu to the user edit page.
+ */
+function paddle_update_7093() {
+  // Add the Site settings page to the menu root items.
+  $root_paths = array(
+    array(
+      'path' => 'user/%/edit',
+      'root_item' => 'admin',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $root_paths);
+}
+
+/**
+ * Enable the honeypot module.
+ */
+function paddle_update_7094() {
+  module_enable(array('honeypot'));
+}
+
+/**
+ * Enable the vo theme.
+ */
+function paddle_update_7095() {
+  theme_enable(array('vo_theme'));
+}
+
+/**
+ * Change the Kanooh helpdesk url.
+ */
+function paddle_update_7096() {
+  variable_set('paddle_helpdesk_url', 'http://support.kanooh.be/');
+}
+
+/**
+ * Remove the language switcher from the header bottom region.
+ */
+function paddle_update_7097() {
+  db_update('block')
+    ->fields(array(
+      'region' => -1,
+      'status' => 0,
+      'weight' => 0,
+    ))
+    ->condition('module', 'locale')
+    ->condition('delta', 'language_content')
+    ->execute();
+}
+
+/**
+ * Create the translations for possible overview pages.
+ */
+function paddle_update_7098() {
+  // All overview pages need to have their tnid set to themselves.
+  $source_nodes = padde_overview_page_get_node_sources();
+  foreach ($source_nodes as $node) {
+    db_update('node')
+      ->fields(array(
+        'tnid' => $node->nid,
+        'translate' => 0,
+      ))
+      ->condition('nid', $node->nid)
+      ->execute();
+  }
+
+  // Reload the source nodes.
+  $source_nodes = padde_overview_page_get_node_sources();
+
+  // Loop over the enabled languages and create the wanted nodes.
+  $languages = language_list('enabled');
+  if (!empty($languages)) {
+    foreach ($source_nodes as $node) {
+      foreach ($languages[1] as $lang_code => $language) {
+        $id = $node->tnid > 0 ? $node->tnid : $node->nid;
+        if ($language->enabled && !paddle_overview_page_translation_exists($lang_code, $id)) {
+          $translation = paddle_overview_page_prepare_new_translation($lang_code, $node);
+          node_save($translation);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Enable the clone module and give permissions to clone nodes.
+ */
+function paddle_update_7099() {
+  module_enable(array('clone'));
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array('clone node'));
+  }
+
+  $path_roots = array(
+    array(
+      'path' => 'admin/content_manager/nojs/node/%/clone/confirm',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+}
+
+/**
+ * Set the views_data_export files to temporary so they are being deleted.
+ */
+function paddle_update_7100() {
+  // Get the managed files created by the views_data_export.
+  $results = db_select('file_managed', 'fm')
+    ->fields('fm', array('fid'))
+    ->condition('filename', db_like('views_data_export') . '%', 'LIKE')
+    ->condition('filemime', 'application/octet-stream', '=')
+    ->execute()
+    ->fetchAll();
+
+  // Set their status to temporary and set the usage to 0 otherwise they won't
+  // be deleted by cron.
+  foreach ($results as $result) {
+    $file = file_load($result->fid);
+    $file->status = 0;
+    file_save($file);
+
+    file_usage_delete($file, 'file');
+
+    $sid = scald_search(array('base_id' => $result->fid), FALSE, TRUE);
+    if ($sid) {
+      $atom = scald_atom_load($sid);
+      scald_atom_delete($atom->sid);
+      watchdog('scald_atom', '@type: deleted %title.', array(
+        '@type' => $atom->type,
+        '%title' => $atom->title
+      ));
+    }
+  }
+
+  // Force the update of the indexed atoms to remove deleted ones.
+  paddle_scald_process_queue_and_commit();
+}
+
+/**
+ * Add the archived moderation state + transitions.
+ */
+function paddle_update_7101() {
+  $state = (object) array(
+    'name' => 'archived',
+    'label' => 'Archived',
+    'description' => '',
+    'weight' => 90,
+  );
+  workbench_moderation_state_save($state);
+
+  // Add the workbench moderation transitions.
+  $transitions = array(
+    'draft' => array(
+      'archived',
+    ),
+    'to_check' => array(
+      'archived',
+    ),
+    'needs_review' => array(
+      'archived',
+    ),
+    'scheduled' => array(
+      'archived',
+    ),
+    'published' => array(
+      'archived',
+    ),
+    'offline' => array(
+      'archived',
+    ),
+    'archived' => array(
+      'draft',
+    ),
+  );
+
+  foreach ($transitions as $from => $target_states) {
+    foreach ($target_states as $to) {
+      $transition = (object) array(
+        'from_name' => $from,
+        'to_name' => $to,
+        'name' => $from . '-' . $to,
+      );
+
+      workbench_moderation_transition_save($transition);
+    }
+  }
+
+  // Reset the static cache of the moderation states and transitions, otherwise
+  // permissions related to the newly added moderation states and transitions
+  // will not be available and user_role_grant_permissions() will fail with a
+  // PDOException. Requires patch for http://drupal.org/node/1911782.
+  drupal_static_reset('workbench_moderation_states');
+  drupal_static_reset('workbench_moderation_transitions');
+
+  // Grant archive workflow permissions.
+  $editor_permissions = array(
+    'moderate content from draft to archived',
+    'moderate content from to_check to archived',
+    'moderate content from archived to draft',
+  );
+
+  $role = user_role_load_by_name('Editor');
+  user_role_grant_permissions($role->rid, $editor_permissions);
+
+  $chief_editor_permissions = array(
+    'moderate content from draft to archived',
+    'moderate content from to_check to archived',
+    'moderate content from archived to draft',
+    'moderate content from needs_review to archived',
+    'moderate content from scheduled to archived',
+    'moderate content from published to archived',
+    'moderate content from offline to archived',
+  );
+
+  // Only chief editors can archive a published page.
+  $role = user_role_load_by_name('Chief Editor');
+  user_role_grant_permissions($role->rid, $chief_editor_permissions);
+}
+
+/**
+ * Disable this variable as it is no longer needed but it causes broken UI.
+ */
+function paddle_update_7102() {
+  if (variable_get('paddle_admin_theme_disable_link_spans', FALSE)) {
+    variable_set('paddle_admin_theme_disable_link_spans', FALSE);
+  }
+}
+
+/**
+ * Simplify the Landing Page module by splitting off panes to Paddle Panes.
+ */
+function paddle_update_7103() {
+  module_enable(array('paddle_panes'));
+}
+
+/**
+ * Enable Reference tracker modules, add the References Node Page to navigation.
+ */
+function paddle_update_7104() {
+  module_enable(array('paddle_reference_tracker'));
+
+  $path_roots = array(
+    array(
+      'path' => 'node/%/references',
+      'root_item' => 'admin/content_manager',
+    ),
+    array(
+      'path' => 'admin/paddle_scald/%/references',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+
+  $pages = "admin/content_manager/list/search\nadmin/paddle_scald/*";
+
+  // Make sure that the level 4 management menu is not shown on the atom
+  // reference page.
+  db_update('block')
+    ->fields(array(
+      'region' => 'sidebar_first',
+      'status' => 1,
+      'weight' => -20,
+      'theme' => 'paddle_admin_theme',
+      'title' => '<none>',
+      'visibility' => BLOCK_VISIBILITY_NOTLISTED,
+      'pages' => $pages,
+    ))
+    ->condition('module', 'paddle_menu_display')
+    ->condition('delta', 'management_level_4')
+    ->condition('theme', 'paddle_admin_theme')
+    ->execute();
+}
+
+/**
+ * Parse all the existing nodes for references.
+ */
+function paddle_update_7105(&$sandbox) {
+  _paddle_reference_tracker_parse_existing_nodes($sandbox);
+}
+
+/**
+ * Revert paddle_search to update the node index.
+ */
+function paddle_update_7106() {
+  features_revert_module('paddle_search');
+}
+
+/**
+ * Enable the kanooh v2 theme.
+ */
+function paddle_update_7107() {
+  theme_enable(array('kanooh_theme_v2'));
+}
+
+/**
+ * Parse all the existing nodes for references.
+ */
+function paddle_update_7108(&$sandbox) {
+  _paddle_reference_tracker_parse_existing_nodes($sandbox);
+}
+
+/**
+ * Make sure that everyone can use the search api sorts.
+ */
+function paddle_update_7109() {
+  module_enable(array('search_api_sorts'));
+  user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('use search_api_sorts'));
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('use search_api_sorts'));
+}
+
+/**
+ * Explicitly saves the old default header and footer tokens in existing custom themes
+ */
+function paddle_update_7110() {
+  $global_header_token = 97;
+  $global_footer_token = 100;
+
+  // Get all custom themes.
+  ctools_include('export');
+  $themes = ctools_export_load_object('paddle_themer_theme');
+
+  foreach ($themes as $theme) {
+    if ($theme->export_type & EXPORT_IN_CODE) {
+      continue;
+    }
+
+    $changed = FALSE;
+
+    // If the value of the tokens is empty fill in the old default header/footer tokens.
+    $vo_tokens = $theme->style['branding_global_header']['global_vo_tokens'];
+
+    if (isset($vo_tokens)) {
+      if ($vo_tokens['header'] == 0) {
+        $theme->style['branding_global_header']['global_vo_tokens']['header'] = $global_header_token;
+        $changed = TRUE;
+      }
+
+      if ($vo_tokens['footer'] == 0) {
+        $theme->style['branding_global_header']['global_vo_tokens']['footer'] = $global_footer_token;
+        $changed = TRUE;
+      }
+    }
+
+    if ($changed) {
+      ctools_export_crud_save('paddle_themer_theme', $theme);
+      $theme->style;
+    }
+  }
+
+  features_revert_module('paddle_vo_themes');
+}
+
+/**
+ * Force update the CSS in the GO theme.
+ */
+function paddle_update_7111() {
+  if (module_exists('paddle_go_themes')) {
+    features_revert_module('paddle_go_themes');
+    drupal_clear_css_cache();
+  }
+}
+
+/**
+ * Fix permissions for the panelizer administration.
+ *
+ * Grant permissions to edit the panels for the basic page, overview page &
+ * landing page content types.
+ */
+function paddle_update_7112() {
+  $permissions = array(
+    'administer panelizer node basic_page layout',
+    'administer panelizer node basic_page content',
+    'administer panelizer node paddle_overview_page layout',
+    'administer panelizer node paddle_overview_page content',
+    'administer panelizer node landing_page layout',
+    'administer panelizer node landing_page content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Enables the paddle_apps_glue module.
+ */
+function paddle_update_7113() {
+  module_enable(array('paddle_apps_glue'));
+}
+
+/**
+ * Enables the paddle_page_wide_theme module.
+ */
+function paddle_update_7114() {
+  module_enable(array('paddle_page_wide_theme'));
+
+  $permissions = array(
+    'administer panels styles',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Allow editors and chief editors to add photo album panes.
+ */
+function paddle_update_7115() {
+  node_type_cache_reset();
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_grant_permissions($role->rid, array('edit photo_album content in landing pages'));
+  }
+}
+
+/**
+ * Delete {system} records of the deleted Apps module.
+ */
+function paddle_update_7116() {
+  $modules = array('apps');
+  db_delete('system')
+    ->condition('name', $modules, 'IN')
+    ->condition('type', 'module')
+    ->execute();
+}
+
+/**
+ * Re-enable the page wide theme properly to make the correct hook calls.
+ */
+function paddle_update_7118() {
+  theme_disable(array('kanooh_theme_v2_page_wide'));
+  theme_enable(array('kanooh_theme_v2_page_wide'));
+}
+
+/**
+ * Removes the photo album permissions for everyone.
+ */
+function paddle_update_7119() {
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    user_role_revoke_permissions($role->rid, array('edit photo_album content in landing pages'));
+  }
+}
+
+/**
+ * Enables the photo album paddlet for sites which contain the panes.
+ */
+function paddle_update_7120() {
+  $results = db_select('panels_pane', 'p')
+    ->fields('p', array('type'))
+    ->condition('type', 'photo_album', '=')
+    ->execute();
+
+  if (!empty($results->fetchAssoc())) {
+    module_enable(array('paddle_photo_album'));
+  }
+}
+
+/**
+ * Enables region style permissions for page wide themes.
+ */
+function paddle_update_7121() {
+  $permissions = array(
+    'administer panels region styles',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Add the webform2pdf pages to the admin menu path roots.
+ */
+function paddle_update_7122() {
+  $path_roots = array(
+    array(
+      'path' => 'node/%/webform/webform2pdf',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+}
+
+/**
+ * Enable the kanooh v2 theme vertical navigation and menu_block module.
+ */
+function paddle_update_7123() {
+  theme_enable(array('kanooh_theme_v2_vertical_navigation'));
+  module_enable(array('menu_block'));
+}
+
+/**
+ * Add the users admin page to the admin menu path roots.
+ */
+function paddle_update_7124() {
+  module_enable(array('paddle_user'));
+
+  $path_roots = array(
+    array(
+      'path' => 'admin/users',
+      'root_item' => 'admin/users',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+}
+
+/**
+ * Adds user management permissions to the Site manager.
+ */
+function paddle_update_7125() {
+  $permissions = array(
+    'administer users',
+    'administer permissions',
+    'access user profiles',
+    'execute user_block_user_action',
+    'execute user_unblock_user_action',
+    'execute views_bulk_operations_user_cancel_action',
+    'execute views_bulk_operations_user_roles_action',
+  );
+
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, $permissions);
+}
+
+/**
+ * Enable the paddle_subscription module.
+ */
+function paddle_update_7126() {
+  module_enable(array('paddle_subscription'));
+}
+
+/**
+ * Don't redirect users with 'authenticated user' role to '/admin'.
+ *
+ * Only redirect default Paddle user roles, because only they, and user 1, have
+ * sufficient permissions.
+ */
+function paddle_update_7127() {
+  db_update('login_destination')
+    ->fields(array('roles' => serialize(drupal_map_assoc(array_keys(paddle_user_paddle_user_roles())))))
+    // There's only 1 record in this table, managed by Paddle.
+    ->condition('id', 1)
+    ->execute();
+}
+
+/**
+ * Disable the apps_compatible module.
+ */
+function paddle_update_7128() {
+  module_disable(array('apps_compatible'));
+
+  $role = user_role_load_by_name('administrator');
+  if (!empty($role) && isset($role->rid)) {
+    user_role_delete((int) $role->rid);
+  }
+}
+
+/**
+ * Add missing bulk action permissions.
+ */
+function paddle_update_7129() {
+
+  $permissions = array(
+    'execute views_bulk_operations_delete_item',
+    'execute paddle_content_manager_restore_node_action',
+    'execute paddle_content_manager_set_page_responsible_author',
+    'execute paddle_content_manager_set_workbench_moderation_state',
+  );
+
+  foreach (array('Chief Editor', 'Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Equalize permissions between authenticated and anonymous users.
+ */
+function paddle_update_7130() {
+  // Revoke permissions for checking out documents
+  // and hand them to the Paddle editor roles.
+  $content_lock_permission = array(
+    'check out documents',
+    'access reference tracker information',
+  );
+  user_role_revoke_permissions(DRUPAL_AUTHENTICATED_RID, $content_lock_permission);
+
+  foreach (array('Chief Editor', 'Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $content_lock_permission);
+  }
+
+  // Revert the permissions on Paddle Reference Tracker
+  // to reload the permissions.
+  features_revert_module('paddle_reference_tracker');
+}
+
+/**
+ * When the faceted search got unintentionally disabled, reenable it again.
+ */
+function paddle_update_7131() {
+  // Get a list of disabled modules.
+  $all_modules = system_rebuild_module_data();
+  $disabled_modules = array();
+  foreach ($all_modules as $name => $module) {
+    if (empty($module->status) && $module->schema_version > SCHEMA_UNINSTALLED) {
+      $disabled_modules[$name] = $module;
+    }
+  }
+
+  // Reenable paddle_faceted_search if it was disabled.
+  if (!empty($disabled_modules['paddle_faceted_search'])) {
+    module_enable(array('paddle_faceted_search'));
+  }
+
+  // Make sure apps_compatible is disabled still.
+  module_disable(array('apps_compatible'));
+}
+
+/**
+ * Delete {system} records of the deleted apps_compatible module.
+ */
+function paddle_update_7132() {
+  $modules = array('apps_compatible');
+  db_delete('system')
+    ->condition('name', $modules, 'IN')
+    ->condition('type', 'module')
+    ->execute();
+}
+
+/**
+ * Fully remove the media module.
+ */
+function paddle_update_7133() {
+  foreach (array('Editor', 'Chief Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_revoke_permissions($role->rid, array('edit media', 'import media'));
+  }
+
+  module_disable(array('media'));
+
+  db_delete('system')
+    ->condition('name', array('media'), 'IN')
+    ->condition('type', 'module')
+    ->execute();
+}
+
+/**
+ * Delete {system} records of the deleted file_entity module.
+ */
+function paddle_update_7134() {
+  db_delete('system')
+    ->condition('name', array('file_entity'), 'IN')
+    ->condition('type', 'module')
+    ->execute();
+}
+
+/**
+ * Delete {system} records of the deleted views_media_browser module.
+ */
+function paddle_update_7135() {
+  db_delete('system')
+    ->condition('name', array('views_media_browser'), 'IN')
+    ->condition('type', 'module')
+    ->execute();
+}
+
+/**
+ * Update configuration values in custom Paddle Themer themes.
+ */
+function paddle_update_7136() {
+  ctools_include('export');
+  $themes = ctools_export_load_object('paddle_themer_theme');
+
+  $drush = function_exists('drush_print');
+
+  foreach ($themes as $theme) {
+    $in_code = $theme->export_type & EXPORT_IN_CODE;
+    $inherits_from_paddle_theme = in_array($theme->theme, array(
+      'paddle_theme',
+      'paddle_theme_branded',
+      'kanooh_theme_v2',
+      'kanooh_theme_v2_page_wide',
+      'kanooh_theme_v2_vertical_navigation',
+      'vo_theme',
+      'go_theme',
+    ));
+
+    // Only target 'custom' themes that do not live in code, and inherit from
+    // our other themes.
+    if (!$in_code && $inherits_from_paddle_theme) {
+      if (isset($theme->style['show_breadcrumbs']['show_breadcrumbs'])) {
+        foreach (node_type_get_types() as $type) {
+          $theme->style['show_breadcrumbs_for_' . $type->type]['show_breadcrumbs_for_' . $type->type] = $theme->style['show_breadcrumbs']['show_breadcrumbs'];
+        }
+        // The breadcrumb can also be shown on pages which are not nodes.
+        $theme->style['show_breadcrumbs_for_other_pages']['show_breadcrumbs_for_other_pages'] = $theme->style['show_breadcrumbs']['show_breadcrumbs'];
+        unset($theme->style['show_breadcrumbs']);
+        ctools_export_crud_save('paddle_themer_theme', $theme);
+
+        if ($drush) {
+          drush_print("Updated theme {$theme->human_name} ({$theme->name})");
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Disable content types if you disable the aligned module.
+ */
+function paddle_update_7137() {
+  variable_set('features_disable_content_types', 1);
+}
+
+/**
+ * Update configuration values in custom Paddle Themer themes.
+ */
+function paddle_update_7138() {
+  ctools_include('export');
+  $themes = ctools_export_load_object('paddle_themer_theme');
+
+  $drush = function_exists('drush_print');
+
+  foreach ($themes as $theme) {
+    $in_code = $theme->export_type & EXPORT_IN_CODE;
+    $inherits_from_paddle_theme = in_array($theme->theme, array(
+      'paddle_theme',
+      'paddle_theme_branded',
+      'kanooh_theme_v2',
+      'kanooh_theme_v2_page_wide',
+      'kanooh_theme_v2_vertical_navigation',
+      'vo_theme',
+      'go_theme',
+    ));
+
+    // Only target 'custom' themes that do not live in code, and inherit from
+    // our other themes.
+    if (!$in_code && $inherits_from_paddle_theme) {
+      $theme->style['branding_logo_alt']['logo_alt'] = 'Home';
+      ctools_export_crud_save('paddle_themer_theme', $theme);
+
+      if ($drush) {
+        drush_print("Updated theme {$theme->human_name} ({$theme->name})");
+      }
+    }
+  }
+}
+
+/**
+ * Enables the geofield module.
+ */
+function paddle_update_7145() {
+  module_enable(array('paddle_geofield'));
+}
+
+/**
+ * Do not geocode addresses if there is no API key defined.
+ */
+function paddle_update_7146() {
+  if (!module_exists('paddle_maps')) {
+    variable_set('geocoder_field_killswitch', 1);
+  }
+  else {
+    variable_set('geocoder_field_killswitch', 0);
+  }
+}

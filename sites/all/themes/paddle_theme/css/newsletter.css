@@ -1,0 +1,314 @@
+/**
+ * @file
+ * Paddle MailChimp newsletter styles.
+ */
+body, table.body, h1, h2, h3, h4, h5, h6, p, td {
+  font-family: "Calibri", "Helvetica", "Arial", sans-serif;
+}
+
+body, .body {
+  background-color: #f5f5f5;
+}
+
+.header, .footer {
+  background-color: #333;
+}
+.header .columns a, .footer .columns a {
+  color: #B8B8B8;
+}
+.header .columns a:hover, .header .columns a:active, .footer .columns a:hover, .footer .columns a:active {
+  color: #FFF !important;
+}
+.header .columns a:visited, .footer .columns a:visited {
+  color: #B8B8B8 !important;
+}
+.header .columns td, .footer .columns td {
+  color: #B8B8B8;
+}
+
+.archive {
+  background-color: #DFDFDF;
+}
+.archive .columns td {
+  font-size: 11px;
+  line-height: 11px;
+}
+
+.content {
+  background-color: #FFF;
+}
+
+.footer .columns.twelve td {
+  padding-bottom: 20px;
+}
+
+.right-text-align {
+  text-align: right;
+}
+
+.middle-text-align {
+  vertical-align: middle;
+}
+
+table.one .pane {
+  width: 30px;
+}
+table.one td.left-text-pad .pane, table.one td.right-text-pad .pane {
+  width: 20px;
+}
+table.one td.text-pad .pane {
+  width: 10px;
+}
+
+table.two .pane {
+  width: 80px;
+}
+table.two td.left-text-pad .pane, table.two td.right-text-pad .pane {
+  width: 70px;
+}
+table.two td.text-pad .pane {
+  width: 60px;
+}
+
+table.three .pane {
+  width: 130px;
+}
+table.three td.left-text-pad .pane, table.three td.right-text-pad .pane {
+  width: 120px;
+}
+table.three td.text-pad .pane {
+  width: 110px;
+}
+
+table.four .pane {
+  width: 180px;
+}
+table.four td.left-text-pad .pane, table.four td.right-text-pad .pane {
+  width: 170px;
+}
+table.four td.text-pad .pane {
+  width: 160px;
+}
+
+table.five .pane {
+  width: 230px;
+}
+table.five td.left-text-pad .pane, table.five td.right-text-pad .pane {
+  width: 220px;
+}
+table.five td.text-pad .pane {
+  width: 210px;
+}
+
+table.six .pane {
+  width: 280px;
+}
+table.six td.left-text-pad .pane, table.six td.right-text-pad .pane {
+  width: 270px;
+}
+table.six td.text-pad .pane {
+  width: 260px;
+}
+
+table.seven .pane {
+  width: 330px;
+}
+table.seven td.left-text-pad .pane, table.seven td.right-text-pad .pane {
+  width: 320px;
+}
+table.seven td.text-pad .pane {
+  width: 310px;
+}
+
+table.eight .pane {
+  width: 380px;
+}
+table.eight td.left-text-pad .pane, table.eight td.right-text-pad .pane {
+  width: 370px;
+}
+table.eight td.text-pad .pane {
+  width: 360px;
+}
+
+table.nine .pane {
+  width: 430px;
+}
+table.nine td.left-text-pad .pane, table.nine td.right-text-pad .pane {
+  width: 420px;
+}
+table.nine td.text-pad .pane {
+  width: 410px;
+}
+
+table.ten .pane {
+  width: 480px;
+}
+table.ten td.left-text-pad .pane, table.ten td.right-text-pad .pane {
+  width: 470px;
+}
+table.ten td.text-pad .pane {
+  width: 460px;
+}
+
+table.eleven .pane {
+  width: 530px;
+}
+table.eleven td.left-text-pad .pane, table.eleven td.right-text-pad .pane {
+  width: 520px;
+}
+table.eleven td.text-pad .pane {
+  width: 510px;
+}
+
+table.twelve .pane {
+  width: 580px;
+}
+table.twelve td.left-text-pad .pane, table.twelve td.right-text-pad .pane {
+  width: 570px;
+}
+table.twelve td.text-pad .pane {
+  width: 560px;
+}
+
+.pane {
+  margin-bottom: 20px;
+  clear: both;
+}
+
+.pane-section-top {
+  clear: both;
+  padding: 10px;
+  color: #FFF;
+  font-weight: 700;
+  background-color: #39B9BE;
+}
+.pane-section-top a {
+  color: #FFF;
+}
+.pane-section-top a:hover, .pane-section-top a:active {
+  color: #FFF !important;
+}
+.pane-section-top a:visited {
+  color: #FFF !important;
+}
+.pane-section-top.pane-section-image {
+  padding: 0;
+}
+.pane-section-top.pane-section-image img {
+  height: auto;
+  float: none;
+}
+.newsletter-layout-paddle_table_no_column .pane-section-top.pane-section-image img {
+  width: 100%;
+}
+
+.pane-section-body {
+  clear: both;
+}
+
+.pane-section-bottom {
+  clear: both;
+  margin: 10px;
+}
+
+.pane-listing .item-list,
+.pane-download-list .item-list {
+  margin: 10px;
+}
+.pane-listing ul,
+.pane-download-list ul {
+  margin: 0 0 0 15px;
+  padding: 0;
+}
+.pane-listing li,
+.pane-download-list li {
+  margin: 0;
+}
+
+.pane-listing .thumbnail img {
+  display: none !important;
+}
+.pane-listing .list-news-item {
+  padding: 7px 10px;
+  border-bottom: 1px solid #EBEBEB;
+}
+.pane-listing .date {
+  display: block;
+  font-size: 12px;
+  color: #5F5F5F;
+}
+.pane-listing h4 {
+  font-size: 14px;
+}
+.pane-listing .node-listing-teaser {
+  margin: 10px 10px 0 10px;
+}
+.pane-listing .node-listing-teaser p:last-child {
+  margin-bottom: 0;
+}
+
+.pane-add-image img {
+  height: auto;
+  float: none;
+}
+.pane-add-image .caption-text {
+  padding: 10px;
+  font-weight: 700;
+  color: #FFF;
+  background-color: #2E8FCB;
+}
+
+.pane-node-content .pane-section-body,
+.pane-free-content .pane-section-body {
+  margin: 0 10px;
+}
+.newsletter-layout-paddle_table_2_col_3_9 table.eight .pane-node-content .pane-section-body, .newsletter-layout-paddle_table_2_col_3_9 table.eight
+.pane-free-content .pane-section-body {
+  margin-left: 0;
+}
+.newsletter-layout-paddle_table_2_col_9_3 table.eight .pane-node-content .pane-section-body, .newsletter-layout-paddle_table_2_col_9_3 table.eight
+.pane-free-content .pane-section-body {
+  margin-right: 0;
+}
+
+.pane-node-content .news-item-featured-image {
+  width: 100%;
+  height: auto;
+  float: none;
+}
+
+.pane-add-menu-structure .ul-menu-items {
+  margin: 10px;
+  word-break: break-all;
+  word-wrap: break-word;
+}
+.pane-add-menu-structure .ul-menu-items > ul {
+  word-break: break-word;
+}
+.pane-add-menu-structure .bullet-list ul {
+  margin: 0 0 0 15px;
+  padding: 0;
+}
+.pane-add-menu-structure .bullet-list li {
+  margin: 0;
+}
+.pane-add-menu-structure .regular-list ul,
+.pane-add-menu-structure .regular-list li {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media only screen and (max-width: 600px) {
+  table[class="body"] .header .columns td,
+  table[class="body"] .footer .columns td {
+    text-align: center !important;
+  }
+  table[class="body"] .columns div[class*="pane"] {
+    width: auto !important;
+  }
+  table[class="body"] .pane-node-content div[class*="pane-section-body"],
+  table[class="body"] .pane-free-content div[class*="pane-section-body"] {
+    margin: 0 10px !important;
+  }
+}

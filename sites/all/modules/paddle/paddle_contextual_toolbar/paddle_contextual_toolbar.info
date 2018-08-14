@@ -1,0 +1,10 @@
+name = Paddle Contextual Toolbar
+description = contains paddle_contextual_toolbar code
+core = 7.x
+
+files[] = tests/paddle_contextual_toolbar_ui.test
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_contextual_toolbar"
+datestamp = "1455502947"

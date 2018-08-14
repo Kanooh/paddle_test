@@ -1,0 +1,144 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCoreHeaderPluginTest.
+ */
+
+/**
+ * Test the header plugin.
+ */
+class PaddleCoreHeaderPluginTest extends DrupalWebTestCase {
+  /**
+   * The profile to install as a basis for testing.
+   *
+   * @var string
+   */
+  protected $profile = 'testing';
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Plugin: Header'),
+      'description' => t('Test the functionality of the header plugin.'),
+      'group' => t('Paddle Style'),
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array('ctools', 'paddle_style', 'paddle_core'));
+  }
+
+  /**
+   * Test the functionality of the header form without allowed values.
+   */
+  public function testHeaderFormWithoutSettings() {
+    // Instantiate the Header plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_header');
+    $instance = new $plugin['handler']['class']();
+    $form_elements = $instance->form();
+
+    // Test if the default elements are being returned.
+    $elements = array(
+      'header_title' => t('Title'),
+      'header_subtitle' => t('Subtitle'),
+    );
+    foreach ($elements as $element => $placeholder) {
+      $this->assertTrue(!empty($form_elements[$element]), format_string('The %element element exists when the header plugin form is called without settings.', array('%element' => $element)));
+      $this->assertEqual($form_elements[$element]['#type'], 'textfield', format_string('The %element element is a text field.', array('%element' => $element)));
+      $this->assertFalse($form_elements[$element]['#default_value'], format_string('The %element element is empty by default.', array('%element' => $element)));
+      $this->assertEqual($form_elements[$element]['#attributes']['placeholder'], $placeholder, format_string('The %element element has the correct placeholder %placeholder.', array('%element' => $element, '%placeholder' => $placeholder)));
+    }
+  }
+
+  /**
+   * Test the functionality of the header form with allowed values.
+   */
+  public function testHeaderFormWithAllowedValues() {
+    // Instantiate the Header plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_header');
+    $instance = new $plugin['handler']['class']();
+    // Allow one only at first.
+    $fields = array('header_title' => TRUE, 'header_subtitle' => TRUE);
+    foreach ($fields as $allowed_field => $values) {
+      $form_elements = $instance->form(array($allowed_field => TRUE));
+
+      // Test if only allowed elements are returned.
+      foreach ($fields as $disallowed_field => $values) {
+        if ($allowed_field != $disallowed_field) {
+          $this->assertTrue(empty($form_elements[$disallowed_field]), 'The form call to the Header plugin returns only allowed fields.');
+        }
+      }
+    }
+
+    // Now allow both.
+    $form_elements = $instance->form($fields);
+    foreach ($fields as $allowed_field => $value) {
+      $this->assertEqual($form_elements[$allowed_field], $value, 'The form call to the Header plugin returns all the allowed fields.');
+    }
+  }
+
+  /**
+   * Tests the form() method of the Header plugin with a $values array.
+   */
+  public function testHeaderFormWithDefaults() {
+    // Instantiate the Header plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_header');
+    $instance = new $plugin['handler']['class']();
+
+    // Values array to give to the form function.
+    $values = array(
+      'header_title' => $this->randomString(8),
+      'header_subtitle' => $this->randomString(8),
+    );
+    $form_elements = $instance->form(array(), $values);
+
+    // Check if the default values are set correctly.
+    foreach ($values as $field => $value) {
+      $this->assertTrue($form_elements[$field]['#default_value'] == $value, "Default value is set properly for the $field.");
+    }
+  }
+
+  /**
+   * Tests the execute() method.
+   */
+  public function testHeaderExecute() {
+    // Instantiate the Header plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_header');
+    $instance = new $plugin['handler']['class']();
+
+    // First try with no values.
+    $values = array(
+      'header_title' => '',
+      'header_subtitle' => '',
+    );
+    $instance->execute(array());
+    foreach ($values as $field => $value) {
+      $this->assertFalse(variable_get('paddle_core_' . $field, ''), 'Variables not set with no values set');
+    }
+
+    // Now set them one by one and check that at the end they are all set and
+    // subsequent called don't overwrite variables already set.
+    $values = array(
+      'header_title' => $this->randomString(8),
+      'header_subtitle' => $this->randomString(8),
+    );
+    foreach ($values as $field_value_set => $value) {
+      $instance->execute(array($field_value_set => $value));
+    }
+
+    foreach ($values as $field => $value) {
+      $this->assertEqual(variable_get('paddle_core_' . $field, ''), $value, 'Plugin variables correctly set');
+    }
+  }
+
+}

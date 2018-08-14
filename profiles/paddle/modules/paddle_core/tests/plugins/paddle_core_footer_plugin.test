@@ -1,0 +1,103 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCoreFooterPluginTest.
+ */
+
+/**
+ * Test the footer plugin.
+ */
+class PaddleCoreFooterPluginTest extends PaddleWebTestCase {
+
+  /**
+   * Stores an instance of the Background plugin.
+   *
+   * @var object PaddleStyleBackgroundPlugin
+   */
+  public $instance;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Plugin: Footer'),
+      'description' => t('Test the functionality of the footer plugin.'),
+      'group' => t('Paddle Style'),
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp(array('paddle_style', 'paddle_core'));
+
+    // Create an instance of the Footer plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_footer');
+    $this->instance = new $plugin['handler']['class']();
+  }
+
+  /**
+   * Tests the form() function of the Footer plugin.
+   */
+  public function testForm() {
+    // Test if all elements are being returned if no parameters are passed.
+    $form_elements = $this->instance->form();
+    $expected_form_elements = array(
+      'footer_title' => 'textfield',
+      'footer_subtitle' => 'textfield',
+      'footer_style' => 'radios',
+    );
+    foreach ($expected_form_elements as $element_name => $element_type) {
+      $this->assertEqual($form_elements[$element_name]['#type'], $element_type, format_string('The form() method of the Footer plugin returns the %element_name form element when called without parameters.', array('%element_name' => $element_name)));
+    }
+
+    // Check if the default values are set correctly.
+    $values = array(
+      'footer_title' => $this->randomString(20),
+      'footer_subtitle' => $this->randomString(20),
+      'footer_style' => 'no_footer',
+    );
+    $form_elements = $this->instance->form(array(), $values);
+    foreach ($form_elements as $form_element_name => $form_element) {
+      // A "markup" form element has been created after this test was written, hence it was not
+      // accounted for that markup elements do not contain a default value.
+      if ($form_element['#type'] != "markup") {
+        $this->assertEqual($form_element['#default_value'], $values[$form_element_name], format_string('Default value is set properly for the %element_name element.', array('%element_name' => $form_element_name)));
+      }
+    }
+  }
+
+  /**
+   * Tests the execute() function of the Footer plugin.
+   */
+  public function testExecute() {
+    global $conf;
+
+    // Values array to give to the execute function.
+    $values = array(
+      'footer_title' => $this->randomString(20),
+      'footer_subtitle' => $this->randomString(20),
+      'footer_style' => 'no_footer',
+    );
+    $this->instance->execute($values);
+
+    // Check if the variable is set.
+    foreach ($values as $name => $value) {
+      $this->assertEqual($conf['paddle_core_footer_' . $name], check_plain($value), format_string('The global configuration of the %name is set correctly.', array('%name' => $name)));
+    }
+
+    // Check if "dangerous" input is properly escaped.
+    $this->instance->execute(array(
+      'footer_title' => '<script>alert(\'xss\');</script>',
+      'footer_subtitle' => '<script>alert(\'xss\');</script>',
+    ));
+    $expected_output = '&lt;script&gt;alert(&#039;xss&#039;);&lt;/script&gt;';
+    $this->assertEqual($conf['paddle_core_footer_footer_title'], $expected_output, 'Dangerous input for the footer title is properly escaped.');
+    $this->assertEqual($conf['paddle_core_footer_footer_subtitle'], $expected_output, 'Dangerous input for the footer subtitle is properly escaped.');
+  }
+
+}

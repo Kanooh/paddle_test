@@ -1,0 +1,13 @@
+name = Internationalization tests
+description = Helper module for testing i18n (do not enable manually)
+dependencies[] = locale
+dependencies[] = translation
+dependencies[] = i18n
+package = Testing
+core = 6.x
+hidden = TRUE
+
+; Information added by drush on 2014-06-14
+version = "7.x-1.11+8-dev"
+project = "i18n"
+datestamp = "1402735776"

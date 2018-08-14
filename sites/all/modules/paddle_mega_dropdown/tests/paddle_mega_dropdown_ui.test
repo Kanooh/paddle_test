@@ -1,0 +1,354 @@
+<?php
+/**
+ * @file
+ * Definition of PaddleMegaDropdownUIAppTest.
+ */
+
+/**
+ * Test the Paddle Mega Dropdown UI.
+ */
+class PaddleMegaDropdownUIAppTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Paddle Mega Dropdown UI',
+      'description' => 'Test the UI of the Mega Dropdown.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * @inheritdoc.
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp(array('paddle_mega_dropdown'));
+  }
+
+  /**
+   * Tests the general overview of the form.
+   */
+  public function testMegaDropdownForm() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Check that the database table exists and is empty.
+    $this->assertTrue(db_table_exists('paddle_mega_dropdown'), 'The Paddle Mega Dropdown database table exists.');
+    $this->assertPaddleMegaDropdownTableEmpty('The Paddle Mega Dropdown database is initially empty.');
+
+    // Create some menu items.
+    $menu_items = $this->createMenuItems();
+
+    $this->drupalGet('admin/paddlet_store/app/paddle_mega_dropdown/configure');
+    // Verify that the Dutch items without a parent are present.
+    foreach ($menu_items['nl_mlids'] as $mlid) {
+      $element = $this->megaDropdownSettingsFormXPath($mlid);
+      if ($mlid != $menu_items['nl_mlids'][2]) {
+        $this->assertEqual(count($element), 1, 'The Dutch menu item is shown once on the configuration form.');
+      }
+      else {
+        $this->assertEqual(count($element), 0, 'The Dutch menu item with a parent is not shown on the configuration form.');
+      }
+    }
+
+    // Verify that the English items are not present.
+    foreach ($menu_items['en_mlids'] as $mlid) {
+      $element = $this->megaDropdownSettingsFormXPath($mlid);
+      $this->assertEqual(count($element), 0, 'The English menu item is not shown on the configuration form.');
+    }
+
+    // Get to the English admin overview as we would if we click a language
+    // switcher link, and run the tests.
+    $this->drupalGet('admin/paddlet_store/app/paddle_mega_dropdown/configure', array('query' => array('language' => 'en')));
+    // Verify that the Dutch items are not present.
+    foreach ($menu_items['nl_mlids'] as $mlid) {
+      $element = $this->megaDropdownSettingsFormXPath($mlid);
+      $this->assertEqual(count($element), 0, 'The Dutch menu item is not shown on the configuration form.');
+    }
+
+    // Verify that the English items without parent are present.
+    foreach ($menu_items['en_mlids'] as $mlid) {
+      $element = $this->megaDropdownSettingsFormXPath($mlid);
+      if ($mlid != $menu_items['en_mlids'][2]) {
+        $this->assertEqual(count($element), 1, 'The English menu item is shown once on the configuration form.');
+      }
+      else {
+        $this->assertEqual(count($element), 0, 'The English menu item with a parent is not shown on the configuration form.');
+      }
+    }
+
+    // Add another menu item to the english main menu, refresh the page and
+    // verify that it is shown on the configure page of the mega dropdown.
+    $item_en_4 = array(
+      'link_path' => '<front>',
+      'link_title' => $this->randomString(8),
+      'menu_name' => 'main_menu_en',
+      'weight' => 0,
+      'expanded' => 0,
+    );
+
+    $item_en_4_mlid = menu_link_save($item_en_4);
+    // We need to clear the cache to show the new element on the configure page.
+    drupal_flush_all_caches();
+
+    $this->drupalGet('admin/paddlet_store/app/paddle_mega_dropdown/configure');
+    $element = $this->megaDropdownSettingsFormXPath($item_en_4_mlid);
+    $this->assertEqual(count($element), 1, 'The new English menu item is shown once on the configuration form.');
+  }
+
+  /**
+   * Test if we can create, edit, delete and recreate Mega Dropdowns.
+   */
+  public function testMegaDropdownCrudLinks() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create some menu items.
+    $menu_items = $this->createMenuItems();
+    $this->drupalGet('admin/paddlet_store/app/paddle_mega_dropdown/configure');
+
+    // Verify that the create links are present.
+    foreach ($menu_items['nl_mlids'] as $mlid) {
+      // The menu item with a parent is not shown.
+      if (!$menu_items['nl_mlids'][2]) {
+        $create_url = url('admin/paddle-mega-dropdown/nojs/' . $mlid . '/create');
+        $this->assertTrue($this->megaDropdownSettingsFormXPath($mlid, $create_url), 'The create link is shown for the menu item.');
+      }
+    }
+
+    // Click create next to the first menu item.
+    $this->drupalGet('admin/paddle-mega-dropdown/nojs/' . $menu_items['nl_mlids'][0] . '/create');
+
+    // Clear the static caches.
+    drupal_static_reset();
+
+    // Get the allowed layouts.
+    if ($handler = panelizer_entity_plugin_get_handler('paddle_mega_dropdown')) {
+      $layouts = $handler->get_default_panelizer_objects('paddle_mega_dropdown.page_manager');
+    }
+
+    // @todo These tests need to be adjusted properly when KANWEBS-1308 is in.
+    // This is not flexible at the moment. Therefor I don't test the href
+    // attribute but only the title attribute.
+    // Check if the layouts are being shown on the page.
+    foreach ($layouts as $layout) {
+      $this->assertTrue($this->buildXPathQuery('//div[@id="choose-layout"]//ul[@class="layout"]//a[@title=:title]', array(':title' => $layout->display->layout)), 'You can choose the' . $layout->display->layout . 'layout for the mega dropdown.');
+    }
+
+    // Get a random number from 2 to 4 to choose the layout.
+    $layout_int = rand(2, 4);
+
+    // Click a layout.
+    $this->drupalGet('admin/paddle-mega-dropdown/create/' . $menu_items['nl_mlids'][0] . '/' . $layout_int);
+    // Verify that we land on an edit page.
+    $this->assertTrue(strpos($this->getUrl(), 'admin/paddle-mega-dropdown/edit/1') !== FALSE, 'We land on the correct page when creating a mega dropdown for a menu item.');
+
+    // Verify the MDD table not is empty.
+    $this->assertPaddleMegaDropdownTableNotEmpty('The Paddle Mega Dropdown database table is no longer empty after creating a Paddle Mega Dropdown.');
+
+    // Verify that the cancel link is present.
+    $cancel_url = url('admin/paddlet_store/app/paddle_mega_dropdown/configure');
+    $this->assertTrue($this->xpath('//a[@href="' . $cancel_url . '"]'), 'The cancel link is present on the edit screen of a mega dropdown.');
+
+    // Verify there's no create link any more next to the same menu item.
+    $this->drupalGet('admin/paddlet_store/app/paddle_mega_dropdown/configure');
+    $create_url = url('admin/paddle-mega-dropdown/nojs/' . $menu_items['nl_mlids'][0] . '/create');
+    $this->assertFalse($this->megaDropdownSettingsFormXPath($menu_items['nl_mlids'][0], $create_url), 'The create link is not shown for the menu item where we created a mega dropdown for.');
+
+    // Verify that the edit and delete links are present for the menu item where
+    // we created a mega dropdown for.
+    $edit_url = url('admin/paddle-mega-dropdown/edit/1');
+    $delete_url = url('admin/paddle-mega-dropdown/nojs/1/delete');
+    $this->assertTrue($this->megaDropdownSettingsFormXPath($menu_items['nl_mlids'][0], $edit_url), 'The edit link is shown for the menu item where we created a mega dropdown for.');
+    $this->assertTrue($this->megaDropdownSettingsFormXPath($menu_items['nl_mlids'][0], $delete_url), 'The delete link is shown for the menu item where we created a mega dropdown for.');
+
+    // Click edit next to the menu item.
+    $this->drupalGet('admin/paddle-mega-dropdown/edit/1');
+    $this->assertResponse(200, 'We get a correct response from the edit page.');
+
+    // Click delete on the overview page.
+    $this->drupalGet('admin/paddle-mega-dropdown/nojs/1/delete');
+    // Confirm deletion.
+    $this->drupalPost(NULL, array(), t('Confirm'));
+    // Verify the MDD table is empty.
+    $this->assertPaddleMegaDropdownTableEmpty('The only delete Paddle Mega Dropdown can be deleted from the database.');
+    // Verify that we land on the overview page.
+    $this->assertTrue(strpos($this->getUrl(), 'admin/paddlet_store/app/paddle_mega_dropdown/configure') !== FALSE, 'We land on the overview page when deleting a mega dropdown.');
+    // Verify that we get a create link next to the menu item.
+    $this->assertTrue($this->megaDropdownSettingsFormXPath($menu_items['nl_mlids'][0], $create_url), 'The create link is shown for the menu item.');
+
+    // Click create next to the first menu item.
+    $this->drupalGet('admin/paddle-mega-dropdown/nojs/' . $menu_items['nl_mlids'][0] . '/create');
+
+    // Get the allowed layouts.
+    if ($handler = panelizer_entity_plugin_get_handler('paddle_mega_dropdown')) {
+      $layouts = $handler->get_default_panelizer_objects('paddle_mega_dropdown.page_manager');
+    }
+
+    // @todo These tests need to be adjusted properly when KANWEBS-1308 is in.
+    // This is not flexible at the moment. Therefor I don't test the href
+    // attribute but only the title attribute.
+    // Check if the layouts are being shown on the page.
+    foreach ($layouts as $layout) {
+      $this->assertTrue($this->buildXPathQuery('//div[@id="choose-layout"]//ul[@class="layout"]//a[@title=:title]', array(':title' => $layout->display->layout)), 'You can choose the' . $layout->display->layout . 'layout for the mega dropdown.');
+    }
+
+    // Click a layout.
+    $this->drupalGet('admin/paddle-mega-dropdown/create/' . $menu_items['nl_mlids'][0] . '/' . $layout_int);
+    // Verify that we land on an edit page with a different id.
+    $this->assertTrue(strpos($this->getUrl(), 'admin/paddle-mega-dropdown/edit/2') !== FALSE, 'We land on the correct page when creating a mega dropdown for a menu item.');
+
+    // Delete the menu item and verify the mega dropdown has been deleted as
+    // well.
+    $this->drupalGet('admin/structure/menu_manager/nojs/main_menu_nl/' . $menu_items['nl_mlids'][0] . '/delete');
+    $this->drupalPost(NULL, array(), t('Confirm'));
+    $this->drupalGet('admin/paddlet_store/app/paddle_mega_dropdown/configure');
+    $this->assertFalse($this->megaDropdownSettingsFormXPath($menu_items['nl_mlids'][0]), 'The mega dropdown link is not shown for the deleted menu item.');
+
+    $result = db_select('paddle_mega_dropdown', 'pmd')
+      ->fields('pmd')
+      ->condition('mlid', $menu_items['nl_mlids'][0], '=')
+      ->execute()
+      ->fetchAll();
+
+    $this->assertFalse($result, 'No mega dropdown found in the database linked to the deleted menu item.');
+  }
+
+  /**
+   * Helper function to create random menu items in a Dutch and English menu.
+   *
+   * @return array
+   *   An associative array containing the mlids per menu.
+   */
+  public function createMenuItems() {
+    // Create some menu items in the english main menu and in the dutch main
+    // menu.
+    $item_en_1 = array(
+      'link_path' => '<front>',
+      'link_title' => $this->randomString(8),
+      'menu_name' => 'main_menu_en',
+      'weight' => 0,
+      'expanded' => 0,
+    );
+
+    $item_en_1_mlid = menu_link_save($item_en_1);
+
+    $item_en_2 = array(
+      'link_path' => '<front>',
+      'link_title' => $this->randomString(8),
+      'menu_name' => 'main_menu_en',
+      'weight' => 0,
+      'expanded' => 0,
+    );
+
+    $item_en_2_mlid = menu_link_save($item_en_2);
+
+    $item_en_3 = array(
+      'link_path' => '<front>',
+      'link_title' => $this->randomString(8),
+      'menu_name' => 'main_menu_en',
+      'weight' => 0,
+      'expanded' => 0,
+      'plid' => $item_en_2_mlid,
+    );
+
+    $item_en_3_mlid = menu_link_save($item_en_3);
+
+    $item_nl_1 = array(
+      'link_path' => '<front>',
+      'link_title' => $this->randomString(8),
+      'menu_name' => 'main_menu_nl',
+      'weight' => 0,
+      'expanded' => 0,
+    );
+
+    $item_nl_1_mlid = menu_link_save($item_nl_1);
+
+    $item_nl_2 = array(
+      'link_path' => '<front>',
+      'link_title' => $this->randomString(8),
+      'menu_name' => 'main_menu_nl',
+      'weight' => 0,
+      'expanded' => 0,
+    );
+
+    $item_nl_2_mlid = menu_link_save($item_nl_2);
+
+    $item_nl_3 = array(
+      'link_path' => '<front>',
+      'link_title' => $this->randomString(8),
+      'menu_name' => 'main_menu_nl',
+      'weight' => 0,
+      'expanded' => 0,
+      'plid' => $item_nl_2_mlid,
+    );
+
+    $item_nl_3_mlid = menu_link_save($item_nl_3);
+
+    return array(
+      'nl_mlids' => array(
+        $item_nl_1_mlid,
+        $item_nl_2_mlid,
+        $item_nl_3_mlid,
+      ),
+      'en_mlids' => array(
+        $item_en_1_mlid,
+        $item_en_2_mlid,
+        $item_en_3_mlid,
+      ),
+    );
+  }
+
+  /**
+   * Check if the Paddle Mega Dropdown database table is empty.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertPaddleMegaDropdownTableEmpty($message = '') {
+    $result = (bool) db_select('paddle_mega_dropdown', 'pmd')->fields('pmd')->execute()->fetchAll();
+    return $this->assertFalse($result, $message ?: 'The Paddle Mega Dropdown database table is empty.');
+  }
+
+  /**
+   * Check if the Paddle Mega Dropdown database table is not empty.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertPaddleMegaDropdownTableNotEmpty($message = '') {
+    $result = (bool) db_select('paddle_mega_dropdown', 'pmd')->fields('pmd')->execute()->fetchAll();
+    return $this->assertTrue($result, $message ?: 'The Paddle Mega Dropdown database table is not empty.');
+  }
+
+  /**
+   * Constructs a XPath query to find an element on the configure page.
+   *
+   * @param int $mlid
+   *   The menu link id to search for.
+   * @param string $path
+   *   The path the link should point to.
+   */
+  protected function megaDropdownSettingsFormXPath($mlid, $path = NULL) {
+    $parts = array(
+      '//form[@id="paddle-mega-dropdown-settings-form"]',
+      '//tr[contains(@class, :mlid)]',
+    );
+    $args[':mlid'] = $mlid;
+
+    if ($path) {
+      $parts[] = '//a[contains(@href, :path)]';
+      $args[':path'] = $path;
+    }
+
+    $query = implode('', $parts);
+
+    return $this->xpath($this->buildXPathQuery($query, $args));
+  }
+}

@@ -1,0 +1,36 @@
+/**
+ * @file
+ * Paddlet styling.
+ */
+
+// --------------------
+// FRONTEND PANE
+// --------------------
+.pane-signup-form {
+  @extend %paddlet-pane-forms;
+
+  .form-radio {
+    margin-top: -2px;
+  }
+
+  .signup-description {
+    margin-bottom: 30px;
+  }
+}
+
+.mailchimp-newsletter-wrapper {
+  margin: 15px 0;
+}
+
+.mailchimp-newsletter-wrapper + .mailchimp-newsletter-mergefields {
+  margin-top: 30px;
+}
+
+// --------------------
+// NEWSLETTER NODE
+// --------------------
+.newsletter-node-content {
+  p {
+    margin-bottom: 15px;
+  }
+}

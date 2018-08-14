@@ -1,0 +1,64 @@
+/**
+* @file
+*  Styling for the VUB specific panes.
+*/
+.vub-banner-block .vub-banner-image {
+  height: 50vh;
+  max-height: 400px;
+  position: relative;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover; }
+  .vub-banner-block .vub-banner-image .vub-center-div {
+    display: table-cell;
+    vertical-align: middle;
+    width: 100%;
+    text-align: center; }
+  .vub-banner-block .vub-banner-image .vub-outer-div {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%; }
+  .vub-banner-block .vub-banner-image .vub-inner-div {
+    display: table;
+    height: 100%;
+    width: 100%; }
+  .vub-banner-block .vub-banner-image h3 {
+    margin: 0 50px;
+    font-size: 1.625rem;
+    font-family: "Roboto Condensed";
+    line-height: 1.45; }
+  .vub-banner-block .vub-banner-image h2 {
+    font-size: 4.0625rem;
+    margin: .1em 0;
+    line-height: 1.025; }
+  .vub-banner-block .vub-banner-image p {
+    font-size: 22px;
+    font-weight: 500;
+    margin: 1em 0 0;
+    line-height: 1.2em;
+    color: #fff; }
+  .vub-banner-block .vub-banner-image h2, .vub-banner-block .vub-banner-image h3 {
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #fff; }
+  .vub-banner-block .vub-banner-image .vub-button {
+    padding-left: 2em;
+    padding-right: 2em;
+    margin-top: 1em;
+    color: #fff; }
+
+.pane-section-body .item-list ul li {
+  margin: 0 0 0.25em 1.5em; }
+
+.entity-paddle-incoming-rss-feed-item h2 {
+  padding-bottom: 5px; }
+  .entity-paddle-incoming-rss-feed-item h2 a {
+    color: #464646 !important;
+    font-size: 20px !important;
+    text-transform: none;
+    letter-spacing: normal;
+    text-decoration: none !important; }
+    .entity-paddle-incoming-rss-feed-item h2 a:hover {
+      color: #ff6600 !important; }

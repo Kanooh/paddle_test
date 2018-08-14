@@ -1,0 +1,29 @@
+name = Google Analytics
+description = Activate Google Analytics using this Paddlet in order to monitor page views and bounce rates. These statistics are an ideal tool to further optimise your website.
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = googleanalytics
+dependencies[] = strongarm
+apps[logo] = apps/logo.png
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+apps[paddle][third_party_service] = 1
+apps[restorable] = 1
+author = iSoLate
+author_url = https://drupal.org/user/2264968
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[variable][] = googleanalytics_roles
+features[variable][] = googleanalytics_site_search
+features[variable][] = googleanalytics_trackfiles_extensions
+features[variable][] = googleanalytics_visibility_roles
+files[] = tests/paddle_google_analytics.test
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_google_analytics"
+datestamp = "1473170416"
+

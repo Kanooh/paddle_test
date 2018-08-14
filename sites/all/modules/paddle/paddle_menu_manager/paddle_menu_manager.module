@@ -1,0 +1,1982 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Menu Manager module.
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_menu_manager_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/" . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_menu_manager_menu() {
+  $items = array();
+
+  $items['admin/structure/menu_manager'] = array(
+    'title' => 'Menus',
+    'page callback' => 'paddle_menu_manager_overview',
+    'access arguments' => array('manage paddle_menu_manager'),
+    'file' => 'paddle_menu_manager.admin.inc',
+  );
+
+  // Get all translation set ids of the paddle_menu_manager type. These are used
+  // to identify menus across languages.
+  $tsids = db_select('i18n_translation_set', 'ts')
+    ->fields('ts', array('tsid'))
+    ->condition('type', 'paddle_menu_manager', '=')
+    ->execute()
+    ->fetchAll();
+
+  // Create a separate menu entry for all menus so these appear as separate menu
+  // items in lists.
+  foreach ($tsids as $tsid) {
+    $items['admin/structure/menu_manager/' . $tsid->tsid] = array(
+      'title callback' => 'paddle_menu_manager_menu_page_title',
+      'title arguments' => array(3),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('paddle_menu_manager_menu_overview_form', 3),
+      'access arguments' => array('manage paddle_menu_manager'),
+      'file' => 'paddle_menu_manager.admin.inc',
+      'weight' => $tsid->tsid,
+    );
+  }
+
+  $items['admin/structure/menu_manager/%ctools_js/add'] = array(
+    'title' => 'Create new menu',
+    'page arguments' => array(3),
+    'page callback' => 'paddle_menu_manager_modal_menu_form',
+    'access arguments' => array('manage paddle_menu_manager'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/menu_manager/%ctools_js/%menu/add'] = array(
+    'title callback' => 'paddle_menu_manager_edit_menu_page_title',
+    'title arguments' => array(4),
+    'page arguments' => array(3, 4),
+    'page callback' => 'paddle_menu_manager_modal_menu_item_form',
+    'access arguments' => array('manage paddle_menu_manager'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/menu_manager/%ctools_js/node/%node/add_menu_link'] = array(
+    'title' => 'Add to menu',
+    'page arguments' => array(3, 5, 6, 7),
+    'page callback' => 'paddle_menu_manager_modal_node_menu_item_form',
+    'access arguments' => array('manage paddle_menu_manager'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/menu_manager/%ctools_js/node/%node/edit_menu_link/%menu_link'] = array(
+    'title' => 'Edit menu link',
+    'page arguments' => array(3, 5, 6, 7, 8),
+    'page callback' => 'paddle_menu_manager_modal_node_menu_item_form',
+    'access callback' => 'paddle_menu_manager_menu_item_access',
+    'access arguments' => array(7),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/menu_manager/%ctools_js/%menu/%menu_link/edit'] = array(
+    'title callback' => 'paddle_menu_manager_edit_menu_page_title',
+    'title arguments' => array(5),
+    'page arguments' => array(3, 4, 5, 6),
+    'page callback' => 'paddle_menu_manager_modal_menu_item_form',
+    'access arguments' => array(5),
+    'access callback' => 'paddle_menu_manager_menu_item_access',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/menu_manager/%ctools_js/%menu/%menu_link/delete'] = array(
+    'title callback' => 'paddle_menu_manager_delete_menu_page_title',
+    'title arguments' => array(5),
+    'page arguments' => array(3, 4, 5, 6),
+    'page callback' => 'paddle_menu_manager_modal_menu_item_form',
+    'access arguments' => array(5),
+    'access callback' => 'paddle_menu_manager_menu_item_access',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/menu_manager/%ctools_js/%menu/edit'] = array(
+    'title callback' => 'paddle_menu_manager_edit_menu_page_title',
+    'title arguments' => array(4),
+    'page arguments' => array(3, 4),
+    'page callback' => 'paddle_menu_manager_modal_menu_form',
+    'access arguments' => array('manage paddle_menu_manager'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/structure/menu_manager/%ctools_js/%menu/delete'] = array(
+    'title' => 'Delete menu',
+    'page arguments' => array(3, 4),
+    'page callback' => 'paddle_menu_manager_modal_menu_delete_confirm',
+    'access callback' => 'paddle_menu_manager_menu_delete_access',
+    'access arguments' => array(4),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['paddle_menu_manager/internal_link_autocomplete_callback'] = array(
+    'page callback' => 'paddle_menu_manager_internal_link_autocomplete_callback',
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+
+  $items['admin/structure/menu_manager/get_submenu/%menu/%menu_link/%/%'] = array(
+    'page callback' => 'paddle_menu_manager_get_submenu',
+    'page arguments' => array(4, 5, 6, 7),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('manage paddle_menu_manager'),
+    'file' => 'paddle_menu_manager.admin.inc',
+  );
+
+  $items['admin/structure/menu_manager/node_menu_items_pane/%node'] = array(
+    'page callback' => 'paddle_menu_manager_node_menu_items_pane_ajax_callback',
+    'page arguments' => array(4),
+    'type' => MENU_CALLBACK,
+    'access callback' => array('node_access'),
+    'access arguments' => array('update', 4),
+  );
+  return $items;
+}
+
+/**
+ * Title callback for the menu edit form.
+ *
+ * @param array $menu
+ *   The menu being edited.
+ *
+ * @return string
+ *   The title for the page.
+ */
+function paddle_menu_manager_edit_menu_page_title($menu) {
+  return t('Edit menu !menu', array('!menu' => $menu['title']));
+}
+
+/**
+ * Title callback for the menu page.
+ *
+ * @param int $tsid
+ *   Translation set ID of the menu.
+ */
+function paddle_menu_manager_menu_page_title($tsid) {
+  global $language_content;
+
+  $translation_set = i18n_translation_set_load($tsid);
+  $translations = $translation_set->get_translations();
+  if (isset($translations[$language_content->language])) {
+    return $translations[$language_content->language]['title'];
+  }
+
+  return '';
+}
+
+/**
+ * Displays the menu form, in a modal dialog if supported.
+ *
+ * @param bool $js
+ *   Whether or not the page was called via javascript.
+ * @param object $menu
+ *   The menu item to edit, or NULL to add a new one.
+ *
+ * @return array
+ *   Returns a render array in case a modal dialog is not supported.
+ *   Otherwise renders the necessary ajax commands itself and exits.
+ */
+function paddle_menu_manager_modal_menu_form($js, $menu = NULL) {
+  // Degrade to no js.
+  if (!$js) {
+    return drupal_get_form('paddle_menu_manager_menu_form', $menu);
+  }
+  else {
+    ctools_include('modal');
+    ctools_include('ajax');
+
+    $form_state = array(
+      'ajax' => TRUE,
+      'build_info' => array(
+        'args' => array(
+          $menu,
+        ),
+      ),
+    );
+
+    $output = ctools_modal_form_wrapper('paddle_menu_manager_menu_form', $form_state);
+
+    if ($form_state['executed']) {
+      $output = array();
+      $output[] = ctools_modal_command_dismiss();
+      $output[] = ctools_ajax_command_reload();
+    }
+
+    print ajax_render($output);
+    ajax_footer();
+    exit;
+  }
+}
+
+/**
+ * Menu builder for the menu edit/create form.
+ */
+function paddle_menu_manager_menu_form($form, &$form_state, $menu = NULL) {
+  if (!$menu) {
+    global $language_content;
+
+    $menu = array(
+      'menu_name' => NULL,
+      'title' => '',
+      'description' => '',
+      'language' => $language_content->language,
+      'i18n_mode' => I18N_MODE_LANGUAGE,
+    );
+  }
+
+  $form_state['menu'] = $menu;
+
+  // Add containers around the form fields and submit buttons to aid in theming.
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  $form['body']['title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Title'),
+    '#required' => TRUE,
+    '#default_value' => $menu['title'],
+    '#size' => 40,
+    '#description' => t('Enter the title of your menu.'),
+  );
+
+  $form['body']['description'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Description'),
+    '#default_value' => $menu['description'],
+    '#cols' => 50,
+    '#rows' => 4,
+    '#description' => t('Enter a short description of your menu.'),
+  );
+
+  $form['buttons']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit callback for the menu edit/create form.
+ */
+function paddle_menu_manager_menu_form_submit($form, &$form_state) {
+  $menu = $form_state['menu'];
+
+  $new = FALSE;
+
+  if (empty($menu['menu_name'])) {
+    // Generate a uuid as machine name for new menus.
+    $menu['menu_name'] = paddle_menu_manager_uuid_generate();
+
+    $new = TRUE;
+  }
+
+  $menu['title'] = $form_state['values']['title'];
+  $menu['description'] = $form_state['values']['description'];
+
+  menu_save($menu);
+
+  if ($new) {
+    paddle_menu_manager_create_menu_translations($menu);
+  }
+
+  menu_rebuild();
+
+  drupal_set_message(t('Menu saved successfully.'));
+
+  // Redirect to the menu overview form.
+  $form_state['redirect'] = 'admin/structure/menu_manager/' . $menu['i18n_tsid'];
+}
+
+/**
+ * Access callback for the menu delete confirmation form.
+ */
+function paddle_menu_manager_menu_delete_access($menu) {
+  if (!user_access('manage paddle_menu_manager')) {
+    return FALSE;
+  }
+
+  $protected_menus = variable_get('paddle_menu_manager_protected_menus', array());
+  if (in_array($menu['i18n_tsid'], $protected_menus)) {
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * Menu callback; confirmation form for deleting a menu.
+ *
+ * Will be displayed in a modal form if possible.
+ *
+ * @param bool $js
+ *   If js capable or not.
+ * @param array $menu
+ *   The menu item to delete.
+ *
+ * @return array
+ *   Returns a render array in case a modal dialog is not supported. Otherwise
+ *   renders the necessary ajax commands itself and exits.
+ */
+function paddle_menu_manager_modal_menu_delete_confirm($js, $menu = NULL) {
+  // Degrade to no js.
+  if (!$js) {
+    return drupal_get_form('paddle_menu_manager_menu_delete_confirm_form', $menu);
+  }
+  else {
+    ctools_include('modal');
+    ctools_include('ajax');
+
+    $form_state = array(
+      'ajax' => TRUE,
+      'build_info' => array(
+        'args' => array(
+          $menu,
+        ),
+      ),
+    );
+
+    $output = ctools_modal_form_wrapper('paddle_menu_manager_menu_delete_confirm_form', $form_state);
+
+    if ($form_state['executed']) {
+      // If the form is submitted successfully, redirect to the menu overview
+      // since we might still be on the page of the menu that was deleted.
+      $output = array();
+      $output[] = ctools_modal_command_dismiss();
+      $output[] = ctools_ajax_command_redirect('admin/structure/menu_manager');
+    }
+
+    print ajax_render($output);
+    ajax_footer();
+    exit;
+  }
+}
+
+/**
+ * Form builder; Builds a confirmation form for deletion of a Paddle menu.
+ */
+function paddle_menu_manager_menu_delete_confirm_form($form, &$form_state, $menu) {
+  $form['#menu'] = $menu;
+
+  // Get the translations of this menu.
+  $translation_set = i18n_translation_set_load($menu['i18n_tsid']);
+  $translations = $translation_set->get_translations();
+  $form_state['storage']['translations'] = $translations;
+  $form['#translations'] = $translations;
+
+  if (count($translations) == 1) {
+    // Menu exists in a single language.
+    $caption = '<p>' . t('<strong>Warning:</strong> The menu %menu will be removed, along with the menu items it contains.', array('%menu' => $menu['title'])) . '</p>';
+  }
+  else {
+    // Menu exists in multiple languages.
+    $languages = locale_language_list();
+    $caption = '<p>' . t('<strong>Warning:</strong> The following menus will be removed, along with the menu items they contain:') . '</p>';
+
+    // List the menu first in the language it was requested.
+    $caption .= '<ul><li>' . check_plain($menu['title']) . '</li>';
+
+    // List the translations of the menu.
+    unset($translations[$menu['language']]);
+    foreach ($translations as $langcode => $translation) {
+      $caption .= '<li>' . check_plain($translation['title']) . ' (' . check_plain($languages[$langcode]) . ')</li>';
+    }
+    $caption .= '</ul>';
+  }
+
+  $caption .= '<p>' . t('This action cannot be undone.') . '</p>';
+  $form = confirm_form($form, t('Are you sure you want to delete the custom menu %title?', array('%title' => $menu['title'])), 'admin/structure/menu_manager', $caption, t('Delete'));
+
+  // Make sure the content of the form is in the containers we expect them to be.
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+  $form['body']['description'] = $form['description'];
+  unset($form['description']);
+  $form['buttons']['submit'] = $form['actions']['submit'];
+  unset($form['actions']['submit']);
+
+  return $form;
+}
+
+/**
+ * Delete a menu and all links in it.
+ *
+ * This is derived from menu_delete_menu_confirm_submit().
+ * @see menu_delete_menu_confirm_submit()
+ */
+function paddle_menu_manager_menu_delete_confirm_form_submit($form, &$form_state) {
+  $menu = $form['#menu'];
+  $translations = $form['#translations'];
+  $form_state['redirect'] = 'admin/structure/menu_manager';
+
+  // System-defined menus may not be deleted.
+  $system_menus = menu_list_system_menus();
+  if (isset($system_menus[$menu['menu_name']])) {
+    return;
+  }
+
+  // Refuse to delete menus without translation set ids, these are not managed
+  // by this module.
+  if (empty($menu['i18n_tsid'])) {
+    return;
+  }
+
+  // Retrieve all menu names in the translation set, as well as a list of
+  // overview pages leading to the menus.
+  $menu_names = array();
+  $overview_pages = array();
+  foreach ($translations as $translation) {
+    $menu_names[] = $translation['menu_name'];
+    $overview_pages[] = 'admin/structure/menu/manage/' . $translation['menu_name'];
+    $overview_pages[] = 'admin/structure/menu_manager/' . $translation['i18n_tsid'];
+  }
+
+  // Reset all the menu links defined by the system via hook_menu().
+  $query = db_select('menu_links', 'ml');
+  $query->addJoin('INNER', 'menu_router', 'm', 'ml.router_path = m.path');
+  $query
+    ->fields('m')
+    ->fields('ml')
+    ->condition('ml.menu_name', $menu_names, 'IN')
+    ->condition('ml.module', 'system')
+    ->orderBy('m.number_parts');
+  $result = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($result as $link) {
+    menu_reset_item($link);
+  }
+
+  // Delete all menu links that link to overview pages of deleted menus.
+  $result = db_select('menu_links', 'ml')
+    ->fields('ml', array('mlid'))
+    ->condition('ml.link_path', $overview_pages, 'IN')
+    ->execute()
+    ->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($result as $link) {
+    menu_link_delete($link['mlid']);
+  }
+
+  // Delete the menu with corresponding translations and all its menu links.
+  foreach ($translations as $translation) {
+    menu_delete($translation);
+  }
+
+  // Delete the translation set.
+  $translation_set = i18n_translation_set_load($menu['i18n_tsid']);
+  $translation_set->delete(FALSE);
+
+  // Get rid of the menu router path for this menu by deleting it directly.
+  $path = 'admin/structure/menu_manager/' . $menu['i18n_tsid'];
+  db_delete('menu_router')
+    ->condition('path', $path)
+    ->execute();
+  db_delete('menu_links')
+    ->condition('router_path', $path)
+    ->execute();
+
+  // Clear the menu caches to get rid of the link to the deleted menu in the
+  // Management menu.
+  menu_cache_clear_all();
+  if (module_exists('paddle_menu_display')) {
+    cache_clear_all('*', 'cache_menu_displays', TRUE);
+  }
+  cache_clear_all('*', 'cache_path', TRUE);
+
+  $t_args = array('%title' => $menu['title']);
+  drupal_set_message(t('The custom menu %title has been deleted.', $t_args));
+  watchdog('menu', 'Deleted custom menu %title and all its menu links.', $t_args, WATCHDOG_NOTICE);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_menu_manager_form_paddle_menu_manager_menu_delete_confirm_form_alter(&$form, &$form_state) {
+  // Instruct CTools to close the modal when the Cancel button is clicked.
+  // @see http://drupal.org/node/1347578
+  $form['actions']['cancel']['#attributes']['class'][] = 'ctools-close-modal';
+}
+
+/**
+ * Displays the node menu link form, in a modal dialog if supported.
+ *
+ * This form is used to create and edit menu links from the node edit form.
+ *
+ * @param bool $js
+ *   If js capable or not.
+ * @param object $node
+ *   The node for which the item is being created.
+ * @param string $action
+ *   The action to take, either 'add_menu_link' or 'edit_menu_link'.
+ * @param array $menu_link
+ *   The menu link. This is only required when the $action is 'edit_menu_link'.
+ *   When creating a new menu link this is ignored.
+ * @param int $step
+ *   The current step in the multistep form wizard.
+ *
+ * @return array
+ *   Returns a render array in case a modal dialog is not supported.
+ *   Otherwise renders the necessary ajax commands itself and exits.
+ */
+function paddle_menu_manager_modal_node_menu_item_form($js, $node, $action, $menu_link = NULL, $step = NULL) {
+  if ($js) {
+    ctools_include('modal');
+    ctools_include('ajax');
+  }
+  // Define the information for the CTools multistep form wizard.
+  $path = 'admin/structure/menu_manager/' . ($js ? 'ajax' : 'nojs') . '/node/' . $node->nid . '/' . $action;
+  $path .= $action == 'edit_menu_link' ? '/' . $menu_link['mlid'] : '';
+  $path .= '/%step';
+  $form_info = array(
+    'id' => 'paddle_menu_manager_node_menu_item',
+    'path' => $path,
+    'cancel path' => 'node/' . $node->nid . '/edit',
+    'show trail' => FALSE,
+    'show back' => FALSE,
+    'show cancel' => FALSE,
+    'show return' => FALSE,
+    'next text' => $action == 'add_menu_link' ? t('Add menu link') : t('Edit menu link'),
+    'finish text' => t('Submit'),
+    'modal' => TRUE,
+
+    // Define forms for the two steps.
+    'forms' => array(
+      'menu_link' => array(
+        'title' => $action == 'add_menu_link' ? t('Add menu link') : t('Edit menu link'),
+        // CTools can figure out the form callback on its own but throws notices
+        // if the 'form id' key is not set.
+        // @see https://drupal.org/node/2265319
+        'form id' => NULL,
+      ),
+      'menu_placement' => array(
+        'title' => t('Position menu link'),
+        // CTools can figure out the form callback on its own but throws notices
+        // if the 'form id' key is not set.
+        // @see https://drupal.org/node/2265319
+        'form id' => NULL,
+      ),
+    ),
+  );
+
+  if (empty($step)) {
+    // We reset the form when $step is NULL because that means they have for
+    // whatever reason started over.
+    paddle_menu_manager_node_menu_item_cache_clear();
+    $step = 'menu_link';
+  }
+
+  // This automatically gets defaults if there wasn't anything saved.
+  $form_data = paddle_menu_manager_node_menu_item_cache_get();
+
+  $form_state = array(
+    'ajax' => $js,
+    'form_data' => &$form_data,
+    'node' => $node,
+    'action' => $action,
+    'menu_link' => $menu_link,
+  );
+
+  // Send this all off to our form. This is like drupal_get_form only wizardy.
+  ctools_include('wizard');
+  $form = ctools_wizard_multistep_form($form_info, $step, $form_state);
+  $output = drupal_render($form);
+
+  if ($js) {
+    if ($form_state['executed'] || !empty($form_state['complete']) || !empty($form_state['cancel'])) {
+      $commands = array();
+      $commands[] = ctools_modal_command_dismiss();
+
+      // Refresh the pane.
+      $commands[] = ajax_command_replace('div.pane-node-menu-items > div', paddle_menu_manager_node_menu_items_pane_render($node));
+
+      // Clear the messages so we don't get a success message on the next page
+      // load.
+      drupal_get_messages(NULL, TRUE);
+    }
+    else {
+      $commands = ctools_modal_form_render($form_state, $output);
+    }
+    print ajax_render($commands);
+    ajax_footer();
+    exit;
+  }
+  else {
+    if ($output === FALSE || !empty($form_state['complete']) || !empty($form_state['cancel'])) {
+      drupal_goto('node/' . $node->nid . '/edit');
+    }
+    return $output;
+  }
+}
+
+/**
+ * Clears the wizard cache.
+ */
+function paddle_menu_manager_node_menu_item_cache_clear() {
+  ctools_include('object-cache');
+  ctools_object_cache_clear('paddle_menu_manager_nmi', 'multistep form data');
+}
+
+/**
+ * Stores our little cache so that we can retain data from form to form.
+ *
+ * @param object $object
+ *   object with form values.
+ */
+function paddle_menu_manager_node_menu_item_cache_set($object) {
+  ctools_include('object-cache');
+  ctools_object_cache_set('paddle_menu_manager_nmi', 'multistep form data', $object);
+}
+
+/**
+ * Gets the current object from the cache, or default.
+ *
+ * @return object
+ *   cache with stored stuff.
+ */
+function paddle_menu_manager_node_menu_item_cache_get() {
+  ctools_include('object-cache');
+  $object = ctools_object_cache_get('paddle_menu_manager_nmi', 'multistep form data');
+  return $object ?: new stdClass();
+}
+
+/**
+ * Handles the 'next' click on the add/edit menu item form wizard.
+ *
+ * All we need to do is store the updated menu item in the cache.
+ */
+function paddle_menu_manager_node_menu_item_next(&$form_state) {
+  if (isset($form_state['menu_link'])) {
+    $form_state['form_data']->menu_link = $form_state['menu_link'];
+  }
+  paddle_menu_manager_node_menu_item_cache_set($form_state['form_data']);
+}
+
+/**
+ * Handles the 'finish' click on the add/edit pane form wizard.
+ *
+ * All we need to do is set a flag so the return can handle adding the pane.
+ */
+function paddle_menu_manager_node_menu_item_finish(&$form_state) {
+  $form_state['complete'] = TRUE;
+}
+
+/**
+ * Handles the 'cancel' click on the add/edit pane form wizard.
+ */
+function paddle_menu_manager_node_menu_item_cancel(&$form_state) {
+  $form_state['cancel'] = TRUE;
+}
+
+/**
+ * Menu builder for the menu item add form in the node edit screen.
+ *
+ * This is based on paddle_menu_manager_menu_item_form() with the following
+ * modifications:
+ * - Contrary to the other form we do not know the menu in advance. We default
+ *   to the main menu in Dutch.
+ * - We do know the node to which the menu link item will be linked, so the
+ *   fields to select internal and external paths are removed.
+ *
+ * If any future modifications are made to this form, also check if they would
+ * be appropriate for the other form.
+ *
+ * @see paddle_menu_manager_menu_item_form()
+ */
+function paddle_menu_manager_node_menu_item_menu_link_form($form, &$form_state) {
+  global $language_content;
+
+  $node = $form_state['node'];
+  $action = $form_state['action'];
+  $menu_link = !empty($form_state['menu_link']) ? $form_state['menu_link'] : NULL;
+
+  if (empty($menu_link) || $action == 'add_menu_link') {
+    $menu_link = array(
+      'menu_name' => 'main_menu_nl',
+      'link_title' => '',
+      'options' => array(),
+      'language' => $language_content->language,
+      'mlid' => 0,
+      'plid' => 0,
+      'link_path' => 'node/' . $node->nid,
+    );
+    $form_state['menu_link'] = $menu_link;
+  }
+
+  // If we are editing the menu links for a node, check that the original link
+  // path matches the node.
+  if ($action == 'edit_menu_link' && $menu_link['link_path'] != 'node/' . $node->nid) {
+    drupal_access_denied();
+  }
+
+  // Add containers around the form fields and submit buttons to aid in theming.
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $form['buttons']['#attributes']['class'][] = 'form-buttons';
+
+
+  if (empty($menu_link['link_title']) && isset($node->title)) {
+    $default_link_title_value = $node->title;
+  }
+  else {
+    $default_link_title_value = $menu_link['link_title'];
+  }
+
+  $form['body']['link_title'] = array(
+    '#type' => 'textfield',
+    '#maxlength' => 255,
+    '#title' => t('Title'),
+    '#required' => TRUE,
+    '#default_value' => $default_link_title_value,
+    '#size' => 40,
+    '#description' => t('Enter the title of your menu item.'),
+  );
+
+  $menu_list = array();
+  foreach (paddle_menu_manager_get_menus($language_content->language) as $menu) {
+    $menu_list[$menu['menu_name']] = $menu['title'];
+  }
+
+  $options_navigation = $menu_list;
+  $form['body']['navigation'] = array(
+    '#type' => 'select',
+    '#title' => t('Place in the navigation'),
+    '#options' => $options_navigation,
+    '#default_value' => $menu_link['menu_name'],
+    // @todo Translate this abomination into a line of beautiful English prose.
+    '#description' => t('Choose where in the navigation this needs to be hung.'),
+  );
+
+  $description = !empty($menu_link['options']['attributes']['title']) ? $menu_link['options']['attributes']['title'] : '';
+  $form['body']['description'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Description'),
+    '#default_value' => $description,
+    '#cols' => 50,
+    '#rows' => 4,
+    '#description' => t('Enter a short description of your menu item.'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit callback for the menu item add form in the node edit screen.
+ */
+function paddle_menu_manager_node_menu_item_menu_link_form_submit($form, &$form_state) {
+  $menu_link = $form_state['menu_link'];
+
+  $menu_link['link_title'] = $form_state['values']['link_title'];
+  $menu_link['description'] = $form_state['values']['description'];
+
+  // If the item has been moved to a different menu, reset the plid.
+  if ($menu_link['menu_name'] != $form_state['values']['navigation'] && !empty($menu_link['plid'])) {
+    $menu_link['plid'] = 0;
+  }
+  $menu_link['menu_name'] = $form_state['values']['navigation'];
+
+  $menu_link['options']['attributes']['title'] = $menu_link['description'];
+
+  // Make sure that when a new item is created, it appears right at the top of
+  // the menu tree, so it can be easily found.
+  if (empty($menu_link['mlid'])) {
+    $menu_link['weight'] = -100;
+  }
+
+  if ($mlid = menu_link_save($menu_link)) {
+    $form_state['menu_link'] = menu_link_load($mlid);
+    drupal_set_message(t('The menu item has been @action. Please drag it to the desired location.', array(
+      '@action' => $form_state['action'] == 'add_menu_link' ? t('created') : t('updated'),
+    )));
+
+    if ($form_state['action'] != 'add_menu_link') {
+      // If the menu item is edited (not created) then the page caches of the
+      // menu structure panes need to be cleared.
+      paddle_landing_page_clear_page_cache_of_menu_structure_panes($menu_link);
+    }
+  }
+  else {
+    // If the menu link could not be saved, output a message and prevent the
+    // wizard from proceeding to the next step.
+    drupal_set_message(t('There was an error saving the menu link.'), 'error');
+    unset($form_state['clicked_button']['#wizard type']);
+  }
+}
+
+/**
+ * Form builder for the second step of the node menu item form.
+ *
+ * In this step the user can position the menu link in the chosen menu.
+ */
+function paddle_menu_manager_node_menu_item_menu_placement_form($form, &$form_state) {
+  $tsid = !empty($form_state['tsid']) ? $form_state['tsid'] : NULL;
+
+  // If the tsid is not passed try to take it from the menu item if we have it.
+  if (!$tsid && isset($form_state['form_data']->menu_link)) {
+    $menu = menu_load($form_state['form_data']->menu_link['menu_name']);
+    $tsid = $menu['i18n_tsid'];
+  }
+
+  // Start with the original form.
+  module_load_include('inc', 'paddle_menu_manager', 'paddle_menu_manager.admin');
+  $form += paddle_menu_manager_menu_overview_form($form, $form_state, $tsid, TRUE);
+
+  // Use the original theming function, and inform it that we want to have the
+  // necessary classes so we can be rendered nicely in a modal.
+  $form['#theme'] = 'paddle_menu_manager_menu_overview_form';
+  $form['#modal_render'] = TRUE;
+
+  // Provide a class on the buttons to aid in theming.
+  $form['buttons']['#attributes']['class'][] = 'form-buttons';
+
+  // Use the submit button from the CTools multistep wizard rather than the
+  // original one.
+  unset($form['actions']);
+
+  // Attach javascript. We need to update the edited menu items when the modal
+  // is closed.
+  $form['#attached']['js'][] = drupal_get_path('module', 'paddle_menu_manager') . '/js/node_menu_items.js';
+
+  // Cache the form so it will be available for the big menu functionality.
+  // @see paddle_menu_manager_get_submenu()
+  $form_state['cache'] = TRUE;
+
+  return $form;
+}
+
+/**
+ * Submit handler for paddle_menu_manager_node_menu_item_placement_form().
+ */
+function paddle_menu_manager_node_menu_item_menu_placement_form_submit($form, &$form_state) {
+  // Delegate the work to the original form.
+  module_load_include('inc', 'paddle_menu_manager', 'paddle_menu_manager.admin');
+  paddle_menu_manager_overview_form_submit($form, $form_state);
+}
+
+/**
+ * Ajax callback. Returns the rendered node menu items pane.
+ *
+ * This is used to update the node menu items pane in the node edit form after
+ * a menu link was changed in a modal dialog.
+ *
+ * @param object $node
+ *   The node for which the node menu items pane should be rendered.
+ */
+function paddle_menu_manager_node_menu_items_pane_ajax_callback($node) {
+  $commands = array();
+
+  // Refresh the pane.
+  $commands[] = ajax_command_replace('div.pane-node-menu-items > div', paddle_menu_manager_node_menu_items_pane_render($node));
+
+  // Clear the messages so we don't get a success message on the next page
+  // load.
+  drupal_get_messages(NULL, TRUE);
+
+  $page = array('#type' => 'ajax', '#commands' => $commands);
+  ajax_deliver($page);
+}
+
+/**
+ * Returns the content of the node menu items pane.
+ *
+ * @param object $node
+ *   The node for which the node menu items pane should be rendered.
+ *
+ * @return string
+ *   The pane output rendered as HTML.
+ */
+function paddle_menu_manager_node_menu_items_pane_render($node) {
+  ctools_include('content');
+  $pane = panels_new_pane('node_menu_items', 'node_menu_items');
+  $conf = array(
+    'context' => 'argument_node_edit_1',
+    'override_title' => 1,
+    'override_title_text' => '',
+  );
+  $context = new ctools_context();
+  $context->data = $node;
+  $pane_output = ctools_content_render($pane->type, $pane->subtype, $conf, array(), array(), array('argument_node_edit_1' => $context));
+
+  return $pane_output->content;
+}
+
+/**
+ * Displays the menu item form, in a modal dialog if supported.
+ *
+ * @param bool $js
+ *   If js capable or not.
+ * @param array $menu
+ *   The menu for which the item is being created.
+ * @param array $menu_item
+ *   The menu item to edit, or NULL to add a new one.
+ * @param string $action
+ *   The action that is being performed: 'edit' or 'delete'.
+ * @param string $command
+ *   The AJAX command that is to be performed after performing the action. Can
+ *   be one of the following strings:
+ *   - 'reload': Forces a reload of the page. This is the default.
+ *   - 'remove': Removes the HTML element containing the menu item.
+ *
+ * @return array
+ *   Returns a render array in case a modal dialog is not supported.
+ *   Otherwise renders the necessary ajax commands itself and exits.
+ */
+function paddle_menu_manager_modal_menu_item_form($js, $menu, $menu_item = NULL, $action = '', $command = 'reload') {
+  // Degrade to no js.
+  if (!$js) {
+    if ($action == 'delete') {
+      return drupal_get_form('paddle_menu_manager_menu_item_delete_form', $menu, $menu_item);
+    }
+    return drupal_get_form('paddle_menu_manager_menu_item_form', $menu, $menu_item);
+  }
+  else {
+    ctools_include('modal');
+    ctools_include('ajax');
+
+    $form_state = array(
+      'ajax' => TRUE,
+      'build_info' => array(
+        'args' => array(
+          $menu,
+          $menu_item,
+        ),
+      ),
+    );
+
+    // Set up title and form callback according to the action.
+    if ($action == 'delete') {
+      $callback = 'paddle_menu_manager_menu_item_delete_form';
+      $form_state['title'] = t('Delete menu item @title', array('@title' => $menu_item['link_title']));
+    }
+    else {
+      $callback = 'paddle_menu_manager_menu_item_form';
+      $form_state['title'] = empty($menu_item['link_title']) ? t('Create menu item in @menu', array('@menu' => $menu['title'])) : t('Edit menu item @title', array('@title' => $menu_item['link_title']));
+    }
+
+    $output = ctools_modal_form_wrapper($callback, $form_state);
+
+    if ($form_state['executed']) {
+      $output = array();
+      $output[] = ctools_modal_command_dismiss();
+      switch ($command) {
+        // Reloads the page.
+        // @see _paddle_menu_manager_menu_overview_form()
+        case 'reload':
+          // Prepend the lock command so the backdrop is added before closing
+          // the modal.
+          array_unshift($output, paddle_menu_manager_ajax_command_lock());
+          $output[] = ctools_ajax_command_reload();
+          break;
+
+        // Removes the menu item from the list.
+        // @see theme_paddle_menu_manager_node_menu_item()
+        case 'remove':
+          // Suppress the output of status messages. Since the page is not
+          // refreshed these would otherwise appear out of place on the next
+          // page load.
+          drupal_get_messages();
+          $output[] = ajax_command_remove('ul.node-menu-links li.mlid-' . $menu_item['mlid']);
+          if (!empty($menu_item['link_path']) && strpos($menu_item['link_path'], "node/") === 0) {
+            $nid = substr($menu_item['link_path'], strrpos($menu_item['link_path'], '/') + 1);
+            $node = node_load($nid);
+            $output[] = ajax_command_replace('div.pane-node-menu-items > div', paddle_menu_manager_node_menu_items_pane_render($node));
+          }
+          break;
+      }
+    }
+
+    print ajax_render($output);
+    ajax_footer();
+    exit;
+  }
+}
+
+/**
+ * Menu builder for the menu item edit/create form.
+ *
+ * There is another variant of this form that is displayed on the node edit
+ * pages. If any future modifications need to be done to this form, also check
+ * if they would be appropriate for the other form.
+ *
+ * @see paddle_menu_manager_node_menu_item_form()
+ */
+function paddle_menu_manager_menu_item_form($form, &$form_state, $menu, $menu_item = NULL) {
+  if (!$menu_item) {
+    global $language_content;
+
+    $menu_item = array(
+      'menu_name' => $menu['menu_name'],
+      'link_title' => '',
+      'options' => array(),
+      'language' => $language_content->language,
+      'mlid' => 0,
+      'plid' => 0,
+      'link_path' => '<front>',
+    );
+  }
+
+  $form_state['menu_item'] = $menu_item;
+
+  // Add containers around the form fields and submit buttons to aid in theming.
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+
+  // Text fields have a max length of 128 by default, so make sure to set it to
+  // 255 for the title field so that it's the same as page titles.
+  $form['body']['link_title'] = array(
+    '#type' => 'textfield',
+    '#maxlength' => 255,
+    '#title' => t('Title'),
+    '#default_value' => $menu_item['link_title'],
+    '#required' => TRUE,
+    '#size' => 40,
+    '#description' => t('Enter the title of your menu item.'),
+    '#prefix' => '<div id="paddle-automatic-menu-title">',
+    '#suffix' => '</div>'
+  );
+
+  $default_content = 'internal';
+  if (url_is_external($menu_item['link_path'])) {
+    $default_content = 'external';
+  }
+
+  $options_content = array(
+    'internal' => t('Internal link'),
+    'external' => t('External link'),
+  );
+
+  $form['body']['content_button'] = array(
+    '#type' => 'radios',
+    '#title' => 'Link',
+    '#default_value' => $default_content,
+    '#options' => $options_content,
+  );
+
+  $internal_link = '';
+  if (!url_is_external($menu_item['link_path'])) {
+    $internal_link = $menu_item['link_path'];
+  }
+
+  $form['body']['internal_link'] = array(
+    '#type' => 'textfield',
+    '#title' => '',
+    '#default_value' => $internal_link,
+    '#size' => 60,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="content_button"]' => array('value' => 'internal'),
+      ),
+    ),
+    '#autocomplete_path' => 'paddle_menu_manager/internal_link_autocomplete_callback',
+    '#ajax' => array(
+      'callback' => 'paddle_menu_manager_callback',
+      'wrapper' => 'paddle-automatic-menu-title',
+    ),
+  );
+
+  $form['body']['external_link'] = array(
+    '#type' => 'textfield',
+    '#title' => '',
+    '#default_value' => url_is_external($menu_item['link_path']) !== FALSE ? $menu_item['link_path'] : 'http://',
+    '#size' => 60,
+    '#maxlength' => defined('PADDLE_CORE_EXTERNAL_URL_MAX_LENGTH') ? PADDLE_CORE_EXTERNAL_URL_MAX_LENGTH : 255,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="content_button"]' => array('value' => 'external'),
+      ),
+    ),
+  );
+
+  $menus = db_select('menu_custom', 'mc')
+    ->fields('mc')
+    ->condition('i18n_tsid', 0, '>')
+    ->condition('language', $menu_item['language'], '=')
+    ->execute()
+    ->fetchAllAssoc('menu_name', PDO::FETCH_ASSOC);
+
+  foreach ($menus as $menu_name => $menu_array) {
+    $custom_menus[$menu_name] = t($menu_array['title']);
+  }
+  asort($custom_menus);
+
+  // Generate the options with the menus and menu items.
+  $options_navigation = array();
+  foreach ($custom_menus as $menu_name => $menu_title) {
+    $m_tree = user_access('view all unpublished content') ? paddle_landing_page_menu_build_tree($menu_name) : menu_build_tree($menu_name);
+    $first_option = '<' . $menu_title . '>';
+    $menu_items = paddle_landing_page_build_menu_structure($m_tree, $first_option);
+    // Change the array key to "<menu_name>:<mlid".
+    unset($menu_items[0]);
+    $options_navigation[$menu_name . ':0'] = $first_option;
+    foreach ($menu_items as $index => $title) {
+      $options_navigation[$menu_name . ':' . $index] = '-' . $title;
+    }
+  }
+  $default_navigation = $menu['menu_name'] . ':' . $menu_item['plid'];
+
+  $form['body']['navigation'] = array(
+    '#type' => 'select',
+    '#title' => t('Place in the navigation'),
+    '#options' => $options_navigation,
+    '#default_value' => $default_navigation,
+    // @todo Translate this abomination into a line of beautiful English prose.
+    '#description' => t('Choose where in the navigation this needs to be hung.'),
+  );
+
+  $description = !empty($menu_item['options']['attributes']['title']) ? $menu_item['options']['attributes']['title'] : '';
+  $form['body']['description'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Description'),
+    '#default_value' => $description,
+    '#cols' => 50,
+    '#rows' => 4,
+    '#description' => t('Enter a short description of your menu item.'),
+  );
+
+  $form['buttons']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+
+  return $form;
+}
+
+/**
+ *  Set the value of the link_title field and return it.
+ */
+function paddle_menu_manager_callback($form, &$form_state) {
+
+  if ($form['body']['link_title']['#value'] == '') {
+    $node_url = drupal_get_normal_path($form_state['values']['internal_link']);
+    $node = menu_get_object("node", 1, $node_url);
+    $form['body']['link_title']['#value'] = $node->title;
+    return $form['body']['link_title'];
+  }
+}
+
+/**
+ * Validate callback for the menu item edit/create form.
+ */
+function paddle_menu_manager_menu_item_form_validate($form, &$form_state) {
+  global $language_content;
+  switch ($form_state['values']['content_button']) {
+    case 'internal':
+      // We need to check if the path is generated with the autocomplete.
+      $matches = array();
+      $result = preg_match('/ \(node\/([0-9]+)\)$/', $form_state['values']['internal_link'], $matches);
+      if ($result > 0) {
+        // It is indeed a value that looks like "node title (node/999)".
+        $form_state['values']['internal_link'] = 'node/' . $matches[$result];
+      }
+      $normal_path = drupal_get_normal_path($form_state['values']['internal_link'], $language_content->language);
+      if (url_is_external($normal_path)) {
+        form_set_error('internal_link', 'The link you entered is not an internal link.');
+      }
+      else {
+        // This is taken from the menu item validate handler from core.
+        // @see menu_edit_item_validate().
+        $item = &$form_state['menu_item'];
+        $item['link_path'] = $normal_path;
+        $parsed_link = parse_url($item['link_path']);
+        if (isset($parsed_link['query'])) {
+          $item['options']['query'] = drupal_get_query_array($parsed_link['query']);
+        }
+        else {
+          // Use unset() rather than setting to empty string
+          // to avoid redundant serialized data being stored.
+          unset($item['options']['query']);
+        }
+        if (isset($parsed_link['fragment'])) {
+          $item['options']['fragment'] = $parsed_link['fragment'];
+        }
+        else {
+          unset($item['options']['fragment']);
+        }
+        if ($item['link_path'] != $parsed_link['path']) {
+          $item['link_path'] = $parsed_link['path'];
+        }
+
+        if (!trim($item['link_path']) || !drupal_valid_path($item['link_path'], TRUE)) {
+          form_set_error('internal_link', t("The path '@link_path' is either invalid or you do not have access to it.", array('@link_path' => $item['link_path'])));
+        }
+      }
+      break;
+
+    case 'external':
+      if (!url_is_external($form_state['values']['external_link'])) {
+        form_set_error('external_link', 'The link you entered is not an external link.');
+      }
+      break;
+  }
+}
+
+/**
+ * Submit callback for the menu item edit/create form.
+ */
+function paddle_menu_manager_menu_item_form_submit($form, &$form_state) {
+  $menu_item = $form_state['menu_item'];
+
+  $menu_item['link_title'] = $form_state['values']['link_title'];
+  $menu_item['description'] = $form_state['values']['description'];
+
+  // Set the link path. Note: for internal paths this has already been set in
+  // the validate handler.
+  switch ($form_state['values']['content_button']) {
+    case 'external':
+      $menu_item['link_path'] = $form_state['values']['external_link'];
+      break;
+  }
+
+  $plid = explode(':', $form_state['values']['navigation']);
+  $menu_item['plid'] = $plid[1];
+
+  // Set the menu name so it is saved by menu_link_save.
+  $menu_item['menu_name'] = $plid[0];
+
+  $menu_item['options']['attributes']['title'] = $menu_item['description'];
+  if (!menu_link_save($menu_item)) {
+    drupal_set_message(t('There was an error saving the menu link.'), 'error');
+  }
+  else {
+    drupal_set_message(t('The menu item has been saved successfully.'));
+  }
+
+  $menu = menu_load($menu_item['menu_name']);
+  // Clears the page cache of all pages which contain this menu item in the
+  // menu structure pane.
+  paddle_landing_page_clear_page_cache_of_menu_structure_panes($menu_item);
+  $form_state['redirect'] = 'admin/structure/menu_manager/' . $menu['i18n_tsid'];
+}
+
+/**
+ * Build a confirm form for deletion of a single menu link.
+ */
+function paddle_menu_manager_menu_item_delete_form($form, &$form_state, $menu, $item) {
+  $form['#menu'] = $menu;
+  $form['#item'] = $item;
+  $form = confirm_form($form, t('Are you sure you want to delete the custom menu link %item?', array('%item' => $item['link_title'])), 'admin/structure/menu_manager/' . $menu['i18n_tsid']);
+
+  // Make sure the content of the form is in the containers
+  // we expect them to be.
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+  $form['body']['description'] = $form['description'];
+  unset($form['description']);
+  $form['buttons']['submit'] = $form['actions']['submit'];
+  unset($form['actions']['submit']);
+
+  return $form;
+}
+
+/**
+ * Process menu delete form submissions.
+ */
+function paddle_menu_manager_menu_item_delete_form_submit($form, &$form_state) {
+  $item = $form['#item'];
+  menu_link_delete($item['mlid']);
+  $t_args = array('%title' => $item['link_title']);
+  drupal_set_message(t('The menu link %title has been deleted.', $t_args));
+  watchdog('menu', 'Deleted menu link %title.', $t_args, WATCHDOG_NOTICE);
+  $form_state['redirect'] = 'admin/structure/menu_manager/' . $form['#menu']['i18n_tsid'];
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_menu_manager_permission() {
+  $return = array();
+
+  $return['manage paddle_menu_manager'] = array(
+    'title' => t('Manage menus'),
+  );
+
+  $return['manage_menu_link_to_published_nodes'] = array(
+    'title' => t('Manage menu links linked to published nodes'),
+  );
+
+  return $return;
+}
+
+/**
+ * Load the language for the langcode.
+ *
+ * @param string $langcode
+ *   The langcode of the language we need.
+ *
+ * @return object
+ *   Returns the language object.
+ */
+function paddle_menu_manager_load_language($langcode = NULL) {
+  if (empty($langcode)) {
+    global $language;
+    return $language;
+  }
+
+  $languages = language_list();
+  if (isset($languages[$langcode])) {
+    return $languages[$langcode];
+  }
+
+  return FALSE;
+}
+
+/**
+ * Get the menus for the given language.
+ *
+ * @param string $langcode
+ *   The langcode for the menus we need to show.
+ *
+ * @return array
+ *   An array of menu definition arrays, keyed by menu name.
+ */
+function paddle_menu_manager_get_menus($langcode = NULL) {
+  $list = array();
+
+  if ($language = paddle_menu_manager_load_language($langcode)) {
+    $menus = menu_load_all();
+
+    foreach ($menus as $menu) {
+      if ($menu['language'] == $language->language && $menu['i18n_tsid'] > 0) {
+        $list[$menu['menu_name']] = $menu;
+      }
+    }
+  }
+
+  return $list;
+}
+
+/**
+ * Retrieves a menu by name in the given language.
+ *
+ * @param string $menu_name
+ *   The name of the menu to retrieve. This may be in any language.
+ * @param string $langcode
+ *   Optional langcode for the menu. Defaults to the current content language.
+ *
+ * @return array
+ *   Array defining the custom menu, or FALSE if the menu doesn't exist.
+ */
+function paddle_menu_manager_get_menu($menu_name, $langcode = NULL) {
+  global $language_content;
+
+  // Default to the current content language.
+  $langcode = $langcode ?: $language_content->language;
+
+  // If the menu is not in the requested language, retrieve the translated menu.
+  $menu = menu_load($menu_name);
+  if ($menu['language'] != $langcode && isset($menu['i18n_tsid']) && $menu['i18n_tsid']) {
+    $translation_set = i18n_translation_set_load($menu['i18n_tsid']);
+    $translations = $translation_set->get_translations();
+    $menu = !empty($translations[$langcode]) ? $translations[$langcode] : FALSE;
+  }
+
+  return $menu;
+}
+
+/**
+ * Implements hook_i18n_translation_set_info().
+ */
+function paddle_menu_manager_i18n_translation_set_info() {
+  return array(
+    'paddle_menu_manager' => array(
+      'title' => t('Menus'),
+      'class' => 'paddle_menu_manager_translation_set',
+    ),
+  );
+}
+
+/**
+ * Implements hook_i18n_object_info().
+ */
+function paddle_menu_manager_i18n_object_info() {
+  $info['paddle_menu_manager'] = array(
+    'title' => t('Menu'),
+    'key' => 'menu_name',
+    'load callback' => 'menu_load',
+    'base path' => 'admin/structure/menu/manage',
+    'placeholders' => array(
+      '%menu' => 'menu_name',
+    ),
+    'edit path' => 'admin/structure/menu/manage/%menu/edit',
+    'translate tab' => 'admin/structure/menu/manage/%menu/translate',
+    'list callback' => 'menu_load_all',
+    'string translation' => array(
+      'textgroup' => 'menu',
+      'type' => 'menu',
+      'properties' => array(
+        'title' => t('Title'),
+        'description' => t('Description'),
+      ),
+    ),
+    'translation set' => TRUE,
+  );
+  return $info;
+}
+
+/**
+ * Creates a clone of a menu in a particular language.
+ *
+ * The cloned menu will be put in the same translation set as the given menu.
+ *
+ * @param array $menu
+ *   A custom menu as returned by menu_load().
+ * @param object $language
+ *   A language object.
+ *
+ * @return bool
+ *   TRUE if the menu was cloned successfully, FALSE otherwise.
+ */
+function paddle_menu_manager_create_menu_translation($menu, $language) {
+  // Check if a menu with the given language already exists in the translation
+  // set.
+  $translation_set = i18n_translation_set_load($menu['i18n_tsid']);
+  if (array_key_exists($language->language, $translation_set->get_translations())) {
+    return FALSE;
+  }
+
+  // Generate a uuid for the menu name.
+  $menu['menu_name'] = paddle_menu_manager_uuid_generate();
+  $menu['language'] = $language->language;
+  menu_save($menu);
+
+  return TRUE;
+}
+
+/**
+ * Generate a clone of the given menu for each enabled language.
+ *
+ * If a translation set id had not yet been created for the menu, this will be
+ * added to $menu by reference.
+ *
+ * @param array $menu
+ *   A custom menu as returned by menu_load().
+ *
+ * @return bool
+ *   TRUE if new clones were created, FALSE otherwise.
+ */
+function paddle_menu_manager_create_menu_translations(&$menu) {
+  // Refuse to clone the menu if it does not have a language, or is not using
+  // the 'fixed language' translation mode.
+  $has_language = !empty($menu['language']) && $menu['language'] != LANGUAGE_NONE;
+  $language_mode = isset($menu['i18n_mode']) ? $menu['i18n_mode'] : FALSE;
+  if (!$has_language || $language_mode != I18N_MODE_LANGUAGE) {
+    return FALSE;
+  }
+
+  // Generate a new translation set if the menu is not yet part of one.
+  if (empty($menu['i18n_tsid'])) {
+    $translation_set = i18n_translation_set_create('paddle_menu_manager');
+    $menu['i18n_tsid'] = $translation_set->tsid;
+
+    db_update('menu_custom')
+      ->fields(array(
+        'i18n_tsid' => $translation_set->tsid,
+      ))
+      ->condition('menu_name', $menu['menu_name'])
+      ->execute();
+  }
+
+  $translations_created = 0;
+  // Create the clones.
+  $language_list = language_list('enabled');
+  foreach ($language_list[1] as $language_code => $language) {
+    // Skip the current language.
+    if ($menu['language'] == $language_code) {
+      continue;
+    }
+    if (paddle_menu_manager_create_menu_translation($menu, $language)) {
+      $translations_created++;
+    }
+  }
+
+  return (bool) $translations_created;
+}
+
+/**
+ * Implements hook_menu_update().
+ */
+function paddle_menu_manager_menu_update($menu) {
+  // Store the translation set id.
+  $menu['i18n_tsid'] = isset($menu['i18n_tsid']) ? $menu['i18n_tsid'] : 0;
+
+  db_update('menu_custom')
+    ->fields(array('i18n_tsid' => $menu['i18n_tsid']))
+    ->condition('menu_name', $menu['menu_name'])
+    ->execute();
+
+  // Update the cached menus.
+  menu_cache_clear_all();
+
+  // Clear the translation sets cache if needed.
+  if ($menu['i18n_tsid']) {
+    entity_get_controller('i18n_translation')->resetCache();
+  }
+}
+
+/**
+ * Implements hook_menu_insert().
+ */
+function paddle_menu_manager_menu_insert($menu) {
+  paddle_menu_manager_menu_update($menu);
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_menu_manager_theme() {
+  return array(
+    'paddle_menu_manager_node_menu_item' => array(
+      'variables' => array(
+        'label' => NULL,
+        'metadata' => NULL,
+      ),
+    ),
+    'paddle_menu_manager_overview' => array(
+      'file' => 'paddle_menu_manager.admin.inc',
+      'variables' => array(
+        'title' => NULL,
+        'name' => NULL,
+        'description' => NULL,
+      ),
+    ),
+    'paddle_menu_manager_menu_overview_form' => array(
+      'render element' => 'form',
+      'file' => 'paddle_menu_manager.admin.inc',
+    ),
+  );
+}
+
+/**
+ * Returns HTML for a menu item on the node edit page.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - 'breadcrumb': Array of menu link titles representing the breadcrumb
+ *     trail.
+ *   - 'menu': The menu.
+ *   - 'menu_link': The menu link item.
+ *   - 'node': The node that is being edited.
+ *
+ * @ingroup themeable
+ */
+function theme_paddle_menu_manager_node_menu_item($variables) {
+  $output = '';
+
+  // Output the action links as icons.
+  $actions = array(
+    'view' => array(
+      '#theme' => 'link',
+      '#text' => '<span>' . t('View') . '</span>',
+      '#path' => $variables['menu_link']['href'],
+      '#options' => array(
+        'html' => TRUE,
+        'attributes' => array(
+          'class' => array('ui-icon', 'ui-icon-hiddentext', 'ui-icon-visit'),
+        ),
+      ),
+    ),
+    'edit' => array(
+      '#markup' => ctools_modal_text_button(t('Edit'), 'admin/structure/menu_manager/nojs/node/' . $variables['node']->nid . '/edit_menu_link/' . $variables['menu_link']['mlid'], t('Edit this menu item.'), 'ui-icon ui-icon-hiddentext ui-icon-edit'),
+      '#access' => paddle_menu_manager_menu_item_access($variables['menu_link']),
+    ),
+    'delete' => array(
+      '#markup' => ctools_modal_text_button(t('Delete'), 'admin/structure/menu_manager/nojs/' . $variables['menu_link']['menu_name'] . '/' . $variables['menu_link']['mlid'] . '/delete/remove', t('Delete this menu item.'), 'ui-icon ui-icon-hiddentext ui-icon-delete'),
+      '#access' => paddle_menu_manager_menu_item_access($variables['menu_link']),
+    ),
+  );
+
+  $output .= render($actions);
+
+  // Output the name of the menu.
+  $output .= '<span class="menu-name menu-name-' . $variables['menu_link']['menu_name'] . '">' . $variables['menu']['title'] . '</span>';
+
+  // Output the breadcrumbs.
+  $last_index = count($variables['breadcrumb']) - 1;
+
+  foreach ($variables['breadcrumb'] as $index => $breadcrumb_item) {
+    $breadcrumb_label = check_plain($breadcrumb_item);
+    if ($index === $last_index) {
+      $breadcrumb_label = '<strong>' . $breadcrumb_label . '</strong>';
+    }
+    $variables['breadcrumb'][$index] = '<span>' . $breadcrumb_label . '</span>';
+  }
+
+  $output .= ' - <span class="breadcrumb">' . implode(' > ', $variables['breadcrumb']) . '</span>';
+
+  return $output;
+}
+
+/**
+ * After-build function of the paddle_menu_manager_menu_overview_form.
+ */
+function paddle_menu_manager_add_contextual_actions_menu_items_overview($form, $form_state) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $actions = array();
+  $actions['paddle_menu_manager_create_menu'] = array(
+    'action' => ctools_modal_text_button(t('Create menu'), 'admin/structure/menu_manager/nojs/add', t('Create a new menu.'), 'ctools-modal-overlay-persist ui-icon fa-plus'),
+    'class' => array('add', 'add-menu'),
+    'weight' => 3,
+  );
+
+  $actions['paddle_menu_manager_edit_menu'] = array(
+    'action' => ctools_modal_text_button(t('Edit menu'), 'admin/structure/menu_manager/nojs/' . $form['#menu']['menu_name'] . '/edit', t('Edit the title and description of this menu'), 'ctools-modal-overlay-persist ui-icon fa-edit'),
+    'link' => 'admin/structure/menu_manager/nojs/' . $form['#menu']['menu_name'] . '/edit',
+    'class' => array('edit'),
+    'weight' => 2,
+  );
+
+  $actions['paddle_menu_manager_create_menu_item'] = array(
+    'action' => ctools_modal_text_button(t('Create menu item'), 'admin/structure/menu_manager/nojs/' . $form['#menu']['menu_name'] . '/add', t('Create a new menu item.'), 'ctools-modal-overlay-persist ui-icon fa-plus'),
+    'link' => 'admin/structure/menu_manager/nojs/' . $form['#menu']['menu_name'] . '/add',
+    'class' => array('add', 'add-item'),
+    'weight' => 1,
+  );
+
+  if (paddle_menu_manager_menu_delete_access($form['#menu'])) {
+    $actions['paddle_menu_manager_delete_menu'] = array(
+      'action' => ctools_modal_text_button(t('Delete menu'), 'admin/structure/menu_manager/nojs/' . $form['#menu']['menu_name'] . '/delete', t('Delete this menu'), 'ctools-modal-overlay-persist ui-icon fa-plus'),
+      'link' => 'admin/structure/menu_manager/nojs/' . $form['#menu']['menu_name'] . '/delete',
+      'class' => array('delete'),
+      'weight' => 4,
+    );
+  }
+
+  if (isset($form['actions']['submit'])) {
+    $actions['paddle_menu_manager_save'] = array(
+      'action' => l(t('Save'), '', array(
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-check'),
+          'data-paddle-contextual-toolbar-click' => $form['actions']['submit']['#id'],
+        ),
+        'html' => TRUE,
+        'external' => TRUE,
+      )),
+      'class' => array('save'),
+      'weight' => 0,
+    );
+  }
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Generates a universally unique identifier without hyphens.
+ *
+ * This is a wrapper around uuid_generate() from the UUID module. It strips out
+ * the 4 hyphens of a standard 36 character UUID to stay within the 32 character
+ * limit of menu machine names.
+ * @see uuid_generate()
+ *
+ * @return string
+ *   A UUID, made up of 32 hex digits and 0 hyphens.
+ */
+function paddle_menu_manager_uuid_generate() {
+  module_load_include('inc', 'uuid');
+  return str_replace('-', '', uuid_generate());
+}
+
+/**
+ * Access callback for the edit and delete links of a menu item.
+ */
+function paddle_menu_manager_menu_item_access($menu_item) {
+  if (!user_access('manage paddle_menu_manager')) {
+    return FALSE;
+  }
+
+  if ($menu_item['router_path'] == 'node/%') {
+    $nid = explode('/', $menu_item['link_path']);
+    $node = node_load($nid[1]);
+
+    if (!empty($node) && $node->status == 1 && !user_access('manage_menu_link_to_published_nodes')) {
+      return FALSE;
+    }
+  }
+
+  return TRUE;
+}
+
+/**
+ * Autocomplete callback for nodes by title or real path.
+ *
+ * @param string $string
+ *   The string that will be searched.
+ * @param int $nid
+ *   When the user searches for "node/<nid>" this will hold the nid.
+ *
+ * Searches for a node by title or real path, but then identifies it by nid,
+ * so the actual returned value can be used later by the form.
+ *
+ * The returned $matches array has
+ * - key: The title, with the identifying node path in brackets, like
+ *     "Some node title (node/444)"
+ * - value: the title which will be displayed in the autocompleted dropdown.
+ */
+function paddle_menu_manager_internal_link_autocomplete_callback($string = "", $nid = 0) {
+  global $language_content;
+  $results = array();
+  if ($string) {
+    $query = db_select('node', 'n');
+    $query->addTag('paddle_menu_manager_internal_link_autocomplete');
+    $query->fields('n', array('nid', 'title'));
+    $query->condition('n.language', $language_content->language, '=');
+
+    if ($string == 'node' && is_numeric($nid) && $nid !== 0) {
+      // The search string is a node path.
+      $query->condition('n.nid', db_like($nid) . '%', 'LIKE');
+    }
+    elseif ($string != 'node') {
+      // The search string is a title or something else.
+      $query->condition('n.title', '%' . db_like(implode('/', func_get_args())) . '%', 'LIKE');
+    }
+    // If neither is true we basically show the first 10 nodes we can find.
+    $query->range(0, 10);
+    $result = $query->execute();
+    foreach ($result as $node) {
+      $results[$node->title . " (node/$node->nid)"] = check_plain($node->title) . " (node/$node->nid)";
+    }
+  }
+
+  drupal_json_output(array_slice($results, 0, 10));
+}
+
+/**
+ * Implements hook_node_metadata_GROUP_items_alter().
+ */
+function paddle_menu_manager_node_metadata_structure_items_alter(&$node, &$items) {
+  $links = paddle_menu_manager_get_menu_links_by_nid($node->nid);
+
+  // Calculate the min and max weight for the breadcrumb metadata items by
+  // taking the URL alias' weight and subtracting the number of menu links
+  // multiplied by a certain amount to leave some space in between.
+  $max_weight = $items['alias']['weight'];
+  $weight_gap = 5;
+  $min_weight = $max_weight - (count($links) * $weight_gap);
+
+  // Make sure the alias stays on top of the breadcrumb metadata.
+  $items['alias']['weight'] = $min_weight - $weight_gap;
+
+  $human_count = 1;
+  $weight = $min_weight;
+  foreach ($links as $mlid => $link) {
+    $breadcrumbs = paddle_menu_manager_breadcrumb_links($link);
+    $titles = paddle_menu_manager_breadcrumb_titles($link);
+
+    $items['menu_link_' . $mlid] = array(
+      'label' => t('Navigation path @count', array('@count' => $human_count)),
+      'raw' => implode(array_keys($breadcrumbs), ','),
+      'metadata' => implode($titles, ' > '),
+      'weight' => $weight,
+    );
+
+    $human_count++;
+    $weight += $weight_gap;
+  }
+}
+
+/**
+ * Gets all menu links pointing to a specific node.
+ *
+ * @param int $nid
+ *   Node id.
+ *
+ * @return array
+ *   List of menu items loaded using menu_link_load().
+ */
+function paddle_menu_manager_get_menu_links_by_nid($nid) {
+  $select = db_select('menu_links', 'ml');
+  $select->fields('ml', array('mlid'))
+    ->condition('ml.link_path', 'node/' . $nid);
+  $results = $select->execute();
+
+  $links = array();
+  foreach ($results as $result) {
+    $links[$result->mlid] = menu_link_load($result->mlid);
+  }
+  return $links;
+}
+
+/**
+ * Generates an array of breadcrumb items data for a specific menu link.
+ *
+ * @param array $menu_link
+ *   Menu link array as generated by menu_link_load().
+ *
+ * @return array
+ *   List of menu items, keyed by their parent link id.
+ */
+function paddle_menu_manager_breadcrumb_links($menu_link) {
+  // Get the list of parent items so we can compile the breadcrumb.
+  $plids = array();
+  $p = 1;
+  while (!empty($menu_link['p' . $p])) {
+    $plids[] = $menu_link['p' . $p++];
+  }
+
+  // Compile the breadcrumb in the correct order.
+  $breadcrumb = array();
+  foreach ($plids as $plid) {
+    $breadcrumb[$plid] = menu_link_load($plid);
+  }
+
+  return $breadcrumb;
+}
+
+/**
+ * Generates an array of breadcrumb titles for a specific menu link.
+ *
+ * @param array $menu_link
+ *   Menu link array as generated by menu_link_load().
+ *
+ * @return string[]
+ *   List of titles for the breadcrumb of the passed menu link, keyed by their
+ *   menu link id. This includes the title of the menu link itself.
+ */
+function paddle_menu_manager_breadcrumb_titles($menu_link) {
+  $links = paddle_menu_manager_breadcrumb_links($menu_link);
+  $titles = array();
+  foreach ($links as $plid => $link) {
+    $titles[$plid] = $link['title'];
+  }
+  return $titles;
+}
+
+/**
+ * Issue an ajax command that places a backdrop to prevent interaction.
+ */
+function paddle_menu_manager_ajax_command_lock() {
+  drupal_add_js(drupal_get_path('module', 'paddle_menu_manager') . '/js/ajax.js');
+  return array(
+    'command' => 'lock',
+  );
+}
+
+/**
+ * Generates an array of all the paddle menus.
+ *
+ * All menus available in the standard Paddle UI for all languages will be
+ * returned.
+ *
+ * @return array
+ *   The menus for each translation set.
+ */
+function paddle_menu_manager_get_paddle_menus() {
+  // Get all translation set ids of the paddle_menu_manager type. These are used
+  // to identify menus across languages.
+  $menus = array();
+  $tsids = db_select('i18n_translation_set', 'ts')
+    ->fields('ts', array('tsid'))
+    ->condition('type', 'paddle_menu_manager', '=')
+    ->execute()
+    ->fetchAll();
+  foreach ($tsids as $tsid) {
+    $translation_set = i18n_translation_set_load($tsid->tsid);
+    $menus[$tsid->tsid] = $translation_set->get_translations();
+  }
+
+  return $menus;
+}
+
+/**
+ * Generates 4 menu blocks, one /language.
+ *
+ * @return array
+ *   The menus block for each translation set.
+ */
+function paddle_menu_manager_menu_block_blocks() {
+  return array(
+    // The array key is the block id used by menu block.
+    'vertical-menu-nl' => array(
+      // Use the array keys/values described in menu_tree_build().
+      'menu_name' => 'main_menu_nl',
+      'parent_mlid' => 0,
+      'title_link' => FALSE,
+      'admin_title' => 'Vertical-menu-nl',
+      'level' => 1,
+      'follow' => 0,
+      'depth' => 3,
+      'expanded' => FALSE,
+      'sort' => FALSE,
+    ),
+
+    'vertical-menu-fr' => array(
+      // Use the array keys/values described in menu_tree_build().
+      'menu_name' => 'main_menu_fr',
+      'parent_mlid' => 0,
+      'title_link' => FALSE,
+      'admin_title' => 'Vertical-menu-fr',
+      'level' => 1,
+      'follow' => 0,
+      'depth' => 3,
+      'expanded' => FALSE,
+      'sort' => FALSE,
+    ),
+
+    'vertical-menu-de' => array(
+      // Use the array keys/values described in menu_tree_build().
+      'menu_name' => 'main_menu_de',
+      'parent_mlid' => 0,
+      'title_link' => FALSE,
+      'admin_title' => 'Vertical-menu-de',
+      'level' => 1,
+      'follow' => 0,
+      'depth' => 3,
+      'expanded' => FALSE,
+      'sort' => FALSE,
+    ),
+
+    'vertical-menu-en' => array(
+      // Use the array keys/values described in menu_tree_build().
+      'menu_name' => 'main_menu_en',
+      'parent_mlid' => 0,
+      'title_link' => FALSE,
+      'admin_title' => 'Vertical-menu-en',
+      'level' => 1,
+      'follow' => 0,
+      'depth' => 3,
+      'expanded' => FALSE,
+      'sort' => FALSE,
+    ),
+
+  );
+}

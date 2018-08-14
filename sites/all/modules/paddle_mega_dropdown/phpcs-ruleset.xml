@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- PHP_CodeSniffer standard for Paddle Mega Dropdown. -->
+<!-- See http://pear.php.net/manual/en/package.php.php-codesniffer.annotated-ruleset.php -->
+<ruleset name="Paddle-Mega-Dropdown">
+    <description>Drupal coding standard for Paddle Mega Dropdown</description>
+
+    <rule ref="Drupal"></rule>
+
+    <rule ref="Drupal.NamingConventions.ValidClassName">
+        <exclude-pattern>*/plugins/display_renderers/panels_renderer_paddle_mega_dropdown.class.php</exclude-pattern>
+    </rule>
+
+    <rule ref="Drupal.NamingConventions.ValidFunctionName">
+        <exclude-pattern>*/plugins/display_renderers/panels_renderer_paddle_mega_dropdown.class.php</exclude-pattern>
+        <exclude-pattern>*/plugins/entity/PanelizerEntityPaddleMegaDropdown.class.php</exclude-pattern>
+    </rule>
+
+    <rule ref="Drupal.NamingConventions.ValidVariableName.LowerCamelName">
+        <exclude-pattern>*/plugins/entity/PanelizerEntityPaddleMegaDropdown.class.php</exclude-pattern>
+    </rule>
+
+</ruleset>

@@ -1,0 +1,39 @@
+<?php
+
+/**
+ * @file
+ * Install and update hook for Who is who paddlet.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_who_is_who_enable() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_who_is_who'));
+
+  // Give permissions to work with the poll content type.
+  $permissions = array(
+    'edit who_is_who content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_who_is_who_disable() {
+  $permissions = array(
+    'edit who_is_who content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_revoke_permissions($role->rid, $permissions);
+  }
+}

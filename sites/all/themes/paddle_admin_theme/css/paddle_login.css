@@ -1,0 +1,1255 @@
+/**
+* @file
+* User login page.
+*
+* Contains all styles related user login form.
+*/
+/* structure.css should be also converted to sass so it will make those of the
+following variables */
+/**
+* @file
+* Resets.
+*
+* Contains all styles related resetting of default HTML elements.
+*/
+body,
+div,
+dl,
+dt,
+dd,
+ul,
+li,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+pre,
+form,
+p,
+blockquote,
+th,
+td {
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: #868686;
+  font-family: 'Source Sans Pro',Helvetica,Arial,sans-serif;
+}
+
+textarea:disabled,
+input:not([type]):disabled,
+input[type="color"]:disabled,
+input[type="date"]:disabled,
+input[type="datetime"]:disabled,
+input[type="datetime-local"]:disabled,
+input[type="email"]:disabled,
+input[type="month"]:disabled,
+input[type="password"]:disabled,
+input[type="number"]:disabled,
+input[type="search"]:disabled,
+input[type="tel"]:disabled,
+input[type="text"]:disabled,
+input[type="time"]:disabled,
+input[type="url"]:disabled,
+input[type="week"]:disabled {
+  background-color: #ebebe4;
+}
+
+h2 {
+  font-size: 1.231em;
+}
+
+.clearfix {
+  *zoom: 1;
+}
+
+.clearfix:before,
+.clearfix:after {
+  display: table;
+  line-height: 0;
+  content: "";
+}
+
+.clearfix:after {
+  clear: both;
+}
+
+li {
+  line-height: 20px;
+}
+
+dt,
+dd {
+  line-height: 20px;
+}
+
+ul.inline,
+ol.inline {
+  margin-left: 0;
+  list-style: none;
+}
+
+ul.inline > li,
+ol.inline > li {
+  display: inline-block;
+  *display: inline;
+  padding-right: 5px;
+  padding-left: 5px;
+  *zoom: 1;
+}
+
+.inline-block {
+  display: inline-block;
+  vertical-align: top;
+}
+
+.visible-block {
+  display: block;
+}
+
+* {
+  transition: opacity 0.2s ease-in-out;
+}
+
+a.link-highlight {
+  text-decoration: underline;
+}
+
+.hidden {
+  display: none;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.hidden-text {
+  display: none;
+  text-indent: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.element-invisible {
+  position: absolute !important;
+  clip: rect(1px 1px 1px 1px);
+  /* IE6, IE7 */
+  clip: rect(1px, 1px, 1px, 1px);
+  overflow: hidden;
+  height: 1px;
+}
+
+/**
+ * The .element-focusable class extends the .element-invisible class to allow
+ * the element to be focusable when navigated to via the keyboard.
+ */
+.element-invisible.element-focusable:active,
+.element-invisible.element-focusable:focus {
+  position: static !important;
+  clip: auto;
+  overflow: visible;
+  height: auto;
+}
+
+/**
+* @file
+* Styling for forms.
+*
+* Contains all styles related to forms.
+*/
+fieldset {
+  border: none;
+}
+
+legend {
+  font-size: 1.6em;
+  font-weight: 400;
+  text-transform: capitalize;
+}
+
+select,
+textarea,
+input {
+  color: #555;
+  display: inline-block;
+  margin: 1em 0;
+  padding: 4px 0;
+  vertical-align: middle;
+}
+
+select,
+input[type="file"] {
+  height: 30px;
+  line-height: 30px;
+}
+
+select {
+  background-color: #FFF;
+  border: 1px solid #ccc;
+}
+
+select[multiple="multiple"] {
+  height: auto;
+}
+
+select:focus,
+input[type="file"]:focus,
+input[type="radio"]:focus,
+input[type="checkbox"]:focus {
+  outline: 5px auto -webkit-focus-ring-color;
+  outline: thin dotted #333;
+  outline-offset: -2px;
+}
+
+textarea,
+input[type="text"] {
+  border: 1px solid #b5b6b7;
+}
+
+input[type="text"] {
+  text-indent: 6px;
+}
+
+.page-node-edit #mini-panel-basic_options .form-text {
+  width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 84%;
+  margin: 0;
+  vertical-align: middle;
+}
+
+#edit-cancel,
+.form-submit,
+.button,
+.confirmation a[id="edit-cancel"] {
+  background-color: #2c8fc6;
+  border: none;
+  color: #FFF;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: 700;
+  line-height: 30px;
+  text-transform: uppercase;
+  text-decoration: none;
+  display: inline-block;
+  vertical-align: middle;
+  min-width: 150px;
+  padding: 0;
+}
+#edit-cancel.hidden,
+.form-submit.hidden,
+.button.hidden,
+.confirmation a.hidden[id="edit-cancel"] {
+  display: none;
+}
+
+.button, .confirmation a[id="edit-cancel"] {
+  text-align: center;
+}
+.button > span, .confirmation a[id="edit-cancel"] > span {
+  display: inline-block;
+  padding: 0 6px;
+}
+.button.ui-icon, .confirmation a.ui-icon[id="edit-cancel"] {
+  text-align: left;
+}
+.button.ui-icon > span, .confirmation a.ui-icon[id="edit-cancel"] > span {
+  padding: 0;
+}
+
+.button-activate {
+  background-color: #2c8fc6;
+}
+
+.button-activated {
+  cursor: default;
+  background-color: #af9f9f;
+}
+
+span.button {
+  cursor: default;
+}
+
+.button-green {
+  background-color: #1ab097;
+}
+
+.button-red {
+  background-color: #ff8c40;
+}
+
+.button-orange {
+  background-color: orange;
+}
+
+.button-configure,
+.button-info {
+  background: #dfdfdf;
+  color: #2c8fc6;
+}
+
+.button-configure a,
+.button-info a {
+  color: #2c8fc6;
+}
+
+a.button:hover, .confirmation a[id="edit-cancel"]:hover,
+#edit-cancel:hover,
+input.form-submit:hover,
+input.form-submit:focus {
+  background: #23719c;
+  color: #FFF;
+}
+
+a.button.button-red:hover, .confirmation a.button-red[id="edit-cancel"]:hover {
+  background: #ff7833;
+}
+
+.button.disabled, .confirmation a.disabled[id="edit-cancel"] {
+  opacity: .65;
+  filter: alpha(opacity=65);
+}
+
+input.form-button-disabled {
+  color: #bababa;
+  background-color: #ebebe4;
+}
+
+input.form-button-disabled:hover {
+  background: #ebebe4;
+  cursor: default;
+}
+
+#edit-actions {
+  margin-top: 20px;
+}
+
+.exposed-filters #edit-actions {
+  margin-top: 0;
+}
+
+#edit-actions > input,
+#edit-actions > a {
+  margin-left: 10px;
+}
+
+#edit-actions > input:first-child,
+#edit-actions > a:first-child {
+  margin-left: 0;
+}
+
+.page-admin-structure-taxonomy-manager #edit-cancel,
+.page-admin-structure-menu-manager #edit-cancel {
+  display: none;
+}
+
+.views-displays .secondary .action-list input.form-submit {
+  background: none repeat scroll 0 0 transparent;
+  border: medium none;
+  color: #43474a;
+  float: none;
+  margin: 0;
+  padding: 0;
+  text-transform: capitalize;
+}
+
+.views-ui-dialog .form-buttons input.form-submit {
+  float: none;
+}
+
+.form-item label {
+  font-size: 1em;
+  font-weight: bold;
+  margin: 0.25em 0;
+}
+
+.input-file-wrapper.withButton {
+  padding-right: 60px;
+}
+
+.input-file-wrapper {
+  background-color: #FFF;
+  border-color: #b5b6b7;
+  border-image: none;
+  border-style: solid none solid solid;
+  border-width: 1px 0 1px 1px;
+  color: #595959;
+  cursor: pointer;
+  display: inline-block;
+  font-size: 16px;
+  height: 28px;
+  line-height: 30px;
+  overflow: hidden;
+  position: relative;
+  text-align: left;
+  white-space: nowrap;
+  width: 110px;
+}
+
+.input-file-wrapper input[type="file"] {
+  cursor: pointer;
+  height: 30px;
+  left: 0;
+  opacity: 0;
+  position: absolute;
+  top: 0;
+  z-index: 3;
+}
+
+.input-file-wrapper.withButton {
+  padding-right: 141px;
+}
+
+.input-file-wrapper:after {
+  background: #fff url(../images/file-upload.png) no-repeat center right;
+  border: 0 none !important;
+  color: #000;
+  content: "";
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  height: 28px;
+  line-height: 30px;
+  position: absolute;
+  right: 0;
+  width: 30px;
+}
+
+.input-file-wrapper .dummy-input-text {
+  background: #FFF;
+  border: none;
+  cursor: pointer;
+  height: 30px;
+  left: 0;
+  line-height: 30px;
+  padding: 0;
+  position: absolute;
+  top: 0;
+  width: 214px;
+}
+
+.input-file-wrapper input:hover {
+  cursor: pointer;
+  display: block;
+}
+
+.input-file-wrapper.withButton + .form-submit {
+  margin-left: 10px;
+}
+
+.exposed-filters .form-item {
+  margin: 0 0 1em;
+  padding: 0;
+}
+
+.form-item input.error,
+.form-item textarea.error,
+.form-item select.error {
+  padding: 3px 0;
+  border: 2px solid red;
+}
+
+.pane-node-form-menu a.ui-selectmenu,
+.page-node-add-basic-page .ui-selectmenu-menu,
+.page-node-add-basic-page .ui-selectmenu-menu-dropdown {
+  background: #FFF;
+  min-width: 300px;
+}
+
+.form-item,
+.form-actions {
+  margin: 1em 0;
+}
+
+.tabledrag-hide .select-wrapper {
+  width: 7.5em;
+}
+
+#edit-field-paddle-title-icon .select-wrapper {
+  overflow: visible;
+  border: none;
+}
+
+#icon-selection-dd-placeholder {
+  background: url("../images/select-arrow-down.png") no-repeat scroll right bottom white;
+}
+
+.select-wrapper .form-select option {
+  width: 100%;
+  padding: 0px 5px;
+  outline: 0px;
+  -webkit-appearance: none;
+}
+
+input[type="submit"]::-moz-focus-inner,
+input[type="radio"]::-moz-focus-inner,
+input[type="checkbox"]::-moz-focus-inner {
+  border: 0px;
+}
+
+.lt-ie9 input[type="submit"]:focus,
+.lt-ie9 input[type="radio"]:focus,
+.lt-ie9 input[type="checkbox"]:focus {
+  outline: none;
+}
+
+.lt-ie8 .select-wrapper {
+  border: none;
+}
+
+.lt-ie8 .select-wrapper .form-select {
+  width: 100%;
+  background-color: white;
+  border: solid 1px #b5b6b7;
+  padding: 0.3em 0.5em;
+}
+
+.view-users-overview .select-wrapper select {
+  height: auto;
+}
+
+/* @paddle style plugins: UI */
+#paddle-themer-theme-edit-form fieldset {
+  border: none;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.paddle-style-plugin .form-type-radio {
+  margin-top: 0;
+}
+
+.paddle-style-plugin input[type="text"] {
+  width: auto;
+}
+
+.paddle-style-plugin label.option {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.paddle-style-plugin .form-item {
+  margin: 0.8em 0;
+}
+
+/*@branding settings */
+.paddle-style-plugin-paddle-core-branding .form-type-radio {
+  display: inline-block;
+  vertical-align: top;
+  margin-right: 30px;
+}
+
+.paddle-style-plugin #edit-branding .fieldset-wrapper {
+  display: inline-block;
+}
+
+.paddle-style-plugin #form-item-branding-paddle-core-branding--context-global-style-vo-branding label {
+  float: none;
+  display: inline !important;
+}
+
+.paddle-style-plugin .input-file-wrapper,
+.paddle-style-plugin .input-file-wrapper:after {
+  background: none repeat scroll 0 0 transparent;
+  border-right: 1px solid #b5b6b7;
+  float: left;
+}
+
+.paddle-style-plugin .input-file-wrapper + input.form-submit {
+  height: 30px;
+  margin: 0 0 0 1em;
+}
+
+.paddle-style-plugin .input-file-wrapper + input.form-submit.remove-button {
+  display: block;
+  height: 30px;
+  border: none;
+  float: left;
+}
+
+#edit-branding-paddle-core-branding-context-global-style-favicon-ajax-wrapper {
+  clear: both;
+  overflow: hidden;
+}
+
+.paddle-style-plugin .file {
+  float: left;
+  margin-right: 13px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 191px;
+}
+
+.paddle-style-plugin .form-submit {
+  padding: 4px 20px;
+}
+
+.paddle-style-plugin .form-type-radios {
+  clear: both;
+}
+
+.paddle-style-plugin .form-type-radio:hover {
+  cursor: pointer;
+}
+
+.paddle-style-plugin .input-file-wrapper.withButton {
+  padding-right: 82px;
+}
+
+.lt-ie9 .paddle-style-plugin .input-file-wrapper.withButton {
+  padding-right: 52px;
+}
+
+.ajax-progress-throbber {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 5px;
+  min-height: 20px;
+}
+
+.ajax-progress .throbber {
+  background: transparent url(../images/throbber.gif) no-repeat 0px 0px;
+  height: 30px;
+  margin: 0;
+  min-width: 30px;
+}
+
+.ajax-progress .message {
+  display: inline-block;
+  padding: 0;
+}
+
+.form-managed-file {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.form-managed-file div.throbber {
+  display: inline;
+  float: none;
+  padding: 1px 12px 4px 12px;
+}
+
+.form-managed-file div.ajax-progress,
+.form-managed-file div.throbber {
+  display: inline-block;
+  float: none;
+  padding: 0px 0 0px 5px;
+}
+
+.form-managed-file div.throbber img {
+  display: block;
+  position: relative;
+  top: 5px;
+}
+
+.ajax-progress .throbber {
+  background: transparent url(../images/throbber.gif) no-repeat center center;
+}
+
+.paddle-style-plugin-paddle-core-branding .form-type-managed-file label {
+  display: inline-block;
+  width: 8em;
+}
+
+/* @styling */
+.paddle-style-plugin-background .form-type-radio {
+  display: inline-block;
+  vertical-align: top;
+  margin-right: 30px;
+}
+
+.paddle-style-plugin .select-wrapper {
+  margin-top: 0;
+}
+
+.jquery_colorpicker .inner_wrapper {
+  background-image: none !important;
+}
+
+/* @Suggestion list */
+#autocomplete {
+  border: 1px solid #b1b3b5;
+  max-height: 136px;
+  overflow-y: scroll;
+}
+
+#autocomplete li {
+  color: #43474a;
+}
+
+#autocomplete li.selected {
+  background: #005384;
+  color: #FFF;
+}
+
+.section-wrapper .form-type-textfield {
+  position: relative;
+}
+
+/* @Create menu item form.  */
+#paddle-menu-manager-menu-item-form .form-item-content-button {
+  position: relative;
+}
+
+#paddle-menu-manager-menu-item-form .form-item-internal-link,
+#paddle-menu-manager-menu-item-form .form-item-external-link {
+  position: absolute;
+  top: 0;
+  left: 10em;
+}
+
+#paddle-menu-manager-menu-item-form .form-item-internal-link {
+  top: 11px;
+}
+
+#paddle-menu-manager-menu-item-form .form-item-external-link {
+  top: 40px;
+}
+
+#modal-content #paddle-menu-manager-menu-item-form input.form-autocomplete {
+  width: auto;
+}
+
+.ie9 .placeholder,
+.lt-ie9 .placeholder {
+  color: #aaa;
+}
+
+.field-widget-active-tags-taxonomy-autocomplete {
+  position: relative;
+}
+.field-widget-active-tags-taxonomy-autocomplete .at-add-btn {
+  width: 95px;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 5px;
+}
+.modal-content .field-widget-active-tags-taxonomy-autocomplete .at-term-entry {
+  max-width: 350px;
+  max-width: calc(99% - 160px);
+}
+
+/* @Content manager internal search page */
+#views-exposed-form-paddle-archive-paddle-content-manager-archive,
+#views-exposed-form-content-manager-page {
+  background-color: #ececec;
+  padding: 20px;
+  /* Fix for extra whitespace when using display: inline-block; */
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .views-exposed-widget,
+#views-exposed-form-content-manager-page .views-exposed-widget {
+  padding: 0;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-type-textfield,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-type-select,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .views-submit-button,
+#views-exposed-form-content-manager-page .form-type-textfield,
+#views-exposed-form-content-manager-page .form-type-select,
+#views-exposed-form-content-manager-page .views-submit-button {
+  padding: 5px 0;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .views-exposed-widgets,
+#views-exposed-form-content-manager-page .views-exposed-widgets {
+  font-size: 0;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .views-exposed-widget,
+#views-exposed-form-content-manager-page .views-exposed-widget {
+  font-size: 1rem;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .views-widget-filter-title,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .views-widget-filter-type,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .views-submit-button,
+#views-exposed-form-content-manager-page .views-widget-filter-title,
+#views-exposed-form-content-manager-page .views-widget-filter-type,
+#views-exposed-form-content-manager-page .views-submit-button {
+  width: 22.63612%;
+  display: inline-block;
+  vertical-align: bottom;
+  float: none;
+  position: relative;
+  z-index: 50;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .views-submit-button,
+#views-exposed-form-content-manager-page .views-submit-button {
+  margin-left: 3.1518624641834%;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive #edit-secondary-wrapper,
+#views-exposed-form-content-manager-page #edit-secondary-wrapper {
+  width: 100%;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive #edit-secondary-wrapper legend,
+#views-exposed-form-content-manager-page #edit-secondary-wrapper legend {
+  top: 1.7em;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive label,
+#views-exposed-form-content-manager-page label {
+  display: block;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item select,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item input,
+#views-exposed-form-content-manager-page .form-item select,
+#views-exposed-form-content-manager-page .form-item input {
+  width: 100%;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-uid,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-field-page-responsible-author-target-id,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-state,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-created-min,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-created-max,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-changed-min,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-changed-max,
+#views-exposed-form-content-manager-page .form-item-uid,
+#views-exposed-form-content-manager-page .form-item-field-page-responsible-author-target-id,
+#views-exposed-form-content-manager-page .form-item-state,
+#views-exposed-form-content-manager-page .form-item-created-min,
+#views-exposed-form-content-manager-page .form-item-created-max,
+#views-exposed-form-content-manager-page .form-item-changed-min,
+#views-exposed-form-content-manager-page .form-item-changed-max {
+  width: 48.424068767908%;
+  float: left;
+}
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-state,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .views-widget-filter-type,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-changed-max,
+#views-exposed-form-paddle-archive-paddle-content-manager-archive .form-item-created-max,
+#views-exposed-form-content-manager-page .form-item-state,
+#views-exposed-form-content-manager-page .views-widget-filter-type,
+#views-exposed-form-content-manager-page .form-item-changed-max,
+#views-exposed-form-content-manager-page .form-item-created-max {
+  margin-left: 3.1518624641834%;
+}
+
+#edit-field-page-responsible-author #field-page-responsible-author-add-more-wrapper {
+  clear: both;
+}
+
+#views-form-paddle-archive-paddle-content-manager-archive .views-field-actions > .ui-icon > span {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+}
+
+#views-exposed-form-content-manager-page .form-item-nid {
+  width: 48.424068767908%;
+  float: left;
+  margin-left: 3.1518624641834%;
+}
+
+#edit-field-page-responsible-author-target-id,
+#edit-nid {
+  width: 222px;
+}
+
+#edit-field-paddle-general-tags-tid-wrapper {
+  clear: left;
+}
+
+#edit-creation-uid-wrapper {
+  clear: left;
+}
+
+#edit-created-wrapper {
+  clear: left;
+}
+
+/* @Collapsible "show more" fieldsets. */
+.has-show-more-fieldset {
+  position: relative;
+}
+
+.has-show-more-fieldset fieldset {
+  padding: 0;
+  position: static;
+  margin-bottom: 0 !important;
+}
+
+html.js .has-show-more-fieldset fieldset.collapsed {
+  height: 0;
+}
+
+.has-show-more-fieldset fieldset > legend {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 1.1em;
+}
+
+.has-show-more-fieldset fieldset > .fieldset-wrapper {
+  border-top: 1px solid #b5b6B7;
+  padding-top: 1em;
+  margin-top: 1em;
+}
+
+.form-type-paddle-scald-image-atom .image > img {
+  max-width: 80px;
+  max-height: 80px;
+  height: auto;
+}
+
+.plupload_buttons .plupload_start {
+  display: none;
+}
+
+@media (min-width: 889px) {
+  #edit-account, #edit-field-paddle-user-real-name {
+    float: left;
+    width: 50%;
+    margin-right: 50px;
+  }
+}
+#edit-field-paddle-user-notifications-und label {
+  font-weight: normal;
+}
+
+form .field-multiple-table th.field-label {
+  padding-left: 10px;
+  /*LTR*/
+}
+
+#edit-settings-image-upload .input-file-wrapper.withButton + .form-submit {
+  margin-bottom: 25px;
+}
+
+#panels-edit-style-type-form {
+  padding-left: 2%;
+  padding-bottom: 1%;
+}
+
+.pane-node-menu-items span.dominant-breadcrumb {
+  font-size: 0.8em;
+}
+
+/**
+ * @file
+ * Defines font families.
+ */
+/**
+ * Source Sans Pro - Extra Light.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-extralight.eot");
+  src: url("../fonts/sourcesanspro-extralight.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-extralight.woff2") format("woff2"), url("../fonts/sourcesanspro-extralight.woff") format("woff"), url("../fonts/sourcesanspro-extralight.ttf") format("truetype");
+  font-weight: 200;
+  font-style: normal;
+}
+/**
+ * Source Sans Pro - Extra Light Italic.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-extralightit.eot");
+  src: url("../fonts/sourcesanspro-extralightit.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-extralightit.woff2") format("woff2"), url("../fonts/sourcesanspro-extralightit.woff") format("woff"), url("../fonts/sourcesanspro-extralightit.ttf") format("truetype");
+  font-weight: 200;
+  font-style: italic;
+}
+/**
+ * Source Sans Pro - Light.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-light.eot");
+  src: url("../fonts/sourcesanspro-light.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-light.woff2") format("woff2"), url("../fonts/sourcesanspro-light.woff") format("woff"), url("../fonts/sourcesanspro-light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+}
+/**
+ * Source Sans Pro - Light Italic.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-lightit.eot");
+  src: url("../fonts/sourcesanspro-lightit.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-lightit.woff2") format("woff2"), url("../fonts/sourcesanspro-lightit.woff") format("woff"), url("../fonts/sourcesanspro-lightit.ttf") format("truetype");
+  font-weight: 300;
+  font-style: italic;
+}
+/**
+ * Source Sans Pro - Regular.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-regular.eot");
+  src: url("../fonts/sourcesanspro-regular.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-regular.woff2") format("woff2"), url("../fonts/sourcesanspro-regular.woff") format("woff"), url("../fonts/sourcesanspro-regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+/**
+ * Source Sans Pro - Regular Italic.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-it.eot");
+  src: url("../fonts/sourcesanspro-it.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-it.woff2") format("woff2"), url("../fonts/sourcesanspro-it.woff") format("woff"), url("../fonts/sourcesanspro-it.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+}
+/**
+ * Source Sans Pro - Semi-bold.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-semibold.eot");
+  src: url("../fonts/sourcesanspro-semibold.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-semibold.woff2") format("woff2"), url("../fonts/sourcesanspro-semibold.woff") format("woff"), url("../fonts/sourcesanspro-semibold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+}
+/**
+ * Source Sans Pro - Semi-bold Italic.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-semiboldit.eot");
+  src: url("../fonts/sourcesanspro-semiboldit.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-semiboldit.woff2") format("woff2"), url("../fonts/sourcesanspro-semiboldit.woff") format("woff"), url("../fonts/sourcesanspro-semiboldit.ttf") format("truetype");
+  font-weight: 600;
+  font-style: italic;
+}
+/**
+ * Source Sans Pro - Bold.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-bold.eot");
+  src: url("../fonts/sourcesanspro-bold.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-bold.woff2") format("woff2"), url("../fonts/sourcesanspro-bold.woff") format("woff"), url("../fonts/sourcesanspro-bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+/**
+ * Source Sans Pro - Bold Italic.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-boldit.eot");
+  src: url("../fonts/sourcesanspro-boldit.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-boldit.woff2") format("woff2"), url("../fonts/sourcesanspro-boldit.woff") format("woff"), url("../fonts/sourcesanspro-boldit.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+}
+/**
+ * Source Sans Pro - Black.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-black.eot");
+  src: url("../fonts/sourcesanspro-black.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-black.woff2") format("woff2"), url("../fonts/sourcesanspro-black.woff") format("woff"), url("../fonts/sourcesanspro-black.ttf") format("truetype");
+  font-weight: 900;
+  font-style: normal;
+}
+/**
+ * Source Sans Pro - Black Italic.
+ */
+@font-face {
+  font-family: 'Source Sans Pro';
+  src: url("../fonts/sourcesanspro-blackit.eot");
+  src: url("../fonts/sourcesanspro-blackit.eot?#iefix") format("embedded-opentype"), url("../fonts/sourcesanspro-blackit.woff2") format("woff2"), url("../fonts/sourcesanspro-blackit.woff") format("woff"), url("../fonts/sourcesanspro-blackit.ttf") format("truetype");
+  font-weight: 900;
+  font-style: italic;
+}
+html,
+body,
+#page,
+.region-content,
+#block-system-main,
+#user-login,
+#user-pass,
+#user-login > div,
+#user-pass > div {
+  height: 100%;
+}
+
+body {
+  background-attachment: fixed;
+  background-image: url(../images/backend_login.jpg);
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center bottom;
+  background-color: #363636;
+  color: #43474a;
+  overflow: auto;
+}
+
+#skip-link {
+  display: none;
+}
+
+p {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+a {
+  color: #005384;
+}
+
+/**
+ * Set font-size to 0 to hide whitespace between the :before element and
+ * .user-login-form.
+ */
+form#user-login > div,
+form#user-pass > div {
+  width: 100%;
+  text-align: right;
+  font-size: 0;
+}
+
+/**
+ * Add an invisible element that's 100% high on the same "line" as the login
+ * form so the "line" becomes as big as the window. Then, we can use
+ * vertical-align: middle; on the login form. See also
+ * http://css-tricks.com/centering-in-the-unknown/
+ */
+form#user-login > div:before,
+form#user-pass > div:before {
+  content: "";
+  height: 100%;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.user-login-form {
+  text-align: left;
+  overflow: hidden;
+  background-color: #eee;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 20px 20px 12px;
+  width: 500px;
+  margin-right: 10%;
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 14px;
+  font-size: 1rem;
+}
+
+@media (max-width: 650px) {
+  .user-login-form {
+    margin-right: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+h2 {
+  display: inline-block;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 26px;
+  font-size: 1.6em;
+  vertical-align: middle;
+  margin: 0 25px 25px 0;
+}
+
+.kanooh-logo {
+  display: inline-block;
+  width: 72px;
+  height: 26px;
+  background: url(../images/kanooh-logo.png) no-repeat;
+  line-height: 26px;
+  vertical-align: middle;
+  margin: 0 0 25px 0;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #d7d7d7;
+  display: block;
+  height: 0;
+  margin: 1em 0;
+  padding: 0;
+  width: 100%;
+}
+
+.bttn-wrapper {
+  font-size: .85em;
+}
+
+.form-text {
+  width: 100%;
+  text-indent: 8px;
+  line-height: 26px;
+  min-height: 26px;
+  color: #43474a;
+  border: 1px solid #b5b6b7;
+}
+
+.form-item {
+  margin: 1em 0 0 0;
+  padding: 0;
+}
+
+.form-item-name {
+  margin: 0;
+}
+
+#edit-actions {
+  margin: 1em 0 0 0;
+}
+
+.bttn-wrapper {
+  margin: 8px 0;
+  width: auto;
+}
+
+.messages {
+  margin: 0 0 1em;
+  padding: 10px;
+}
+.messages.status {
+  background-color: #63af40;
+  color: #fff;
+}
+.messages.error {
+  background-color: #e24e2f;
+  color: #fff;
+}
+.messages ul li {
+  margin-left: 15px;
+}
+
+.messages-inline {
+  margin: 0.5em 0 0 8px;
+  padding: 0;
+  font-size: 0.85em;
+  color: red;
+}
+.messages-inline.status, .messages-inline.error {
+  background-color: transparent;
+}
+.messages-inline.error {
+  color: red;
+  line-height: 1.2em;
+}
+
+#user-pass #edit-submit {
+  padding-left: 1.5em;
+  padding-right: 1.5em;
+  white-space: normal;
+}

@@ -1,0 +1,50 @@
+<?php
+
+/**
+ * @file
+ * Enable, disable, install, uninstall and schema hooks for Paddle Landing Page.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_landing_page_enable() {
+  // Allow page manager to handle node/%node. Panelizer requires this.
+  variable_set('page_manager_node_view_disabled', FALSE);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_landing_page_uninstall() {
+  variable_del('pane_listing_number_items');
+}
+
+/**
+ * Enable the new dependency: Paddle Panels Renderer module.
+ */
+function paddle_landing_page_update_7001() {
+  module_enable(array('paddle_panels_renderer'));
+}
+
+/**
+ * Disable the custom node edit page variant for landing pages.
+ */
+function paddle_landing_page_update_7002() {
+  // We were using a custom variant for the node edit page so we could show some
+  // custom fields ('Show title' and 'Show body'). These have now been converted
+  // to the 'Additional fields' system, so we don't need the custom variant any
+  // more.
+  // First make sure our feature is reverted, so the page variant is removed
+  // from the database.
+  features_revert_module('paddle_landing_page');
+
+  // Now delete the variant.
+  ctools_include('page', 'page_manager', 'plugins/tasks');
+  $page = page_manager_cache_load('node_edit');
+  if (!empty($page->handlers['node_edit_panel_context_2'])) {
+    page_manager_delete_task_handler($page->handlers['node_edit_panel_context_2']);
+    page_manager_clear_page_cache('node_edit');
+    cache_clear_all();
+  }
+}

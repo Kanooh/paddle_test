@@ -1,0 +1,465 @@
+<?php
+
+/**
+ * @file
+ * Tests for the Paddle Themer module.
+ */
+
+/**
+ * Tests the user interface.
+ */
+class PaddleThemerUiTestCase extends PaddleThemerTestCase {
+  // The installation profile that will be used to run the tests.
+  protected $profile = 'testing';
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'User interface',
+      'description' => 'Tests the user interface components.',
+      'group' => 'Paddle Themer',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array('paddle_themer_test'));
+
+    $admin_user = $this->drupalCreateUser(
+      array('administer paddle_themer', 'manage paddle_themer')
+    );
+    $this->drupalLogin($admin_user);
+  }
+
+  /**
+   * Check that all modules that are required for the test suite are available.
+   */
+  public function testRequiredModules() {
+    $required_modules = array(
+      'ctools',
+      'paddle_style',
+      'paddle_themer',
+      'paddle_themer_test',
+      'file',
+      'uuid',
+    );
+
+    foreach ($required_modules as $module) {
+      $this->assertTrue(module_exists($module), format_string('The required module @module exists.', array('@module' => $module)));
+    }
+  }
+
+  /**
+   * Test if style sets are displayed in vertical tabs.
+   *
+   * @see http://drupal.org/node/1924458
+   */
+  public function testStyleSetVerticalTabs() {
+    // Create a new theme.
+    $edit = array(
+      'human_name' => $this->randomString(),
+      'name' => strtolower($this->randomName()),
+    );
+    $this->drupalPost('admin/structure/paddle_themer/add', $edit, t('Continue'));
+    $this->drupalPost(NULL, array('theme' => 'bartik'), t('Continue'));
+
+    // Check that the Global Styles style set is rendered inside a vertical tab.
+    $elements = $this->xpath('//form[@id="paddle-themer-styles-edit-wizard-form"]//div[contains(normalize-space(@class), "vertical-tabs")]//*[text()[contains(.,:style_set)]]', array(':style_set' => t('Global styles')));
+    $this->assertTrue(count($elements), 'The "Global styles" style set is displayed as a vertical tab.');
+
+    // Check that the Header style set is rendered inside a vertical tab.
+    $elements = $this->xpath('//form[@id="paddle-themer-styles-edit-wizard-form"]//div[contains(normalize-space(@class), "vertical-tabs")]//*[text()[contains(.,:style_set)]]', array(':style_set' => t('Header')));
+    $this->assertTrue(count($elements), 'The "Header" style set is displayed as a vertical tab.');
+  }
+
+  /**
+   * Test the "changed" column in the paddle_themer_theme table.
+   *
+   * @see http://drupal.org/node/1924666
+   */
+  public function testChangedPaddleTheme() {
+    // Get the current time.
+    $time = REQUEST_TIME;
+
+    // Create a theme and edit it.
+    $theme = $this->createPaddleTheme();
+    $theme = paddle_themer_load($theme);
+
+    $this->assertTrue($theme->changed, 'The changed date is set for the theme.');
+
+    $this->drupalPost('admin/themes/' . $theme->name . '/edit', array(), t('Submit'));
+    $theme = paddle_themer_load($theme->name);
+
+    $this->assertTrue($theme->changed, 'The changed date is set for the theme after editing.');
+    $this->assertTrue($theme->changed >= $time, 'The timestamp of the theme indicates that it has been updated after the test started running.');
+  }
+
+  /**
+   * Test the screenshot a user can upload for his personalized theme.
+   *
+   * @see http://drupal.org/node/1924530
+   */
+  public function testMyThemeImage() {
+    // Get an image.
+    $images = $this->drupalGetTestFiles('image');
+    $image = $images[array_rand($images)];
+    $url = $this->getAbsoluteUrlFromUri($image->uri);
+
+    // Create a theme and add the image to it.
+    $theme_name = $this->createPaddleTheme();
+    $this->drupalPost('admin/themes/' . $theme_name . '/edit_screenshot', array('files[image]' => $url), t('Submit'));
+
+    // Check that the placeholder text is not visible.
+    $this->assertNoRaw(t('No image set'), 'The placeholder text for a missing image is not visible on the theme overview.');
+
+    // Check that the image URL is present in the HTML.
+    $this->assertRaw($image->filename, 'The image is visible in the theme overview.');
+
+    // Check that the image was added to the theme.
+    $theme = paddle_themer_load($theme_name);
+    $this->assertTrue($theme->image_id, 'An image file is written for the theme.');
+
+    $image_id = $theme->image_id;
+
+    $image = file_load($image_id);
+    $this->assertEqual(FILE_STATUS_PERMANENT, $image->status, 'Image file status is set to permanent.');
+
+    // Now remove the image again.
+    $this->drupalPostAJAX('admin/themes/' . $theme_name . '/edit_screenshot', array(), array('image_remove_button' => t('Remove')));
+    $this->drupalPost(NULL, array(), t('Submit'));
+
+    // Check that the placeholder text is now visible.
+    $this->assertRaw(t('No image set'), 'The placeholder text for a missing image is visible on the theme overview.');
+
+    // Check that the image URL is no longer present in the HTML.
+    $this->assertNoRaw($image->filename, 'The image is no longer visible in the theme overview.');
+
+    // Clear the in-memory cache which will prevent paddle_themer_load() from
+    // loading our updated theme.
+    ctools_export_load_object_reset('paddle_themer_theme');
+
+    $theme = paddle_themer_load($theme_name);
+    $this->assertFalse($theme->image_id, 'The reference to the image was removed from the theme.');
+
+    $image = file_load($image_id);
+    $this->assertFalse($image, 'The image was removed.');
+  }
+
+  /**
+   * Tests the theme deletion form.
+   */
+  public function testDeletetheme() {
+    $theme_name = $this->createPaddleTheme();
+
+    // Test when the delete confirmation form is submitted, the theme object
+    // is being deleted.
+    $this->drupalGet('admin/themes/' . $theme_name . '/delete');
+    $this->drupalPost(NULL, array(), t('Delete'));
+
+    $result = db_select('paddle_themer_theme', 'ptt')
+      ->fields('ptt')
+      ->condition('name', $theme_name, '=')
+      ->execute()
+      ->fetchAll();
+
+    $this->assertFalse($result, 'The theme object has been deleted.');
+  }
+
+  /**
+   * Test the theme creation form.
+   */
+  public function testCreateTheme() {
+    // Check if the name is pre-filled.
+    $this->drupalGet('admin/themes/create');
+    $values = $this->xpath($this->constructFieldXpath('name', 'name'));
+
+    $this->assertEqual(count($values) == 1, 'Name field is present.');
+
+    $name_field = reset($values);
+
+    $this->assertTrue($name_field->attributes()->value, 'The name field has a default value set.');
+
+    $random_name = $this->randomString();
+
+    $base_theme_name = $this->createPaddleTheme();
+    $base_theme = paddle_themer_load($base_theme_name);
+
+    $edit = array(
+      'name' => $random_name,
+      'base_theme' => $base_theme_name,
+    );
+
+    $this->drupalPost('admin/themes/create', $edit, t('Submit'));
+
+    $this->assertEqual(1, preg_match('@/admin/themes/(.*?)/edit$@', $this->getUrl(), $matches), 'User is redirected to the edit form of the new theme.');
+
+    $theme_name = $matches[1];
+    $theme = paddle_themer_load($theme_name);
+
+    $this->assertTrue($theme, 'The new theme can be loaded.');
+
+    $this->assertEqual($theme->human_name, $random_name, 'The name of the new theme is set.');
+    $this->assertTrue($theme->changed >= REQUEST_TIME, 'The date the new theme was created is bigger than the date when the test started running.');
+    $this->assertEqual($base_theme->theme, $theme->theme, 'The new theme and the theme it is based on have the same Drupal theme.');
+    $this->assertEqual($base_theme->style, $theme->style, 'The new theme and the theme it is based on have the same style.');
+  }
+
+  /**
+   * Tests if the active Paddle Theme is only activated on non-admin pages.
+   */
+  public function testEnabledThemeGetsActivatedOnNonAdminPages() {
+    // Create a new Paddle theme.
+    $theme_name = $this->createPaddleTheme();
+    $paddle_theme = paddle_themer_load($theme_name);
+
+    // Enable 'seven' as the administration theme.
+    variable_set('admin_theme', 'seven');
+
+    // Enable the Drupal theme associated with the Paddle theme.
+    theme_enable(array($paddle_theme->theme));
+
+    // Enable our new Paddle theme.
+    variable_set('paddle_theme', $theme_name);
+
+    // Log in as an administrator who can see the administrative theme.
+    $admin_user = $this->drupalCreateUser(array('view the administration theme', 'administer site configuration'));
+    $this->drupalLogin($admin_user);
+
+    // Xpath query to check for the active Drupal theme.
+    $paddle_query = '//body[contains(concat(" ", normalize-space(@class), " "), " theme-' . drupal_html_class($paddle_theme->theme) . '")]';
+
+    // Ensure the Paddle theme is activated on non-admin pages.
+    $this->drupalGet('node');
+    $elements = $this->xpath($paddle_query);
+    $this->assertEqual(count($elements), 1, 'The Drupal theme associated with the Paddle Theme is activated on non-admin pages.');
+
+    $elements = $this->xpath('//body/@class');
+
+    // Ensure the Paddle theme is not activated on admin pages.
+    $this->drupalGet('admin');
+    $elements = $this->xpath($paddle_query);
+    $this->assertEqual(count($elements), 0, 'The Drupal theme associated with the Paddle Theme is not activated on admin pages.');
+
+    $seven_query = '//body[contains(concat(" ", normalize-space(@class), " "), " theme-seven")]';
+    $elements = $this->xpath($seven_query);
+    $this->assertEqual(count($elements), 1, 'The admin theme we set is activated on admin pages.');
+  }
+
+  /**
+   * Test the theme save as functionality.
+   */
+  public function testThemeSaveAs() {
+    // Create a theme.
+    $theme_name = $this->createPaddleTheme();
+    $theme = paddle_themer_load($theme_name);
+
+    $this->drupalGet('admin/themes/' . $theme_name . '/edit');
+    $this->assertTrue($this->xpath('//input[@type="submit" and @id="edit-submit-as"]'), 'The save as button is found on the edit page of a theme.');
+
+    $this->drupalPost(NULL, array(), t('Save As'));
+    $name = $this->randomString();
+    $this->drupalPost(NULL, array('name' => $name), t('Submit'));
+
+    $result = db_select('paddle_themer_theme', 'ptt')
+      ->fields('ptt')
+      ->condition('human_name', $name, '=')
+      ->execute()
+      ->fetchAll();
+
+    $this->assertTrue($result[0], 'A theme object with this name was found in the database.');
+    $this->assertTrue($result[0]->id != $theme->id, 'The new theme is not the same as the initial theme.');
+  }
+
+  /**
+   * Tests the theme preview functionality.
+   */
+  public function testPreview() {
+    // Create a new Paddle theme.
+    $theme_name = $this->createPaddleTheme();
+    $paddle_theme = paddle_themer_load($theme_name);
+
+    // Enable 'seven' as the administration theme.
+    variable_set('admin_theme', 'seven');
+
+    // Enable the Drupal theme associated with the Paddle theme.
+    theme_enable(array($paddle_theme->theme));
+
+    // Enable our new Paddle theme.
+    variable_set('paddle_theme', $theme_name);
+
+    // Create a new Paddle theme for previewing.
+    $preview_theme_name = $this->createPaddleTheme();
+    $preview_paddle_theme = paddle_themer_load($preview_theme_name);
+
+    $preview_url_options = array(
+      'query' => array(
+        'preview_theme' => $preview_theme_name,
+      ),
+    );
+
+    // Enable the Drupal theme associated with the preview Paddle theme.
+    theme_enable(array($preview_paddle_theme->theme));
+
+    // Log in as an administrative user, who can see the administrative theme.
+    $permissions = array('view the administration theme');
+    $administrative_user = $this->drupalCreateUser($permissions);
+    $this->drupalLogin($administrative_user);
+
+    // Xpath query to check for the preview Paddle theme.
+    $preview_paddle_query = $this->activePaddleThemeXPathQuery($preview_paddle_theme);
+
+    // Ensure the Preview Paddle theme is not activated on non-admin pages if we
+    // pass the preview_theme query string parameter, if the user does not have
+    // the 'manage paddle_themer' permission.
+    $this->drupalGet('node', $preview_url_options);
+    $elements = $this->xpath($preview_paddle_query);
+    $msg = 'The preview Paddle Theme is not activated on non-admin pages if the user does not have proper permissions.';
+    $this->assertEqual(count($elements), 0, $msg);
+
+    // Xpath query to check for the active Paddle theme.
+    $active_paddle_query = $this->activePaddleThemeXPathQuery($paddle_theme);
+
+    $elements = $this->xpath($active_paddle_query);
+    $msg = 'The active Paddle Theme is activated on non-admin pages because we do not have proper permissions, although we are trying to preview another Paddle Theme.';
+    $this->assertEqual(count($elements), 1, $msg);
+
+    // Log in as an administrative user, who can also manage Paddle themes.
+    $permissions = array(
+      'view the administration theme',
+      'manage paddle_themer',
+    );
+    $theme_administrative_user = $this->drupalCreateUser($permissions);
+    $this->drupalLogin($theme_administrative_user);
+
+    // Ensure the Preview Paddle theme is activated on non-admin pages if we
+    // pass the preview_theme query string parameter, if the user has
+    // the 'manage paddle_themer' permission.
+    $this->drupalGet('node', $preview_url_options);
+    $elements = $this->xpath($preview_paddle_query);
+    $msg = 'The preview Paddle Theme is activated on non-admin pages if the user does have proper permissions.';
+    $this->assertEqual(count($elements), 1, $msg);
+
+    $elements = $this->xpath($active_paddle_query);
+    $msg = 'The active Paddle Theme is not activated on non-admin pages because we are previewing another Paddle Theme.';
+    $this->assertEqual(count($elements), 0, $msg);
+
+    // Ensure the preview Paddle theme is not activated on admin pages.
+    $this->drupalGet('admin', $preview_url_options);
+    $elements = $this->xpath($preview_paddle_query);
+    $this->assertEqual(count($elements), 0, 'The preview Paddle Theme is not activated on admin-pages.');
+  }
+
+  /**
+   * Tests the navigation dialog which appears while previewing themes.
+   */
+  public function testPreviewNavigation() {
+    // Enable 'seven' as the administration theme.
+    variable_set('admin_theme', 'seven');
+
+    // Create a bunch of new Paddle themes for previewing.
+    $themes = array();
+    $human_names = array(
+      'alfa',
+      'bravo',
+      'charlie',
+      'delta',
+      'echo',
+      'foxtrot',
+    );
+    // The order of creation should not influence the order in which
+    // the preview navigation functions.
+    shuffle($human_names);
+
+    foreach ($human_names as $human_name) {
+      $theme_name = $this->createPaddleTheme(array(
+        'human_name' => $human_name,
+      ));
+      $theme = paddle_themer_load($theme_name);
+      $themes[$human_name] = $theme;
+
+      // Enable the Drupal theme associated with the Paddle theme.
+      theme_enable(array($theme->theme));
+    }
+
+    // Disable a Paddle theme. It will not occur in the preview navigation then.
+    ctools_export_crud_disable('paddle_themer_theme', $themes['charlie']);
+
+    $themes_in_expected_order = array(
+      $themes['alfa'],
+      $themes['bravo'],
+      $themes['delta'],
+      $themes['echo'],
+      $themes['foxtrot'],
+    );
+
+    // Start previewing in the last theme.
+    $start_theme = end($themes_in_expected_order);
+
+    $preview_url_options['query']['preview_theme'] = $start_theme->name;
+    $this->drupalGet('node', $preview_url_options);
+
+    $nav_xpath_query = "//div[@id='paddle-themer-preview-selection']";
+
+    $elements = $this->xpath($nav_xpath_query);
+    $this->assertEqual(count($elements), 1, 'The theme preview navigation dialog is present.');
+
+    // Navigate forward through the list of themes.
+    foreach ($themes_in_expected_order as $expected_theme) {
+      $this->clickLink(t('Next'));
+
+      $preview_url_options['query']['preview_theme'] = $expected_theme->name;
+      $this->assertUrl('node', $preview_url_options, 'Clicking the next link navigates to the preview of the next theme.');
+
+      $elements = $this->xpath($nav_xpath_query);
+      $this->assertEqual(count($elements), 1, 'The theme preview navigation dialog is present.');
+    }
+
+    $this->clickLink(t('Next'));
+
+    // Navigate backward through the list of themes.
+    foreach (array_reverse($themes_in_expected_order) as $expected_theme) {
+      $this->clickLink(t('Previous'));
+
+      $preview_url_options['query']['preview_theme'] = $expected_theme->name;
+      $this->assertUrl('node', $preview_url_options, 'Clicking the previous link navigates to the preview of the previous theme.');
+
+      $elements = $this->xpath($nav_xpath_query);
+      $this->assertEqual(count($elements), 1, 'The theme preview navigation dialog is present.');
+    }
+
+    $this->clickLink(t('Exit preview'));
+
+    $this->assertUrl('admin/themes', array(), 'Exit preview link leads back to the themes overview.');
+  }
+
+  /**
+   * Constructs a XPath query for checking if a Paddle theme is active.
+   *
+   * @param object $theme
+   *   The Paddle theme.
+   *
+   * @return string
+   *   A XPath query.
+   */
+  public function activePaddleThemeXPathQuery($theme) {
+    return '//body[contains(concat(" ", normalize-space(@class), " "), " paddle-theme-' . drupal_html_class($theme->name) . '")]';
+  }
+
+  /**
+   * Constructs a XPath query for checking if a Drupal theme is active.
+   *
+   * @param string $theme_name
+   *   The name of the Drupal theme.
+   *
+   * @return string
+   *   A XPath query.
+   */
+  public function activeThemeXPathQuery($theme_name) {
+    return '//body[contains(concat(" ", normalize-space(@class), " "), " theme-' . drupal_html_class($theme_name) . '")]';
+  }
+
+}

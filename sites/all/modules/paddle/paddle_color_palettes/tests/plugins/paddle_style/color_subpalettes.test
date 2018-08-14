@@ -1,0 +1,163 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleStylePluginColorSubPalettesTest.
+ */
+
+/**
+ * Tests the color subpalettes plugin.
+ *
+ * @todo Remove hard dependency on the Paddle Themer test case when we have a
+ *   generic way of choosing palettes.
+ */
+class PaddleStylePluginColorSubPalettesTest extends PaddleThemerTestCase {
+
+  /**
+   * Stores an instance of the color subpalettes plugin.
+   *
+   * @var PaddleColorSubPalettesPlugin
+   */
+  public $instance;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Color subpalettes',
+      'description' => 'Tests the color subpalettes style plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    // Enable the test module in addition to the given modules.
+    $modules = func_get_args();
+    $modules = isset($modules[0]) && is_array($modules[0]) ? $modules[0] : array();
+    $modules[] = 'paddle_color_palettes_test';
+    parent::setUp($modules);
+
+    // Create an instance of the plugin.
+    $this->instance = paddle_style_get_plugin('color_subpalettes');
+
+    // Create a new Paddle theme.
+    $theme_name = $this->createPaddleTheme();
+    $paddle_theme = paddle_themer_load($theme_name);
+
+    // Enable the Drupal theme associated with the Paddle theme.
+    theme_enable(array($paddle_theme->theme));
+
+    // Enable our new Paddle theme.
+    variable_set('paddle_theme', $theme_name);
+  }
+
+  /**
+   * Tests the form() function of the color subpalettes plugin.
+   */
+  public function testForm() {
+    // Test that if the form is called without the administrator having chosen a
+    // palette it shows the sub-palettes of the first available palette, and
+    // defaults to the primary sub-palette.
+    $form_elements = $this->instance->form();
+    $palettes = paddle_color_palettes_test_palette_definitions();
+    $this->assertPaletteFormElements($palettes['palette_a'], $form_elements, 'The sub-palettes of the first available palette are shown if the form is called without a chosen palette.');
+    $this->assertDefaultValue(0, $form_elements, 'The first sub-palette is selected by default.');
+
+    // Simulate choosing a different default palette, and repeat the test.
+    $theme = paddle_themer_enabled_theme();
+    $theme->style['color_palettes']['primary_color_palettes'] = 'palette_b';
+    paddle_themer_save_theme($theme);
+
+    $form_elements = $this->instance->form();
+    $palettes = paddle_color_palettes_test_palette_definitions();
+    $this->assertPaletteFormElements($palettes['palette_b'], $form_elements, 'The sub-palettes of the second palette are shown when this has been set as the default palette.');
+    $this->assertDefaultValue(0, $form_elements);
+
+    // Pass another default value and check that it is selected correctly.
+    $form_elements = $this->instance->form(array(), array('paddle_color_subpalette' => 2));
+    $palettes = paddle_color_palettes_test_palette_definitions();
+    $this->assertPaletteFormElements($palettes['palette_b'], $form_elements);
+    $this->assertDefaultValue(2, $form_elements, 'When a default value is passed it is correctly selected in the form.');
+  }
+
+  /**
+   * Tests the getClasses() function of the color subpalettes plugin.
+   */
+  public function testGetClasses() {
+    // It should return an empty array when called without a correct value and
+    // no default value.
+    $this->assertEqual($this->instance->getClasses(array('some_unrelated_setting')), array(), 'No classes are returned if we have no value.');
+
+    // It should return the default value when it is called without value, but
+    // the plugin definition contains a default value.
+    $context = new ctools_context();
+    $context->data = array(
+      'instance' => array(
+        'default_values' => array(
+          'paddle_color_subpalette' => 3,
+        ),
+      ),
+    );
+    $this->assertEqual($this->instance->getClasses(array(), $context), array('paddle-color-palettes-subpalette-3'), 'No classes are returned if we have no value.');
+
+    // It should return an appropriate class name when called with a value.
+    $this->assertEqual($this->instance->getClasses(array('paddle_color_subpalette' => 2)), array('paddle-color-palettes-subpalette-2'), 'The correct class is returned when a value is passed.');
+  }
+
+  /**
+   * Checks that the given palette colors are present in the form elements.
+   *
+   * @param array $palette
+   *   The palette that contains the colors to verify.
+   * @param array $form_elements
+   *   A render array as returned by PaddleColorSubPalettesPlugin::form().
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertPaletteFormElements(array $palette, array $form_elements, $message = '', $group = 'Other') {
+    // Make sure all our subpalettes have a complete set of colors.
+    $palette = paddle_color_palettes_supplement_subpalettes($palette);
+    // Convert to an indexed array, the subpalettes are ordered numerically in
+    // the form.
+    $palette = array_values($palette);
+
+    // Check if the colors are present in the form elements.
+    $equal = TRUE;
+    foreach ($palette as $key => $subpalette) {
+      foreach ($subpalette['colors'] as $color) {
+        $equal &= strpos($form_elements['paddle_color_subpalette']['#options'][$key], $color) !== FALSE;
+      }
+    }
+
+    return $this->assertTrue($equal, $message ?: 'The colors of the given palette are present in the form elements.', $group);
+  }
+
+  /**
+   * Checks that the given default value is selected in the form array.
+   *
+   * @param array $value
+   *   The default value to check.
+   * @param array $form_elements
+   *   A render array as returned by PaddleColorSubPalettesPlugin::form().
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertDefaultValue($value, array $form_elements, $message = '', $group = 'Other') {
+    return $this->assertEqual($value, $form_elements['paddle_color_subpalette']['#default_value'], $message ?: 'The default value is correct.', $group);
+  }
+
+}

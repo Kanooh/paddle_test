@@ -1,0 +1,647 @@
+/**
+* @file
+* Header specific layout.
+*
+*/
+@media (min-width: 579px) {
+  body.customized-header #fake-menu-bg {
+    display: none;
+  }
+  body.customized-header .header-wrapper {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: -moz-flex;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-direction: normal;
+    -webkit-box-orient: vertical;
+    -webkit-flex-direction: column;
+    -moz-flex-direction: column;
+    -ms-flex-direction: column;
+    flex-direction: column;
+    height: 100%;
+  }
+  body.customized-header .header-row {
+    -webkit-align-self: flex-start;
+    -moz-align-self: flex-start;
+    -ms-flex-item-align: start;
+    align-self: flex-start;
+    margin-top: auto;
+    margin-bottom: 15px;
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: -moz-flex;
+    display: -ms-flexbox;
+    display: flex;
+  }
+  body.customized-header .navigation {
+    height: 44px;
+    -webkit-align-self: flex-start;
+    -moz-align-self: flex-start;
+    -ms-flex-item-align: start;
+    align-self: flex-start;
+    margin-top: auto;
+  }
+  body.customized-header #menu-display-first-level {
+    width: 100%;
+  }
+  body.customized-header #logo img {
+    margin-top: 0;
+  }
+
+  body.smaller-header .vo-global-header {
+    display: none;
+  }
+}
+@media (min-width: 889px) {
+  #block-search-api-page-search {
+    float: right;
+    width: 75%;
+  }
+
+  #block-paddle-menu-display-top-menu .content {
+    max-width: 92%;
+  }
+
+  body.customized-header header .header-background-canvas {
+    height: 128px;
+  }
+  body.customized-header header .header-background-canvas.show-search:not(.pop-up-search) {
+    height: 200px;
+  }
+  body.customized-header .content-wrapper {
+    padding-top: 128px;
+  }
+  body.customized-header.sticky-header header {
+    position: fixed;
+    width: 100%;
+    z-index: 9000;
+  }
+  body.customized-header.sticky-header #logo img {
+    max-height: 120px;
+  }
+  body.customized-header.sticky-header header.smaller-header .logo, body.customized-header.sticky-header header.smaller-header .navigation {
+    bottom: 0px;
+  }
+  body.customized-header.sticky-header header.smaller-header #block-paddle-menu-display-top-menu, body.customized-header.sticky-header header.smaller-header #block-search-api-page-search, body.customized-header.sticky-header header.smaller-header #block-locale-language, body.customized-header.sticky-header header.smaller-header .search-pop-up {
+    display: none;
+  }
+  body.customized-header.sticky-header header.smaller-header .block-locale {
+    padding-top: 2px;
+  }
+  body.customized-header.sticky-header header.smaller-header .header-background-canvas {
+    height: 50px;
+  }
+  body.customized-header.sticky-header header.smaller-header .header-background-canvas .page-wide-container .row .logo a img {
+    max-height: 38px !important;
+    margin-bottom: 2px;
+  }
+}
+@media (min-width: 579px) and (max-width: 888px) {
+  body.customized-header #block-search-api-page-search {
+    width: 100%;
+    padding-top: 5px;
+  }
+  body.customized-header .header-background-canvas, body.customized-header .logo-wrapper {
+    height: 100%;
+  }
+  body.customized-header #block-paddle-menu-display-top-menu {
+    padding-bottom: 10px;
+  }
+  body.customized-header .header-wrapper {
+    width: 100%;
+    display: block;
+  }
+  body.customized-header .header-row {
+    margin-bottom: 0;
+    display: block;
+  }
+  body.customized-header .logo {
+    padding-top: 10px;
+    position: relative;
+    padding-bottom: 5px;
+  }
+  body.customized-header .navigation {
+    max-width: calc(100% - 30px);
+    position: absolute;
+    bottom: 10px;
+  }
+}
+@media (max-width: 578px) {
+  body.customized-header .service-links-row {
+    float: right;
+  }
+  body.customized-header .logo, body.customized-header .navigation {
+    left: initial;
+    transform: initial;
+  }
+  body.customized-header .navigation #main-nav {
+    background-color: transparent;
+  }
+}
+@media (min-width: 579px) and (max-width: 888px) {
+  #search-box-holder, .search-pop-up {
+    padding-bottom: 25px;
+  }
+
+  #search-box-holder {
+    padding-top: 0;
+  }
+}
+/**
+* @file
+* Layout.
+*
+*/
+.container {
+  padding: 0 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+@media (min-width: 1270px) {
+  .container {
+    padding: 0 !important;
+  }
+}
+.container#page-title {
+  margin: 0 auto;
+}
+.container .page-wide-container {
+  padding: 0;
+}
+
+.page-wide-container {
+  padding: 0 20px;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+
+.col-md-12 .page-wide-container-max-width {
+  max-width: 1200px;
+}
+
+.page-wide .paddingizer {
+  padding: 0;
+}
+
+.is-transparent .pane-content {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.is-transparent .pane-content .pane-section-body {
+  background: none !important;
+  border: none !important;
+}
+
+.has-padding {
+  margin: 0 auto 30px;
+}
+.has-padding .pane-content {
+  margin: 0;
+}
+
+.row .col-md-4.col-md-offset-6:first-child {
+  margin-left: 69.52817574021%;
+}
+
+@media (min-width: 888px) {
+  .col-md-12 .pane-google-custom-search #paddle-google-custom-search-form,
+  .col-md-9 .pane-google-custom-search #paddle-google-custom-search-form {
+    width: 50%;
+    margin: 0 auto;
+  }
+  .col-md-12 .pane-google-custom-search #paddle-google-custom-search-form .form-item-search-field,
+  .col-md-9 .pane-google-custom-search #paddle-google-custom-search-form .form-item-search-field {
+    width: 65%;
+    float: left;
+  }
+  .col-md-12 .pane-google-custom-search #paddle-google-custom-search-form .form-submit,
+  .col-md-9 .pane-google-custom-search #paddle-google-custom-search-form .form-submit {
+    padding: 0em 1.6em;
+    margin-top: 0px;
+    margin-left: 9px;
+    height: 40px;
+  }
+  .col-md-12 .pane-advanced-search-form #paddle-advanced-search-form,
+  .col-md-12 .pane-advanced-search #paddle-advanced-search-form,
+  .col-md-9 .pane-advanced-search-form #paddle-advanced-search-form,
+  .col-md-9 .pane-advanced-search #paddle-advanced-search-form {
+    width: 50%;
+    margin: 0 auto;
+  }
+  .col-md-12 .pane-advanced-search-form #paddle-advanced-search-form .form-item-search,
+  .col-md-12 .pane-advanced-search #paddle-advanced-search-form .form-item-search,
+  .col-md-9 .pane-advanced-search-form #paddle-advanced-search-form .form-item-search,
+  .col-md-9 .pane-advanced-search #paddle-advanced-search-form .form-item-search {
+    width: 65%;
+    float: left;
+  }
+  .col-md-12 .pane-advanced-search-form #paddle-advanced-search-form #edit-actions,
+  .col-md-12 .pane-advanced-search #paddle-advanced-search-form #edit-actions,
+  .col-md-9 .pane-advanced-search-form #paddle-advanced-search-form #edit-actions,
+  .col-md-9 .pane-advanced-search #paddle-advanced-search-form #edit-actions {
+    float: left;
+  }
+  .col-md-12 .pane-advanced-search-form #paddle-advanced-search-form #edit-actions .form-submit,
+  .col-md-12 .pane-advanced-search #paddle-advanced-search-form #edit-actions .form-submit,
+  .col-md-9 .pane-advanced-search-form #paddle-advanced-search-form #edit-actions .form-submit,
+  .col-md-9 .pane-advanced-search #paddle-advanced-search-form #edit-actions .form-submit {
+    padding: 0em 1.6em;
+    margin-top: 0px;
+    margin-left: 9px;
+    height: 40px;
+  }
+}
+@media (max-width: 578px) {
+  .page-wide-container .logo-wrapper {
+    width: 70%;
+  }
+}
+@media (min-width: 889px) {
+  #search-api-page-search-form .form-submit-container {
+    float: none;
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
+
+  #search-api-page-search-form > div {
+    display: inherit;
+  }
+
+  #search-api-page-search-form .form-type-textfield {
+    max-width: 1086px;
+    width: calc(100% - 100px);
+  }
+
+  .navigation {
+    max-width: 100%;
+    overflow: hidden;
+  }
+}
+@media (max-width: 888px) {
+  #search-api-page-search-form .form-submit-container {
+    display: block;
+  }
+}
+/**
+* @file
+* Base styling for page wide content.
+*
+*/
+.page-wide .landing-page-body {
+  padding-left: 25px;
+}
+
+.col-xs-12 .page-wide-container-max-width {
+  max-width: 1200px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.page-wide-container.background-image {
+  margin: 0 20px;
+}
+
+@media screen and (min-width: 579px) {
+  .block-culturefeed-agenda {
+    margin-top: 15px;
+  }
+}
+@media screen and (min-width: 889px) and (max-width: 1200px) {
+  .block-culturefeed-agenda {
+    margin-right: 30px;
+  }
+}
+
+footer .paddingizer.rich_footer {
+  padding-top: 30px;
+}
+
+/**
+* @file
+* Common elements shared across pages.
+*
+*/
+html {
+  font-family: sans-serif;
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+.paddingizer {
+  padding: 0 4.20248%;
+}
+
+img {
+  border: none;
+  display: block;
+}
+
+img.file-icon {
+  display: inline;
+}
+
+hr {
+  border: 0;
+}
+
+.inline-block {
+  display: inline-block;
+  vertical-align: top;
+}
+
+.visuallyhidden {
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.focusable:active, .focusable:focus {
+  clip: auto;
+  height: auto;
+  overflow: visible;
+  position: static;
+  width: auto;
+  white-space: normal;
+  clip-path: none;
+}
+
+#page {
+  width: 100%;
+  margin: 0;
+}
+
+/* @header */
+header {
+  position: relative;
+}
+
+.header-background-canvas {
+  padding-bottom: 10px;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+#logo {
+  display: block;
+  margin: 0 8px 0 0;
+  color: #FFF;
+}
+
+#logo:focus {
+  outline: thin dotted;
+}
+
+#logo img {
+  width: auto;
+  max-height: 127px;
+  margin-top: 30px;
+}
+
+.header-subtitle {
+  font-weight: normal;
+}
+
+.header-title {
+  margin-top: 30px;
+  font-weight: normal;
+}
+
+/* @second-level menu */
+#menu-display-current-level-plus-one {
+  border: 1px solid #EBEBEB;
+  box-shadow: 0 5px 5px -4px #B5B5B5;
+}
+
+/*@page title */
+#page-title {
+  margin: 15px 0;
+}
+
+/*@region content */
+.region-content {
+  margin-top: 20px;
+}
+
+/* @footer */
+footer {
+  position: relative;
+}
+footer .paddingizer {
+  padding-top: 30px;
+}
+footer .paddingizer .row .pane-content {
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+footer .paddingizer .row .pane-content .pane-section-body {
+  background: none;
+}
+
+.footer-tagline {
+  float: right;
+}
+
+.footer-title,
+.footer-subtitle {
+  display: inline-block;
+}
+
+[class^="icon-"].valigntop,
+[class*=" icon-"].valigntop,
+.fa.valigntop {
+  display: inline-block;
+  vertical-align: top;
+  min-width: 14px;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.content-wrapper {
+  position: relative;
+  clear: both;
+}
+
+.full-height {
+  min-height: 100%;
+  position: relative;
+}
+
+/* @media queries */
+@media (min-width: 800px) {
+  .max-width {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+@media (max-width: 578px) {
+  .header-background-canvas {
+    height: 60px;
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  .header-background-canvas > .paddingizer {
+    /* Don't overlap with floating elements */
+    overflow-x: hidden;
+  }
+
+  #logo {
+    height: 56px;
+    margin: 0;
+    padding: 2px 0;
+    white-space: nowrap;
+    color: transparent;
+  }
+
+  /* Helper to vertical align the image */
+  #logo:before {
+    content: "";
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+  }
+
+  #logo img {
+    display: inline-block;
+    max-width: 100%;
+    max-height: 56px;
+    height: auto;
+    margin: 0 !important;
+    vertical-align: middle;
+  }
+
+  .header-title {
+    margin-top: 12px;
+  }
+
+  /* Hide the header title if we have a logo */
+  #logo + .header-title {
+    display: none;
+  }
+
+  .header-subtitle {
+    display: none;
+  }
+}
+@media (min-width: 889px) {
+  .header-background-canvas,
+  .logo-wrapper {
+    height: 127px;
+  }
+
+  .header-background-canvas {
+    padding-bottom: 0;
+  }
+
+  .logo-wrapper {
+    overflow: hidden;
+  }
+
+  .region-service-links {
+    position: absolute;
+    width: 100%;
+  }
+}
+.node-type-paddle-overview-page .pane-views-panes > .pane-content,
+.node-type-paddle-overview-page .pane-additional-panes > .pane-content {
+  border-style: none;
+  box-shadow: none;
+  background: none transparent;
+}
+
+#first-time {
+  padding-left: 25px;
+}
+
+/*
+  This file can be used to override width settings.
+  This will be useful if the site does not use the same width and breakpoint settings as vlaanderen.be
+
+  We use important, because when using custom breakpoints, this file should not be overridden
+*/
+/* ====== iw-layout breakpoints ======= */
+/* ==================================== */
+/* Set the minimum and maximum width of the global header and footer content
+   This content will be centered inside the global header and footer.
+*/
+.iwgh2, .iwgf2 {
+  min-width: 268px !important;
+}
+
+.iw2-layout.iw2-custom-breakpoint {
+  max-width: 1200px !important;
+  margin: 0 auto !important;
+}
+
+.iwgh2-bar .iw-wrapper {
+  padding: 0 4.20248%;
+}
+
+.iw2-custom-margin {
+  padding: 0 4.20248%;
+}
+
+/* Set the width (in percentage) and minimum width of the GH and GF content for smaller screens (tablets)*/
+/*screens >1024*/
+@media screen and (min-width: 1024px) {
+  .iw-responsive .iw-layout.iw-custom-breakpoint {
+    width: 1200px !important;
+    min-width: 1024px !important;
+  }
+}
+/* Set the width (in percentage) and minimum width of the GH and GF content for smallest screens (phones)*/
+/*mobile*/
+@media screen and (max-device-width: 767px) {
+  .iw-responsive .iw-layout.iw-custom-breakpoint {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+/*1700 bar*/
+/*screens <1024*/
+@media screen and (max-width: 1024px) {
+  .iwgf-infolijnBar.iw-custom-breakpoint .iwgf-bar {
+    padding-left: 0 !important;
+  }
+}
+/*screens <1023*/
+@media screen and (max-width: 1023px) {
+  .iwgf-infolijnBar.iw-custom-breakpoint {
+    right: 9px !important;
+  }
+
+  .iwgf-infolijnBar.iw-custom-breakpoint .iwgf-bar .iwgf-intro {
+    display: none !important;
+  }
+}
+/*mobile*/
+@media screen and (max-device-width: 767px) {
+  .iwgf-infolijnBar.iw-custom-breakpoint {
+    display: none !important;
+  }
+}
+/**
+ * @file
+ * Custom Page Layout paddlet styling.
+ */
+body.page-wide #page-content div.page .region-content .panel-responsive {
+  padding: 0 20px;
+  box-sizing: border-box;
+  margin: 0 auto;
+}

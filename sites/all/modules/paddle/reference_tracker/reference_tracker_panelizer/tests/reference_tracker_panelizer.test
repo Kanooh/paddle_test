@@ -1,0 +1,108 @@
+<?php
+
+/**
+ * @file
+ * Contains ReferenceTrackerPanelizerTest.
+ */
+
+/**
+ * Class ReferenceTrackerPanelizerTest.
+ */
+class ReferenceTrackerPanelizerTest extends DrupalWebTestCase {
+
+  /**
+   * The content type created for tests purposes.
+   *
+   * @var object
+   */
+  protected $contentType;
+
+  /**
+   * The user created for the test.
+   *
+   * @var object
+   */
+  protected $user;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Reference tracker panelizer',
+      'description' => 'Tests integration with the Panelizer module.',
+      'group' => 'Reference Tracker',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($modules = array()) {
+    $modules[] = 'reference_tracker_panelizer';
+    parent::setUp($modules);
+
+    $this->contentType = $this->drupalCreateContentType();
+
+    // Enable panelizer for this content type.
+    variable_set('panelizer_defaults_node_' . $this->contentType->type, array(
+      'status' => 1,
+      'view modes' => array(
+        'default' => array(
+          'status' => 1,
+        ),
+      ),
+    ));
+
+    // Reset static caches to ensure that the node type is panelized also
+    // in this process.
+    drupal_static_reset();
+
+    $this->user = $this->drupalCreateUser(array(
+      'access content',
+      'administer panelizer',
+      "create {$this->contentType->type} content",
+      "edit own {$this->contentType->type} content",
+    ));
+
+    $this->drupalLogin($this->user);
+  }
+
+  /**
+   * Tests that references in panes are tracked.
+   */
+  public function testPanelsReferences() {
+    $node_settings = array(
+      'type' => $this->contentType->type,
+    );
+    $referenced_node = $this->drupalCreateNode($node_settings);
+    $referencing_node = $this->drupalCreateNode($node_settings);
+
+    // Enable panelizer for it.
+    $this->drupalPost("node/{$referencing_node->nid}/panelizer/default", array(), t('Panelize it!'));
+
+    // Reload the node to fetch the panelizer data.
+    $referencing_node = node_load($referencing_node->nid, NULL, TRUE);
+
+    // Verify that we start without references.
+    $this->assertEqual(array(), reference_tracker_get_inbound_references('node', $referenced_node->nid), 'The referenced node has no references yet.');
+
+    // Create a new custom pane with a link to the referenced node.
+    $pane = panels_new_pane('custom', 'custom', TRUE);
+    $pane->configuration['body'] = l($this->randomName(), 'node/' . $referenced_node->nid);
+
+    // Add the pane to the display.
+    /* @var panels_display $display */
+    $display = $referencing_node->panelizer['default']->display;
+    $display->add_pane($pane, 'center');
+    // Mark the display as modified, so it will be saved when saving the node.
+    $referencing_node->panelizer['default']->display_is_modified = TRUE;
+    node_save($referencing_node);
+
+    $expected = array(
+      'node' => array($referencing_node->nid),
+    );
+    $this->assertEqual($expected, reference_tracker_get_inbound_references('node', $referenced_node->nid), 'The referenced node has a reference.');
+  }
+
+}

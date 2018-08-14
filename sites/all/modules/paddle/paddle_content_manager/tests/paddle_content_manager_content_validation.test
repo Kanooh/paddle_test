@@ -1,0 +1,111 @@
+<?php
+
+/**
+ * @file
+ * Tests if the validation of nodes is tracked in a separate table.
+ */
+
+/**
+ * Tests if moderation state transitions to published state are tracked.
+ */
+class PaddleContentManagerValidateNodeTest extends PaddleWebTestCase {
+  /**
+   * A content type definition.
+   *
+   * @var array
+   */
+  protected $contentType;
+
+  /**
+   * A user entity object representing a chief editor.
+   *
+   * @var object
+   */
+  protected $chiefEditor;
+
+  /**
+   * A user entity object representing an editor.
+   *
+   * @var object
+   */
+  protected $editor;
+
+  /**
+   * Provides the necessary test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Validate node tests',
+      'description' => 'Test the tracking of node validation.',
+      'group' => 'Paddle Content Manager',
+    );
+  }
+
+  /**
+   * Sets up a Drupal site for running functional and integration tests.
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp($enable_modules);
+
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a node using the content type.
+    $this->node = $this->drupalCreateUiNode('basic_page');
+  }
+
+  /**
+   * Tests that data about the user which validates a node is saved.
+   *
+   * This is tracked in the paddle_content_manager_validate_user table.
+   */
+  public function testNodeValidation() {
+    $this->drupalLogin($this->chiefEditor);
+    // Check the validation state of our test node. It should not yet have been
+    // validated.
+    $this->assertFalse(paddle_content_manager_get_validate_user($this->node->nid), 'A newly created node does not have a validate user associated with it.');
+
+    // Change the moderation status to 'Needs review' and check the validation.
+    // No validation data should be present.
+    $this->moderateNode($this->node, 'To chief editor', $this->chiefEditor->uid);
+    $this->assertFalse(paddle_content_manager_get_validate_user($this->node->nid), 'A node that had its moderation state changed to "Needs review" does not have a validate user associated with it.');
+
+    // Change the moderation status to 'Published' and check the validation.
+    // The validation data should be present, and linked to the current user.
+    $this->moderateNode($this->node, 'Publish');
+    $this->assertEqual(paddle_content_manager_get_validate_user($this->node->nid)->uid, $this->chiefEditor->uid, 'A node that had its moderation state changed to "Published" has a validate user associated with it.');
+
+    // Check the moderation history data.
+    $data = paddle_content_manager_get_validate_data($this->node->nid);
+    $original_hid = $data['hid'];
+    $this->assertTrue($data['published'], 'The moderation state history indicates that the validated node is published');
+    $this->assertTrue($data['is_current'], 'The moderation state history indicates that the current transition is the one which validated the node.');
+
+    // Change the moderation status back to 'Draft' and check the validation.
+    $this->drupalGet('node/' . $this->node->nid . '/edit');
+    $this->drupalPost(NULL, array(), 'Save');
+    $this->assertEqual(paddle_content_manager_get_validate_user($this->node->nid)->uid, $this->chiefEditor->uid, 'A node that had its moderation state changed to "Published" has a validate user associated with it.');
+    $data = paddle_content_manager_get_validate_data($this->node->nid);
+    $this->assertEqual($data['hid'], $original_hid, 'The moderation state history id of the transition that validated the node has not changed.');
+    $this->assertTrue($data['published'], 'The moderation state history indicates that the validated node is published');
+    $this->assertFalse($data['is_current'], 'The moderation state history indicates that the transition which validated the node is not the current one.');
+
+    // Change the moderation status back to 'Needs review' and check the
+    // validation.
+    $this->moderateNode($this->node, 'To chief editor', $this->chiefEditor->uid);
+    $this->assertEqual(paddle_content_manager_get_validate_user($this->node->nid)->uid, $this->chiefEditor->uid, 'A node that had its moderation state changed to "Published" has a validate user associated with it.');
+    $data = paddle_content_manager_get_validate_data($this->node->nid);
+    $this->assertEqual($data['hid'], $original_hid, 'The moderation state history id of the transition that validated the node has not changed.');
+    $this->assertTrue($data['published'], 'The moderation state history indicates that the validated node is published');
+    $this->assertFalse($data['is_current'], 'The moderation state history indicates that the transition which validated the node is not the current one.');
+
+    // Change the moderation status back to 'Published' and check the
+    // validation.
+    $this->moderateNode($this->node, 'Publish');
+    $this->assertEqual(paddle_content_manager_get_validate_user($this->node->nid)->uid, $this->chiefEditor->uid, 'A node that had its moderation state changed to "Published" has a validate user associated with it.');
+    $data = paddle_content_manager_get_validate_data($this->node->nid);
+    $this->assertNotEqual($data['hid'], $original_hid, 'The moderation state history id of the transition that validated the node has changed.');
+    $this->assertTrue($data['published'], 'The moderation state history indicates that the validated node is published');
+    $this->assertTrue($data['is_current'], 'The moderation state history indicates that the current transition is the one which validated the node.');
+  }
+
+}

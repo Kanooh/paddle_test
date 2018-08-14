@@ -1,0 +1,142 @@
+@import "utils/font-face";
+@import "variables/colors";
+@import "variables/typography";
+
+@include FLOW-get-font("Roboto", "../fonts/Roboto-Light-Italic", 100, italic);
+@include FLOW-get-font("Roboto", "../fonts/Roboto-Light", 100);
+@include FLOW-get-font("Roboto", "../fonts/Roboto-Regular", 300);
+@include FLOW-get-font("Roboto", "../fonts/Roboto-Italic", 300, italic);
+@include FLOW-get-font("Roboto", "../fonts/Roboto-Medium", 500);
+@include FLOW-get-font("Roboto", "../fonts/Roboto-Bold", 700);
+
+@include FLOW-get-font("Roboto Condensed", "../fonts/RobotoCondensed-Regular", 300);
+@include FLOW-get-font("Roboto Condensed", "../fonts/RobotoCondensed-Bold", 700);
+
+@include FLOW-get-font("Adventor", "../fonts/texgyreadventor-bold", 700);
+
+// -------------------------------------------------------------------
+// :: BASE
+// -------------------------------------------------------------------
+
+html {
+  font-size: rem(16px);
+  font-smoothing: antialiased;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-smooth: always;
+}
+
+body {
+  color: $text-color;
+  font-family: $font-family-text;
+  font-size: rem($font-size-base);
+  line-height: $line-height-base;
+  font-weight: 300;
+}
+
+h1,h2,h3,h4,h5,h6{
+  font-family: $font-family-title;
+}
+
+// -------------------------------------------------------------------
+// :: BLOCK ELEMENTS
+// -------------------------------------------------------------------
+
+h1 {
+  @include FLOW-at($tablet){
+    font-size: rem($font-size-xxxlarge);
+  }
+  font-size: rem(45px);
+  line-height: 1.025;
+  letter-spacing: 2px;
+}
+
+h2 {
+  @include FLOW-at($tablet){
+    font-size: rem($font-size-xxlarge);
+  }
+  font-size: rem($font-size-xlarge);
+  font-weight: bold;
+  line-height: 1.025;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+}
+
+h3 {
+  font-size: rem($font-size-xlarge);
+  font-family: "Roboto Condensed";
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  line-height: 1.45;
+
+}
+
+h4 {
+  font-size: rem($font-size-large);
+  line-height: 1.45;
+  color:$secondary-color;
+}
+
+h5 {
+  font-size: rem($font-size-base);
+  line-height: 1.55;
+  font-family: "Roboto Condensed";
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+h6 {
+  line-height: 1.55;
+  font-size: rem($font-size-small);
+  font-weight: 200;
+  text-transform: uppercase;
+  font-family: "Roboto Condensed";
+  letter-spacing: 1px;
+  sup{
+    font-size:9px;
+  }
+}
+
+p {
+  font-size: $font-size-base;
+  margin: 1.2em 0 1.2em;
+  &:first-child{
+    margin: 0;
+  }
+  [class*="icon"]{
+    line-height: 1;
+    &:before{
+      font-size: 2.5em;
+    }
+  }
+}
+
+h6,
+small,
+cite {
+  font-size: rem($font-size-small);
+}
+
+
+h1,h2,h3,h4,h5,h6{
+  &.primary-color{
+    color: $primary-color;
+  }
+}
+
+.pane-content a, .panel-pane .pane-content .pane-section-body a, .is-hyperlink {
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: none;
+  }
+}
+
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-content .pane-section-body a {
+  color: $secondary-color;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-content .pane-section-body a:hover {
+  color: $primary-color;
+}

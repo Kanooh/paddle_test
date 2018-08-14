@@ -1,0 +1,460 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Web Universe feature.
+ */
+
+include_once 'paddle_web_universe_theme.features.inc';
+
+/**
+ * Checks if the base theme of the current theme is the web universe theme.
+ *
+ * @return bool
+ *   Whether the theme is either web universe theme or based upon it.
+ */
+function paddle_web_universe_theme_is_theme_web_universe() {
+  $base_theme = variable_get('paddle_base_theme', '');
+
+  if ($base_theme == 'web_universe_theme') {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_web_universe_theme_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' || $owner == 'paddle_style') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * For the web universe theme we add new options to display the listing pane
+ * as.
+ */
+function paddle_web_universe_theme_form_paddle_panes_listing_content_type_edit_form_alter(&$form, &$form_state, $form_id) {
+  if (paddle_web_universe_theme_is_theme_web_universe()) {
+    $conf = $form_state['conf'];
+
+    $view_mode_default_value = isset($conf['view_mode']) ? $conf['view_mode'] : 'doormat';
+    $web_universe_view_modes = paddle_web_universe_theme_get_web_universe_node_view_modes();
+
+    foreach ($web_universe_view_modes as $view_mode => $label) {
+      $form['pane_settings']['section_body']['display_settings']['view_mode'][$view_mode] = array(
+        '#type' => 'radio',
+        '#title' => $label,
+        '#return_value' => $view_mode,
+        '#parents' => array('view_mode'),
+        '#default_value' => $view_mode_default_value,
+        '#attributes' => array(
+          'name' => 'view_mode',
+        ),
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_landing_page_menu_structure_view_modes().
+ */
+function paddle_web_universe_theme_paddle_landing_page_menu_structure_view_modes() {
+  $view_modes = array();
+
+  if (paddle_web_universe_theme_is_theme_web_universe()) {
+    $view_modes = paddle_web_universe_theme_get_web_universe_node_view_modes();
+  }
+
+  return $view_modes;
+}
+
+/**
+ * Returns the new node view modes which are applicable for web universe themes.
+ *
+ * @return array
+ *   The web universe view modes, keyed by view mode, with the label as value.
+ */
+function paddle_web_universe_theme_get_web_universe_node_view_modes() {
+  return array(
+    'doormat' => t('Doormat'),
+    'spotlight_extended' => t('Spotlight - extended (displays title, body and the featured image)'),
+    'spotlight_short' => t('Spotlight - short (displays only the title)'),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_web_universe_theme_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_web_universe_theme_naked_header' => array(
+      'path' => $path . '/templates/headers',
+      'template' => 'paddle-web-universe-theme-naked-header',
+    ),
+    'paddle_web_universe_theme_image_header_full_width' => array(
+      'path' => $path . '/templates/headers',
+      'template' => 'paddle-web-universe-theme-image-header-full-width',
+    ),
+    'paddle_web_universe_theme_image_header_page_title' => array(
+      'path' => $path . '/templates/headers',
+      'template' => 'paddle-web-universe-theme-image-header-page-title',
+    ),
+    'node__doormat' => array(
+      'render element' => 'elements',
+      'path' => $path . '/templates/node',
+      'template' => 'node--doormat',
+    ),
+    'node__spotlight_extended' => array(
+      'render element' => 'elements',
+      'path' => $path . '/templates/node',
+      'template' => 'node--spotlight_extended',
+    ),
+    'node__spotlight_short' => array(
+      'render element' => 'elements',
+      'path' => $path . '/templates/node',
+      'template' => 'node--spotlight_short',
+    ),
+  );
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ */
+function paddle_web_universe_theme_entity_info_alter(&$entity_info) {
+  // Define the custom view modes which can be used in the web universe theme.
+  $web_universe_view_modes = paddle_web_universe_theme_get_web_universe_node_view_modes();
+
+  foreach ($web_universe_view_modes as $view_mode => $label) {
+    $entity_info['node']['view modes'][$view_mode] = array(
+      'label' => $label,
+      'custom settings' => TRUE,
+    );
+  }
+}
+
+/**
+ * Implements template_preprocess_node().
+ */
+function paddle_web_universe_theme_preprocess_node(&$vars) {
+  // Add a theme hook suggestion for nodes that are displayed in the custom
+  // view modes for the Listing content type plugin so they
+  // can be targeted with template files such as
+  // node--landing-page--doormat.tpl.php and node--listing-doormat.tpl.php.
+  $web_universe_view_modes = $web_universe_view_modes = paddle_web_universe_theme_get_web_universe_node_view_modes();
+  if (in_array($vars['view_mode'], array_keys($web_universe_view_modes))) {
+    $vars['theme_hook_suggestions'][] = 'node__' . $vars['type'] . '__' . $vars['view_mode'];
+    $vars['theme_hook_suggestions'][] = 'node__' . $vars['view_mode'];
+
+    // Render the featured image for the spotlight_extended view mode.
+    if ($vars['view_mode'] == 'spotlight_extended') {
+      $image = '';
+      $vars['extra_class'] = '';
+      $field_paddle_featured_image = field_get_items('node', $vars['node'], 'field_paddle_featured_image');
+      if (!empty($field_paddle_featured_image)) {
+        $sid = $field_paddle_featured_image[0]['sid'];
+        $atom = scald_atom_load($sid);
+        if ($atom) {
+          $alt = field_get_items('scald_atom', $atom, 'field_scald_alt_tag');
+          $alt = !empty($alt) ? $alt[0]['value'] : '';
+          $image = theme('image', array(
+            'path' => $atom->file_source,
+            'alt' => $alt,
+            'attributes' => array(
+              'class' => 'spotlight__image__img',
+            ),
+          ));
+        }
+      }
+
+      $vars['image'] = $image;
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * @TODO: remove this alter after updating the plugins to accept form states.
+ * @See paddle theme theme_settings.php.
+ */
+function paddle_web_universe_theme_form_paddle_themer_theme_edit_form_alter(&$form, &$form_state, $form_id) {
+  $form['style_sets']['header']['form_elements']['header_title_text']['header_title']['#states'] = array(
+    'invisible' => array(
+      '#edit-header-form-elements-header-title-default-header-title-default' => array('checked' => TRUE),
+    ),
+  );
+  // Don't show the logo tag line if the logo is not rendered.
+  $form['style_sets']['header']['form_elements']['header_logo_tag_line']['header_logo_tag_line']['#states'] = array(
+    'invisible' => array(
+      'input[name="header[form_elements][header_type][header_type]"]' => array('value' => 'image_header_full_width'),
+    ),
+  );
+  // The naked header has no image to render.
+  $form['style_sets']['header']['form_elements']['header_image']['header_image']['#states'] = array(
+    'invisible' => array(
+      'input[name="header[form_elements][header_type][header_type]"]' => array('value' => 'naked_header'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_themer_enable_theme_alter().
+ */
+function paddle_web_universe_theme_paddle_themer_enable_theme_alter(&$theme) {
+  // Enables or disables the web_universe components based on the enabled theme.
+  if ($theme->theme == 'web_universe_theme') {
+    module_enable(array('paddle_web_universe_panes'));
+  }
+  else {
+    module_disable(array('paddle_web_universe_panes'), FALSE);
+  }
+}
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function paddle_web_universe_theme_node_type_insert($info) {
+  paddle_web_universe_theme_create_field_instances($info);
+}
+
+/**
+ * Creates the field instances for a content type.
+ *
+ * @param Object $type
+ *   The content type.
+ */
+function paddle_web_universe_theme_create_field_instances(&$type) {
+  if (!field_read_instance('node', 'field_display_title_in_header', $type->type)) {
+    $field_instance_display_title_in_header = array(
+      'bundle' => $type->type,
+      'default_value' => array(
+        0 => array(
+          'value' => 0,
+        ),
+      ),
+      'deleted' => 0,
+      'description' => '',
+      'display' => array(
+        'default' => array(
+          'label' => 'hidden',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 10,
+        ),
+        'diff_standard' => array(
+          'label' => 'above',
+          'module' => 'i18n_field',
+          'settings' => array(),
+          'type' => 'i18n_list_default',
+          'weight' => 6,
+        ),
+        'doormat' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'spotlight_extended' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'spotlight_short' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => 'node',
+      'field_name' => 'field_display_title_in_header',
+      'label' => t('Display title in the header'),
+      'required' => 0,
+      'settings' => array(
+        'field_instance_sync' => 0,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'options',
+        'settings' => array(
+          'display_label' => 1,
+        ),
+        'type' => 'options_onoff',
+        'weight' => 31,
+      ),
+    );
+
+    field_create_instance($field_instance_display_title_in_header);
+  }
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_web_universe_theme_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+  if (isset($menu_object)) {
+    return array(
+      'field_display_title_in_header',
+    );
+  }
+
+  return array();
+}
+
+/**
+ * Implements hook_paddle_scald_atom_ckeditor_html_alter().
+ */
+function paddle_web_universe_theme_paddle_scald_atom_ckeditor_html_alter(&$html, $atom, $attributes) {
+  if ($atom->type == 'file' && isset($atom->paddle_scald_file[LANGUAGE_NONE][0])) {
+    // First check if the atom provider has a custom url generator.
+    $url_callback = $atom->provider . '_download_url';
+    if (function_exists($url_callback)) {
+      $url = $url_callback($atom);
+    }
+    // If not, and the atom is known to have a file as download, generate a url
+    // ourselves.
+    else {
+      $url = file_create_url($atom->file_source);
+    }
+
+    // See if the atom provider has additional options for the download link.
+    $options_callback = $atom->provider . '_download_link_options';
+    if (function_exists($options_callback)) {
+      $link_options = $options_callback();
+    }
+    $link_options['attributes']['target'] = '_blank';
+    $link_options['html'] = TRUE;
+
+    $extension = strtolower(pathinfo($atom->file_source, PATHINFO_EXTENSION));
+    $file_size = $atom->paddle_scald_file[LANGUAGE_NONE][0]['filesize'];
+
+    $icon = theme('paddle_core_icon', array(
+      'type' => 'file',
+      'name' => $extension,
+      'attributes' => $attributes,
+    ));
+
+    $item = theme('paddle_core_listing_table_item', array(
+      'content' => $atom->title,
+      'icon' => $icon,
+      'extension' => $extension,
+      'size' => paddle_scald_file_format_size($file_size),
+      'type' => 'file',
+    ));
+
+    // If an url exists, wrap the item inside a link. If no url was found, we're
+    // out of luck.
+    if (!empty($url)) {
+      $item = l($item, $url, $link_options);
+    }
+
+    $html = $item;
+  }
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function paddle_web_universe_theme_theme_registry_alter(&$theme_registry) {
+  if (paddle_web_universe_theme_is_theme_web_universe()) {
+    // Force the admin theme to use the WU theme functions as well.
+    if (!empty($theme_registry['paddle_core_icon'])) {
+      $theme_registry['paddle_core_icon']['type'] = 'module';
+      $theme_registry['paddle_core_icon']['function'] = 'web_universe_theme_paddle_core_icon';
+      $theme_registry['paddle_core_icon']['theme path'] = 'sites/all/modules/paddle/paddle_web_universe_theme';
+    }
+
+    if (!empty($theme_registry['paddle_core_listing_table_item'])) {
+      $theme_registry['paddle_core_listing_table_item']['type'] = 'module';
+      $theme_registry['paddle_core_listing_table_item']['function'] = 'web_universe_theme_paddle_core_listing_table_item';
+      $theme_registry['paddle_core_listing_table_item']['theme path'] = 'sites/all/modules/paddle/paddle_web_universe_theme';
+    }
+  }
+}
+
+/**
+ * Implements theme_paddle_core_icon().
+ */
+function web_universe_theme_paddle_core_icon($variables) {
+  $type = $variables['type'];
+  $name = $variables['name'];
+
+  if ($type == 'file') {
+    return '<div class="document-miniature__type"><span class="document-miniature__type__text">' . strtoupper($name) . '</span></div>';
+  }
+  // When there is no file, just use the styling defined in
+  // theme_paddle_core_icon.
+  else {
+    return theme_paddle_core_listing_table($variables);
+  }
+}
+
+/**
+ * Implements theme_paddle_core_listing_table_item().
+ */
+function web_universe_theme_paddle_core_listing_table_item($variables) {
+  $type = $variables['type'];
+  $icon = $variables['icon'];
+  $content = $variables['content'];
+  $extension = $variables['extension'];
+  $file_size = $variables['size'];
+
+  if ($type == 'file') {
+    $output = '<div class="document-miniature">';
+    if (!empty($icon)) {
+      $output .= $icon;
+    }
+    $output .= '<div class="document-miniature__content">';
+
+    if (!empty($content)) {
+      $output .= '<div class="document-miniature__title" data-clamp="2">' . $content . '</div>';
+    }
+
+    if (!empty($extension) && !empty($file_size)) {
+      $metadata = $extension . ' - ' . $file_size;
+    }
+    elseif (!empty($extension)) {
+      $metadata = $extension;
+    }
+    elseif (!empty($file_size)) {
+      $metadata = $file_size;
+    }
+
+    if (!empty($metadata)) {
+      $output .= '<div class="document-miniature__metadata">' . $metadata . '</div>';
+    }
+
+    $output .= '</div></div>';
+
+    return $output;
+  }
+  // When there is no file, just use the styling defined in
+  // theme_paddle_core_table_item.
+  else {
+    return theme_paddle_core_listing_table_item($variables);
+  }
+}

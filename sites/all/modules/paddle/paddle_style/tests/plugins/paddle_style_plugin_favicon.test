@@ -1,0 +1,175 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleStylePluginFaviconTest.
+ */
+
+/**
+ * Tests the favicon plugin.
+ */
+class PaddleStylePluginFaviconTest extends PaddleStylePluginTestCase {
+
+  /**
+   * Stores an instance of the Favicon plugin.
+   *
+   * @var object PaddleStyleFaviconPlugin
+   */
+  public $instance;
+
+  /**
+   * Stores a file object pointing to a mock favicon.
+   */
+  public $favicon;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'testing';
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Favicon',
+      'description' => 'Tests the favicon style plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array('paddle_style'));
+
+    // Create an instance of the Favicon plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'favicon');
+    $this->instance = new $plugin['handler']['class']();
+
+    // Create a test file containing a mock favicon.
+    $this->favicon = file_save_data('mock favicon', 'public://favicon.ico');
+  }
+
+  /**
+   * Tests the form() method of the favicon plugin.
+   */
+  public function testForm() {
+    // Check that all elements are being returned by default.
+    $form_elements = $this->instance->form();
+    foreach (array('favicon', 'toggle') as $property) {
+      $this->assertTrue($form_elements[$property], format_string('The %property property is present when the form is built using default settings.', array('%property' => $property)));
+    }
+
+    // Check that it is possible to disallow the toggle checkbox.
+    $allowed_values = array('favicon' => TRUE);
+    $form_elements = $this->instance->form($allowed_values);
+    $this->assertTrue(!empty($form_elements['favicon']), 'The file field is available when the toggle checkbox is disallowed.');
+    $this->assertTrue(empty($form_elements['toggle']), 'The toggle checkbox is not available it is disallowed.');
+
+    // Test if the form is submitted that the uploaded file is marked as
+    // permanent and used by the favicon plugin.
+    $values = array('values' => array('favicon' => $this->favicon->fid));
+    $this->instance->submit($values);
+
+    $this->assertFilePermanent($this->favicon->fid, 'The uploaded favicon has been marked as permanent.');
+    $this->assertFileUsage($this->favicon->fid, 'paddle_style', 'favicon');
+  }
+
+  /**
+   * Tests the execute() method of the favicon plugin.
+   */
+  public function testExecute() {
+    // Use a core theme for testing.
+    global $theme_key;
+    $theme_key = 'bartik';
+
+    $default_favicon = file_create_url('misc/favicon.ico');
+    $uploaded_favicon = file_create_url($this->favicon->uri);
+
+    // Define some test cases.
+    $test_cases = array(
+      array(
+        'description' => 'When the toggle is disallowed and no favicon is uploaded the default favicon should be shown.',
+        'values' => array('favicon' => NULL),
+        'expected' => $default_favicon,
+      ),
+      array(
+        'description' => 'When the toggle is disallowed and a favicon is uploaded the uploaded favicon should be shown.',
+        'values' => array('favicon' => $this->favicon->fid),
+        'expected' => $uploaded_favicon,
+      ),
+      array(
+        'description' => 'When the toggle is unchecked and no favicon is uploaded the default favicon should be shown.',
+        'values' => array('favicon' => NULL, 'toggle' => FALSE),
+        'expected' => $default_favicon,
+      ),
+      array(
+        'description' => 'When the toggle is unchecked and a favicon is uploaded the default favicon should be shown.',
+        'values' => array('favicon' => $this->favicon->fid, 'toggle' => FALSE),
+        'expected' => $default_favicon,
+      ),
+      array(
+        'description' => 'When the toggle is checked and no favicon is uploaded the default favicon should be shown.',
+        'values' => array('favicon' => NULL, 'toggle' => TRUE),
+        'expected' => $default_favicon,
+      ),
+      array(
+        'description' => 'When the toggle is checked and a favicon is uploaded the uploaded favicon should be shown.',
+        'values' => array('favicon' => $this->favicon->fid, 'toggle' => TRUE),
+        'expected' => $uploaded_favicon,
+      ),
+    );
+
+    foreach ($test_cases as $test_case) {
+      // Reset the theme key and theme settings.
+      drupal_static_reset('theme_get_setting');
+
+      // Call the execute() method and verify the expected result.
+      $this->instance->execute($test_case['values']);
+      $this->assertEqual(theme_get_setting('favicon'), $test_case['expected'], $test_case['description']);
+    }
+  }
+
+  /**
+   * Tests the clone and delete functions for the favicon.
+   */
+  public function testCloneAndDelete() {
+    $values = array('values' => array('favicon' => $this->favicon->fid));
+    $this->instance->submit($values);
+
+    // Check if the file exists.
+    $this->assertFilePermanent($this->favicon->fid);
+    $this->assertFileUsage($this->favicon->fid, 'paddle_style', 'favicon');
+
+    // Load the file.
+    $file = file_load($this->favicon->fid);
+
+    // Check the correct usage of the file.
+    $references = file_usage_list($file);
+    $this->assertEqual(1, $references['paddle_style']['favicon'][1]);
+
+    // Clone the settings and check that the usage has been updated.
+    $this->instance->onClone(array('favicon' => $this->favicon->fid));
+    $references = file_usage_list($file);
+    $this->assertEqual(2, $references['paddle_style']['favicon'][1]);
+
+    // Delete one setting and check that the usage has been updated.
+    $this->instance->onDelete(array('favicon' => $this->favicon->fid));
+    $references = file_usage_list($file);
+    $this->assertEqual(1, $references['paddle_style']['favicon'][1]);
+
+    // Check if the file still exists.
+    $this->assertFilePermanent($this->favicon->fid);
+    $this->assertFileUsage($this->favicon->fid, 'paddle_style', 'favicon');
+
+    // Remove the last usage of the file and check that the file does not exist
+    // anymore.
+    $this->instance->onDelete(array('favicon' => $this->favicon->fid));
+    $references = file_usage_list($file);
+    $this->assertTrue(empty($references));
+    $this->assertFalse(file_load($this->favicon->fid));
+  }
+}

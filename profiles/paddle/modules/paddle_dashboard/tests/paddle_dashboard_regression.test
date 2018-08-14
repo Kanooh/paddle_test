@@ -1,0 +1,101 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleDashboardRegressionTest.
+ */
+
+/**
+ * Regression tests for Paddle Dashboard module.
+ */
+class PaddleDashboardRegressionTestCase extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Paddle dashboard regression tests',
+      'description' => 'Regression tests for  the Paddle Dashboard module.',
+      'group' => 'Paddle Dashboard',
+    );
+  }
+
+  /**
+   * Tests if new drafts of published nodes are displayed on the dashboard.
+   */
+  public function testNewDraftsOfPublishedNodes() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a new draft of a basic page.
+    $this->drupalGet('node/add/basic-page');
+    $data = array(
+      'title' => $this->randomString(),
+    );
+    $node = $this->drupalCreateUiNode('basic_page', $data);
+
+    // The basic page now appears on the dashboard, in the list of drafts.
+    $this->drupalGet('admin');
+    $this->assertNodePresentInDashboardList('my_concepts', $node);
+    $this->assertNodeNotPresentInDashboardList('all_published', $node);
+
+    // Publish the basic page.
+    $this->moderateNode($node, 'Publish');
+
+    // The basic page now appears on the dashboard, in the list of
+    // published items.
+    $this->drupalGet('admin');
+    $this->assertNodeNotPresentInDashboardList('my_concepts', $node);
+    $this->assertNodePresentInDashboardList('all_published', $node);
+
+    // Create a new draft of the same basic page.
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->drupalPost(NULL, array(), t('Save'));
+
+    // The basic page now appears on the dashboard, in the list of
+    // published items as well as the list of drafts.
+    $this->drupalGet('admin');
+    $this->assertNodePresentInDashboardList('my_concepts', $node);
+    $this->assertNodePresentInDashboardList('all_published', $node);
+  }
+
+  /**
+   * Tests if the dashboard page manager handler access is per permission.
+   *
+   * It used to be by role ID in the past but we have variable role IDs
+   * on our Paddle roles.
+   */
+  public function testDashBoardAccess() {
+    // Retrieve the page handlers of the Paddle Dashboard page elements.
+    // pm_existing_pages_admin_panel_context contains the basic Dashboard
+    // elements and pm_existing_pages_admin_panel_context_2 contains
+    // the extended Dashboard elements.
+    $page_manager_handlers = ctools_export_load_object('page_manager_handlers');
+
+    $standard_dashboard_handler = $page_manager_handlers['pm_existing_pages_admin_panel_context'];
+    $extended_dashboard_handler = $page_manager_handlers['pm_existing_pages_admin_panel_context_2'];
+    $this->assertPermissionsPerPageHandler($standard_dashboard_handler, 'access paddle dashboard');
+    $this->assertPermissionsPerPageHandler($extended_dashboard_handler, 'access paddle in review dashboard');
+  }
+
+  /**
+   * Asserts if the correct permissions are assigned to the page handler.
+   *
+   * @param stdClass $handler
+   *   The page handler object.
+   * @param string $permission
+   *   The permission which the permission plugin should contain.
+   */
+  protected function assertPermissionsPerPageHandler(stdClass $handler, $permission) {
+    $config = $handler->conf;
+    $plugins = $config['access']['plugins'];
+
+    foreach ($plugins as $plugin) {
+      // Assert that the access plugin is a permission plugin.
+      $this->assertEqual('perm', $plugin['name']);
+      // Assert that the correct permission is assigned to the page handler.
+      $this->assertEqual($permission, $plugin['settings']['perm']);
+    }
+  }
+
+}

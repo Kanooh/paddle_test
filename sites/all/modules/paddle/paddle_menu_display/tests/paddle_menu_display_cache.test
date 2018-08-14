@@ -1,0 +1,596 @@
+<?php
+
+/**
+ * @file
+ * Definition of PaddleMenuDisplayCacheTest.
+ */
+
+/**
+ * Tests for caching of menu displays.
+ */
+class PaddleMenuDisplayCacheTest extends PaddleMenuDisplayTestCase {
+
+  /**
+   * The menu display that is being tested.
+   *
+   * @var PaddleMenuDisplay
+   */
+  protected $menuDisplay = NULL;
+
+  /**
+   * A path to a page that contains a menu display. Used for warming the cache.
+   *
+   * @var string
+   */
+  protected $populateCachePath = '';
+
+  /**
+   * An administrator user.
+   *
+   * @var object
+   */
+  protected $adminUser;
+
+  /**
+   * The anonymous user role.
+   *
+   * @var object
+   */
+  protected $anonymousUserRole;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Caching',
+      'description' => 'Tests for menu display caching.',
+      'group' => 'Paddle Menu Display',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array(
+      'paddle_menu_display',
+    ));
+
+    // Populate the anonymous user role variable.
+    $this->anonymousUserRole = user_role_load_by_name('anonymous user');
+
+    // Create a test user and log in.
+    $this->adminUser = $this->drupalCreateUser(array(
+      'administer menu displays',
+      'administer blocks',
+      'administer menu',
+    ));
+    $this->drupalLogin($this->adminUser);
+
+    // Create a content type.
+    $this->contentType = $this->drupalCreateContentType();
+
+    // Create the 'complex' menu hierarchy from the base class.
+    $this->complexMenu = $this->createMenu();
+    $this->createLinkHierarchy($this->complexHierarchy, $this->complexMenu['menu_name']);
+
+    // Create a menu display to test with.
+    $menu_display = array('menu_name' => $this->complexMenu['menu_name']);
+    $this->menuDisplay = $this->createMenuDisplay($menu_display);
+
+    // Save a path to a page that contains a first level menu display.
+    $this->populateCachePath = 'node/' . $this->complexHierarchy[1]['nid'];
+
+    // Place the menu display in the header region.
+    $edit = array('regions[bartik]' => 'header');
+    $this->drupalPost('admin/structure/block/manage/paddle_menu_display/' . $this->menuDisplay->name . '/configure', $edit, t('Save block'));
+  }
+
+  /**
+   * Test caching of menu displays with the 'current level' behaviour.
+   */
+  public function testCurrentLevel() {
+    // Make sure the menu display shows only up to the current level.
+    $this->menuDisplay->to_level = 'curr_lvl';
+    $fields = array('to_level' => 'curr_lvl');
+    $this->updateMenuDisplay($fields);
+
+    // Visit a page in the first level of the menu to generate a cache entry.
+    $this->populateCache();
+
+    // Check that the first level tree is cached for administrators.
+    $this->assertMenuDisplayCache($this->generateCid(), $this->getMlidsFromHierarchy($this->complexHierarchy), 'The first level is cached correctly for administrators.');
+
+    // Check that the second level trees are not yet cached, these have not been
+    // displayed yet.
+    $cids = array();
+    foreach ($this->getMlidsFromHierarchy($this->complexHierarchy) as $plid) {
+      $cids[] = $this->generateCid($plid);
+    }
+
+    $this->assertNoMenuDisplayCaches($cids, 'The second level trees are not cached when they have not yet been displayed.');
+
+    // Check that the first level tree is not yet cached for anonymous users.
+    $anonymous_rids = (array) $this->anonymousUserRole->rid;
+    $cid = $this->generateCid(0, $anonymous_rids);
+    $this->assertNoMenuDisplayCache($cid, 'The first level tree is not yet cached for anonymous users.');
+
+    // Log out to check caching for anonymous users.
+    $this->drupalLogout();
+
+    // Visit a page in the first level of the menu to generate a cache entry.
+    $this->populateCache();
+
+    // Check that the first level tree is cached for anonymous users.
+    $cid = $this->generateCid(0, $anonymous_rids);
+    $this->assertMenuDisplayCache($cid, $this->getMlidsFromHierarchy($this->complexHierarchy), 'The first level is cached correctly for anonymous users.');
+
+    // Retrieve a deep link from the menu and populate the cache.
+    $deep_link = $this->complexHierarchy[7]['children'][9]['children'][10]['children'][11]['children'][12];
+    $this->populateCache('node/' . $deep_link['nid']);
+
+    // Check that all parent levels have been cached successfully.
+    $mlid = $deep_link['mlid'];
+    do {
+      $menu_link = menu_link_load($mlid);
+      $cid = $this->generateCid($menu_link['plid'], $anonymous_rids);
+      $active_trail = paddle_menu_display_get_active_trail($menu_link);
+      $this->assertMenuDisplayCache($cid, $this->getMlidsFromHierarchy($this->complexHierarchy, count($active_trail), 0, $active_trail), format_string('The parent with mlid %mlid has been correctly cached.', array('%mlid' => $mlid)));
+    } while ($mlid = $menu_link['plid']);
+
+    // Check that the deepest level itself has not been cached. It is pointless
+    // to cache individual items at the deepest level since these have no
+    // children and will all be identical.
+    $cid = $this->generateCid($deep_link['mlid'], $anonymous_rids);
+    $this->assertNoMenuDisplayCache($cid, 'The deepest level has not been cached.');
+  }
+
+  /**
+   * Tests caching of menu displays with fixed from and to levels.
+   */
+  public function testFixedLevels() {
+    // Test menu displays that have the 'from_level' and 'to_level' options set.
+    $this->menuDisplay->from_level = 2;
+    $this->menuDisplay->to_level = 4;
+    $fields = array(
+      'from_level' => 2,
+      'to_level' => 4,
+    );
+    $this->updateMenuDisplay($fields);
+
+    // First check that when a first level item is requested, that no cache
+    // entry is generated.
+    cache_clear_all('*', 'cache_menu_displays', TRUE);
+    $this->drupalGet($this->populateCachePath);
+    $this->assertMenuDisplayCacheEmpty('The cache is empty when requesting a first level item for a menu display with minimum level set to 2.');
+
+    // Check that the menu items are correctly cached when items of the second
+    // through fifth levels are requested.
+    $testcases = array(
+      array(
+        'depth' => 2,
+        'requested' => $this->complexHierarchy[1]['children'][2],
+        'expected' => $this->complexHierarchy[1]['children'][2],
+        'cid' => $this->generateCid($this->complexHierarchy[1]['children'][2]['mlid']),
+      ),
+      array(
+        'depth' => 3,
+        'requested' => $this->complexHierarchy[1]['children'][3]['children'][4],
+        'expected' => $this->complexHierarchy[1]['children'][3]['children'][4],
+        'cid' => $this->generateCid($this->complexHierarchy[1]['children'][3]['children'][4]['mlid']),
+      ),
+      array(
+        'depth' => 4,
+        'requested' => $this->complexHierarchy[1]['children'][3]['children'][5]['children'][6],
+        'expected' => $this->complexHierarchy[1]['children'][3]['children'][5]['children'][6],
+        'cid' => $this->generateCid($this->complexHierarchy[1]['children'][3]['children'][5]['mlid']),
+      ),
+      array(
+        'depth' => 5,
+        'requested' => $this->complexHierarchy[7]['children'][9]['children'][10]['children'][11]['children'][12],
+        'expected' => $this->complexHierarchy[7]['children'][9]['children'][10]['children'][11],
+        'cid' => $this->generateCid($this->complexHierarchy[7]['children'][9]['children'][10]['mlid']),
+      ),
+    );
+
+    foreach ($testcases as $testcase) {
+      // Start from a clean slate.
+      cache_clear_all('*', 'cache_menu_displays', TRUE);
+
+      // Populate the cache.
+      $path = 'node/' . $testcase['requested']['nid'];
+      $this->populateCache($path);
+
+      // Generate a list of expected mlids.
+      $menu_link = menu_link_load($testcase['expected']['mlid']);
+      $mlids = $this->getMlidsFromHierarchy($this->complexHierarchy, 3, 1, paddle_menu_display_get_active_trail($menu_link));
+      $this->assertMenuDisplayCache($testcase['cid'], $mlids);
+    }
+  }
+
+  /**
+   * Tests caching of menu displays with the full depth of levels.
+   */
+  public function testFullRange() {
+    // Get the full list of menu items in the test hierarchy.
+    $mlids = $this->getMlidsFromHierarchy($this->complexHierarchy, 9);
+
+    foreach ($mlids as $mlid) {
+      // Start from a clean slate.
+      cache_clear_all('*', 'cache_menu_displays', TRUE);
+
+      // Populate the cache.
+      $menu_link = menu_link_load($mlid);
+      $this->populateCache($menu_link['link_path']);
+
+      // Generate a list of expected mlids.
+      $cid = $this->generateCid($mlid);
+      $active_trail = paddle_menu_display_get_active_trail($menu_link);
+      $this->assertMenuDisplayCache($cid, $this->getMlidsFromHierarchy($this->complexHierarchy, 9, 0, $active_trail), format_string('The menu link with mlid %mlid is displayed correctly when rendering a menu that shows the full depth.', array('%mlid' => $mlid)));
+    }
+  }
+
+  /**
+   * Test caching of menu displays with the 'current level plus one' behaviour.
+   */
+  public function testCurrentToLevelPlusOne() {
+    // Make sure the menu display shows only up to the current level.
+    $this->menuDisplay->to_level = 'curr_lvl_plus_1';
+    $fields = array('to_level' => 'curr_lvl_plus_1');
+    $this->updateMenuDisplay($fields);
+
+    // Retrieve test data from the first item in the menu.
+    $mlid = $this->complexHierarchy[1]['mlid'];
+    $menu_link = menu_link_load($mlid);
+    $active_trail = paddle_menu_display_get_active_trail($menu_link);
+
+    // Visit a page in the first level of the menu to generate a cache entry.
+    $this->populateCache();
+
+    // Check that the first level tree is cached for administrators.
+    $this->assertMenuDisplayCache($this->generateCid($mlid), $this->getMlidsFromHierarchy($this->complexHierarchy, 2, 0, $active_trail), 'The first level plus one is cached correctly for administrators.');
+
+    // Check that the second level trees are not yet cached, these have not been
+    // displayed yet.
+    $cids = array();
+    foreach ($this->getMlidsFromHierarchy($this->complexHierarchy, 1, 1) as $mlid) {
+      $cids[] = $this->generateCid($mlid);
+    }
+
+    $this->assertNoMenuDisplayCaches($cids, 'The second level trees are not cached when they have not yet been displayed.');
+
+    // Check that the first level tree is not yet cached for anonymous users.
+    $anonymous_rids = (array) $this->anonymousUserRole->rid;
+    $cid = $this->generateCid($menu_link['mlid'], $anonymous_rids);
+    $this->assertNoMenuDisplayCache($cid, 'The first level tree plus one is not yet cached for anonymous users.');
+
+    // Log out to check caching for anonymous users.
+    $this->drupalLogout();
+
+    // Visit a page in the first level of the menu to generate a cache entry.
+    $this->populateCache();
+
+    // Check that the first level tree is now cached for anonymous users.
+    $this->assertMenuDisplayCache($cid, $this->getMlidsFromHierarchy($this->complexHierarchy, 2, 0, $active_trail), 'The first level plus one is cached correctly for anonymous users.');
+
+    // Retrieve a deep link from the menu and populate the cache.
+    $deep_link = $this->complexHierarchy[7]['children'][9]['children'][10]['children'][11]['children'][12];
+    $this->populateCache('node/' . $deep_link['nid']);
+
+    // Check that all parent levels have been cached successfully.
+    $mlid = $deep_link['mlid'];
+    do {
+      $menu_link = menu_link_load($mlid);
+      $cid = $this->generateCid($menu_link['mlid'], $anonymous_rids);
+      $active_trail = paddle_menu_display_get_active_trail($menu_link);
+      $this->assertMenuDisplayCache($cid, $this->getMlidsFromHierarchy($this->complexHierarchy, count($active_trail) + 1, 0, $active_trail), format_string('The menu item with mlid %mlid plus one has been correctly cached.', array('%mlid' => $mlid)));
+    } while ($mlid = $menu_link['plid']);
+  }
+
+  /**
+   * Test caching of menu displays with the 'current level plus one' behaviour.
+   */
+  public function testCurrentFromLevelPlusOne() {
+    // Make sure the menu display shows only up to the current level.
+    $this->menuDisplay->from_level = 'curr_lvl_plus_1';
+    $this->menuDisplay->to_level = 'curr_lvl_plus_1';
+    $fields = array(
+      'from_level' => 'curr_lvl_plus_1',
+      'to_level' => 'curr_lvl_plus_1',
+    );
+    $this->updateMenuDisplay($fields);
+
+    // Retrieve test data from the first item in the menu.
+    $mlid = $this->complexHierarchy[1]['mlid'];
+    $menu_link = menu_link_load($mlid);
+    $active_trail = paddle_menu_display_get_active_trail($menu_link);
+
+    // Visit a page in the first level of the menu to generate a cache entry.
+    $this->populateCache();
+
+    // Check that the first level tree is cached for administrators.
+    $this->assertMenuDisplayCache($this->generateCid($mlid), $this->getMlidsFromHierarchy($this->complexHierarchy, 1, 1, $active_trail), 'The first level plus one of a menu display with from level set to "current level plus one" is cached correctly for administrators.');
+
+    // Check that the second level trees are not yet cached, these have not been
+    // displayed yet.
+    $cids = array();
+    foreach ($this->getMlidsFromHierarchy($this->complexHierarchy, 1, 1) as $mlid) {
+      $cids[] = $this->generateCid($mlid);
+    }
+
+    $this->assertNoMenuDisplayCaches($cids, 'The second level trees of a menu display with from level set to "current level plus one" are not cached when they have not yet been displayed.');
+
+    // Check that the first level tree is not yet cached for anonymous users.
+    $anonymous_rids = (array) $this->anonymousUserRole->rid;
+    $cid = $this->generateCid($menu_link['mlid'], $anonymous_rids);
+    $this->assertNoMenuDisplayCache($cid, 'The first level tree plus one of a menu display with from level set to "current level plus one" is not yet cached for anonymous users.');
+
+    // Log out to check caching for anonymous users.
+    $this->drupalLogout();
+
+    // Visit a page in the first level of the menu to generate a cache entry.
+    $this->populateCache();
+
+    // Check that the first level tree is now cached for anonymous users.
+    $this->assertMenuDisplayCache($cid, $this->getMlidsFromHierarchy($this->complexHierarchy, 1, 1, $active_trail), 'The first level plus one of a menu display with from level set to "current level plus one" is cached correctly for anonymous users.');
+
+    // Check that the deepest level has not been cached, since this has no + 1
+    // level.
+    $deepest_link = $this->complexHierarchy[7]['children'][9]['children'][10]['children'][11]['children'][12];
+    $this->populateCache('node/' . $deepest_link['nid']);
+    $cid = $this->generateCid($deepest_link['mlid'], $anonymous_rids);
+    $this->assertNoMenuDisplayCache($cid, 'The deepest level of a menu with from level set to "current level plus one" is not cached.');
+
+    // Loop over a range of depths (one short of the deepest level) and check
+    // that the items on each level are correctly cached.
+    $mlid = $this->complexHierarchy[7]['children'][9]['children'][10]['children'][11]['mlid'];
+    do {
+      $menu_link = menu_link_load($mlid);
+      $this->populateCache($menu_link['link_path']);
+      $cid = $this->generateCid($mlid, $anonymous_rids);
+      $active_trail = paddle_menu_display_get_active_trail($menu_link);
+      $this->assertMenuDisplayCache($cid, $this->getMlidsFromHierarchy($this->complexHierarchy, 1, count($active_trail), $active_trail), format_string('The menu item with mlid %mlid of a menu display with from level set to "current level plus one" has been correctly cached.', array('%mlid' => $mlid)));
+    } while ($mlid = $menu_link['plid']);
+  }
+
+  /**
+   * Test caching of menu displays with a fixed root path.
+   */
+  public function testFixedRootPath() {
+    // Make sure the menu display uses a fixed root path.
+    $this->menuDisplay->follow_active_trail = 0;
+    $this->menuDisplay->root_path = '';
+    $fields = array(
+      'follow_active_trail' => 0,
+      'root_path' => '',
+    );
+    $this->updateMenuDisplay($fields);
+
+    // Visit a page in the first level of the menu to generate a cache entry.
+    $this->populateCache();
+
+    // Check that the first level tree is cached for administrators.
+    $this->assertMenuDisplayCache($this->generateCid(), $this->getMlidsFromHierarchy($this->complexHierarchy, 9, 0), 'The fixed root path menu is cached correctly for administrators.');
+
+    // Check that the first level tree is not yet cached for anonymous users.
+    $anonymous_rids = (array) $this->anonymousUserRole->rid;
+    $cid = $this->generateCid(0, $anonymous_rids);
+    $this->assertNoMenuDisplayCache($cid, 'The fixed root path menu is not yet cached for anonymous users.');
+
+    // Log out to check caching for anonymous users.
+    $this->drupalLogout();
+
+    // Visit a page in the first level of the menu to generate a cache entry.
+    $this->populateCache();
+
+    // Check that the first level tree is now cached for anonymous users.
+    $this->assertMenuDisplayCache($this->generateCid(0, $anonymous_rids), $this->getMlidsFromHierarchy($this->complexHierarchy, 9, 0), 'The fixed root path menu is cached correctly for anonymous users.');
+
+    // Limit the number of levels that are displayed.
+    $this->menuDisplay->to_level = 2;
+    $fields = array('to_level' => '2');
+    $this->updateMenuDisplay($fields);
+
+    // Clear the menu display cache, regenerate and test it.
+    cache_clear_all('*', 'cache_menu_displays', TRUE);
+    $this->populateCache();
+    $this->assertMenuDisplayCache($this->generateCid(0, $anonymous_rids), $this->getMlidsFromHierarchy($this->complexHierarchy, 2, 0), 'The fixed root path menu with limited depth is cached correctly for anonymous users.');
+  }
+
+  /**
+   * Test that the menu display cache is invalidated at the right moments.
+   */
+  public function testMenuDisplayCacheInvalidation() {
+    // Check that the menu display cache is empty after flushing all caches.
+    $this->populateCache();
+    drupal_flush_all_caches();
+    $this->assertMenuDisplayCacheEmpty('The cache is empty after flushing all caches.');
+
+    // Check that the cache is empty after changing the settings of the menu
+    // display.
+    $this->populateCache();
+    $edit = array('description' => $this->randomString());
+    $this->drupalPost('admin/structure/menu_displays/' . $this->menuDisplay->mdid . '/edit', $edit, t('Save'));
+    $this->assertMenuDisplayCacheEmpty('The cache is empty after changing the settings of the menu display.');
+
+    // Check that the cache is empty after adding a new menu item to the menu.
+    $this->populateCache();
+
+    $item = array(
+      'link_path' => drupal_get_normal_path('<front>'),
+      'link_title' => $this->randomString(),
+      'menu_name' => $this->complexMenu['menu_name'],
+    );
+    menu_link_save($item);
+    $this->assertMenuDisplayCacheEmpty('The cache is empty after adding a new menu item to the menu.');
+
+    // Check that the cache is empty after editing a menu item.
+    $this->populateCache();
+    $item['link_title'] = $this->randomString();
+    menu_link_save($item);
+    $this->assertMenuDisplayCacheEmpty('The cache is empty after editing a menu item.');
+
+    // Check that the cache is empty after deleting a menu item.
+    $this->populateCache();
+    menu_link_delete($item['mlid']);
+    $this->assertMenuDisplayCacheEmpty('The cache is empty after deleting a menu item.');
+
+    // Check that the cache is empty after deleting a node attached to a menu
+    // item.
+    $this->populateCache();
+    node_delete($this->complexHierarchy[1]['children'][2]['nid']);
+    $this->assertMenuDisplayCacheEmpty('The cache is empty after deleting a node attached to a menu item.');
+
+    // Check that the cache is empty after moving a menu item from one menu to
+    // another.
+    // First add a menu item to the first menu and populate the cache.
+    $item = array(
+      'link_path' => drupal_get_normal_path('<front>'),
+      'link_title' => $this->randomString(),
+      'menu_name' => $this->complexMenu['menu_name'],
+    );
+    $mlid = menu_link_save($item);
+    $this->populateCache();
+
+    // Create a second menu, move the menu link to it and check the cache is
+    // cleared.
+    $menu_item = menu_link_load($mlid);
+    $second_menu = $this->createMenu();
+    $menu_item['menu_name'] = $second_menu['menu_name'];
+    menu_link_save($menu_item);
+    $this->assertMenuDisplayCacheEmpty('The cache is empty after moving a menu item from one menu to another.');
+  }
+
+  /**
+   * Populate the cache by visiting a page containing a menu display.
+   *
+   * @param int $path
+   *   An optional path to visit. If omitted the front page will be visited.
+   */
+  protected function populateCache($path = NULL) {
+    $path = $path ?: $this->populateCachePath;
+    $this->drupalGet($path);
+    $this->assertMenuDisplayCacheNotEmpty(format_string('The display cache is not empty after visiting the path %path.', array('%path' => $path)));
+  }
+
+  /**
+   * Checks if the menu display cache is completely empty.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertMenuDisplayCacheEmpty($message = '', $group = 'Other') {
+    return $this->assertFalse(db_query_range('SELECT 1 FROM {cache_menu_displays}', 0, 1)->fetchField(), $message ? $message : 'The menu display cache is empty.', $group);
+  }
+
+  /**
+   * Checks if the menu display cache is not empty.
+   *
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertMenuDisplayCacheNotEmpty($message = '', $group = 'Other') {
+    return $this->assertTrue(db_query_range('SELECT 1 FROM {cache_menu_displays}', 0, 1)->fetchField(), $message ? $message : 'The menu display cache is not empty.', $group);
+  }
+
+  /**
+   * Checks if a menu display cache entry does not exist.
+   *
+   * @param string $cid
+   *   The cache id to check.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertNoMenuDisplayCache($cid, $message = '', $group = 'Other') {
+    $message = $message ? $message : format_string('The menu display cache %cid does not exist.', array('%cid' => $cid));
+    $result = db_select('cache_menu_displays', 'c')
+      ->fields('c', array('cid'))
+      ->condition('c.cid', $cid)
+      ->range(0, 1)
+      ->execute()
+      ->fetchAll();
+
+    return $this->assertFalse($result, $message, $group);
+  }
+
+  /**
+   * Checks that none of the given menu display cache entries exist.
+   *
+   * @param array $cids
+   *   An array of cache ids to check.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertNoMenuDisplayCaches(array $cids, $message = '', $group = 'Other') {
+    $message = $message ?: format_string('None of the given menu display caches exist.');
+    $result = TRUE;
+    foreach ($cids as $cid) {
+      $result &= $this->assertNoMenuDisplayCache($cid);
+    }
+    $this->assertTRUE($result, $message, $group);
+  }
+
+  /**
+   * Compare a menu display cache entry with a list of mlids.
+   *
+   * This assertion will fail if any of the given mlids is not present in the
+   * cache, and if the cache contains any additional mlids.
+   *
+   * @param string $cid
+   *   The cache id to check.
+   * @param array $mlids
+   *   The list of mlids that should be present in the cache.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertMenuDisplayCache($cid, $mlids, $message = '', $group = 'Other') {
+    $cache = paddle_menu_display_cache_retrieve($cid);
+    $result = $this->assertTrue($cache, format_string('The cache with cid %cid has been found.', array('%cid' => $cid)));
+
+    // Define a rover that is adept at extracting mlids from cache data.
+    $cached_mlids = array();
+    $cache_rover = function ($items) use (&$cache_rover, &$cached_mlids) {
+      foreach ($items as $item) {
+        $cached_mlids[$item['mlid']] = $item['mlid'];
+        // Recurse into child items.
+        if (!empty($item['below'])) {
+          $cache_rover($item['below']);
+        }
+      }
+    };
+
+    // Let loose the rover!
+    $cache_rover($cache);
+
+    $result &= $this->assertFalse(array_diff($mlids, $cached_mlids), 'All given mlids are present in the cache.');
+    $result &= $this->assertFalse(array_diff($cached_mlids, $mlids), 'The cache does not contain any additional mlids.');
+    return $this->assertTrue($result, $message ? $message : 'The cached menu items match the given mlids.', $group);
+  }
+
+}

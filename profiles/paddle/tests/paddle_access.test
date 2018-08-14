@@ -1,0 +1,420 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleAccessTest.
+ */
+
+/**
+ * Tests the access for users.
+ */
+class PaddleAccessTest extends PaddleWebTestCase {
+
+  /**
+   * List of entity ids to use in the URLs.
+   *
+   * @var array
+   */
+  protected $tokens;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Access tests',
+      'description' => 'Tests the access for users.',
+      'group' => 'Paddle',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp($enable_modules);
+    $this->prepareDynamicElements();
+  }
+
+  /**
+   * Creates entities and stores their IDs in the list of tokens.
+   */
+  public function prepareDynamicElements() {
+    // Create a node (basic page) to use in the access denied / page not
+    // found tests.
+    $this->drupalLogin($this->chiefEditor);
+    $basic_page = $this->createBasicPage();
+    $this->tokens['{node}'] = $basic_page->nid;
+    $this->tokens['{revisions_1}'] = $basic_page->vid;
+
+    $basic_page->revision = 1;
+    $basic_page->log = 'Changes here.';
+    node_save($basic_page);
+    $revision = node_load($basic_page->nid);
+    $this->tokens['{revisions_2}'] = $revision->vid;
+
+    // Create an atom so we can check if it is accessible.
+    $atom = new ScaldAtom('video', 'paddle_scald_youtube', array(
+      'title' => $this->randomName(),
+    ));
+    $sid = scald_atom_save($atom);
+    $this->tokens['{atom}'] = $sid;
+    $this->drupalLogout();
+  }
+
+  /**
+   * Replaces tokens in the given string.
+   *
+   * @param string $string
+   *   The string in which tokens should be replaced.
+   *
+   * @return string
+   *   The replacement result.
+   */
+  public function replaceTokens($string) {
+    $search = array_keys($this->tokens);
+    $replace = array_values($this->tokens);
+    return str_replace($search, $replace, $string);
+  }
+
+  /**
+   * Checks that specific paths return a specific status code.
+   *
+   * @param array $paths
+   *   List of path strings. May contain tokens.
+   */
+  protected function assertStatusCode($status, $paths) {
+    foreach ($paths as $path) {
+      $path = $this->replaceTokens($path);
+      $this->drupalGet($path);
+      $this->assertResponse($status, t('%path returns status %status.', array(
+        '%path' => $path,
+        '%status' => $status,
+      )));
+    }
+  }
+
+  /**
+   * Tests path status codes.
+   *
+   * We test all the paths and their status codes in a single test, since it
+   * would be a huge performance impact if we had to create a new Drupal
+   * installation every time just to check some different sets of paths.
+   */
+  public function testAccess() {
+    $users = array(
+      'anonymous',
+      'editor',
+      'chiefEditor',
+      'siteManager',
+    );
+    $responses = array(
+      'AccessOK' => 200,
+      'AccessDenied' => 403,
+    );
+    foreach ($users as $user) {
+      if ($user != "anonymous") {
+        $this->drupalLogin($this->{$user});
+      }
+
+      foreach ($responses as $response => $status) {
+        $paths_method = "get{$user}{$response}Paths";
+        $paths = call_user_func(array($this, $paths_method));
+
+        if ($paths === FALSE) {
+          $this->fail(t('Paths for status %status as user %user not found.', array('%status' => $status, '%user' => $user)));
+        }
+
+        $this->assertStatusCode($status, $paths);
+      }
+
+      if ($this->loggedInUser !== FALSE) {
+        $this->drupalLogout();
+      }
+    }
+  }
+
+  /**
+   * Returns a list of paths that should be denied for anonymous users.
+   *
+   * @return array
+   *   The paths that should generate a 403 Access Denied.
+   */
+  public function getAnonymousAccessDeniedPaths() {
+    return array_merge(
+      $this->getReadOnlyAccessDeniedPaths(),
+      array(
+        'admin',
+        'admin/dashboard',
+        'node/{node}/moderation/diff',
+        'node/{node}/moderation/diff/view/{revisions_1}/{revisions_2}',
+        'node/{node}/references',
+        'admin/paddle_scald/{node}/references',
+      )
+    );
+  }
+
+  /**
+   * Returns a list of paths that should be denied for a site manager.
+   *
+   * @return array
+   *   The paths that should generate a 403 Access Denied.
+   */
+  public function getSiteManagerAccessDeniedPaths() {
+    return $this->getAccessDeniedPaths();
+  }
+
+  /**
+   * Returns a list of paths that should be denied for a chief editor.
+   *
+   * @return array
+   *   The paths that should generate a 403 Access Denied.
+   */
+  public function getChiefEditorAccessDeniedPaths() {
+    return array_merge(
+        $this->getAccessDeniedPaths(),
+        array(
+          'admin/structure/paddle_themer',
+          'admin/structure/paddle_themer/add',
+          'admin/structure/paddle_themer/import',
+          'admin/structure/paddle_themer/list',
+        )
+    );
+  }
+
+  /**
+   * Returns a list of paths that should be denied for an editor.
+   *
+   * @return array
+   *   The paths that should generate a 403 Access Denied.
+   */
+  public function getEditorAccessDeniedPaths() {
+    return array_merge(
+        $this->getChiefEditorAccessDeniedPaths(),
+        array(
+          'admin/paddlet_store',
+          'admin/structure/content_region',
+        )
+    );
+  }
+
+  /**
+   * Returns a list of paths that should be denied for a read only user.
+   *
+   * @return array
+   *   The paths that should generate a 403 Access Denied.
+   */
+  public function getReadOnlyAccessDeniedPaths() {
+    return array_merge(
+        $this->getEditorAccessDeniedPaths(),
+        array(
+          'admin/content',
+          'admin/content/content_lock',
+          'admin/content/content_lock/release',
+          'admin/content/media',
+          'admin/content/media/import',
+          'admin/content/media_browser',
+          'admin/content/media_browser/list',
+          'admin/content/media_browser/thumbs',
+          'admin/content/message',
+          'admin/content/node',
+          'admin/content/scheduler',
+          'admin/site-settings',
+          'paddle_site_settings_autocomplete',
+          'admin/content_manager/add',
+          'admin/content_manager/assets',
+          'admin/content_manager/assets/nojs/library',
+          'admin/content_manager/assets/ajax/library',
+          'admin/content_manager/nojs/basic_page/add',
+          'admin/content_manager/nojs/landing_page/add',
+          'admin/content_manager/nojs/paddle_overview_page/add',
+          'admin/structure',
+          'admin/structure/menu_manager',
+          'admin/structure/taxonomy_manager',
+          'node/{node}/revisions/{revisions_1}/revert',
+        )
+    );
+  }
+
+  /**
+   * Returns a list of paths that should be denied for all users.
+   *
+   * @return array
+   *   The paths that should generate a 403 Access Denied.
+   */
+  public function getAccessDeniedPaths() {
+    $paths = array(
+      'admin/config',
+      'admin/content/atoms',
+      'admin/content_manager/node/{node}/moderate/draft',
+      'admin/content_manager/node/{node}/moderate/needs_review',
+      'admin/content_manager/node/{node}/moderate/offline',
+      'admin/content_manager/node/{node}/moderate/published',
+      'admin/content_manager/node/{node}/moderate/scheduled',
+      'admin/content_manager/node/{node}/moderate/to_check',
+      'admin/index',
+      'admin/structure/block',
+      'admin/structure/block/add',
+      'admin/structure/block/demo/bartik',
+      'admin/structure/block/demo/garland',
+      'admin/structure/block/demo/paddle_admin_branding',
+      'admin/structure/block/demo/paddle_admin_theme',
+      'admin/structure/block/demo/paddle_theme',
+      'admin/structure/block/demo/paddle_theme_branded',
+      'admin/structure/block/demo/seven',
+      'admin/structure/block/demo/stark',
+      'admin/structure/block/list/bartik',
+      'admin/structure/block/list/bartik/add',
+      'admin/structure/block/list/garland',
+      'admin/structure/block/list/garland/add',
+      'admin/structure/block/list/paddle_admin_branding',
+      'admin/structure/block/list/paddle_admin_branding/add',
+      'admin/structure/block/list/paddle_admin_theme',
+      'admin/structure/block/list/paddle_admin_theme/add',
+      'admin/structure/block/list/paddle_theme',
+      'admin/structure/block/list/paddle_theme/add',
+      'admin/structure/block/list/paddle_theme_branded',
+      'admin/structure/block/list/seven',
+      'admin/structure/block/list/seven/add',
+      'admin/structure/block/list/stark',
+      'admin/structure/block/list/stark/add',
+      'admin/structure/features',
+      'admin/structure/features/cleanup',
+      'admin/structure/features/create',
+      'admin/structure/features/manage',
+      'admin/structure/features/settings',
+      'admin/structure/menu',
+      'admin/structure/menu/add',
+      'admin/structure/menu/list',
+      'admin/structure/menu/manage/translation',
+      'admin/structure/menu/manage/translation/add',
+      'admin/structure/menu/parents',
+      'admin/structure/menu/settings',
+      'admin/structure/menu_displays',
+      'admin/structure/menu_displays/0/add',
+      'admin/structure/messages',
+      'admin/structure/messages/add',
+      'admin/structure/messages/import',
+      'admin/structure/messages/list',
+      'admin/structure/mini-panels',
+      'admin/structure/mini-panels/add',
+      'admin/structure/mini-panels/import',
+      'admin/structure/mini-panels/list',
+      'admin/structure/mini-panels/settings',
+      'admin/structure/pages',
+      'admin/structure/pages/add',
+      'admin/structure/pages/add-existing',
+      'admin/structure/pages/argument',
+      'admin/structure/pages/existing-pages',
+      'admin/structure/pages/existing-pages/add',
+      'admin/structure/pages/existing-pages/import',
+      'admin/structure/pages/existing-pages/list',
+      'admin/structure/pages/import',
+      'admin/structure/pages/list',
+      'admin/structure/pages/wizard',
+      'admin/structure/panels',
+      'admin/structure/panels/dashboard',
+      'admin/structure/panels/layouts',
+      'admin/structure/panels/layouts/add-flexible',
+      'admin/structure/panels/layouts/import',
+      'admin/structure/panels/layouts/list',
+      'admin/structure/panels/settings',
+      'admin/structure/panels/settings/general',
+      'admin/structure/panels/settings/panel-page',
+      'admin/structure/panels/settings/panels-mini',
+      'admin/structure/scald',
+      'admin/structure/taxonomy',
+      'admin/structure/taxonomy/add',
+      'admin/structure/taxonomy/list',
+      'admin/structure/types',
+      'admin/structure/types/add',
+      'admin/structure/types/list',
+      'admin/tasks',
+      'atom/{atom}',
+      'atom/{atom}/delete',
+      'atom/{atom}/edit',
+      'atom/add',
+      'atom/add/image',
+      'atom/add/file',
+      'atom/add/video',
+      'node',
+      'node/add',
+      'user/register',
+    );
+
+    // Get the paths for all node types exactly like node_menu() does it.
+    node_type_cache_reset();
+    foreach (node_type_get_types() as $type) {
+      $type = str_replace('_', '-', $type->type);
+      $paths[] = 'node/add/' . $type;
+    }
+
+    return $paths;
+  }
+
+  /**
+   * Returns a list of paths that should be OK for anonymous users.
+   *
+   * @return array
+   *   The paths that should generate a 200 Access OK.
+   */
+  public function getAnonymousAccessOKPaths() {
+    return $this->getAccessOKPaths();
+  }
+
+  /**
+   * Returns a list of paths that should be OK for a site manager.
+   *
+   * @return array
+   *   The paths that should generate a 200 Access OK.
+   */
+  public function getSiteManagerAccessOKPaths() {
+    return array_merge(
+      $this->getEditorAccessOKPaths(),
+      array(
+        'admin/paddlet_store',
+      )
+    );
+  }
+
+  /**
+   * Returns a list of paths that should be OK for a chief editor.
+   *
+   * @return array
+   *   The paths that should generate a 200 Access OK.
+   */
+  public function getChiefEditorAccessOKPaths() {
+    return $this->getAccessOKPaths();
+  }
+
+  /**
+   * Returns a list of paths that should be OK for an editor.
+   *
+   * @return array
+   *   The paths that should generate a 200 Access OK.
+   */
+  public function getEditorAccessOKPaths() {
+    return $this->getAccessOKPaths();
+  }
+
+  /**
+   * Returns a list of paths that should be OK for a read only user.
+   *
+   * @return array
+   *   The paths that should generate a 200 Access OK.
+   */
+  public function getReadOnlyAccessOKPaths() {
+    return $this->getAccessOKPaths();
+  }
+
+
+  /**
+   * Returns a list of paths that should be OK for all users.
+   *
+   * @return array
+   *   The paths that should generate a 200 Access OK.
+   */
+  public function getAccessOKPaths() {
+    return array();
+  }
+}

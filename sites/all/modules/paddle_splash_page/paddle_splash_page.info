@@ -1,0 +1,13 @@
+name = paddle_splash_page
+description = paddle_splash_page
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = language_cookie
+dependencies[] = language_selection_page
+dependencies[] = paddle_i18n
+dependencies[] = strongarm
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[variable][] = locale_language_providers_weight_language
+features[variable][] = locale_language_providers_weight_language_content

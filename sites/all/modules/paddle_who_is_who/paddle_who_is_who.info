@@ -1,0 +1,14 @@
+name = Who is who
+description = Use this Paddlet to display your organisation’s organigram.
+core = 7.x
+package = Paddle
+
+dependencues[] = image
+dependencies[] = paddle_organizational_unit
+dependencies[] = paddle_contact_person
+
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+features[features_api][] = api:2
+features[image][] = who_is_who_thumbnail

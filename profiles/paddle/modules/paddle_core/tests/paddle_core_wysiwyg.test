@@ -1,0 +1,93 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCoreWysiwygTestCase.
+ */
+
+/**
+ * Tests for the Wysiwyg editor in the Paddle distribution.
+ */
+class PaddleCoreWysiwygTestCase extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Wysiwyg'),
+      'description' => t('Test the integration of the Wysiwyg editor.'),
+      'group' => t('Paddle Core'),
+    );
+  }
+
+  /**
+   * Tests if the autocomplete callback of CKEditor Link was replaced by ours.
+   */
+  public function testAutocompleteAlter() {
+    $this->drupalLogin($this->chiefEditor);
+    // We create some node to test with.
+    $default_node_title = 'Test <num>';
+    $node_num = 1;
+    foreach (array('en', 'nl') as $node_lang) {
+      // Set the language on the other side.
+      $this->drupalGet('admin', array('query' => array('language' => $node_lang)));
+      for ($i = 0; $i < 8; $i++) {
+        $node_title = str_replace('<num>', $node_num + $i, $default_node_title);
+        $node = array(
+          'type' => 'basic_page',
+          'title' => $node_title,
+          'language' => $node_lang,
+          'body' => array(
+            $node_lang => array(array()),
+          ),
+        );
+        $node = $this->drupalCreateNode($node);
+      }
+
+      // Check that for each language we get results if we search for "node"
+      // only. The normal behaviour of CKEditor Link module will find no
+      // results but our autocomplete callback will if it is overriden.
+      $results = (array) json_decode($this->drupalGet('ckeditor_link/autocomplete/node'));
+      $this->assertEqual(count($results), 8, 'The autocomplete callback successfully overriden.');
+    }
+  }
+
+  /**
+   * Tests if the correct roles have permission to access ckeditor link.
+   */
+  public function testCkeditorLinkPermissions() {
+    $chief = user_role_load_by_name('Chief Editor');
+    $editor = user_role_load_by_name('Editor');
+
+    $roles = array(
+      $chief->rid => $chief->name,
+      $editor->rid => $editor->name,
+    );
+
+    $role_permissions = user_role_permissions($roles);
+
+    foreach ($role_permissions as $rid => $permission) {
+      $this->assertTrue(in_array('access ckeditor link', $permission), t('The %role_name role has access to the ckeditor link', array('%role_name' => $roles[$rid])));
+    }
+  }
+
+  /**
+   * Tests if the "Switch to plain text editor" link is hidden.
+   */
+  public function testEditorToggleLinkHidden() {
+    $this->drupalLogin($this->editor);
+
+    // Create a node.
+    $node = $this->drupalCreateUiNode('basic_page');
+
+    // Navigate to node edit page.
+    $this->drupalGet("node/{$node->nid}/edit");
+
+    // Check if the "Switch to plain text editor" link is hidden.
+    $xpath = '//div[contains(@class, "body-add-more-wrapper")]/div[contains(@class, "text-format-wrapper")]/a[text() = :text]';
+    $link_found = $this->xpath($this->buildXPathQuery($xpath, array(':text' => t('Switch to plain text editor'))));
+    $this->assertFalse($link_found, 'Input type switcher link is not present on the page');
+  }
+
+}

@@ -1,0 +1,57 @@
+/**
+ * @file
+ * Advanced search Paddlet styling.
+ */
+
+.pane-advanced-search-results > .pane-content {
+  padding: 21px 15px 14px 15px;
+  overflow: hidden;
+}
+
+.pane-vocabulary-term-filter {
+  @extend %paddlet-pane-forms;
+
+  ul {
+    margin: 0;
+
+    ul {
+      margin: 0 0 0 15px;
+    }
+
+    li {
+      margin: 0;
+      list-style: none;
+    }
+  }
+
+  a {
+    text-decoration: none;
+  }
+}
+
+.pane-advanced-search-form,
+.pane-advanced-search {
+  @extend %paddlet-pane-forms;
+
+  form {
+    @include clearfix;
+  }
+
+  .form-actions {
+    float: right;
+  }
+
+  .form-submit {
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+}
+.view-paddle-advanced-search {
+  .search-result-count {
+    font-size: 17px;
+    color: #1C7074;
+  }
+}

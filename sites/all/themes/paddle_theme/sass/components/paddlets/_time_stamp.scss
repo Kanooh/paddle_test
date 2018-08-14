@@ -1,0 +1,12 @@
+/**
+* @file
+* Paddlet styling.
+*/
+@import "../variables/*";
+@import "../abstractions/*";
+
+@media (min-width: $screen-sm-max) {
+  .field-name-field-paddle-timestamp {
+    float: right;
+  }
+}

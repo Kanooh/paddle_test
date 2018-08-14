@@ -1,0 +1,172 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuManagerBigMenus.
+ */
+
+/**
+ * UI tests for the Big menus functionality.
+ */
+class PaddleMenuManagerBigMenus extends PaddleMenuManagerTestCase {
+
+  /**
+   * Stores the menu objects being tested, keyed on language code.
+   *
+   * @var array
+   */
+  protected $menus;
+
+  /**
+   * Stores langcodes of enabled languages.
+   *
+   * @var array
+   */
+  protected $langcodes;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Big menus'),
+      'description' => t('Test the big menu functionality on the menu overview page.'),
+      'group' => t('Paddle Menu Manager'),
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array(
+      'i18n_menu',
+      'paddle_multilingual',
+      'paddle_menu_manager',
+    ));
+
+    // Enable 3 random languages in addition to English.
+    include_once DRUPAL_ROOT . '/includes/iso.inc';
+    $language_list = _locale_get_predefined_list();
+    unset($language_list['en']);
+
+    $this->langcodes = array('en');
+    foreach (array_rand($language_list, 3) as $langcode) {
+      locale_add_language($langcode);
+      $this->langcodes[] = $langcode;
+    }
+
+    $this->admin_user = $this->drupalCreateUser(array('manage paddle_menu_manager'));
+    $this->drupalLogin($this->admin_user);
+  }
+
+  /**
+   * Test the big menu functionality on the menu overview page.
+   */
+  public function testBigMenus() {
+    // Create a custom menu and its translations.
+    $menu = $this->createMenu();
+    paddle_menu_manager_create_menu_translations($menu);
+    menu_rebuild();
+
+    // We create some nodes and menu links to test with.
+    foreach ($this->langcodes as $langcode) {
+      $menu_links = $this->createMenuTree($langcode);
+      // Go to the menu overview page.
+      $this->drupalGet('admin/structure/menu_manager/' . $menu['i18n_tsid'], array('query' => array('language' => $langcode)));
+
+      // See if the number of items is correct - should be = to the L1 items.
+      $l1_items = $this->getMenuItemsWithParent($menu_links, 0);
+      $this->assertEqual(count($this->xpath('//table/tbody/tr')), count($l1_items), 'The correct number of L1 items is displayed.');
+
+      // Now check each L1 item - if it has children it should expandable link.
+      foreach ($l1_items as $mlid => $item) {
+        $children = $this->getMenuItemsWithParent($menu_links, $mlid);
+        $expandable_link = $this->xpath('//a[contains(@class, "paddle-big-menu-expandable") and @rel="' . $mlid . '"]');
+        $this->assertEqual(count($children) > 0, $expandable_link, 'A menu item with children has an expandable link.');
+      }
+    }
+  }
+
+  /**
+   * Finds the children of a parent menu link item in a list of menu links.
+   *
+   * @param array $menu_links
+   *   An associative array containing menu links, keyed by menu link id.
+   * @param int $parent
+   *   The mlid of the parent item.
+   *
+   * @return array
+   *   An associative array containing menu links that are children of the given
+   *   parent link, keyed by menu link id.
+   */
+  protected function getMenuItemsWithParent($menu_links, $parent) {
+    $result = array();
+    foreach ($menu_links as $mlid => $item) {
+      if ($item['plid'] == $parent) {
+        $result[$mlid] = $item;
+      }
+    }
+
+    return $result;
+  }
+
+  /**
+   * Populates a menu tree with a number of nodes and menu links.
+   *
+   * @param string $langcode
+   *   The language to use for the menu tree.
+   *
+   * @return array
+   *   An array of menu links.
+   */
+  protected function createMenuTree($langcode) {
+    $default_node_title = 'Test node <num>';
+    $node_num = 1;
+    $lang_index = 0;
+    // Create a some nodes to use for paths.
+    $nodes = array();
+    for ($i = 0; $i < rand(1, 5); $i++) {
+      $edit = array(
+        'title' => $this->randomString() . '"&%\'"',
+        'language' => $langcode,
+        'body' => array(
+          $langcode => array(array()),
+        ),
+      );
+      $nodes[] = $this->drupalCreateNode($edit);
+    }
+
+    // Build a big menu.
+    $menu_links = array();
+    // First create the menu object.
+    $menus = paddle_menu_manager_get_menus($langcode);
+    $this->menus[$langcode] = reset($menus);
+    // Then create the menu items.
+    for ($i = 0; $i < 20; $i++) {
+      // Generate random path.
+      $path = 'http://example.com';
+      if (rand(0, 2) > 0 && $node = array_pop($nodes)) {
+        $path = 'node/' . $node->nid;
+      }
+      // See who is the parent.
+      $plid = 0;
+      if (rand(0, 2) > 0 && count($menu_links)) {
+        // Prevent going deeper than 9 items, this is Drupal's limit.
+        do {
+          $plid = array_rand($menu_links);
+        } while ($menu_links[$plid]['depth'] > 8);
+      }
+      // Make the item.
+      $menu_item = array(
+        'link_path' => $path,
+        'link_title' => $this->randomString() . '"&%\'"',
+        'plid' => $plid,
+      );
+      $menu_item = $this->createMenuLink($this->menus[$langcode], $menu_item);
+      $menu_links[$menu_item['mlid']] = $menu_item;
+    }
+    return $menu_links;
+  }
+
+}

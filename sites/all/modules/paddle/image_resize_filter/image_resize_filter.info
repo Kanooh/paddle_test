@@ -1,0 +1,10 @@
+name = Image resize filter
+description = Filter to automatically scale images to their height and width dimensions.
+core = 7.x
+package = Input filters
+configure = admin/config/content/formats
+
+; Information added by drush on 2015-07-31
+version = "7.x-1.16"
+project = "image_resize_filter"
+datestamp = "1438371635"

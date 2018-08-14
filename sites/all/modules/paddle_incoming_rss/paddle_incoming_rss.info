@@ -1,0 +1,53 @@
+name = Paddle Incoming RSS
+description = App providing incoming RSS for the Paddle platform.
+core = 7.x
+package = Paddle
+
+files[] = paddle_incoming_rss.info.inc
+files[] = includes/paddle_incoming_rss.entities.inc
+files[] = includes/paddle_incoming_rss.controllers.inc
+files[] = includes/PaddleIncomingRssFeedsSource.inc
+
+dependencies[] = ctools
+dependencies[] = entity
+dependencies[] = elysia_cron
+dependencies[] = features
+dependencies[] = feeds
+dependencies[] = feeds_entity_processor
+dependencies[] = feeds_tamper
+dependencies[] = text
+dependencies[] = views
+dependencies[] = smart_trim
+dependencies[] = strongarm
+
+features[ctools][] = elysia_cron:default_elysia_cron_rules:1
+features[ctools][] = feeds:feeds_importer_default:1
+features[ctools][] = feeds_tamper:feeds_tamper_default:2
+features[ctools][] = views:views_default:3.0
+features[ctools][] = strongarm:strongarm:1
+features[elysia_cron][] = feeds_cron
+features[elysia_cron][] = job_scheduler_cron
+features[elysia_cron][] = queue_feeds_source_clear
+features[elysia_cron][] = queue_feeds_source_expire
+features[elysia_cron][] = queue_feeds_source_import
+features[features_api][] = api:2
+features[feeds_importer][] = paddle_incoming_rss
+features[feeds_tamper][] = paddle_incoming_rss-url-copy
+features[feeds_tamper][] = paddle_incoming_rss-url-find_replace_regex
+features[field_base][] = field_feed_item_description
+features[field_instance][] = paddle_incoming_rss_feed_item-paddle_incoming_rss_feed_item-field_feed_item_description
+features[views_view][] = paddle_incoming_rss_feed_items_list
+features[variable][] = feeds_source_class
+features[variable][] = field_bundle_settings_paddle_incoming_rss_feed_item__paddle_incoming_rss_feed_item
+
+apps[name] = Inkomende RSS
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+apps[logo] = apps/logo.png
+apps[description] = Abonneer je op relevante RSS-feeds en importeer artikels op je website. Zo blijft de bezoeker steeds op de hoogte van relevante nieuwsberichten gerelateerd aan de inhoud op jouw website.
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_incoming_rss"
+datestamp = "1473170421"

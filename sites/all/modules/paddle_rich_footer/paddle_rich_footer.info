@@ -1,0 +1,33 @@
+name = Rich footer
+description = The rich footer allows you to add extra information and calls to action at the bottom of each web page.
+core = 7.x
+package = Paddle
+
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+
+dependencies[] = ctools
+dependencies[] = entity
+dependencies[] = features
+dependencies[] = paddle_panel_layouts
+dependencies[] = paddle_panels_renderer
+dependencies[] = page_manager
+dependencies[] = panelizer
+dependencies[] = panels
+dependencies[] = strongarm
+
+features[ctools][] = page_manager:pages_default:1
+features[ctools][] = panelizer:panelizer:1
+features[ctools][] = panels:pipelines:1
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[page_manager_pages][] = paddle_rich_footer_panel
+features[panelizer_defaults][] = paddle_rich_footer:paddle_rich_footer:paddle_2_col_6_6
+features[panelizer_defaults][] = paddle_rich_footer:paddle_rich_footer:paddle_4_col_full
+features[panelizer_defaults][] = paddle_rich_footer:paddle_rich_footer:paddle_three_column
+features[variable][] = panelizer_defaults_paddle_rich_footer_paddle_rich_footer
+features[variable][] = panelizer_paddle_rich_footer:paddle_rich_footer:page_manager_selection
+features[variable][] = panelizer_paddle_rich_footer:paddle_rich_footer_allowed_layouts
+files[] = plugins/entity/PanelizerEntityPaddleRichFooter.class.php
+files[] = tests/rich_footer.test

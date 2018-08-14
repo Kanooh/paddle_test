@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * @file
+ * Install / update file for culturefeed_agenda.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function culturefeed_agenda_install() {
+  $fields = array(
+    'what' => 0,
+    'types' => 1,
+  );
+
+  variable_set('culturefeed_agenda_search_block_active_fields', $fields);
+}
+
+/**
+ * Move the default sort variable to the new settings.
+ */
+function culturefeed_agenda_update_7001() {
+
+  $default_sort = variable_get('culturefeed-agenda-default-sort', 'date');
+  if ($default_sort != 'date') {
+
+    $page = culturefeed_agenda_culturefeed_search_page_info();
+    $sorting_options = culturefeed_search_ui_get_sort_options_for_page($page['activiteiten']);
+
+    foreach ($sorting_options as $key => $option) {
+      if ($key != 'default' && $option['value'] == $default_sort) {
+        $sorting_options['default'] = $key;
+      }
+    }
+
+    variable_set('culturefeed_search_sortoptions_activiteiten', $sorting_options);
+
+  }
+
+  variable_del('culturefeed-agenda-default-sort');
+
+}
+
+/**
+ * Set the default search block active filters.
+ */
+function culturefeed_agenda_update_7002() {
+
+  $fields = array(
+    'what' => 1,
+    'types' => 2,
+  );
+
+  variable_set('culturefeed_agenda_search_block_active_fields', $fields);
+}

@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Enable, disable, install, uninstall and schema hooks for Paddle Geofield.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_geofield_enable() {
+  paddle_geofield_create_geofield_per_node_type();
+}

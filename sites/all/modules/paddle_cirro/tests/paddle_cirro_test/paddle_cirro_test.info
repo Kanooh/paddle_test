@@ -1,0 +1,7 @@
+name = "Paddle CIRRO module tests"
+description = "Support module for Paddle CIRRO related testing."
+package = Testing
+version = VERSION
+core = 7.x
+dependencies[] = paddle_cirro
+hidden = TRUE

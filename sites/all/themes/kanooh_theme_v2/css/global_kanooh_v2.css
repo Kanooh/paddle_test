@@ -1,0 +1,4 @@
+.pane-content a,
+.panel-pane .pane-content .pane-section-body a {
+  text-decoration: none;
+}

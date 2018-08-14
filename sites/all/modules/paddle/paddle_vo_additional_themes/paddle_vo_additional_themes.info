@@ -1,0 +1,17 @@
+name = Paddle Vo Additional Themes
+core = 7.x
+package = Features
+php = 5.2.4
+dependencies[] = ctools
+dependencies[] = paddle_themer
+features[ctools][] = paddle_themer:default_paddle_themer:1
+features[features_api][] = api:2
+features[paddle_themer_theme][] = 43c63090-fef7-4a17-90a7-6b63da5465ac
+features[paddle_themer_theme][] = 885c2f68-54a3-408c-947a-1557156a60a2
+features[paddle_themer_theme][] = bbaca73c-2930-4fe2-b614-ca3d6792495b
+features[paddle_themer_theme][] = f8b6079e-059e-4005-99b7-23c3c587b054
+
+; Information added by drush on 2014-08-12
+version = "7.x-1.x-dev"
+project = "paddle_vo_additional_themes"
+datestamp = "1407842101"

@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- PHP_CodeSniffer standard for Paddle Taxonomy Manager. -->
+<!-- See http://pear.php.net/manual/en/package.php.php-codesniffer.annotated-ruleset.php -->
+<ruleset name="Paddle-Taxonomy-Manager">
+    <description>Drupal coding standard</description>
+
+    <rule ref="Drupal">
+
+    </rule>
+
+    <!-- When we have link placed on character we don't want to translate it. -->
+    <rule ref="Drupal.Semantics.FunctionCall.LArg">
+        <exclude-pattern>*/paddle_taxonomy_manager.admin.inc</exclude-pattern>
+    </rule>
+
+</ruleset>

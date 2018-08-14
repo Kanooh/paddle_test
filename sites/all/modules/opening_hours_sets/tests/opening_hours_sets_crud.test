@@ -1,0 +1,125 @@
+<?php
+
+/**
+ * @file
+ * Contains OpeningHoursCrudTest.
+ */
+
+/**
+ * Test the CRUD of the opening hours sets.
+ */
+class OpeningHoursCrudTest extends DrupalWebTestCase {
+  protected $profile = 'minimal';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Opening hours sets CRUD test',
+      'description' => 'Test the CRUD for opening hours sets.',
+      'group' => 'Opening hours sets',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array('opening_hours_sets'));
+
+    $user = $this->drupalCreateUser(array(
+      'manage opening hours sets',
+      'administer opening hours sets',
+      'administer field collections',
+    ));
+    $this->drupalLogin($user);
+  }
+
+  /**
+   * Tests the CRUD for opening hours sets.
+   */
+  public function testCrud() {
+    $controller = new EntityAPIController('opening_hours_set');
+    $entities = $controller->load();
+    $this->assertTrue(empty($entities));
+
+    $set = $controller->create(array('title' => $this->randomName()));
+    $set->save();
+
+    $created_set = $controller->load(array($set->ohsid));
+    $created_set = reset($created_set);
+    $this->assertEqual($created_set->title, $set->title);
+
+    $created_set->title = $this->randomName();
+    $created_set->save();
+    $created_set = $controller->load(array($set->ohsid));
+    $created_set = reset($created_set);
+    $this->assertNotEqual($set->title, $created_set->title);
+
+    $created_set->delete();
+    $entities = $controller->load();
+    $this->assertTrue(empty($entities));
+  }
+
+  /**
+   * Tests the opening hours field.
+   */
+  public function testOpeningHoursField() {
+    $description = $this->randomName();
+    $title = $this->randomName();
+    $edit = array(
+      'title' => $title,
+      'field_ous_monday[und][0][field_ous_opening_hours][und][0][field_ous_ou_hours][und][0][value][time]' => '10:30',
+      'field_ous_monday[und][0][field_ous_opening_hours][und][0][field_ous_ou_hours][und][0][value2][time]' => '16:20',
+      'field_ous_monday[und][0][field_ous_opening_hours][und][0][field_ous_ou_description][und][0][value]' => $description,
+    );
+
+    $this->drupalPost('admin/content/opening_hours_set/add', $edit, t('Save'));
+    $this->drupalGet('admin/content/opening_hours_set/edit/1');
+    $this->assertRaw($title);
+    $this->assertRaw($description);
+    $this->assertRaw('10:30');
+    $this->assertRaw('16:20');
+  }
+
+  /**
+   * Tests the closing days field.
+   */
+  public function testClosingDaysField() {
+    $description = $this->randomName();
+    $title = $this->randomName();
+    $edit = array(
+      'title' => $title,
+      'field_ous_closing_days[und][0][field_ous_closing_days_date][und][0][value][date]' => '07/09/2016',
+      'field_ous_closing_days[und][0][field_ous_closing_description][und][0][value]' => $description,
+    );
+
+    $this->drupalPost('admin/content/opening_hours_set/add', $edit, t('Save'));
+    $this->drupalGet('admin/content/opening_hours_set/edit/1');
+    $this->assertRaw($title);
+    $this->assertRaw($description);
+    $this->assertRaw('07/09/2016');
+  }
+
+  /**
+   * Tests the exceptional opening hours field.
+   */
+  public function testExceptionalOpeningHoursField() {
+    $description = $this->randomName();
+    $title = $this->randomName();
+    $edit = array(
+      'title' => $title,
+      'field_ous_exc_opening_hours[und][0][field_ous_exc_oh_date][und][0][value][date]' => '07/09/2016',
+      'field_ous_exc_opening_hours[und][0][field_ous_exc_oh_date][und][0][value2][date]' => '08/09/2016',
+      'field_ous_exc_opening_hours[und][0][field_ous_exc_oh_description][und][0][value]' => $description,
+    );
+
+    $this->drupalPost('admin/content/opening_hours_set/add', $edit, t('Save'));
+    $this->drupalGet('admin/content/opening_hours_set/edit/1');
+    $this->assertRaw($title);
+    $this->assertRaw($description);
+    $this->assertRaw('07/09/2016');
+    $this->assertRaw('08/09/2016');
+  }
+}

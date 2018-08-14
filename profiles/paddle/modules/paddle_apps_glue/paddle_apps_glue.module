@@ -1,0 +1,59 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Apps Glue module.
+ */
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_apps_glue_paddle_content_manager_additional_fields() {
+  $additional_fields = array();
+
+  if (module_exists('paddle_opening_hours')) {
+    $additional_fields = array('field_paddle_opening_hours');
+  }
+
+  return $additional_fields;
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function paddle_apps_glue_modules_enabled($modules) {
+  foreach ($modules as $module) {
+    if ($module == 'paddle_opening_hours') {
+      if (module_exists('paddle_organizational_unit')) {
+        paddle_apps_glue_create_field_instance_from_module($module, 'organizational_unit');
+      }
+    }
+    elseif ($module == 'paddle_organizational_unit') {
+      if (module_exists('paddle_opening_hours')) {
+        paddle_apps_glue_create_field_instance_from_module('paddle_opening_hours', 'organizational_unit');
+      }
+    }
+    elseif ($module == 'paddle_holiday_participation') {
+      paddle_apps_glue_create_field_instance_from_module('paddle_holiday_participation', 'offer');
+    }
+  }
+}
+
+/**
+ * This function adds field instances from modules into content types.
+ *
+ * @param string $module
+ *   The module which provides the field instance.
+ * @param string $bundle
+ *   The bundle of the content type.
+ */
+function paddle_apps_glue_create_field_instance_from_module($module, $bundle) {
+  features_revert_module($module);
+  node_type_cache_reset();
+  if ($bundle == 'offer') {
+    paddle_holiday_participation_geo_field_instance($bundle);
+  }
+  else {
+    paddle_opening_hours_create_ohs_instance($bundle);
+  }
+}

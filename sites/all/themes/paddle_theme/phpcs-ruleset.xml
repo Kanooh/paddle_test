@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!-- PHP_CodeSniffer standard for Paddle Theme. -->
+<!-- See http://pear.php.net/manual/en/package.php.php-codesniffer.annotated-ruleset.php -->
+<ruleset name="Paddle-Theme">
+    <description>Drupal coding standard</description>
+
+    <rule ref="Drupal">
+
+    </rule>
+
+    <rule ref="Drupal.Commenting.InlineComment.SpacingBefore">
+        <exclude-pattern>*</exclude-pattern>
+    </rule>
+
+</ruleset>

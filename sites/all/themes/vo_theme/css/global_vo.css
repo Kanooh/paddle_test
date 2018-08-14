@@ -1,0 +1,37 @@
+.paddle-glossary-pager .views-summary > a.active, .paddle-glossary-pager .views-summary > a:hover {
+  color: #FFFFFF;
+}
+
+#block-paddle-menu-display-first-level .level-1 > .menu-item.active > a {
+  color: #FFFFFF;
+}
+
+.form-submit-container .form-submit:hover, .field-type-simple-contact-form .form-submit:hover {
+  color: #55493D;
+}
+
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a {
+  color: #55493D;
+  font-family: "FlandersArtSans-Light","Lucida Sans Unicode","Lucida Grande",sans-serif;
+}
+
+body > footer {
+  border-top: 5px solid #FFE615;
+}
+
+.content-wrapper .pane-free-content .pane-content .pane-section-body a, .pane-content .pane-section-body .node .field-name-body a, .region-content .field-name-body a {
+  color: #2892be;
+  text-decoration: underline;
+}
+
+#block-paddle-menu-display-current-level-plus-one .menu-item a:hover, #block-paddle-menu-display-first-level .level-2 > .menu-item > a:hover {
+  color: #55493D;
+}
+
+.region-content blockquote, .region-content h3, .region-content a {
+  color: #55493D;
+}
+
+.search-api-page-results h3 a {
+  color: #55493D !important;
+}

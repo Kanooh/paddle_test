@@ -1,0 +1,807 @@
+<?php
+
+/**
+ * @file
+ * Provides content regions for content types.
+ *
+ * Customizable:
+ * - globally
+ * - per content type
+ * - per node
+ *
+ * Extends Paddle Panels Renderer.
+ *
+ * Exposes content regions as panes,
+ * so other regions (eg. on landing pages) can reuse them,
+ * therefore we use panelized Paddle Content Region entities.
+ */
+
+include_once 'paddle_content_region.features.inc';
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_content_region_entity_info() {
+  $entity_info = array();
+
+  $entity_info['paddle_content_region'] = array(
+    'label' => t('Paddle Content Region'),
+    'plural label' => t('Paddle Content Regions'),
+    'description' => t('A configuration entity used by the Paddle Content Regions module.'),
+    'entity class' => 'Entity',
+    'controller class' => 'EntityAPIController',
+    'base table' => 'paddle_content_region',
+    'fieldable' => TRUE,
+    'entity keys' => array(
+      'id' => 'pcrid',
+      'language' => 'language',
+    ),
+    'bundles' => array(),
+    'label callback' => 'paddle_content_region_label',
+    'uri callback' => 'paddle_content_region_uri',
+    'access callback' => 'paddle_content_region_access',
+    'module' => 'paddle_content_region',
+  );
+
+  return $entity_info;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_content_region_menu() {
+  $items = array();
+  $permission = 'administer panelizer paddle_content_region paddle_content_region content';
+
+  // Entry point for the global content configuration page.
+  $items['admin/structure/content_region'] = array(
+    'title' => 'Regions',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_content_region_overview'),
+    'access arguments' => array($permission),
+  );
+
+  return $items;
+}
+
+/**
+ * Access callback for the node entity.
+ *
+ * If a user has access to Paddle Apps, we let them configure Paddle Content
+ * Regions.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ * @param object $paddle_content_region
+ *   The Paddle Content Region configuration entity to check for.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ *
+ * @return bool
+ *   Whether access is allowed or not. If the entity type does not specify any
+ *   access information, NULL is returned.
+ *
+ * @see entity_metadata_no_hook_node_access()
+ */
+function paddle_content_region_access($op, $paddle_content_region = NULL, $account = NULL) {
+  return user_access('manage paddle_apps', $account);
+}
+
+/**
+ * Loads a paddle_content_region object from the database.
+ *
+ * @param int $paddle_content_region_id
+ *   The paddle_content_region ID.
+ *
+ * @return array|bool
+ *   A fully-populated node object, or FALSE if the node is not found.
+ */
+function paddle_content_region_load($paddle_content_region_id = NULL) {
+  return entity_load_single('paddle_content_region', $paddle_content_region_id);
+}
+
+/**
+ * Composes the label of a content region.
+ *
+ * @see entity_label()
+ *
+ * @param string $entity_type
+ *   The entity type; e.g., 'node' or 'user'.
+ * @param object $entity
+ *   The entity for which to generate the label.
+ *
+ * @return string
+ *   The entity label.
+ */
+function paddle_content_region_label($entity_type, $entity) {
+  if ($entity->node_type == 'all_pages') {
+    return t('Global page layout');
+  }
+  else {
+    return t('Edit content for every @node_type',
+      array(
+        '@node_type' => drupal_strtolower(_paddle_content_region_node_type_name($entity)),
+      )
+    );
+  }
+}
+
+/**
+ * Overview page of Paddle Content Region.
+ *
+ * Creates as many Paddle Content Regions as needed, if not created yet. We need
+ * 1 for each content type, except for 'Landing page', plus 1 for 'All pages'.
+ *
+ * Give every Content Region the opportunity to use 'All pages' panes.
+ * We save it with the 'inherit' option. If entity_id == 0 and this is 1, then
+ * use the global settings for this content type.
+ *
+ * @see paddle_content_region.install
+ *
+ * @param array $form
+ *   Form definition.
+ * @param array $form_state
+ *   Current form state.
+ *
+ * @return array
+ *   A renderable form array.
+ */
+function paddle_content_region_overview($form, &$form_state) {
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_content_region_add_contextual_actions_overview';
+  }
+
+  // Go to separate function to create needed config entities and return them.
+  $content_regions = paddle_content_region_get_all_and_create_missing();
+
+  // Build a list of all config entities for this region.
+  $items = array();
+  foreach ($content_regions as $content_region) {
+    $items[$content_region->node_type] = $content_region;
+  }
+
+  // Sort the list alphabetically, by key, which is node type, so 'All pages'
+  // gets on top, because its node type is empty.
+  ksort($items);
+
+  $form['introduction'] = array(
+    '#type' => 'item',
+    '#markup' => t('Add, edit and remove panes like you would on landing pages. Panes that show on all pages. Except landing pages, unless you add them there.'),
+  );
+
+  $all_pages_label = paddle_content_region_label('paddle_content_region', $items['all_pages']);
+  $all_pages_link = _paddle_content_region_edit_link($items['all_pages'], array('ui-icon', 'ui-icon-edit'), t('Edit'));
+  $form['all_pages'] = array(
+    '#type' => 'item',
+    '#markup' => '<span>' . $all_pages_label . '</span>' . $all_pages_link,
+  );
+
+  // Group al settings.
+  $form['settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Override Global Page Layout'),
+    '#tree' => TRUE,
+  );
+
+  foreach ($items as $node_type => $content_region) {
+    if (!empty($node_type) && $node_type != 'all_pages') {
+      // Get node type name.
+      $node_type_names = node_type_get_names();
+      $node_type_name = $node_type_names[$node_type];
+
+      $wrapper_name = 'content_type_' . $content_region->node_type . '_wrapper';
+      $form['settings'][$wrapper_name] = array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'class' => array('region-content-type-wrapper'),
+        ),
+      );
+      // The form element for this.
+      $form['settings'][$wrapper_name]['override'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Customize %node_type pages.', array('%node_type' => $node_type_name)),
+        '#default_value' => !$content_region->inherit,
+        '#attributes' => array(
+          'class' => array('paddle-content-region-node-type-' . $content_region->node_type),
+        ),
+      );
+
+      $form['settings'][$wrapper_name]['pcrid'] = array(
+        '#type' => 'value',
+        '#value' => $content_region->identifier(),
+      );
+
+      $form['settings'][$wrapper_name]['edit_link'] = array(
+        '#markup' => _paddle_content_region_edit_link($content_region, array('ui-icon', 'ui-icon-edit'), t('Edit')),
+      );
+    }
+  }
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save customization'),
+  );
+
+  return $form;
+}
+
+/**
+ * Save content type specific settings, if changed.
+ */
+function paddle_content_region_overview_submit(&$form, &$form_state) {
+  foreach ($form_state['values']['settings'] as $content_type) {
+    $content_region = paddle_content_region_load($content_type['pcrid']);
+    $inherit = !$content_type['override'];
+    if ($content_region !== FALSE && $content_region->inherit != $inherit) {
+      $content_region->inherit = $inherit;
+      $content_region->save();
+    }
+  }
+
+  drupal_set_message('Your configuration has been saved.');
+}
+
+/**
+ * After-build function of the content region overview form.
+ */
+function paddle_content_region_add_contextual_actions_overview($form, $form_state) {
+  ctools_include('ajax');
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-check'),
+        'data-paddle-contextual-toolbar-click' => 'edit-submit',
+      ),
+      'html' => TRUE,
+      'external' => TRUE,
+    )),
+    'class' => array('submit', 'save'),
+    'weight' => 0,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Get the link to the configuration page for one specific Content Region.
+ *
+ * @param object $content_region
+ *   Content Region config entity.
+ * @param array $additional_classes
+ *   Additional classes to add to the generated <a> tag.
+ * @param string $override_title
+ *   Specify if the paddle_content_region_label() doesn't provide the correct
+ *   title.
+ *
+ * @return string
+ *   A-tag with link to a specific Content Region edit page.
+ */
+function _paddle_content_region_edit_link($content_region, $additional_classes = array(), $override_title = '') {
+  $node_type = !empty($content_region->node_type) ? $content_region->node_type : 'all_pages';
+  $additional_classes[] = 'paddle-content-region-edit-content-' . $node_type;
+  $options = array(
+    'attributes' => array(
+      'class' => $additional_classes,
+    ),
+  );
+  $title = $override_title ?: paddle_content_region_label('paddle_content_region', $content_region);
+  return l($title, 'admin/content_manager/entity/' . $content_region->identifier() . '/panels_content', $options);
+}
+
+/**
+ * Get human readable node type name for one specific Content Region.
+ *
+ * @param object $content_region
+ *   Content Region config entity.
+ *
+ * @return string
+ *   Node type name related to the Content Region.
+ */
+function _paddle_content_region_node_type_name($content_region) {
+  $node_type_names = node_type_get_names();
+
+  if ($content_region->node_type != 'all_pages') {
+    return $node_type_names[$content_region->node_type];
+  }
+}
+
+/**
+ * Get all Content Region config entities, create missing if needed.
+ *
+ * @todo A function doing two separate things is a code smell. Refactor this
+ *   into two separate functions.
+ *
+ * @return array
+ *   A list of Content Region entity objects, keyed by their id.
+ */
+function paddle_content_region_get_all_and_create_missing() {
+  // Enlist all region instances we need.
+  $allowed_node_types = paddle_content_region_get_allowed_node_types();
+
+  // Get all existing instances.
+  $existing_regions = paddle_content_region_load_all($GLOBALS['language_content']->language);
+
+  // Check which are missing.
+  $missing_node_types = $allowed_node_types;
+  foreach ($existing_regions as $paddle_content_region) {
+    unset($missing_node_types[$paddle_content_region->node_type]);
+  }
+
+  // Create missing.
+  foreach (array_keys($missing_node_types) as $node_type) {
+    $new_content_region = entity_create('paddle_content_region', array(
+      'node_type' => $node_type,
+      'language' => $GLOBALS['language_content']->language,
+    ));
+    $new_content_region->save();
+    $existing_regions[$new_content_region->identifier()] = $new_content_region;
+  }
+
+  // Return them all.
+  return $existing_regions;
+}
+
+/**
+ * Get allowed node types.
+ *
+ * @return array
+ *   A list of strings.
+ */
+function paddle_content_region_get_allowed_node_types() {
+  // Get all content types.
+  $node_types = node_type_get_names();
+  // Only keep node type (names) with content region support.
+  $supported_content_types = paddle_content_region_supported_content_types();
+  $node_types = array_intersect_key($node_types, array_flip($supported_content_types));
+
+  // Prepend with a value for global presets.
+  $node_types = array_merge(array('all_pages' => t('Global')), $node_types);
+
+  return $node_types;
+}
+
+/**
+ * Load all existing config entities from database.
+ *
+ * @param string $language
+ *   The language we want to load entities for.
+ *
+ * @return array
+ *   A list of Content Region entity objects, keyed by their id.
+ */
+function paddle_content_region_load_all($language) {
+  $query = new EntityFieldQuery();
+
+  $query->entityCondition('entity_type', 'paddle_content_region')
+    ->propertyCondition('language', $language);
+  $result = $query->execute();
+
+  if (isset($result['paddle_content_region'])) {
+    $paddle_content_region_pcrids = array_keys($result['paddle_content_region']);
+    return entity_load('paddle_content_region', $paddle_content_region_pcrids);
+  }
+  else {
+    return array();
+  }
+}
+
+/**
+ * Load all related config entities in all available languages.
+ *
+ * @param string $node_type
+ *   Node type.
+ *
+ * @return array
+ *   A list of Content Region entity objects, keyed by their id.
+ */
+function paddle_content_region_load_translation_set($node_type) {
+  $query = new EntityFieldQuery();
+
+  $query->entityCondition('entity_type', 'paddle_content_region')
+    ->propertyCondition('node_type', $node_type);
+  $result = $query->execute();
+
+  if (isset($result['paddle_content_region'])) {
+    $paddle_content_region_pcrids = array_keys($result['paddle_content_region']);
+    return entity_load('paddle_content_region', $paddle_content_region_pcrids);
+  }
+  else {
+    return array();
+  }
+}
+
+/**
+ * Get the Paddle Content Region path.
+ *
+ * @param object $paddle_content_region
+ *   The Paddle Content Region that'll get displayed.
+ *
+ * @return string
+ *   Path to a specific Paddle Content Region.
+ */
+function paddle_content_region_uri($paddle_content_region) {
+  return array(
+    'path' => 'paddle-content-region/' . $paddle_content_region->identifier(),
+  );
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ */
+function paddle_content_region_paddle_contextual_toolbar_actions_alter(&$actions) {
+  $menu = menu_get_item();
+
+  if ($menu['path'] == 'admin/content_manager/entity/%/panels_content' && module_exists('paddle_contextual_toolbar')) {
+    // Add contextual toolbar buttons on global content region pages.
+    $actions = array();
+    $content_region_overview_path = 'admin/structure/content_region';
+
+    // Add the save button.
+    $action_link = l(
+      t('Save'),
+      '',
+      array(
+        'html' => TRUE,
+        'external' => TRUE,
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-plus'),
+          'data-paddle-contextual-toolbar-click' => 'panels-ipe-save',
+        ),
+      )
+    );
+    $actions[] = array(
+      'action' => $action_link,
+      'class' => array('save'),
+      'weight' => 5,
+    );
+    $js_settings = array(
+      'paddle_panels_renderer_redirect_after_successful_ajax_call_url' => url($content_region_overview_path),
+    );
+    drupal_add_js($js_settings, 'setting');
+
+    // Set the buttons.
+    paddle_contextual_toolbar_actions($actions);
+    // Load the click delegator.
+    paddle_contextual_toolbar_add_js('click_delegator');
+  }
+}
+
+/**
+ * Implements hook_language_switch_links_alter().
+ *
+ * Set the right content region edit page links.
+ * Content region entities have different id's per language. Make sure the
+ * language switcher block gets these.
+ */
+function paddle_content_region_language_switch_links_alter(array &$links, $type, $path) {
+  $menu = menu_get_item();
+
+  if ($menu['path'] == 'admin/content_manager/entity/%/panels_content') {
+    // Get the current content region.
+    $content_region = $menu['page_arguments'][1]->data;
+
+    // Get the existing content regions for this and the other languages.
+    $existing_content_regions = paddle_content_region_load_translation_set($content_region->node_type);
+
+    // Check which are missing.
+    $missing_langcodes = $links;
+    foreach ($existing_content_regions as $content_region) {
+      unset($missing_langcodes[$content_region->language]);
+    }
+
+    // Create missing.
+    foreach (array_keys($missing_langcodes) as $langcode) {
+      $new_content_region = entity_create('paddle_content_region', array(
+        'node_type' => $content_region->node_type,
+        'language' => $langcode,
+      ));
+      $new_content_region->save();
+      $existing_content_regions[$new_content_region->identifier()] = $new_content_region;
+    }
+
+    // Loop all language links.
+    foreach ($existing_content_regions as $content_region) {
+      $langcode = $content_region->language;
+      // Change the href of the other languages.
+      if ($langcode != $GLOBALS['language_content']->language) {
+        $links[$langcode]['href'] = 'admin/content_manager/entity/' . $content_region->identifier() . '/panels_content';
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_content_region_ctools_plugin_directory($module, $plugin) {
+  if (in_array($module, array('panelizer', 'ctools', 'page_manager'))) {
+    return 'plugins/' . $plugin;
+  }
+  if ("$module:$plugin" == 'panels:display_renderers') {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Fetch a single entity plugin.
+ */
+function paddle_content_region_get_entity_plugin($entity_type) {
+  ctools_include('plugins');
+  return ctools_get_plugins('panelizer', 'entity', $entity_type);
+}
+
+/**
+ * Fetch all entity plugin.
+ */
+function paddle_content_region_get_entity_plugins() {
+  ctools_include('plugins');
+  return ctools_get_plugins('panelizer', 'entity');
+}
+
+/**
+ * Get the allowed regions that we can render.
+ *
+ * @param panels_display $display
+ *   The panels display about to be rendered.
+ *
+ * @return array
+ *   The list of regions.
+ */
+function paddle_content_region_get_regions(panels_display $display = NULL) {
+  $regions = array(
+    'right' => t('Right region'),
+    'bottom' => t('Bottom region'),
+  );
+
+  if (isset($display) && isset($display->context['panelizer']) && $display->context['panelizer']->type[0] == 'entity:node') {
+    $content_type = $display->context['panelizer']->data->type;
+    $result = module_invoke_all('paddle_content_region_extra_content_regions', $content_type);
+    $regions = array_merge($regions, $result);
+  }
+
+  return $regions;
+}
+
+/**
+ * Loads a display object from the database.
+ *
+ * @param string $node_type
+ *   The node type for which to search.
+ * @param string $region
+ *   The region for which to search.
+ *
+ * @return array|bool
+ *   A fully-populated display object.
+ */
+function paddle_content_region_get_panes_html($node_type, $region) {
+  global $language;
+  $panes = array();
+  $output = '';
+
+  // Get the wanted record out of the paddle_content_region table.
+  $result = db_select('paddle_content_region', 'pcr')
+    ->fields('pcr', array('pcrid'))
+    ->condition('node_type', $node_type, '=')
+    ->condition('language', $language->language, '=')
+    ->execute()
+    ->fetchAll();
+
+  if (count($result)) {
+    // Get the panelizer entity linked to the paddle_content_region.
+    $entity = entity_load('paddle_content_region', array($result[0]->pcrid));
+    $entity = reset($entity);
+
+    // Get the display from the entity.
+    $display = $entity->panelizer['page_manager']->display;
+
+    // Only get the panes for the requested region.
+    if (isset($display->panels[$region])) {
+      foreach ($display->content as $key => $panel) {
+        if ($panel->panel == $region) {
+          $panes[] = $panel;
+        }
+      }
+    }
+
+    // Get the display renderer to be able to get HTML for the panes.
+    $renderer_metadata = panels_get_display_renderer('standard');
+    $renderer = panels_get_renderer_handler($renderer_metadata, $display);
+    foreach ($panes as $pane) {
+      $output .= $renderer->render_pane($pane);
+    }
+  }
+
+  // Return the requested HTML for the panes.
+  return $output;
+}
+
+/**
+ * Implements hook_panelizer_pre_render_alter().
+ *
+ * For all nodes except landing pages:
+ * - Add node view pane to the left region on node view.
+ * - Add global content regions pane to right and bottom region.
+ * - Add specific javascript.
+ */
+function paddle_content_region_panelizer_pre_render_alter($panelizer, $display, $entity) {
+  if ($panelizer->pipeline == 'paddle_content_region') {
+    // Add javascript to enable redirect after clicking 'Save'.
+    drupal_add_js(drupal_get_path('module', 'paddle_content_region') . '/js/paddle_content_region_actions.js', array('type' => 'file'));
+  }
+}
+
+/**
+ * Get the inherit setting from a certain global content region.
+ *
+ * @param string $node_type
+ *   Node type.
+ * @param string $language
+ *   Language key.
+ */
+function paddle_content_region_get_inherit($node_type, $language) {
+  $result = db_select('paddle_content_region', 'pcr')
+    ->fields('pcr', array('inherit'))
+    ->condition('node_type', $node_type, '=')
+    ->condition('language', $language, '=')
+    ->execute()
+    ->fetchAll();
+
+  if (count($result)) {
+    return $result[0]->inherit;
+  }
+  else {
+    // Fall back to default value if no database record yet.
+    return 1;
+  }
+}
+
+/**
+ * Implements hook_panels_ipe_pane_links_alter().
+ *
+ * Hide all buttons on global panes, except the colour scheme selector button.
+ */
+function paddle_content_region_panels_ipe_pane_links_alter(&$links, $context) {
+  $pane = $context['pane'];
+  if (paddle_content_region_is_global_pane($pane)) {
+    if (isset($links['paddle_style'])) {
+      $paddle_style_link = $links['paddle_style'];
+    }
+    $links = array();
+    if (isset($paddle_style_link)) {
+      $links['paddle_style'] = $paddle_style_link;
+    }
+  }
+}
+
+/**
+ * Check if the given pane is a global pane.
+ *
+ * @param object $pane
+ *   Pane object.
+ *
+ * @return bool
+ *   Whether the pane is global or not.
+ */
+function paddle_content_region_is_global_pane($pane) {
+  return ($pane->type == 'content_region' && $pane->subtype == 'inherit');
+}
+
+/**
+ * Get all content types that support content regions.
+ *
+ * @return array
+ *   Content type machines names as values.
+ */
+function paddle_content_region_supported_content_types() {
+  // Invoke all hook_paddle_content_region_content_type_info() implementations.
+  return module_invoke_all('paddle_content_region_content_type_info');
+}
+
+/**
+ * Check if the given content type supports content regions.
+ *
+ * @param string $content_type
+ *   Content type.
+ *
+ * @return bool
+ *   Whether the content type supports content regions or not.
+ */
+function paddle_content_region_supported_content_type($content_type) {
+  return in_array($content_type, paddle_content_region_supported_content_types());
+}
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function paddle_content_region_node_type_insert($info) {
+  $bundle = $info->type;
+
+  if (paddle_content_region_supported_content_type($bundle)) {
+    paddle_content_region_panelize_node_type($bundle);
+    paddle_content_region_grant_node_type_permissions($bundle);
+  }
+}
+
+/**
+ * Panelize the node type and provide content region defaults.
+ *
+ * @param string $bundle
+ *   Content type.
+ *
+ * @todo Consider moving this to the module containing the content
+ * type and panelizer defaults. The form submit results in a
+ * variable 'panelizer_defaults_node_[bundle]' to be set.
+ */
+function paddle_content_region_panelize_node_type($bundle) {
+  // Enable panelizer for the new content type.
+  $form_state['values']['entities']['node'][$bundle] = array(
+    0 => array(
+      'status' => 1,
+    ),
+    'page_manager' => array(
+      'status' => 1,
+      'default' => 1,
+      'choice' => 0,
+    ),
+    'default' => array(
+      'status' => 0,
+      'default' => 0,
+      'choice' => 0,
+    ),
+    'teaser' => array(
+      'status' => 0,
+      'default' => 0,
+      'choice' => 0,
+    ),
+    'listing_title' => array(
+      'status' => 0,
+      'default' => 0,
+      'choice' => 0,
+    ),
+    'listing_teaser' => array(
+      'status' => 0,
+      'default' => 0,
+      'choice' => 0,
+    ),
+  );
+
+  module_load_include('inc', 'panelizer', 'includes/admin');
+  panelizer_settings_page_form_submit(array(), $form_state);
+}
+
+/**
+ * Grant permissions to editors to work with the panelized node type.
+ *
+ * @param string $bundle
+ *   Content type.
+ */
+function paddle_content_region_grant_node_type_permissions($bundle) {
+  // Clear the statically cached Panelizer handlers. When these were
+  // originally initialized, this entity type was not panelized yet, causing
+  // Panelizer to fail to report all its available permissions.
+  drupal_static_reset('panelizer_entity_plugin_get_handler');
+  // Let editors manage panes on this node type.
+  foreach (array('Chief Editor', 'Editor') as $name) {
+    $role = user_role_load_by_name($name);
+    if ($role !== FALSE) {
+      user_role_grant_permissions($role->rid, array('administer panelizer node ' . $bundle . ' content'));
+    }
+  }
+}
+
+/**
+ * Implements hook_panels_renderer_paddle_allowed_content_types_alter().
+ *
+ * Prevent the "content region" content type being added to a content region.
+ */
+function paddle_content_region_panels_renderer_paddle_allowed_content_types_alter(&$content_types, $context) {
+  $plugin_type = $context['panelizer']->plugin;
+  if (isset($content_types['content_region']) && $plugin_type == 'entity:paddle_content_region') {
+    unset($content_types['content_region']);
+  }
+}

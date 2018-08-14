@@ -1,0 +1,173 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCodexFlandersCodexFlandersUnitTest.
+ */
+
+module_load_include('test', 'paddle_panes', 'tests/plugins/content_types/content_type_test_case');
+
+/**
+ * Tests the "Codex Flanders" content type plugin.
+ */
+class PaddleCodexFlandersCodexFlandersUnitTest extends PaddlePanesContentTypeTestCase {
+
+  /**
+   * @var object $node
+   */
+  protected $node;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Codex Flanders',
+      'description' => 'Tests the "Codex Flanders" content type plugin.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp($modules = array()) {
+    parent::setUp(array('paddle_codex_flanders_test'));
+
+    // Declare the node_content content type plugin definition and subtype.
+    $this->contentType = ctools_get_content_type('codex_flanders');
+    $this->subtype = ctools_content_get_subtype($this->contentType, 'codex_flanders');
+
+    // Create a mock pane, display and context to feed to the plugin.
+    $this->pane = panels_new_pane('codex_flanders', 'codex_flanders');
+    $this->display = panels_new_display();
+    $this->context = new ctools_context();
+  }
+
+  /**
+   * Tests the add form callback of the Codex Flanders plugin.
+   */
+  public function testAddForm() {
+    global $base_url;
+
+    // Define mock form state, form info and configuration.
+    $form_state = $this->getMockPaneFormState();
+    $form_info = array();
+    $conf = array();
+
+    // Request the add form.
+    $form = ctools_content_form('add', $form_info, $form_state, $this->contentType, 'codex_flanders', $this->subtype, $conf, NULL);
+
+    // Check that the form fields are present.
+    $this->assertTrue($form['pane_settings']['section_body']['codices'][1]['name'], 'The text field to enter a name is present.');
+    $this->assertTrue($form['pane_settings']['section_body']['codices'][1]['url'], 'The text field to enter an url is present.');
+
+    // Build the form so we can run validation tests on it.
+    form_builder($form['#form_id'], $form, $form_state);
+
+    // Test that the "The given url is not a valid one" form validation error is
+    // thrown with default settings.
+    $errors = array('codices][1][url' => t('The given url is not a valid one.'));
+    $this->assertFormValidationErrors($form, $form_state, $errors, 'The "The given url is not a valid one" form validation error is thrown when the url field is left empty.');
+
+    // Test that the "The given url is not a valid one" form validation error is
+    // thrown when no url given.
+    $errors = array('codices][1][url' => t('The given url is not a valid one.'));
+    $form_state['values']['codices'][1]['url'] = $this->randomName();
+    $this->assertFormValidationErrors($form, $form_state, $errors, 'The "The given url is not a valid one" form validation error is thrown when the url field is left empty.');
+
+    // Test that the "The given codex link does not contain an article ID" form
+    // validation error is thrown when an url without valid article ID is given.
+    $errors = array('codices][1][url' => t('The given codex link does not contain an article ID.'));
+    $form_state['values']['codices'][1]['url'] = $base_url . '/test/codex-flanders';
+    $this->assertFormValidationErrors($form, $form_state, $errors, 'The "The given codex link does not contain an article ID" form validation error is thrown when the article ID is not given.');
+
+    // Test that no form validation errors are thrown when the input is valid.
+    $form_state['values']['codices'][1]['url'] = $base_url . '/test/codex-flanders?AID=1';
+    $this->assertNoFormValidationErrors($form, $form_state, 'When a valid URL with a valid article ID is given, no errors are thrown.');
+
+    // Set values to query to the mock.
+    for ($i = 1; $i < 5; $i++) {
+      $form['pane_settings']['section_body']['codices'][$i] = $form['pane_settings']['section_body']['codices'][1];
+      $form_state['values']['codices'][$i]['url'] = $base_url . '/test/codex-flanders?AID=' . $i;
+      $form_state['values']['codices'][$i]['name'] = 'Artikel ' . $i;
+    }
+
+    // Process the values and verify that the correct version has been set.
+    paddle_codex_flanders_codex_flanders_content_type_edit_form_submit($form, $form_state);
+
+    $this->assertEqual('Artikel 1', $conf['codices'][1]['name']);
+    $this->assertEqual($base_url . '/test/codex-flanders?AID=1', $conf['codices'][1]['url']);
+    $this->assertEqual('Artikel 2', $conf['codices'][2]['name']);
+    $this->assertEqual($base_url . '/test/codex-flanders?AID=2', $conf['codices'][2]['url']);
+    $this->assertEqual('Artikel 3', $conf['codices'][3]['name']);
+    $this->assertEqual($base_url . '/test/codex-flanders?AID=3', $conf['codices'][3]['url']);
+    $this->assertEqual('Artikel 4', $conf['codices'][4]['name']);
+    $this->assertEqual($base_url . '/test/codex-flanders?AID=4', $conf['codices'][4]['url']);
+  }
+
+  /**
+   * Tests the rendering function of the Codex Flanders plugin.
+   */
+  public function testRender() {
+    global $base_url;
+
+    // Test that nothing is returned when the configuration is not valid. An
+    // empty configuration is invalid, since the required node is missing.
+    $configuration = array();
+    $this->assertFalse($this->render($configuration)->content, 'Nothing is rendered when the configuration is not valid.');
+
+    $configuration = array(
+      'codices' => array(
+        array(
+          'name' => 'Article 1',
+          'url' => $base_url . '/test/codex-flanders?AID=1',
+        ),
+      ),
+    );
+
+    // Now render the pane and verify what is shown.
+    $output = $this->render($configuration);
+    $elements = $output->elements->xpath('//div[contains(@class, "paddle-flanders-codex")]');
+    $this->assertEqual(1, count($elements));
+
+    $elements = $output->elements->xpath('//div[contains(@class, "paddle-flanders-codex")]//div[contains(@class, "codex-name")]');
+    $this->assertEqual($configuration['codices'][0]['name'], (string) $elements[0]);
+
+    $elements = $output->elements->xpath('//div[contains(@class, "paddle-flanders-codex")]//div[contains(@class, "codex-text")]');
+    $this->assertEqual('ActiveVersionArticle1', (string) $elements[0]);
+
+    $elements = $output->elements->xpath('//div[contains(@class, "paddle-flanders-codex")]//div[contains(@class, "codex-source-container")]');
+    $link = 'Article 1.1246502 of the Decreet from ' . date('d/m/Y', strtotime('2014-03-28T00:00:00')) . ' OpschriftActiveVersionArticle1';
+    $this->assertEqual($link, (string) $elements[0]->a);
+
+    // Test the cache.
+    $cache = cache_get('flanders:codex:article:1', 'cache_flanders_codices');
+    $this->assertTrue(!empty($cache->data));
+  }
+
+  /**
+   * Tests the error handling when the wanted info is not found.
+   */
+  public function testErrorHandling() {
+    global $base_url;
+
+    // Test response when no active version found.
+    $configuration = array(
+      'codices' => array(
+        array(
+          'name' => 'Article 4',
+          'url' => $base_url . '/test/codex-flanders?AID=4',
+        ),
+      ),
+    );
+
+    $output = $this->render($configuration);
+    $elements = $output->elements->xpath('//li[contains(text(), "No active version for article with ID: 4 has been found.")]');
+    $this->assertTrue(!empty($elements));
+
+    // Test the cache.
+    $cache = cache_get('flanders:codex:article:4', 'cache_flanders_codices');
+    $this->assertTrue(empty($cache->data));
+  }
+}

@@ -1,0 +1,63 @@
+<?php
+/**
+ * @file
+ * Install code for the Paddle VO themes.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_vo_themes_enable() {
+  // Add global header and footer blocks.
+  paddle_vo_themes_update_header_and_footer();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_vo_themes_uninstall() {
+  // Remove all general widget_block block info.
+  db_delete('block')
+    ->condition('module', 'widget_block')
+    ->execute();
+
+  // Get all widget block configurations.
+  $all = widget_block_get_config_multiple();
+  foreach (array_keys($all) as $block_id) {
+    // Remove widget_block specific settings.
+    widget_block_del_config($block_id);
+  }
+}
+
+/**
+ * Replace local global header and footer with a centrally managed one.
+ */
+function paddle_vo_themes_update_7000() {
+  // Remove Paddle global header text and link from all themes.
+  ctools_include('export');
+  $themes = ctools_export_load_object('paddle_themer_theme');
+  foreach ($themes as $theme) {
+    unset($theme->style['global_header_link']);
+    unset($theme->style['global_header_text']);
+    paddle_themer_save_theme($theme);
+  }
+
+  // Remove corresponding variables.
+  variable_del('paddle_style_global_header_link');
+  variable_del('paddle_style_global_header_text');
+
+  // Enable the Widget Block module to get the global header and footer.
+  module_enable(array('widget_block'));
+
+  // Add global header and footer blocks.
+  paddle_vo_themes_update_header_and_footer();
+}
+
+/**
+ * Rename the "VO Content Theme" to "kañooh Theme".
+ */
+function paddle_vo_themes_update_7001() {
+  $theme = paddle_themer_load('vo_standard');
+  $theme->human_name = 'kañooh Theme';
+  ctools_export_crud_save('paddle_themer_theme', $theme);
+}

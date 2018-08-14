@@ -1,0 +1,53 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Dashboard feature.
+ */
+
+include_once 'paddle_dashboard.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_dashboard_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'panels' && $plugin == 'layouts') {
+    return 'plugins/layouts';
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_dashboard_menu() {
+  $items = array();
+
+  $items['admin/dashboard'] = array(
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'title' => 'Dashboard',
+    'weight' => -50,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function paddle_dashboard_menu_alter(&$items) {
+  // Make the "admin" path visible in the menu.
+  $items['admin']['type'] = MENU_NORMAL_ITEM;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_dashboard_permission() {
+  return array(
+    'access paddle dashboard' => array(
+      'title' => t('Access the Paddle Dashboard.'),
+    ),
+    'access paddle in review dashboard' => array(
+      'title' => t('Access paddle "In Review” dashboard.'),
+    ),
+  );
+}

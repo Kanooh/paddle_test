@@ -1,0 +1,128 @@
+<?php
+/**
+ * @file
+ * Definition of PaddleContentPreviewTest.
+ */
+
+/**
+ * Tests previewing of content.
+ */
+class PaddleContentPreviewTest extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Content preview',
+      'description' => 'Tests content previewing.',
+      'group' => 'Paddle - Content Editing',
+    );
+  }
+
+  /**
+   * Tests previewing basic pages.
+   */
+  public function testBasicPagePreview() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create and publish a basic page.
+    $edit = array(
+      'title' => $this->randomString() . '&<>',
+      'body[' . LANGUAGE_NONE . '][0][value]' => $this->randomString() . '&<>',
+    );
+    $node = $this->drupalCreateUiNode('basic_page', $edit);
+    $this->moderateNode($node, 'Publish');
+
+    $backend_node_view_url = 'admin/content_manager/node/' . $node->nid . '/view';
+    $preview_url = url('node/' . $node->nid . '/current-revision');
+    $online_version_url = url('node/' . $node->nid);
+
+    $published_version_expected_body_text = check_markup($node->body[LANGUAGE_NONE][0]['value'], $node->body[LANGUAGE_NONE][0]['format']);
+
+    // Check that for a published node only the 'Preview revision' button is
+    // visible. The 'Online version' button should not be visible.
+    $this->drupalGet($backend_node_view_url);
+    $this->assertTrue($this->contextualToolbarLinkXPath('preview', $preview_url), 'The preview button is shown in the contextual toolbar for an administrator.');
+    $this->assertFalse($this->contextualToolbarLinkXPath('online-version', $online_version_url), 'The "Online version" button is not shown in the contextual toolbar for an administrator.');
+
+    // Check that the body text of the basic page is visible after clicking
+    // on 'Preview revision'.
+    $this->clickAdminLink(t('Preview revision'));
+    $this->assertRaw(check_plain(trim($node->title)), 'The title of the published node is visible when previewing in the front end.');
+    $this->assertRaw($published_version_expected_body_text, 'The body of the published node is visible when previewing in the front end.');
+
+    $new_title = $this->randomString() . '&><';
+    $new_body = $this->randomString() . '&><';
+
+    // Create a new draft revision of the basic page.
+    $edit = array(
+      'title' => $new_title,
+      'body[' . LANGUAGE_NONE . '][0][value]' => $new_body,
+    );
+    $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+
+    $this->assertUrl($backend_node_view_url);
+
+    // Check that now both the 'Preview revision' and 'Online version' buttons
+    // are visible.
+    $this->assertTrue($this->contextualToolbarLinkXPath('preview', $preview_url), 'The preview button is shown in the contextual toolbar for an administrator.');
+    $this->assertTrue($this->contextualToolbarLinkXPath('online-version', $online_version_url), 'The "Online version" button is shown in the contextual toolbar for an administrator.');
+
+    // Check that the title and body text of the draft are shown after clicking
+    // on the 'Preview revision' button.
+    $this->clickAdminLink(t('Preview revision'));
+    $this->assertRaw(check_plain(trim($new_title)), 'The title of the draft is visible when previewing in the front end.');
+    $this->assertRaw(check_markup($new_body, 'full_html'), 'The body of the draft is visible when previewing in the front end.');
+
+    // Check that the title and body text of the published revision are shown
+    // after clicking on the 'Online version' button.
+    $this->drupalGet($backend_node_view_url);
+
+    $this->clickAdminLink(t('Online version'));
+    $this->assertRaw(check_plain(trim($node->title)), 'The title of the published node is visible when viewing the online version in the front end.');
+    $this->assertRaw($published_version_expected_body_text, 'The body of the published node is visible when viewing the online version in the front end.');
+
+    // Publish the draft.
+    $this->drupalGet($backend_node_view_url);
+    $this->moderateNode($node, 'Publish');
+
+    // Check that only the 'Preview revision' button is visible.
+    $this->assertUrl($backend_node_view_url);
+    $this->assertTrue($this->contextualToolbarLinkXPath('preview', $preview_url), 'The preview button is shown in the contextual toolbar for an administrator.');
+    $this->assertFalse($this->contextualToolbarLinkXPath('online-version', $online_version_url), 'The "Online version" button is not shown in the contextual toolbar for an administrator.');
+
+    // Check that the title and body text of the new published revision are
+    // shown after clicking on the 'Preview revision' button.
+    $this->clickAdminLink(t('Preview revision'));
+    $this->assertRaw(check_plain(trim($new_title)), 'The title of the published node is visible when previewing in the front end.');
+    $this->assertRaw(check_markup($new_body, 'full_html'), 'The body of the published node is visible when previewing in the front end.');
+  }
+
+  /**
+   * Constructs a XPath query to find a contextual toolbar link.
+   *
+   * Only valid for the administrative node view.
+   *
+   * @param string $class
+   *   The class for the li surrounding the link.
+   * @param string $path
+   *   The path the link should point to.
+   */
+  protected function contextualToolbarLinkXPath($class, $path = NULL) {
+    $parts = array(
+      '//div[@id="block-paddle-contextual-toolbar-contextual-toolbar"]',
+      '//ul[@id="contextual-actions-list"]',
+      '//li[contains(normalize-space(@class), "' . $class . '")]',
+    );
+
+    if ($path) {
+      $parts[] = '//a[contains(@href, "' . $path . '")]';
+    }
+
+    $query = implode('', $parts);
+
+    return $this->xpath($query);
+  }
+
+}

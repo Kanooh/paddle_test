@@ -1,0 +1,58 @@
+// Common mixins.
+
+// Clearfix from Bootstrap 3.
+@mixin clearfix() {
+  &:before,
+  &:after {
+    content: " ";
+    display: table;
+  }
+  &:after {
+    clear: both;
+  }
+}
+
+// Placeholder text from Bootstrap 3.
+@mixin placeholder($color: $input-color-placeholder) {
+  // Firefox
+  &::-moz-placeholder {
+    color: $color;
+    opacity: 1; // Override Firefox's unusual default opacity; see https://github.com/twbs/bootstrap/pull/11526
+  }
+  &:-ms-input-placeholder { color: $color; } // Internet Explorer 10+
+  &::-webkit-input-placeholder  { color: $color; } // Safari and Chrome
+}
+
+// Transition from Bootstrap 3.
+@mixin transition($transition...) {
+  -webkit-transition: $transition;
+       -o-transition: $transition;
+          transition: $transition;
+}
+
+// Based on https://github.com/twbs/bootstrap/blob/v4-dev/scss/mixins/_screen-reader.scss
+@mixin sr-only {
+  border: 0;
+  clip: rect(0,0,0,0);
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+// Based on https://github.com/twbs/bootstrap/blob/v4-dev/scss/mixins/_screen-reader.scss
+@mixin sr-only-focusable {
+  &:active,
+  &:focus {
+    clip: auto;
+    height: auto;
+    overflow: visible;
+    position: static;
+    width: auto;
+    white-space: normal;
+    clip-path: none;
+  }
+}

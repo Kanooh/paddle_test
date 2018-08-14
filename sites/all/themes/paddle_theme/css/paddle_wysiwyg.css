@@ -1,0 +1,45 @@
+/**
+* @file
+* Styling for preview page with the theming applied.
+*
+*/
+.cke_editable {
+  height: auto;
+  background: #FFF;
+}
+
+.cke_editable.region-content {
+  margin: 5px;
+}
+
+.cke_editable p {
+  color: #000000;
+}
+
+.cke_editable img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border: none;
+}
+
+/* CKE editor indent styles */
+.region-content .rteindent1,
+.region-content .rteindent1:first-child {
+  margin-left: 15px;
+}
+
+.region-content .rteindent2,
+.region-content .rteindent2:first-child {
+  margin-left: 25px;
+}
+
+.region-content .rteindent3,
+.region-content .rteindent3:first-child {
+  margin-left: 40px;
+}
+
+.region-content .rteindent4,
+.region-content .rteindent4:first-child {
+  margin-left: 60px;
+}

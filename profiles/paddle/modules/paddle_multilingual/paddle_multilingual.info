@@ -1,0 +1,7 @@
+name = Paddle Multilingual
+description = Multilingual support for the Paddle distribution.
+core = 7.x
+package = Paddle
+
+dependencies[] = locale
+dependencies[] = translation

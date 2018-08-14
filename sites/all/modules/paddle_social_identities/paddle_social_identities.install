@@ -1,0 +1,57 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Social Identities.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_social_identities_schema() {
+  $schema = array();
+
+  $schema['paddle_social_identity'] = array(
+    'description' => 'Stores Paddle Social Identity configuration entities.',
+    'fields' => array(
+      'psiid' => array(
+        'description' => 'The primary identifier for a social identity.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'The name for a social identity.',
+      ),
+    ),
+    'indexes' => array(
+      'name' => array('name'),
+    ),
+    'primary key' => array('psiid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_social_identities_enable() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  ctools_modules_enabled(array('paddle_social_identities'));
+
+  // Make sure all editors can use the embed widget pane.
+  $permissions = array(
+    'edit social_media_identity content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}

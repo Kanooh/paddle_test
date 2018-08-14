@@ -1,0 +1,247 @@
+<?php
+/**
+ * @file
+ * Definition of OfferTest.
+ */
+
+/**
+ * Test the offer content type.
+ */
+class OfferTest extends DrupalWebTestCase {
+  protected $profile = 'minimal';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Test the offer content type',
+      'description' => 'Test the functionality of the offer content type.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * @inheritdoc.
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp();
+    // Enable module after the setup() because otherwise the cron is run.
+    module_enable(array('paddle_holiday_participation_test'));
+
+    // Create our privileged user.
+    $permissions = array(
+      'view revisions',
+      'view all unpublished content',
+      'access content',
+      'create offer content',
+      'edit any offer content',
+      'delete any offer content',
+      'administer panelizer node offer layout',
+      'administer panelizer node offer content',
+    );
+    $this->chiefEditor = $this->drupalCreateUser($permissions);
+  }
+
+  /**
+   * Test the fields.
+   */
+  public function testOfferFields() {
+    // Create an offer.
+    $values = array(
+      'type' => 'offer',
+    );
+    $offer = entity_create('node', $values);
+
+    $title = $this->randomName();
+    $facebook = array(
+      'title' => '',
+      'value' => 'http://www.' . $this->randomName() . '.com',
+      'attributes' => array(),
+    );
+    $twitter = array(
+      'title' => '',
+      'value' => 'http://www.' . $this->randomName() . '.com',
+      'attributes' => array(),
+    );
+    $youtube = array(
+      'title' => '',
+      'value' => 'http://www.' . $this->randomName() . '.com',
+      'attributes' => array(),
+    );
+    $website = array(
+      'title' => '',
+      'value' => 'http://www.' . $this->randomName() . '.com',
+      'attributes' => array(),
+    );
+    $private_transport_description = $this->randomName();
+    $public_transport_description = $this->randomName();
+    $validity_period_description = $this->randomName();
+    $opening_hours = $this->randomName();
+    $surroundings_desc = $this->randomName();
+    $residence_desc = $this->randomName();
+    $on_the_spot_desc = $this->randomName();
+    $contract_id = rand(1, 99999);
+    $name_line = $this->randomName();
+    $thoroughfare = 'Korenmarkt 33';
+    $premise = 'bus 4';
+    $postal_code = '9000';
+    $locality = 'Gent';
+    $province = 'oost-vlaanderen';
+    $internal = 1;
+    $min_capacity = rand(1, 8);
+    $max_capacity = rand(9, 999);
+    $contract_start_year = rand(1000, 9999);
+    $contract_end_year = rand(1000, 9999);
+    $expected_categories = array(
+      'holiday accommodations' => 'Holiday accommodations',
+      'group accommodations' => 'Group accommodations',
+      'day trips' => 'Day trips',
+      'organised holidays' => 'Organised holidays',
+    );
+    $expected_contract_types = array(
+      'hp_daguitstap' => 'Daguitstap',
+      'hp_tva' => 'TVA',
+      'hp_niet_tva' => 'Niet-TVA',
+      'hp_georganiseerde_vakantie' => 'Georganiseerde vakantie',
+      'hp_jeugdverblijf' => 'Jeugdverblijf',
+      'hp_evenement' => 'Evenement',
+      'hp_promo' => 'Promo',
+    );
+
+    $reservation_period_individual = $this->randomName();
+    $reservation_period_group = $this->randomName();
+    $reservation_comments = $this->randomName();
+    $base_contract_id = rand(1, 99999);
+
+    $wrapper = entity_metadata_wrapper('node', $offer);
+
+    // Fill out the fields.
+    $category_options = $wrapper->field_hp_category->optionsList();
+    $this->assertTrue($expected_categories === $category_options);
+
+    $wrapper->title->set($title);
+    $wrapper->field_hp_facebook->set($facebook);
+    $wrapper->field_hp_twitter->set($twitter);
+    $wrapper->field_hp_youtube->set($youtube);
+    $wrapper->field_hp_website->set($website);
+    $wrapper->field_hp_private_transport_desc->set($private_transport_description);
+    $wrapper->field_hp_public_transport_desc->set($public_transport_description);
+    $wrapper->field_hp_validity_period_desc->set($validity_period_description);
+    $wrapper->field_hp_opening_hours->set($opening_hours);
+    $wrapper->field_hp_surroundings_desc->set($surroundings_desc);
+    $wrapper->field_hp_residence_desc->set($residence_desc);
+    $wrapper->field_hp_on_the_spot_desc->set($on_the_spot_desc);
+    $wrapper->field_hp_category->set('holiday accommodations');
+    $wrapper->field_hp_svp_contract_id->set($contract_id);
+    $wrapper->field_hp_facilities = array(
+      'hp_picknick_possible',
+      'hp_tearoom_bar',
+      'hp_restaurant_snackbar',
+      'hp_shop',
+      'hp_parking',
+    );
+    $wrapper->field_hp_room_and_board = array(
+      'hp_self_cooking',
+      'hp_bed_and_breakfast',
+    );
+    $wrapper->field_hp_labels = array('hp_green_key_label', 'hp_cycling_label');
+    $wrapper->field_hp_address->name_line->set($name_line);
+    $wrapper->field_hp_address->thoroughfare->set($thoroughfare);
+    $wrapper->field_hp_address->premise->set($premise);
+    $wrapper->field_hp_address->postal_code->set($postal_code);
+    $wrapper->field_hp_address->locality->set($locality);
+    $contract_types_options = $wrapper->field_hp_contract_type->optionsList();
+    $this->assertTrue($expected_contract_types === $contract_types_options);
+    $wrapper->field_hp_contract_type->set('hp_promo');
+    $wrapper->field_hp_province->set($province);
+    $wrapper->field_hp_resv_period_individual->set($reservation_period_individual);
+    $wrapper->field_hp_resv_period_group->set($reservation_period_group);
+    $wrapper->field_hp_resv_comments->set($reservation_comments);
+    $wrapper->field_hp_base_contract_id->set($base_contract_id);
+    $wrapper->field_hp_formula_oh->set($internal);
+    $wrapper->field_hp_min_capacity->set($min_capacity);
+    $wrapper->field_hp_max_capacity->set($max_capacity);
+    $this->assertTrue(!empty($wrapper->field_hp_validity_period->info()));
+    $wrapper->field_hp_contract_start_year->set($contract_start_year);
+    $wrapper->field_hp_contract_end_year->set($contract_end_year);
+    $wrapper->save();
+
+    $offer = node_load($offer->nid);
+    $wrapper = entity_metadata_wrapper('node', $offer);
+
+    $this->assertEqual($title, $wrapper->title->value());
+    $this->assertEqual($private_transport_description, $wrapper->field_hp_private_transport_desc->value());
+    $this->assertEqual($public_transport_description, $wrapper->field_hp_public_transport_desc->value());
+    $this->assertEqual($validity_period_description, $wrapper->field_hp_validity_period_desc->value());
+    $this->assertEqual($opening_hours, $wrapper->field_hp_opening_hours->value());
+    $this->assertEqual($facebook['title'], $wrapper->field_hp_facebook->value()['title']);
+    $this->assertEqual($facebook['value'], $wrapper->field_hp_facebook->value()['value']);
+    $this->assertEqual($twitter['title'], $wrapper->field_hp_twitter->value()['title']);
+    $this->assertEqual($twitter['value'], $wrapper->field_hp_twitter->value()['value']);
+    $this->assertEqual($youtube['title'], $wrapper->field_hp_youtube->value()['title']);
+    $this->assertEqual($youtube['value'], $wrapper->field_hp_youtube->value()['value']);
+    $this->assertEqual($website['title'], $wrapper->field_hp_website->value()['title']);
+    $this->assertEqual($website['value'], $wrapper->field_hp_website->value()['value']);
+    $this->assertEqual($surroundings_desc, $wrapper->field_hp_surroundings_desc->value());
+    $this->assertEqual($residence_desc, $wrapper->field_hp_residence_desc->value());
+    $this->assertEqual($on_the_spot_desc, $wrapper->field_hp_on_the_spot_desc->value());
+    $this->assertEqual('holiday accommodations', $wrapper->field_hp_category->value());
+    $this->assertEqual($contract_id, $wrapper->field_hp_svp_contract_id->value());
+    $this->assertEqual($name_line, $wrapper->field_hp_address->name_line->value());
+    $this->assertEqual($thoroughfare, $wrapper->field_hp_address->thoroughfare->value());
+    $this->assertEqual($premise, $wrapper->field_hp_address->premise->value());
+    $this->assertEqual($postal_code, $wrapper->field_hp_address->postal_code->value());
+    $this->assertEqual($locality, $wrapper->field_hp_address->locality->value());
+    $this->assertEqual('hp_promo', $wrapper->field_hp_contract_type->value());
+    $this->assertEqual($province, $wrapper->field_hp_province->value());
+    $this->assertEqual($reservation_period_individual, $wrapper->field_hp_resv_period_individual->value());
+    $this->assertEqual($reservation_period_group, $wrapper->field_hp_resv_period_group->value());
+    $this->assertEqual($reservation_comments, $wrapper->field_hp_resv_comments->value());
+    $this->assertEqual($base_contract_id, $wrapper->field_hp_base_contract_id->value());
+    $this->assertEqual($internal, $wrapper->field_hp_formula_oh->value());
+    $this->assertEqual($min_capacity, $wrapper->field_hp_min_capacity->value());
+    $this->assertEqual($max_capacity, $wrapper->field_hp_max_capacity->value());
+    $this->assertEqual($contract_start_year, $wrapper->field_hp_contract_start_year->value());
+    $this->assertEqual($contract_end_year, $wrapper->field_hp_contract_end_year->value());
+
+    // We need to login, as the node is not published yet.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Verify that the category is not shown on the front end.
+    $this->drupalGet('node/' . $offer->nid);
+
+    $this->assertText($private_transport_description);
+    $this->assertText($public_transport_description);
+    $this->assertText($validity_period_description);
+    $this->assertText($opening_hours);
+    $this->assertText('Picknick possible');
+    $this->assertText('Tearoom/bar');
+    $this->assertText('Restaurant/snackbar');
+    $this->assertText('Shop');
+    $this->assertText('Parking');
+
+    $this->assertText('Self cooking');
+    $this->assertText('Bed and breakfast');
+
+    $this->assertText('Green key');
+    $this->assertText('Bicycle-friendly accommodation');
+    $this->assertLinkByHref($facebook['value']);
+    $this->assertLinkByHref($twitter['value']);
+    $this->assertLinkByHref($youtube['value']);
+    $this->assertLinkByHref($website['value']);
+    $this->assertText($surroundings_desc);
+    $this->assertText($residence_desc);
+    $this->assertText($on_the_spot_desc);
+    $this->assertText($name_line);
+    $this->assertText($thoroughfare);
+    $this->assertText($premise);
+    $this->assertText($postal_code);
+    $this->assertText($locality);
+    $this->assertText($reservation_period_individual);
+    $this->assertText($reservation_period_group);
+    $this->assertText($reservation_comments);
+    $this->drupalLogout();
+  }
+
+}

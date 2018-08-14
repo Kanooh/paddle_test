@@ -1,0 +1,37 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Opening Hours Sets.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function opening_hours_sets_schema() {
+  $schema = array();
+
+  $schema['opening_hours_sets'] = array(
+    'description' => 'Stores opening hours sets.',
+    'fields' => array(
+      'ohsid' => array(
+        'description' => 'The primary identifier for an opening hours set.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'The title of the opening hours set.',
+      ),
+    ),
+    'indexes' => array(
+      'title' => array('title'),
+    ),
+    'primary key' => array('ohsid'),
+  );
+
+  return $schema;
+}

@@ -1,0 +1,27 @@
+/**
+* @file
+* Print.
+*
+*/
+/**
+* @file
+* Styling for print.
+*
+*/
+/* @common */
+header,
+footer,
+.region-service-links {
+  display: none;
+}
+
+.navigation {
+  display: none;
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.full-height-row [class*="full-height"] {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}

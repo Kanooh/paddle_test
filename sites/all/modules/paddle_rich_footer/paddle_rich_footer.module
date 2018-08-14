@@ -1,0 +1,253 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Rich Footer module.
+ */
+
+include_once 'paddle_rich_footer.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_rich_footer_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_rich_footer_configuration_form',
+  );
+}
+
+/**
+ * Form callback displaying Rich Footer configuration.
+ */
+function paddle_rich_footer_configuration_form() {
+  drupal_goto('admin/paddle-rich-footer/edit/' . variable_get('paddle_rich_footer_id'));
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_rich_footer_entity_info() {
+  $entity_info = array();
+
+  $entity_info['paddle_rich_footer'] = array(
+    'label' => t('Paddle Rich Footer'),
+    'plural label' => t('Paddle Rich Footers'),
+    'description' => t('A configuration entity used by the Paddle Rich Footer module.'),
+    'entity class' => 'Entity',
+    'controller class' => 'EntityAPIController',
+    'base table' => 'paddle_rich_footer',
+    'fieldable' => TRUE,
+    'entity keys' => array(
+      'id' => 'prfid',
+      'label' => 'title',
+    ),
+    'bundles' => array(),
+    'module' => 'paddle_rich_footer',
+    'access callback' => 'paddle_rich_footer_access',
+    'label callback' => 'paddle_mega_dropdown_label',
+    'uri callback' => 'paddle_mega_dropdown_uri',
+  );
+
+  return $entity_info;
+}
+
+/**
+ * Access callback for the paddle rich footer entity.
+ */
+function paddle_rich_footer_access($op, $opening_hours_set = NULL, $account = NULL) {
+  return user_access('manage paddle_apps', $account);
+}
+
+/**
+ * Implements hook_panelizer_access().
+ *
+ * Allow people that are allowed to edit a rich footer also to change its
+ * layout.
+ */
+function paddle_rich_footer_panelizer_access($op, $entity_type, $bundle, $view_mode) {
+  if (
+    $op == "layout" &&
+    $entity_type == "paddle_rich_footer" &&
+    $bundle == "paddle_rich_footer" &&
+    $view_mode == "page_manager"
+  ) {
+    return paddle_rich_footer_access($op);
+  }
+}
+
+/**
+ * Composes the label of a Rich Footer.
+ *
+ * @see entity_label()
+ *
+ * @param object $entity
+ *   The entity for which to generate the label.
+ * @param string $entity_type
+ *   The entity type; e.g., 'node' or 'user'.
+ *
+ * @return string|bool
+ *   The entity label or FALSE if not found.
+ */
+function paddle_rich_footer_label($entity, $entity_type) {
+  return t('Rich footer');
+}
+
+/**
+ * Get the Paddle Rich Footer path.
+ *
+ * @param object $paddle_rich_footer
+ *   The Paddle Rich Footer that'll get displayed.
+ *
+ * @return string
+ *   Path to a specific Paddle Rich Footer.
+ */
+function paddle_rich_footer_uri($paddle_rich_footer) {
+  return array(
+    'path' => 'paddle-rich-footer/' . $paddle_rich_footer->identifier(),
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_rich_footer_ctools_plugin_directory($module, $plugin) {
+  if (in_array($module, array('panelizer', 'ctools', 'page_manager'))) {
+    return 'plugins/' . $plugin;
+  }
+  if ("$module:$plugin" == 'panels:display_renderers') {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Loads a paddle_rich_footer object from the database.
+ *
+ * @param int $paddle_rich_footer_id
+ *   The paddle_rich_footer ID.
+ *
+ * @return array|bool
+ *   A fully-populated node object, or FALSE if the node is not found.
+ */
+function paddle_rich_footer_load($paddle_rich_footer_id = NULL) {
+  return entity_load_single('paddle_rich_footer', $paddle_rich_footer_id);
+}
+
+/**
+ * After build handler to add contextual toolbar on the rich footer form.
+ */
+function paddle_rich_footer_add_contextual_toolbar($form, &$form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  // Add the back button.
+  $action_link = l(
+    t('Back'),
+    'admin/paddlet_store',
+    array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-arrow-left'),
+      ),
+    )
+  );
+  $actions[] = array(
+    'action' => $action_link,
+    'class' => array('cancel', 'cancel-js'),
+    'weight' => 0,
+  );
+
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array('data-paddle-contextual-toolbar-click' => $form['actions']['submit']['#id']),
+      'html' => TRUE,
+      'external' => TRUE,
+    )),
+    'class' => array('save'),
+    'weight' => 0,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ */
+function paddle_rich_footer_paddle_contextual_toolbar_actions_alter(&$actions) {
+  $menu = menu_get_item();
+
+  // Add the contextual actions.
+  if ($menu['path'] == 'admin/paddle-rich-footer/edit/%' && $menu['page_arguments'][0] == 'paddle_rich_footer_panel') {
+    drupal_add_js(drupal_get_path('module', 'paddle_core') . '/js/cancel.js');
+    $actions = paddle_contextual_toolbar_actions();
+
+    // Add the back button.
+    $action_link = l(
+        t('Back'),
+        'admin/paddlet_store',
+        array(
+          'attributes' => array(
+            'class' => array('ui-icon', 'fa-arrow-left'),
+          ),
+        )
+      );
+    $actions[] = array(
+      'action' => $action_link,
+      'class' => array('cancel', 'cancel-js'),
+      'weight' => 0,
+    );
+
+    $actions[] = array(
+      'action' => l(t('Save'), '', array(
+        'attributes' => array(
+          'data-paddle-contextual-toolbar-click' => 'panels-ipe-save',
+          'class' => array('ui-icon', 'fa-check'),
+        ),
+        'html' => TRUE,
+        'external' => TRUE,
+      )),
+      'class' => array('save'),
+      'weight' => 0,
+    );
+
+    // The change layout functionality comes in a later ticket. It works but the
+    // allowed layouts need to be updated.
+    /**
+      $action_link = l(
+        t('Change layout'),
+        'panels/ajax/paddle_landing_page/change_layout/panelizer:paddle_rich_footer:' . variable_get('paddle_rich_footer_id') . ':page_manager',
+        array(
+          'attributes' => array(
+            'class' => array(
+              'panels-ipe-change-layout',
+              'ctools-use-modal',
+              'ctools-modal-wide-modal',
+              'ui-icon',
+              'fa-exchange',
+            ),
+          ),
+        )
+      );
+      $actions['Change layout'] = array(
+        'action' => $action_link,
+        'class' => array('change_layout'),
+        'weight' => 10,
+      );
+     * */
+
+    // Set the buttons.
+    paddle_contextual_toolbar_actions($actions);
+    // Load the click delegator.
+    paddle_contextual_toolbar_add_js('click_delegator');
+  }
+}
+
+/**
+ * Implements hook_paddle_footer_styles().
+ */
+function paddle_rich_footer_paddle_footer_styles() {
+  return array(
+    'rich_footer' => array(
+      'title' => t('Rich footer'),
+      'description' => t('Add panes of your choice to the footer.'),
+    ),
+  );
+}

@@ -1,0 +1,27 @@
+name = Webservice API
+description = Using this Paddlet allows you to expose information from your website or mobile app on another website. You can create an automated list including titles and links. You can filter this information and decide what to show, using tags.
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = paddle_content_manager
+dependencies[] = restful
+dependencies[] = strongarm
+files[] = tests/PaddleWebServiceFilterTestCase.test
+files[] = tests/PaddleWebServiceViewEntityTestCase.test
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[variable][] = restful_enable_user_login_resource
+features[variable][] = restful_enable_users_resource
+registry_autoload[] = PSR-4
+
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+apps[logo] = apps/logo.png
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_web_service"
+datestamp = "1473170452"
+

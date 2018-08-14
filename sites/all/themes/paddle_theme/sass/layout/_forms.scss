@@ -1,0 +1,132 @@
+/**
+* @file
+* Common form styling.
+*
+*/
+
+input,
+optgroup,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+textarea:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="datetime"]:focus,
+input[type="datetime-local"]:focus,
+input[type="date"]:focus,
+input[type="month"]:focus,
+input[type="time"]:focus,
+input[type="week"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="url"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="color"]:focus,
+.uneditable-input:focus {
+  border-color: #66afe9;
+  outline: 0;
+  outline: thin dotted \9; /* IE6-9 */
+  -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102, 175, 233, .6);
+  -moz-box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102, 175, 233, .6);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102, 175, 233, .6);
+}
+
+input[type="file"]:focus,
+input[type="radio"]:focus,
+input[type="checkbox"]:focus,
+input[type="submit"]:focus {
+  outline: thin dotted;
+  outline: 5px auto -webkit-focus-ring-color;
+  outline-offset: -2px;
+}
+
+/* Move back to previous group when select and buttons are styled. */
+select:focus {
+  outline: thin dotted;
+  outline-offset: -2px;
+}
+
+.form-item,
+.form-actions {
+  margin-bottom: 0;
+  margin-top: 0;
+}
+
+.form-text,
+.form-textarea {
+  width: 96%;
+  height: 24px;
+  padding: 8px 11px;
+  border: 1px solid #e1e1e1;
+  font-family: inherit;
+  line-height: 24px;
+  text-indent: 5px;
+  color: #999999;
+  background: #fff;
+  box-shadow: inset 0 1px 2px 0 rgba(0,0,0,0.1);
+}
+
+.form-text:focus,
+.form-textarea:focus {
+  border-color: #66afe9;
+  outline: 0;
+  outline: thin dotted \9; /* IE6-9 */
+  -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102, 175, 233, .6);
+  -moz-box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102, 175, 233, .6);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102, 175, 233, .6);
+}
+
+.form-textarea {
+  overflow-y: auto;
+  min-height: 10em;
+  resize: vertical;
+  width: 99.7%;
+}
+.form-text::-ms-clear,
+.form-textarea::-ms-clear {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.form-text.error,
+.form-textarea.error,
+.form-text.error:focus,
+.form-textarea.error:focus {
+  border-color: red;
+}
+.form-item label {
+  font-weight: normal;
+  margin: 8px 0 2px 0;
+}
+.form-submit {
+  width: auto;
+  height: 50px;
+  margin-top: 20px;
+  padding: 1em 1.6em;
+  border: none;
+  font-size: .9em;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #ffffff;
+  background-color: #39b9be;
+  cursor: pointer;
+}
+.form-submit::-moz-focus-inner {
+  border: 0;
+}
+.form-required {
+  display: inline;
+  position: relative;
+  top: 0;
+  margin-left: 5px;
+  font-size: 0.85em;
+  color: #ee0000;
+}
+.grippie {
+  display: none;
+}

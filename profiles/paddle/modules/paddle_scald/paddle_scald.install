@@ -1,0 +1,34 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Scald module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_scald_uninstall() {
+  variable_del('paddle_scald_library_items_per_page');
+}
+
+/**
+ * Deletes the meta data field for atoms.
+ */
+function paddle_scald_update_7001() {
+  field_delete_field('field_scald_meta_data');
+}
+
+/**
+ * Enable Manual crop and Image resize filter modules.
+ */
+function paddle_scald_update_7002() {
+  module_enable(array('manualcrop', 'image_resize_filter'));
+}
+
+/**
+ * Enable Search API View module.
+ */
+function paddle_scald_update_7003() {
+  module_enable(array('search_api_views'));
+}

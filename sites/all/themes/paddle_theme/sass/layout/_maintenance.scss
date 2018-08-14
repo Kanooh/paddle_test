@@ -1,0 +1,61 @@
+html body.in-maintenance {
+  background-repeat: repeat-y;
+  background-position: center;
+  background-image: url(../images/body-bg.png);
+}
+.in-maintenance #page-content {
+  padding-top: 150px;
+}
+
+html body.paddle-maintenance-mode {
+  background: url(../images/bg_body_stretched.png) repeat-y center top;
+}
+html body.paddle-maintenance-mode .page_background {
+  background: transparent url(../images/maintenance_body.png) center top no-repeat;
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 100%;
+  z-index: -1;
+}
+html body.paddle-maintenance-mode #page {
+  background: transparent url(../images/dots.png);
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 100%;
+  z-index: 1;
+}
+html body.paddle-maintenance-mode #page-title {
+  background-image: url(../images/kanooh_logo.png);
+  width: 202px;
+  height: 43px;
+  margin: 0 auto 0 auto;
+  position: relative;
+  padding: 0;
+}
+html body.paddle-maintenance-mode #page-title span {
+  display: none;
+}
+html body.paddle-maintenance-mode #content {
+  font-size: 135%;
+  line-height: 180%;
+  margin: 33px auto 0 auto;
+  padding-top: 33px;
+  text-align: center;
+  padding-bottom: 40px;
+  color: $c-white;
+  width: 580px;
+}
+html body.paddle-maintenance-mode #content::after,
+html body.paddle-maintenance-mode #content::before {
+  display: block;
+  content: '';
+  height: 20px;
+  background: transparent url(../images/separator.png) no-repeat center center;
+}
+html body.paddle-maintenance-mode #content a {
+  color: $c-white;
+}

@@ -1,0 +1,53 @@
+<?php
+
+/**
+ * @file
+ * Contains \PaddleWebServiceViewEntityTestCase.
+ */
+
+class PaddleWebServiceViewEntityTestCase extends DrupalWebTestCase {
+
+  /**
+   * Overrides DrupalWebTestCase::getInfo().
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'View entity',
+      'description' => 'Test the viewing of an entity.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp('paddle_web_service');
+  }
+
+  /**
+   * Test viewing an entity (GET method) with the Paddle web service.
+   */
+  public function testViewEntity() {
+    $node = $this->drupalCreateNode(array('type' => 'article'));
+
+    $resource_manager = restful()->getResourceManager();
+
+    $handler = $resource_manager->getPlugin('pages:1.0');
+    $expected_result = array(
+      'id' => $node->nid,
+      'self' => $handler->versionedUrl($node->nid),
+      'url' => url('node/' . $node->nid, array('absolute' => TRUE)),
+      'title' => $node->title,
+      'general-vocabulary' => array(),
+    );
+
+    $response = drupal_json_decode(restful()
+      ->getFormatterManager()
+      ->format($handler->doGet($node->nid), 'json'));
+    $response = $response['data'];
+    $result = $response[0];
+    $this->assertEqual($result, $expected_result, 'Entity view has expected result for "pages" resource v1');
+  }
+
+}

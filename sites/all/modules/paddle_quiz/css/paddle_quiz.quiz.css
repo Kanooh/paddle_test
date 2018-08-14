@@ -1,0 +1,192 @@
+.pane-paddle-quiz-preview .pane-content {
+  width: 100%;
+  max-width: 775px;
+  border: 1px solid #ebebeb;
+}
+
+.pane-paddle-quiz .pane-content {
+  padding: 15px;
+  position: relative;
+}
+
+.paddle-quiz-screen {
+  position: relative;
+}
+
+.paddle-quiz-screen .paddle-quiz-disclaimer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: #fff;
+}
+.paddle-quiz-screen .paddle-quiz-disclaimer-hidden {
+  display: none;
+}
+.paddle-quiz-screen a.paddle-quiz-disclaimer-close {
+  position: absolute;
+  right: 0;
+}
+.paddle-quiz-screen .paddle-quiz-disclaimer .paddle-quiz-disclaimer-message {
+  position: absolute;
+  top: 45px;
+  bottom: 45px;
+  left: -15px;
+  right: -15px;
+  overflow: auto;
+  border-top: 1px solid #ebebeb;
+  border-bottom: 1px solid #ebebeb;
+  padding: 0 15px;
+}
+.paddle-quiz-screen .paddle-quiz-disclaimer input.paddle-quiz-disclaimer-close {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+.paddle-quiz-screen .paddle-quiz-image {
+  width: 50%;
+  display: inline-block;
+  vertical-align: top;
+  padding-right: 15px;
+  box-sizing: border-box;
+}
+.paddle-quiz-screen .paddle-quiz-image img {
+  width: 100%;
+  height: auto;
+}
+
+.paddle-quiz-screen .paddle-quiz-screen-content {
+  display: inline-block;
+  vertical-align: middle;
+}
+.paddle-quiz-screen.has-image .paddle-quiz-screen-content {
+  max-width: 50%;
+}
+
+.paddle-quiz-screen-content .paddle-quiz-title {
+  padding-right: 20px;
+}
+
+.paddle-quiz-screen .paddle-quiz-title {
+  font-size: 1.5em;
+}
+.paddle-quiz-screen .paddle-quiz-subtitle,
+.paddle-quiz-screen .paddle-quiz-question {
+  font-size: 1.1em;
+}
+
+.paddle-quiz-screen .paddle-quiz-disclaimer-link {
+  display: block;
+}
+
+.paddle-quiz-screen .paddle-quiz-message,
+.paddle-quiz-screen .paddle-quiz-user-info .form-item,
+.paddle-quiz-screen .paddle-quiz-screen-actions,
+.paddle-quiz-screen .paddle-quiz-question,
+.paddle-quiz-screen .paddle-quiz-tiebreaker-answer,
+.paddle-quiz-screen .paddle-quiz-disclaimer-link {
+  margin-top: 15px;
+}
+
+.paddle-quiz-screen-question .form-type-radios .form-item {
+  margin-top: 5px;
+}
+
+form .paddle-quiz-screen-question input[type="radio"] {
+  vertical-align: top;
+  position: relative;
+  top: 2px;
+}
+form .paddle-quiz-screen-question label {
+  margin-top: 0;
+  width: 80%;
+  display: inline-block;
+  vertical-align: top;
+}
+
+.paddle-quiz-screen .form-submit {
+  margin-top: 0;
+  margin-right: .5em;
+  height: auto;
+  padding: .8em 1em;
+}
+
+.paddle-quiz-screen .paddle-quiz-question {
+  font-size: 1.1em;
+}
+
+.paddle-quiz-screen .paddle-quiz-tiebreaker-answer input[type="text"] {
+  width: 12em;
+  margin-right: 0.25em;
+}
+
+.paddle-quiz-screen-result .paddle-quiz-screen-content {
+  width: 100%;
+}
+.paddle-quiz-screen .paddle-quiz-result-score {
+  float: left;
+  border-radius: 3em;
+  font-size: 2em;
+  padding: .5em 0;
+  width: 3.5em;
+  margin: 1em;
+  text-align: center;
+  background: #24af8e;
+  color: #fff;
+}
+.paddle-quiz-screen .paddle-quiz-result-message {
+  margin: 1em 0;
+}
+
+.pane-paddle-quiz .paddle-quiz-full-screen-open,
+.pane-paddle-quiz .paddle-quiz-full-screen-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  line-height: 1em;
+  vertical-align: middle;
+}
+.pane-paddle-quiz .paddle-quiz-full-screen-open,
+.pane-paddle-quiz.paddle-quiz-full-screen .paddle-quiz-full-screen-close {
+  display: block;
+}
+.pane-paddle-quiz.paddle-quiz-full-screen .paddle-quiz-full-screen-open,
+.pane-paddle-quiz .paddle-quiz-full-screen-close {
+  display: none;
+}
+.pane-paddle-quiz.paddle-quiz-full-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 0;
+  margin: 0;
+  z-index: 100;
+  background: #fff;
+  overflow: auto;
+}
+.pane-paddle-quiz.paddle-quiz-full-screen .pane-content {
+  margin: 50px auto;
+  width: 100%;
+  max-width: 775px;
+  box-sizing: border-box;
+}
+
+.pane-paddle-quiz.paddle-quiz-full-screen .paddle-quiz-screen {
+  padding-top: 15px;
+}
+
+.pane-paddle-quiz.paddle-quiz-full-screen .paddle-quiz-screen .paddle-quiz-title {
+  padding-right: 0px;
+}
+
+body.paddle-quiz-full-screen {
+  overflow: hidden;
+}
+
+body.paddle-quiz-full-screen .menu_wrapper .menu_wrapper {
+  z-index: 0;
+}

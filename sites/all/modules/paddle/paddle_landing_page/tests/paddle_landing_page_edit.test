@@ -1,0 +1,189 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleLandingPageEditTest.
+ */
+
+/**
+ * User interface tests for the Paddle Landing Page module.
+ */
+class PaddleLandingPageUiTest extends DrupalWebTestCase {
+
+  /**
+   * A user with administration rights.
+   *
+   * @var object $adminUser
+   */
+  protected $adminUser;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'User interface',
+      'description' => 'Test creating and editing of landing pages through the user interface.',
+      'group' => 'Paddle Landing Page',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array(
+      'paddle_landing_page',
+      'paddle_landing_page_test',
+      'paddle_content_manager',
+      'paddle_editorial_notes',
+      'pathauto',
+      'scheduler',
+    ));
+
+    // Create our full_html format for the body field to appear.
+    $format = new stdClass();
+    $format->format = 'full_html';
+    $format->name = 'Full HTML';
+    $format->status = 1;
+    $format->cache = 1;
+    $format->weight = -10;
+    filter_format_save($format);
+
+    // Create an administrator.
+    $this->adminUser = $this->drupalCreateUser(array(
+      'administer content types',
+      'administer panelizer',
+      'administer menu',
+      'administer url aliases',
+      'bypass node access',
+      'manage paddle_content_manager',
+      'use paddle_editorial_notes',
+      'create landing_page content',
+      'edit any landing_page content',
+      'use text format full_html',
+      'schedule publishing of nodes',
+    ));
+
+    // Log in as administrator.
+    $this->drupalLogin($this->adminUser);
+
+    features_revert();
+  }
+
+  /**
+   * Test creation of a landing page through the user interface.
+   */
+  public function testCreateLandingPage() {
+    // Fill in all fields of the add/edit form.
+    $edit = array(
+      'title' => $this->randomName(),
+    );
+
+    $layout = $this->randomLayout();
+    $node = $this->createLandingPage($edit, $layout);
+
+    // Confirm that the data has been saved.
+    $this->assertEqual($node->title, $edit['title'], 'The "Title" field contains the right data.');
+
+    // Confirm the correct layout is assigned to this node.
+    $this->drupalGet('node/' . $node->nid . '/panelizer/page_manager/layout');
+    $layout_id = str_replace('node:landing_page:', '', $layout);
+    $this->assertFieldByXPath('//input[@checked="checked"]/@value', $layout_id, 'The correct layout has been saved.');
+
+    // Tests the initial status on node creation.
+    $this->assertFalse($node->status, 'A newly created landing page is not published on creation.');
+  }
+
+  /**
+   * Test editing the page information through the user interface.
+   */
+  public function testEditPageInformation() {
+    $node = $this->createLandingPage();
+    $this->drupalPost('node/' . $node->nid . '/edit', array('body[und][0][value]' => $this->randomString()), t('Save'));
+
+    // By default body and title should be shown.
+    $this->assertTrue($this->xpath('//h1[contains(@class, "landing-page-title")]'), 'When the "Show title" checkbox is checked the node title is shown on the node view page.');
+    $this->assertTrue($this->xpath('//div[contains(@class, "landing-page-body")]'), 'When the "Show body" checkbox is checked the node body is shown on the node view page.');
+
+    // Test checking and unchecking the "Show title" and "Show body" checkboxes.
+    for ($i = 0; $i < 4; $i++) {
+      // Play with the checkboxes a bit.
+      $title_checked = $i < 2 ? TRUE : FALSE;
+      $body_checked = 0 == $i % 2 ? TRUE : FALSE;
+      $this->drupalGet('node/' . $node->nid . '/edit');
+      $edit = array(
+        'field_show_title[und]' => $title_checked ? 'checked' : FALSE,
+        'field_show_body[und]' => $body_checked ? 'checked' : FALSE,
+      );
+
+      $this->drupalPost(NULL, $edit, t('Save'));
+      $this->drupalGet('node/' . $node->nid);
+
+      $this->assertEqual($this->xpath('//h1[@id="page-title"]'), $title_checked, 'When the "Show title" checkbox is checked the node title is shown on the node view page.');
+      $this->assertEqual($this->xpath('//div[contains(@class, "landing-page-body")]'), $body_checked, 'When the "Show body" checkbox is checked the node body is shown on the node view page.');
+      // Check if the title and body are not shown twice on the front end view.
+      $this->assertFalse($this->xpath('//h1[@class="landing-page-title-view"]'), 'When the "Show title" checkbox is checked the node title is shown once on the node view page.');
+      $this->assertFalse($this->xpath('//div[@class="landing-page-body-view"]'), 'When the "Show body" checkbox is checked the node body is shown once on the node view page.');
+    }
+  }
+
+  /**
+   * Creates a landing page node object.
+   *
+   * @param array $edit
+   *   An optional array with form options as used by $this->drupalPost(). If
+   *   omitted random form options will be used.
+   * @param string $layout_name
+   *   An optional Panelizer layout name. If omitted a random layout will be
+   *   used.
+   *
+   * @return object
+   *   The freshly created node object.
+   */
+  protected function createLandingPage($edit = array(), $layout_name = NULL) {
+    $layout_name = $layout_name ?: $this->randomLayout();
+
+    // Make sure we always have a title, this is a required field.
+    $edit += array('title' => $this->randomString());
+
+    $this->drupalPost('admin/content_manager/nojs/landing_page/add', $edit, t('Save'), array('query' => array('layout' => check_plain($layout_name))));
+    return $this->drupalGetNodeByTitle($edit['title']);
+  }
+
+  /**
+   * Returns a random layout that can be used for landing pages.
+   *
+   * @return string
+   *   A random layout name.
+   */
+  protected function randomLayout() {
+    ctools_include('common', 'panels');
+    $allowed_layouts = panels_common_get_allowed_layouts('panelizer_node:landing_page');
+    $key = array_rand($allowed_layouts);
+    return 'node:landing_page:' . $key;
+  }
+
+  /**
+   * Generates a random string of ASCII characters of codes 32 to 126.
+   *
+   * Like DrupalWebTestCase::randomString(), but inserts some special characters
+   * to help in discovering potential security issues and malformed HTML.
+   *
+   * @param int $length
+   *   Length of random string to generate.
+   *
+   * @return string
+   *   Randomly generated string.
+   *
+   * @see DrupalWebTestCase::randomString()
+   */
+  public static function randomString($length = 12) {
+    $str = '><"\'';
+    for ($i = 0; $i < $length - 4; $i++) {
+      $str .= chr(mt_rand(32, 126));
+    }
+    return $str;
+  }
+
+}

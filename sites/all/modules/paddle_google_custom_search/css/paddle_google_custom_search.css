@@ -1,0 +1,44 @@
+#paddle-google-custom-search-settings-form p {
+  padding: 5px 0;
+}
+#paddle-google-custom-search-settings-form a {
+  text-decoration: underline;
+  color: #085885;
+}
+.item-list .search-labels li {
+  display: inline-block;
+  list-style: none;
+  margin-right: 9px;
+  font-size: 1.3em;
+  margin-left: 0;
+}
+a.label-link.active-facet.active {
+  text-decoration: none;
+  color: #fff;
+  padding: 0 4px;
+  display: block;
+}
+#edit-search-method {
+  clear: both;
+}
+#edit-search-method .form-type-radio {
+  display: inline-block;
+}
+h3.google-custom-search-title a {
+  font-weight: normal;
+  font-size: 25px;
+}
+.item-list .search-results li {
+  list-style: none;
+  margin-top: 23px;
+  padding-top: 18px;
+  margin-left: 0;
+}
+.item-list .search-labels {
+  margin-left: 0;
+}
+.search-labels a {
+  font-size: 0.8em;
+  text-transform: uppercase;
+  text-decoration: none;
+}

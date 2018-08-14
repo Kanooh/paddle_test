@@ -1,0 +1,114 @@
+.pane-carousel .pane-section-body {
+  padding: 0;
+}
+.region-content .slides {
+  margin: 0;
+}
+.carousel {
+  position: relative;
+}
+.flex-direction-nav i,
+.autoplay-control i {
+  display: inline-block;
+  line-height: 38px;
+  width: 40px;
+  text-align: center;
+  font-size: 1.2em;
+  padding-bottom: 2px;
+  color: #ffffff;
+  -moz-transition: all 0.2s ease 0s;
+  -webkit-transition: all 0.2s ease 0s;
+  -o-transition: all 0.2s ease 0s;
+  transition: all 0.2s ease 0s;
+}
+.region-content .pane-carousel .carousel .flex-direction-nav i:hover,
+.region-content .pane-carousel .carousel .autoplay-control i:hover {
+  background: #fff;
+}
+.slider-counter {
+  position: absolute;
+  bottom: 1.8em;
+  right: 11.2em;
+  z-index: 20;
+  font-size: 1em;
+  color: #ffffff;
+}
+ul.flex-direction-nav {
+  position: absolute;
+  bottom: 1.2em;
+  right: 5.2em;
+  list-style: none;
+}
+ul.flex-direction-nav li {
+  float: left;
+}
+li.slide {
+  position: relative;
+}
+.carousel a.autoplay-control {
+  position: absolute;
+  bottom: 1.2em;
+  font-size: 15px !important;
+}
+.figcaption {
+  position: absolute;
+  bottom: 0;
+  padding: 2.2em 10em 1.5em 1.2em;
+  width: 100%;
+  box-sizing: border-box;
+  color: #ffffff;
+}
+/* back-end carousel modal */
+#paddle-carousel-slides-table .form-type-radio {
+  float: left;
+  padding-right: 15px;
+  margin: 6px 0 5px 0;
+}
+#paddle-carousel-slides-table .form-type-radios {
+  clear: both;
+  overflow: hidden;
+  margin-top: 9px;
+}
+#paddle-carousel-slides-table .selected-items .title {
+  display: none;
+}
+#paddle-carousel-slides-table td {
+  vertical-align: top;
+}
+#paddle-carousel-slides-table td.image,
+#paddle-carousel-slides-table td.remove {
+  width: 21%;
+}
+#paddle-carousel-slides-table td.remove input {
+  margin-top: 27px;
+}
+.paddle-scald-atom-field.thumbnails {
+  clear: both;
+}
+.paddle-scald-atom-field.thumbnails label {
+  display: none;
+}
+.paddle-scald-atom-field.thumbnails a.button {
+  margin-top: 5px;
+}
+#paddle-carousel-slides-table tr.odd {
+  background: #d9d9d9;
+}
+#paddle-carousel-slides-table .form-item .form-type-radio label {
+  font-weight: normal;
+}
+#paddle-carousel-slides-table .image img {
+  width: 100px;
+}
+.autoplay-control {
+  display: block;
+  background-color: #fff;
+  bottom: 1.2em;
+  cursor: pointer;
+  position: absolute;
+  right: 1.5em;
+  z-index: 40;
+}
+.carousel .slide img {
+  width: 100%;
+}

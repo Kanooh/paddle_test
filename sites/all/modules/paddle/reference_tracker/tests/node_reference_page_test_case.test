@@ -1,0 +1,98 @@
+<?php
+
+/**
+ * @file
+ * Contains ReferenceTrackerNodeReferencePageTest
+ */
+
+/**
+ * Class ReferenceTrackerNodeReferencePageTest.
+ */
+class ReferenceTrackerNodeReferencePageTest extends DrupalWebTestCase {
+
+  /**
+   * @var string $expectedLinkPattern
+   *   Defines the pattern of the
+   */
+  protected $expectedLinkPattern = 'node/%nid';
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Node Reference Page',
+      'description' => 'Tests the rendering of the Node Reference page.',
+      'group' => 'Reference Tracker',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($modules = array()) {
+    $modules[] = 'reference_tracker';
+    parent::setUp($modules);
+  }
+
+  /**
+   * Tests the rendering of the Node Reference page.
+   */
+  public function testNodeReferencePage() {
+    // Login a user that can access the content.
+    $user = $this->drupalCreateUser(array(
+      'access reference tracker information',
+    ));
+    $this->drupalLogin($user);
+
+    // Create the node that is going to be referenced.
+    $referenced_title = $this->randomName();
+    $edit = array(
+      'title' => $referenced_title,
+    );
+    $referenced_node = $this->drupalCreateNode($edit);
+
+    // Create the node that is going to reference the first one.
+    $referencing_title = $this->randomName();
+    $edit = array(
+      'title' => $referencing_title,
+      'body' => array(
+        LANGUAGE_NONE => array(
+          array(
+            'value' => l($referenced_title, 'node/' . $referenced_node->nid),
+            'format' => 'full_html',
+          ),
+        ),
+      ),
+    );
+    $referencing_node = $this->drupalCreateNode($edit);
+
+    // Go to the Node Reference Page for the referenced node.
+    $this->drupalGet('node/' . $referenced_node->nid . '/references');
+
+    // Check that the reference table contains the link to the correct node.
+    $url = url(str_replace('%nid', $referencing_node->nid, $this->expectedLinkPattern));
+    $link_xpath = '//table//td[contains(@class, "entity-link")]/a[@href="' . $url . '" and text()="' . $referencing_title . '"]';
+    $this->assertTrue($this->xpath($link_xpath), 'Link to the referencing node found.');
+
+    $types = node_type_get_types();
+    // Check that the reference table contains the correct entity type.
+    $type_xpath = '//table//td[contains(@class, "entity-label") and text()="' . $types[$referencing_node->type]->name . '"]';
+    $this->assertTrue($this->xpath($type_xpath), 'Entity type of the referencing node found');
+
+    // Now delete the reference and check that the reference is gone from the
+    // table.
+    $referencing_node->body = array(
+      LANGUAGE_NONE => array(
+        array(
+          'value' => '',
+        ),
+      ),
+    );
+
+    node_save($referencing_node);
+
+    $this->drupalGet('node/' . $referenced_node->nid . '/references');
+    $this->assertFalse($this->xpath($link_xpath), 'Reference removed from the Reference table.');
+    $this->assertFalse($this->xpath($type_xpath), 'Reference removed from the Reference table.');
+  }
+}

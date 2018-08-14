@@ -1,0 +1,73 @@
+name = Contact form
+description = Add a simple contact form to your web page. You’ll receive completed forms via email.
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = field_instance_sync
+dependencies[] = options
+dependencies[] = paddle_content_manager
+dependencies[] = paddle_simple_contact_field
+dependencies[] = page_manager
+dependencies[] = panelizer
+dependencies[] = strongarm
+dependencies[] = text
+features[ctools][] = page_manager:pages_default:1
+features[ctools][] = panelizer:panelizer:1
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[field_base][] = field_paddle_contact_form
+features[field_instance][] = node-simple_contact_page-field_paddle_contact_form
+features[field_instance_sync][] = node-simple_contact_page-body
+features[field_instance_sync][] = node-simple_contact_page-field_paddle_featured_image
+features[field_instance_sync][] = node-simple_contact_page-field_paddle_contact_form
+features[field_instance_sync][] = node-simple_contact_page-field_paddle_general_tags
+features[field_instance_sync][] = node-simple_contact_page-field_paddle_seo_description
+features[field_instance_sync][] = node-simple_contact_page-field_paddle_seo_title
+features[field_instance_sync][] = node-simple_contact_page-field_paddle_show_next_level
+features[field_instance_sync][] = node-simple_contact_page-field_paddle_tags
+features[field_instance_sync][] = node-simple_contact_page-field_page_responsible_author
+features[field_instance_sync][] = node-simple_contact_page-field_show_breadcrumb
+features[node][] = simple_contact_page
+features[panelizer_defaults][] = node:simple_contact_page:default
+features[variable][] = field_bundle_settings_node__simple_contact_page
+features[variable][] = i18n_node_extended_simple_contact_page
+features[variable][] = i18n_node_options_simple_contact_page
+features[variable][] = language_content_type_simple_contact_page
+features[variable][] = menu_options_simple_contact_page
+features[variable][] = menu_parent_simple_contact_page
+features[variable][] = node_options_simple_contact_page
+features[variable][] = node_preview_simple_contact_page
+features[variable][] = node_submitted_simple_contact_page
+features[variable][] = scheduler_expand_fieldset_simple_contact_page
+features[variable][] = scheduler_publish_allow_state_simple_contact_page
+features[variable][] = scheduler_publish_enable_simple_contact_page
+features[variable][] = scheduler_publish_moderation_state_simple_contact_page
+features[variable][] = scheduler_publish_past_date_simple_contact_page
+features[variable][] = scheduler_publish_required_simple_contact_page
+features[variable][] = scheduler_publish_revision_simple_contact_page
+features[variable][] = scheduler_publish_touch_simple_contact_page
+features[variable][] = scheduler_unpublish_default_time_simple_contact_page
+features[variable][] = scheduler_unpublish_enable_simple_contact_page
+features[variable][] = scheduler_unpublish_moderation_state_simple_contact_page
+features[variable][] = scheduler_unpublish_required_simple_contact_page
+features[variable][] = scheduler_unpublish_revision_simple_contact_page
+features[variable][] = scheduler_use_vertical_tabs_simple_contact_page
+files[] = tests/paddle_simple_contact.test
+
+apps[logo] = apps/logo.png
+
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+
+; Information added by drush on 2015-12-02
+version = "7.x-1.x-dev"
+project = "paddle_simple_contact"
+datestamp = "1449062800"
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_simple_contact"
+datestamp = "1473170449"
+

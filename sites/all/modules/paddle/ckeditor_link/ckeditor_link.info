@@ -1,0 +1,10 @@
+name = CKEditor Link
+description = Easily create links to Drupal internal paths through CKEditor.
+package = User interface
+core = 7.x
+configure = admin/config/content/ckeditor_link
+
+; Information added by drush on 2013-12-03
+version = "7.x-2.3+3-dev"
+project = "ckeditor_link"
+datestamp = "1386087210"

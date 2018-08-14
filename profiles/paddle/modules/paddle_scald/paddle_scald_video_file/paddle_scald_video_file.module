@@ -1,0 +1,244 @@
+<?php
+
+/**
+ * @file
+ * Scald Video is a Scald Atom Provider for video files.
+ *
+ * This module was copied from https://www.drupal.org/sandbox/SylvainM/2036257
+ * and adapted where necessary to fit our needs.
+ */
+
+/*******************************************************************************
+ * SCALD HOOK IMPLEMENTATIONS
+ */
+
+/**
+ * Implements hook_scald_atom_providers().
+ */
+function paddle_scald_video_file_scald_atom_providers() {
+  return array(
+    'video' => 'Upload video file',
+  );
+}
+
+/**
+ * Implements hook_scald_add_form().
+ */
+function paddle_scald_video_file_scald_add_form(&$form, &$form_state) {
+  paddle_scald_video_file_get_video_file_form($form['file']);
+  $form['file']['#title'] = 'Video';
+}
+
+/**
+ * Implements hook_scald_add_atom_count().
+ */
+function paddle_scald_video_file_scald_add_atom_count(&$form, &$form_state) {
+  if (is_array($form_state['values']['file'])) {
+    return max(count($form_state['values']['file']), 1);
+  }
+  return 1;
+}
+
+/**
+ * Implements hook_scald_add_form_fill().
+ */
+function paddle_scald_video_file_scald_add_form_fill(&$atoms, $form, $form_state) {
+  $dir_video_thumb = 'public://atoms/video/thumb';
+
+  foreach ($atoms as $delta => $atom) {
+
+    // Delta is used only with multifile field:
+    if (is_array($form_state['values']['file'])) {
+      // Plupload infos:
+      $file_infos = $form_state['values']['file'][$delta];
+    }
+    else {
+      // This will be a fid:
+      $file_infos = $form_state['values']['file'];
+    }
+    $file = paddle_scald_video_file_get_video_file($file_infos, $form['file']['#upload_location']);
+
+    $atom->base_id = $file->fid;
+    $atom->file_source = $file->uri;
+    $atom->data['video_file'] = $file->uri;
+    $atom->data['video_id'] = $file->fid;
+    $atom->title = $file->filename;
+
+    // @TODO : find lib to get metadatas from video files
+  }
+}
+
+/**
+ * Implements hook_scald_fetch().
+ */
+function paddle_scald_video_file_scald_fetch($atom, $type) {
+  $file_items = field_get_items('scald_atom', $atom, 'scald_thumbnail');
+  if (!empty($file_items)) {
+    $file_item = current($file_items);
+    if (file_exists($file_item['uri'])) {
+      $atom->thumbnail_source = $file_item['uri'];
+    }
+  }
+  $atom->file_source = $atom->data['video_file'];
+}
+
+/**
+ * Implements hook_scald_atom_insert().
+ */
+function paddle_scald_video_file_scald_atom_insert($atom) {
+  if ($atom->provider == 'paddle_scald_video_file') {
+    $file = file_load($atom->data['video_id']);
+    if ($file) {
+      $file->status = FILE_STATUS_PERMANENT;
+      file_save($file);
+      file_usage_add($file, 'paddle_scald_video_file', 'scald_atom', $atom->sid);
+    }
+  }
+}
+
+/**
+ * Implements hook_file_mimetype_mapping_alter().
+ */
+function paddle_scald_video_file_file_mimetype_mapping_alter(&$mapping) {
+  if (!in_array('video/webm', $mapping['mimetypes'])) {
+    $mapping['mimetypes'][] = 'video/webm';
+    $mapping['extensions']['webm'] = count($mapping['mimetypes']) - 1;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_scald_video_file_form_scald_atom_add_form_options_alter(&$form, &$form_state) {
+
+  // We check for multiple atoms on the form:
+  if (isset($form_state['scald']['atom'])) {
+    $atoms = array($form_state['scald']['atom']);
+  }
+  else {
+    $atoms = $form_state['scald']['atoms'];
+  }
+
+  // Set one atom's form options. This can be called multiple times in case
+  // a multifile field is used.
+  foreach ($atoms as $key => $atom) {
+
+    $form["atom$key"]['#tree'] = TRUE;
+
+    if ($atom->provider !== 'paddle_scald_video_file') {
+      break;
+    }
+
+    $width = '';
+    $height = '';
+    if (isset($atom->sid)) {
+      if (isset($atom->data['video_width'])) {
+        $width = $atom->data['video_width'];
+      }
+      if (isset($atom->data['video_height'])) {
+        $height = $atom->data['video_height'];
+      }
+    }
+    else {
+      // Retrieve informations of Video by ffmpeg
+      // http://ffmpeg-php.sourceforge.net/doc/api/ffmpeg_movie.php
+      if (class_exists('ffmpeg_movie')) {
+        $ffmpeg_video = new ffmpeg_movie(drupal_realpath($atom->file_source));
+        $ffmpeg_width = (int) $ffmpeg_video->getFrameWidth();
+        if ($ffmpeg_width > 0) {
+          $width = check_plain($ffmpeg_width);
+        }
+        $ffmpeg_height = (int) $ffmpeg_video->getFrameHeight();
+        if ($ffmpeg_height > 0) {
+          $height = check_plain($ffmpeg_height);
+        }
+      }
+    }
+    $form["atom$key"]['width'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Width'),
+      '#size' => 10,
+      '#element_validate' => array('element_validate_integer_positive'),
+      '#required' => TRUE,
+      '#default_value' => $width,
+    );
+    $form["atom$key"]['height'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Height'),
+      '#size' => 10,
+      '#element_validate' => array('element_validate_integer_positive'),
+      '#required' => TRUE,
+      '#default_value' => $height,
+      '#description' => t('Please fill out the desired proportions (for example width: 16 and height: 9). Common proportions are 16:9 and 4:3. This will define its size on the page before playing the video.'),
+    );
+  }
+
+  $form['#submit'][] = 'paddle_scald_video_file_form_scald_atom_add_form_options_submit';
+}
+
+/**
+ * Atom's form save and edit submit callback.
+ */
+function paddle_scald_video_file_form_scald_atom_add_form_options_submit($form, &$form_state) {
+
+  // We check for multiple atoms on the form:
+  if (isset($form_state['scald']['atom'])) {
+    $atoms = array($form_state['scald']['atom']);
+  }
+  else {
+    $atoms = $form_state['scald']['atoms'];
+  }
+
+  foreach ($atoms as $key => $atom) {
+
+    if ($atom->provider !== 'paddle_scald_video_file') {
+      break;
+    }
+
+    $atom->data['video_width'] = $form_state['values']["atom$key"]['width'];
+    $atom->data['video_height'] = $form_state['values']["atom$key"]['height'];
+
+    scald_atom_save($atom);
+  }
+}
+
+/**
+ * Returns a video file form element compatible with plupload.
+ *
+ * This function avoid repetitions over the multiple places
+ * a file upload field is needed in paddle_scald_video_file.
+ * 
+ * @param array $form_element
+ *   The form element we want to set to video file field.
+ */
+function paddle_scald_video_file_get_video_file_form(&$form_element) {
+  if (module_exists('plupload')) {
+    $form_element = array(
+      '#type' => 'plupload',
+      '#plupload_settings' => array(
+        'runtimes' => 'html5', 'chunk_size' => '1mb',
+      ),
+    );
+  }
+  else {
+    $defaults = scald_atom_defaults('video');
+    $form_element['#type'] = $defaults->upload_type;
+  }
+  $form_element['#upload_validators'] = array('file_validate_extensions' => array('mp4'));
+  $form_element['#upload_location'] = 'public://atoms/video/';
+
+}
+
+/**
+ * Saves a video file from a form's file value.
+ */
+function paddle_scald_video_file_get_video_file($file_form_value, $location = 'public://atoms/video/') {
+  if (is_array($file_form_value) && module_exists('plupload')) {
+    module_load_include('inc', 'scald', 'includes/scald.plupload');
+    $file = scald_plupload_save_file($file_form_value['tmppath'], $location . $file_form_value['name']);
+  }
+  else {
+    $file = file_load($file_form_value);
+  }
+  return $file;
+}

@@ -1,0 +1,98 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Varnish module.
+ */
+
+include_once 'paddle_varnish.features.inc';
+
+/**
+ * Implements hook_init().
+ */
+function paddle_varnish_init() {
+  // Get the Kanooh host ID from an environment variable set on hosting level.
+  // For example: 'SetEnv KANOOH_HOST_ID k0025' in a virtual hosts file.
+  $host_id = getenv('KANOOH_HOST_ID');
+
+  if (!empty($host_id)) {
+    // Send it as a header in the response so Varnish knows about it and we can
+    // ban based on this header.
+    // @see paddle_varnish_purge()
+    drupal_add_http_header('Kanooh-Host', $host_id);
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_varnish_module_implements_alter(&$implementations, $hook) {
+  // Remove the implementation of varnish itself and replace it by our own
+  // logic regarding Kanooh host IDs.
+  if ($hook == 'expire_cache') {
+    unset($implementations['varnish']);
+    unset($implementations['purge']);
+  }
+}
+
+/**
+ * Implements hook_expire_cache().
+ *
+ * Basically does the same as varnish_expire_cache() but doesn't care about
+ * the host and uses our own helper function.
+ * @see varnish_expire_cache()
+ */
+function paddle_varnish_expire_cache($paths) {
+  $base = base_path();
+  $purge = implode('$|^' . $base, $paths);
+  $purge = '^' . $base . $purge . '$';
+  paddle_varnish_purge($purge);
+}
+
+/**
+ * Helper function to quickly flush all caches for the current site.
+ *
+ * Basically does the same as varnish_purge_all_pages() but doesn't care about
+ * the host and uses our own helper function.
+ * @see varnish_purge_all_pages()
+ */
+function paddle_varnish_purge_all_pages() {
+  $path = base_path();
+  paddle_varnish_purge($path);
+}
+
+/**
+ * Helper function to purge items for a host that matches the provided pattern.
+ *
+ * Basically does the same as varnish_purge() but runs commands on a different
+ * parameter.
+ * @see varnish_purge()
+ *
+ * @param string $pattern
+ *   The pattern to look for and purge.
+ */
+function paddle_varnish_purge($pattern) {
+  $host_id = getenv('KANOOH_HOST_ID');
+
+  if (!empty($host_id)) {
+    // Get the current varnish version, if we are using Varnish 3.x, then we can
+    // need to use ban instead of purge.
+    $version = floatval(variable_get('varnish_version', 2.1));
+    $command = $version >= 3 ? "ban" : "purge";
+    $bantype = variable_get('varnish_bantype', VARNISH_DEFAULT_BANTYPE);
+    switch ($bantype) {
+      case VARNISH_BANTYPE_NORMAL:
+        _varnish_terminal_run(array("$command obj.http.Kanooh-Host ~ \"$host_id\" && req.url ~ \"$pattern\""));
+        break;
+
+      case VARNISH_BANTYPE_BANLURKER:
+        _varnish_terminal_run(array("$command obj.http.x-Kanooh-Host ~ \"$host_id\" && obj.http.x-url  ~ \"$pattern\""));
+        break;
+
+      default:
+        // We really should NEVER get here. Log WATCHDOG_ERROR. I can only see
+        // this happening if a user switches between different versions of the
+        // module where we remove a ban type.
+        watchdog('varnish', 'Varnish ban type is out of range.', array(), WATCHDOG_ERROR);
+    }
+  }
+}

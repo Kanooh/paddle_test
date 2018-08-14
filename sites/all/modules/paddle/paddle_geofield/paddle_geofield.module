@@ -1,0 +1,180 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle geofield module.
+ */
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function paddle_geofield_node_type_insert($info) {
+  $address_field = paddle_geofield_get_field_per_type_per_entity_bundle_combo('node', $info->type);
+
+  if (!empty($address_field)) {
+    paddle_geofield_create_geofield_field_instance('node', $info->type, $address_field);
+  }
+}
+
+/**
+ * Implements hook_node_type_delete().
+ */
+function paddle_geofield_node_type_delete($info) {
+  if ($instance = field_info_instance('node', 'field_paddle_address_geocode', $info->type)) {
+    field_delete_instance($instance);
+    field_cache_clear();
+  }
+}
+
+/**
+ * Creates geofields for every address field per bundle.
+ */
+function paddle_geofield_create_geofield_per_node_type() {
+  // First create the geofield for all nodes.
+  $node_types = array_keys(node_type_get_names());
+  foreach ($node_types as $node_type) {
+    $address_field = paddle_geofield_get_field_per_type_per_entity_bundle_combo('node', $node_type);
+
+    if (!empty($address_field)) {
+      paddle_geofield_create_geofield_field_instance('node', $node_type, $address_field);
+    }
+  }
+}
+
+/**
+ * Retrieves dynamically the name of the field.
+ *
+ * @param string $entity_type
+ *   The entity type of the entity we want the field from.
+ * @param string $bundle
+ *   The bundle name of the entity we want the field from.
+ *
+ * @return string
+ *   Returns the field name of the address field.
+ */
+function paddle_geofield_get_field_per_type_per_entity_bundle_combo($entity_type, $bundle) {
+  $address_field = '';
+  $fields = field_info_field_map();
+  foreach ($fields as $field => $info) {
+    if ($info['type'] == 'addressfield' &&
+      in_array($entity_type, array_keys($info['bundles'])) &&
+      in_array($bundle, $info['bundles'][$entity_type])) {
+      $address_field = $field;
+    }
+  }
+  return $address_field;
+}
+
+/**
+ * Creates the geofield instance for a content type.
+ *
+ * @param string $entity_type
+ *   The entity type.
+ * @param string $bundle
+ *   The bundle.
+ * @param string $address_field
+ *   The name of the original address field.
+ */
+function paddle_geofield_create_geofield_field_instance($entity_type, $bundle, $address_field) {
+  features_revert_module('paddle_geofield');
+  field_cache_clear();
+
+  if (!field_read_instance($entity_type, 'field_paddle_address_geocode', $bundle)) {
+    $field_instance = array(
+      'bundle' => $bundle,
+      'deleted' => 0,
+      'description' => '',
+      'display' => array(
+        'default' => array(
+          'label' => 'above',
+          'module' => 'geofield',
+          'settings' => array(
+            'data' => 'full',
+          ),
+          'type' => 'geofield_wkt',
+          'weight' => 18,
+        ),
+        'diff_standard' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_summary' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => $entity_type,
+      'field_name' => 'field_paddle_address_geocode',
+      'label' => 'Geofield',
+      'required' => 0,
+      'settings' => array(
+        'field_instance_sync' => 0,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'geocoder',
+        'settings' => array(
+          'delta_handling' => 'default',
+          'geocoder_field' => $address_field,
+          'geocoder_handler' => 'google',
+          'handler_settings' => array(
+            'google' => array(
+              'all_results' => 0,
+              'biasing' => array(
+                'bounds' => '',
+                'components' => '',
+                'region' => '',
+              ),
+              'geometry_type' => 'point',
+              'reject_results' => array(
+                'APPROXIMATE' => 0,
+                'GEOMETRIC_CENTER' => 0,
+                'RANGE_INTERPOLATED' => 0,
+                'ROOFTOP' => 0,
+              ),
+            ),
+          ),
+        ),
+        'type' => 'geocoder',
+        'weight' => 16,
+      ),
+    );
+
+    field_create_instance($field_instance);
+  }
+}

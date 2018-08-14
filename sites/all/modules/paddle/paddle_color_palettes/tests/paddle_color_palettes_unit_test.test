@@ -1,0 +1,167 @@
+<?php
+
+/**
+ * @file
+ * Tests the main functionality of the Paddle Color Palette module.
+ */
+
+
+/**
+ * Test the fetching methods for palettes and color-selectors pairs.
+ *
+ * @todo Remove hard dependency on the Paddle Themer test case when we have a
+ *   generic way of choosing palettes.
+ */
+class PaddleColorPalettesUnitTestTestCase extends PaddleThemerTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Unit tests',
+      'description' => 'Unit tests for the Paddle Color Palettes module.',
+      'group' => 'Paddle Color Palettes',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    // Enable the test module in addition to the given modules.
+    $modules = func_get_args();
+    $modules = isset($modules[0]) && is_array($modules[0]) ? $modules[0] : array();
+    $modules[] = 'paddle_color_palettes_test';
+    parent::setUp($modules);
+  }
+
+  /**
+   * Tests if the palettes definitions are returned correctly.
+   */
+  public function testPalettesDefinitions() {
+    $theme_palettes = paddle_color_palettes_get_palettes_definitions();
+    $expected_palettes = paddle_color_palettes_test_palette_definitions();
+
+    $this->assertEqual($theme_palettes, $expected_palettes, 'Palettes definitions correct');
+  }
+
+  /**
+   * Tests if the colour-selectors pairs are returned correctly.
+   */
+  public function testColorSelectorsPairs() {
+    $theme_pairs = paddle_color_palettes_get_color_selectors();
+    $expected_pairs = paddle_color_palettes_test_paddle_color_palettes_color_selectors();
+
+    $this->assertEqual($theme_pairs, $expected_pairs, 'Colour-selector pairs correct');
+  }
+
+  /**
+   * Tests if invalid color palette definitions are detected.
+   */
+  public function testPaletteValidation() {
+    // Check that no exceptions are thrown when a valid palette definition is
+    // validated.
+    $palettes = paddle_color_palettes_test_palette_definitions();
+    try {
+      paddle_color_palettes_validate_palettes($palettes);
+      $this->pass('No exceptions are thrown when a valid palette definition is validated.');
+    }
+    catch (Exception $ex) {
+      $this->fail('An exception is thrown when not all palettes have an equal number of subpalettes.');
+    }
+
+    // Check that an exception is thrown when not all palettes have an equal
+    // number of sub-palettes.
+    unset($palettes['palette_b']['palette_b2']);
+    try {
+      paddle_color_palettes_validate_palettes($palettes);
+      $this->fail('An exception is thrown when not all palettes have an equal number of subpalettes.');
+    }
+    catch (Exception $ex) {
+      $this->pass('An exception is thrown when not all palettes have an equal number of subpalettes.');
+    }
+
+    // Check that an exception is thrown when one of the sub-palettes has more
+    // colours than the primary palette.
+    $palettes = paddle_color_palettes_test_palette_definitions();
+    $palettes['palette_b']['palette_b1']['colors'][] = '#DEFEC7';
+    try {
+      paddle_color_palettes_validate_palettes($palettes);
+      $this->fail('An exception is thrown when a subpalette has more colors than the primary palette.');
+    }
+    catch (Exception $ex) {
+      $this->pass('An exception is thrown when a subpalette has more colors than the primary palette.');
+    }
+  }
+
+  /**
+   * Tests that missing colours in sub-palettes are substituted correctly.
+   */
+  public function testSupplementSubPalettes() {
+    $test_palette = array(
+      'primary' => array(
+        'title' => 'Primary palette',
+        'colors' => array(
+          '#AABB44',
+          'rgb(255, 15, 185)',
+          'rgba(55, 215, 18, 0.5)',
+          'hsl(120, 100%, 25%)',
+          'DarkOliveGreen',
+        ),
+      ),
+      'secondary' => array(
+        'title' => 'Secondary palette',
+        'colors' => array(
+          '#FC8700',
+          '',
+          '',
+          'hsla(120, 50%, 80%, 0.3)',
+          '#AAA',
+        ),
+      ),
+      'tertiary' => array(
+        'title' => 'Tertiary palette',
+        'colors' => array(
+          '',
+          '#FCAA00',
+        ),
+      ),
+    );
+
+    $expected_palette = array(
+      'primary' => array(
+        'title' => 'Primary palette',
+        'colors' => array(
+          '#AABB44',
+          'rgb(255, 15, 185)',
+          'rgba(55, 215, 18, 0.5)',
+          'hsl(120, 100%, 25%)',
+          'DarkOliveGreen',
+        ),
+      ),
+      'secondary' => array(
+        'title' => 'Secondary palette',
+        'colors' => array(
+          '#FC8700',
+          'rgb(255, 15, 185)',
+          'rgba(55, 215, 18, 0.5)',
+          'hsla(120, 50%, 80%, 0.3)',
+          '#AAA',
+        ),
+      ),
+      'tertiary' => array(
+        'title' => 'Tertiary palette',
+        'colors' => array(
+          '#AABB44',
+          '#FCAA00',
+          'rgba(55, 215, 18, 0.5)',
+          'hsl(120, 100%, 25%)',
+          'DarkOliveGreen',
+        ),
+      ),
+    );
+
+    $this->assertEqual(paddle_color_palettes_supplement_subpalettes($test_palette), $expected_palette, 'Missing colors in subpalettes are correctly substituted with colors from the primary palette.');
+  }
+}

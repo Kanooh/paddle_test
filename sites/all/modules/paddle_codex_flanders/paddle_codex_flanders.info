@@ -1,0 +1,22 @@
+name = Vlaamse Codex
+description = Flemish legislation and regulations are automatically updated on your website (Dutch only).
+core = 7.x
+package = Paddle
+
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle
+apps[paddle][vendor_link] = http://kanooh.be
+apps[paddle][third_party_service] = 0
+
+dependencies[] = ctools
+dependencies[] = elysia_cron
+dependencies[] = features
+dependencies[] = panels
+dependencies[] = webclient
+
+features[ctools][] = elysia_cron:default_elysia_cron_rules:1
+features[elysia_cron][] = paddle_codex_flanders_cron
+features[features_api][] = api:2
+
+files[] = tests/plugins/content_types/codex_flanders.test

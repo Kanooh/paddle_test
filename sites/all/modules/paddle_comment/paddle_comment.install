@@ -1,0 +1,67 @@
+<?php
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Comment.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_comment_install() {
+  // Set all comment settings for existing content types.
+  foreach (node_type_get_types() as $type => $name) {
+    variable_set('comment_' . $type, COMMENT_NODE_HIDDEN);
+    paddle_comment_set_default_comment_settings($type);
+  }
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_comment_enable() {
+  // Allow everybody to see and post comments.
+  user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access comments', 'post comments'));
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('access comments', 'post comments'));
+
+  // Make sure the site managers and (chief) editors can fully manage comments.
+  foreach (array('Editor', 'Chief Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array(
+      'administer comments',
+      'access comment manager',
+      'skip comment approval',
+      'edit own comments',
+    ));
+  }
+
+  // Add bulk permissions to the Site Manager.
+  $bulk_permissions = array(
+    'execute comment_publish_action',
+    'execute comment_unpublish_action',
+  );
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, $bulk_permissions);
+
+  // Allow read only role to visit the comment manager page.
+  $read_only_role = user_role_load_by_name('Read Only');
+  user_role_grant_permissions($read_only_role->rid, array('access comment manager'));
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_comment_disable() {
+  variable_del('paddle_comment_skip_approval');
+}
+
+/**
+ * Add bulk permissions to the Site Manager.
+ */
+function paddle_comment_update_7001() {
+  $permissions = array(
+    'execute comment_publish_action',
+    'execute comment_unpublish_action',
+  );
+  $role = user_role_load_by_name('Site Manager');
+  user_role_grant_permissions($role->rid, $permissions);
+}

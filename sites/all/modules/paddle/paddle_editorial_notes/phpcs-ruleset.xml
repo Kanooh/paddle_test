@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!-- PHP_CodeSniffer standard for Paddle. -->
+<!-- See http://pear.php.net/manual/en/package.php.php-codesniffer.annotated-ruleset.php -->
+<ruleset name="Paddle">
+    <description>Drupal coding standard for Paddle</description>
+
+    <rule ref="Drupal" />
+
+    <!-- Comments in Features export of fields exceed 80 characters. -->
+    <rule ref="Drupal.Files.LineLength.TooLong">
+        <exclude-pattern>paddle_editorial_notes.features.field.inc</exclude-pattern>
+    </rule>
+
+</ruleset>

@@ -1,0 +1,117 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleStylePluginBoxModelTest.
+ */
+
+/**
+ * Tests the Box Model plugin.
+ */
+class PaddleStylePluginBoxModelTest extends DrupalWebTestCase {
+
+  /**
+   * Stores supported properties along with their human readable names.
+   *
+   * @var array $properties
+   */
+  public $properties;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Box Model',
+      'description' => 'Test the Box Model plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    // Additionally enable ctools module.
+    parent::setUp(array('ctools', 'paddle_style'));
+
+    // Define supported properties with their human readable names.
+    $this->properties = array(
+      'margin' => array(
+        'margin_left' => t('Left margin'),
+        'margin_right' => t('Right margin'),
+        'margin_top' => t('Top margin'),
+        'margin_bottom' => t('Bottom margin'),
+      ),
+      'padding' => array(
+        'padding_left' => t('Left padding'),
+        'padding_right' => t('Right padding'),
+        'padding_top' => t('Top padding'),
+        'padding_bottom' => t('Bottom padding'),
+      ),
+    );
+  }
+
+  /**
+   * Tests the form() function of the Box Model plugin.
+   */
+  public function testForm() {
+    // Create an instance of the Box Model plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'boxmodel');
+    $instance = new $plugin['handler']['class']();
+
+    // Check that all supported properties are present if form() is called
+    // without options.
+    $form_elements = $instance->form();
+    foreach ($this->properties as $group => $properties) {
+      foreach ($properties as $property => $title) {
+        $this->assertTrue(array_key_exists($property, $form_elements[$group]), format_string('The property %property is shown when the form is called without options.', array('%property' => $title)));
+      }
+    }
+
+    // Check that if only a single property is allowed, the property is returned
+    // and the others are not.
+    foreach ($this->properties as $group => $properties) {
+      foreach ($properties as $property => $title) {
+        $form_elements = $instance->form(array($property => array()));
+        $this->assertTrue(array_key_exists($property, $form_elements[$group]), format_string('The property %property is shown when this property is allowed.', array('%property' => $title)));
+        // Create a control group containing all properties except the currently
+        // allowed one, and check that none of these properties exist.
+        foreach (array_keys($this->properties) as $control_group) {
+          foreach (array_diff_key($this->properties[$control_group], array($property => array())) as $control_property => $title) {
+            $this->assertFalse(array_key_exists($control_property, $form_elements[$control_group]), format_string('The property %property is not shown when this property is not allowed.', array('%property' => $title)));
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Tests the getProperties() function of the Box Model plugin.
+   */
+  public function testGetProperties() {
+    // Create an instance of the Box Model plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'boxmodel');
+    $instance = new $plugin['handler']['class']();
+
+    // Call getProperties with random values.
+    $values = array();
+    foreach ($this->properties as $property => $title) {
+      $values[$property] = rand(-100, 100);
+    }
+    $properties = $instance->getProperties($values);
+
+    // Test if the array being returned by getProperties() has the right
+    // mappings.
+    foreach ($properties as $css_property => $value) {
+      // Check that the property name (eg. 'margin_top') has been translated to
+      // a CSS property (eg. 'margin-top').
+      $property = strtr($css_property, '-', '_');
+      $this->assertTrue(array_key_exists($property, $this->properties), format_string('The %property property has been translated to a CSS property correctly', array('%property' => $this->properties[$property])));
+      $this->assertEqual($value, $values[$property] . 'px', format_string('The %property property has the right value.', array('%property' => $this->properties[$property])));
+    }
+  }
+
+}

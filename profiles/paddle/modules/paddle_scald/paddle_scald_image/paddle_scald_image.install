@@ -1,0 +1,119 @@
+<?php
+/**
+ * @file
+ * Scald Images Installation
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_scald_image_install() {
+  // This code comes from ScaldAtomController::addType but was adapted for our
+  // case, we do not want Scald's tags and authors fields.
+  // Check if this type already exists.
+  $types = scald_types();
+  if (!empty($types['image'])) {
+    return FALSE;
+  }
+
+  $type = 'image';
+  $title = 'Image';
+  $t = get_t();
+  $description = $t('Add image files.');
+
+  // Create a new type.
+  db_insert('scald_types')
+    ->fields(array('type', 'title', 'description', 'provider'))
+    ->values(array($type, $title, $description, 'scald'))
+    ->execute();
+
+  // And add fields on it, starting with the Scald Thumbnail field.
+  $instance = array(
+    'field_name' => 'scald_thumbnail',
+    'entity_type' => 'scald_atom',
+    'bundle' => $type,
+    'label' => 'Image',
+    'required' => TRUE,
+    'display' => array(
+      'default' => array(
+        'type' => 'hidden',
+      ),
+    ),
+    'settings' => array(
+      'file_directory' => 'thumbnails/' . $type,
+    ),
+  );
+  if (!field_read_instance($instance['entity_type'], $instance['field_name'], $instance['bundle'])) {
+    field_create_instance($instance);
+    $instance = field_info_instance($instance['entity_type'], $instance['field_name'], $instance['bundle']);
+    foreach ($instance['display'] as $view_mode => $settings) {
+      $instance['display'][$view_mode]['type'] = 'hidden';
+    }
+    field_update_instance($instance);
+  }
+
+  // Flush our caches.
+  scald_contexts(TRUE);
+
+  $instance = field_read_instance('scald_atom', 'scald_thumbnail', 'image');
+  if ($instance) {
+    $instance['label'] = 'Image';
+    foreach ($instance['display'] as $view_mode => $settings) {
+      $instance['display'][$view_mode]['type'] = 'hidden';
+    }
+    field_update_instance($instance);
+  }
+
+  // Associate the image atom type to the "library" image style in the library
+  // context.
+  $context_config = scald_context_config_load('sdl_library_item');
+  $context_config->transcoder['image']['*'] = 'style-Library';
+  scald_context_config_save($context_config);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_scald_image_uninstall() {
+  drupal_load('module', 'scald');
+  // If Scald is disabled, its classes are not autoloaded.
+  module_load_include('inc', 'scald', 'includes/ScaldAtomController');
+
+  ScaldAtomController::removeType('image');
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_scald_image_enable() {
+  variable_set('image_allow_insecure_derivatives', TRUE);
+  variable_set('image_suppress_itok_output', TRUE);
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_scald_image_disable() {
+  variable_set('image_allow_insecure_derivatives', FALSE);
+  variable_set('image_suppress_itok_output', FALSE);
+}
+
+/**
+ * Update the Paddle image atom type description.
+ */
+function paddle_scald_image_update_7000() {
+  db_update('scald_types')
+    ->fields(array(
+      'description' => t('Add image files.'),
+    ))
+    ->condition('type', 'image')
+    ->execute();
+}
+
+/**
+ * Allow generation of image derivatives from CKEditor.
+ */
+function paddle_scald_image_update_7001() {
+  variable_set('image_allow_insecure_derivatives', TRUE);
+  variable_set('image_suppress_itok_output', TRUE);
+}

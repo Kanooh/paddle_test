@@ -1,0 +1,427 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuManagerOverviewTest.
+ */
+
+/**
+ * UI tests for listings and overviews for the Paddle Menu Manager module.
+ */
+class PaddleMenuManagerOverviewTest extends PaddleMenuManagerTestCase {
+  /**
+   * Associative array storing menu definitions. Only contains original menus,
+   * no clones. Keyed by menu name.
+   *
+   * @var array
+   */
+  protected $menus;
+
+  /**
+   * Associative array storing translation set ids. Keyed by menu name.
+   *
+   * @var array
+   */
+  protected $tsids;
+
+  /**
+   * Stores langcodes of enabled languages.
+   *
+   * @var array
+   */
+  protected $langcodes;
+
+  /**
+   * A user entity object representing a chief editor.
+   *
+   * @var object
+   */
+  protected $chiefEditor;
+
+  /**
+   * A user entity object representing an editor.
+   *
+   * @var object
+   */
+  protected $editor;
+
+  /**
+   * A content type definition.
+   *
+   * @var object
+   */
+  protected $contentType;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'UI overview tests',
+      'description' => 'Test the user interface components for listings and overviews.',
+      'group' => 'Paddle Menu Manager',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    // Additionally enable i18n_menu module.
+    parent::setUp();
+
+    module_enable(array('i18n_menu', 'paddle_menu_manager'));
+
+    // Enable 3 random languages in addition to English.
+    include_once DRUPAL_ROOT . '/includes/iso.inc';
+    $language_list = _locale_get_predefined_list();
+    unset($language_list['en']);
+    $this->langcodes = array('en');
+    foreach (array_rand($language_list, 3) as $langcode) {
+      locale_add_language($langcode);
+      $this->langcodes[] = $langcode;
+    }
+
+    // Create a menu in every enabled language and clone it in every language.
+    $this->menus = array();
+    $this->tsids = array();
+    foreach ($this->langcodes as $langcode) {
+      $menu = $this->createMenu($langcode);
+      $this->menus[$menu['menu_name']] = $menu;
+      paddle_menu_manager_create_menu_translations($menu);
+      $this->tsids[$menu['menu_name']] = $menu['i18n_tsid'];
+    }
+
+    $this->contentType = $this->drupalCreateContentType();
+
+    $this->chiefEditor = $this->drupalCreateUser(array(
+      'administer content types',
+      'manage paddle_menu_manager',
+      'view the administration theme',
+      'manage_menu_link_to_published_nodes',
+      'create ' . $this->contentType->type . ' content',
+      'edit any ' . $this->contentType->type . ' content',
+    ));
+
+    $this->editor = $this->drupalCreateUser(array(
+      'manage paddle_menu_manager',
+      'manage_menu_link_to_published_nodes',
+      'view the administration theme',
+    ));
+
+    $this->drupalLogin($this->chiefEditor);
+  }
+
+  /**
+   * Asserts that the title attribute on the menu item equals the item title.
+   *
+   * @param array $item
+   *   A menu link item.
+   * @param string $message
+   *   Message to display with the assertion.
+   */
+  public function assertItemTitleAttributeEqualsItemTitle($item, $message = NULL) {
+    // Check the menu title.
+    $args = array(
+      ':title' => $item['link_title'],
+    );
+    $items = $this->xpath('//table[@id="menu-overview"]/tbody/tr/td/a[contains(text(), :title)][@title=:title]', $args);
+
+    if (NULL === $message) {
+      $message = 'The title of the menu item is used as the value of the HTML title attribute.';
+    }
+
+    $this->assertTrue($items, $message);
+  }
+
+  /**
+   * Asserts that the title attribute on the menu path equals the path.
+   *
+   * @param array $item
+   *   A menu link item.
+   * @param string $message
+   *   Message to display with the assertion.
+   */
+  public function assertItemPathAttributeEqualsItemPath($item, $message = NULL) {
+    $url = url_is_external($item['link_path']) ? $item['link_path'] : '/' . drupal_get_path_alias($item['link_path']);
+    $link_path = $item['link_path'] == '<front>' ? '/' : $url;
+
+    $args = array(
+      ':url' => $link_path,
+    );
+    $items = $this->xpath('//table[@id="menu-overview"]/tbody/tr/td/span[contains(text(), :url)][@title=:url]', $args);
+
+    if (NULL === $message) {
+      $message = 'The path of the menu item is used as the value of the HTML title attribute.';
+    }
+
+    $this->assertTrue($items, $message);
+  }
+
+  /**
+   * Tests the menu overview.
+   */
+  public function testMenuOverview() {
+    // When menus are created through the user interface they are rebuilt on
+    // form submit. We have used the API so we have to rebuild ourselves.
+    menu_rebuild();
+
+    // During setUp() menus have been created in different languages. Retrieve
+    // a full set of menus in the current language.
+    $en_menus = db_select('menu_custom', 'mc')
+      ->fields('mc')
+      ->condition('i18n_tsid', $this->tsids, 'IN')
+      ->condition('language', 'en', '=')
+      ->execute()
+      ->fetchAllAssoc('i18n_tsid');
+
+    foreach ($this->menus as $menu_name => $menu) {
+      // Check that the 'no results' text is shown when there are no menu links.
+      $this->drupalGet('admin/structure/menu_manager/' . $this->tsids[$menu_name]);
+      $url_options = array(
+        'query' => array(
+          'destination' => 'admin/structure/menu_manager/' . $this->tsids[$menu_name],
+        ),
+      );
+
+      $this->assertRaw(t('There are no menu links yet.'), 'The text when there are no menu items on the page is shown correctly');
+      $this->assertFalse($this->xpath('//table[@id="menu-overview"]//td//a[@href="/admin/structure/menu_manager/nojs/' . $en_menus[$this->tsids[$menu_name]]->menu_name . '/add"]'), 'The add link is not found on the page when there are no menu items.');
+      // Check that the page title equals the menu title.
+      $this->assertTrue($this->xpath('//h1[@id="page-title" and contains(text(), :title)]', array(':title' => $menu['title'])), 'The page title of the menu overview form equals the menu title.');
+
+      // Create a number of menu links.
+      $menu_item_1 = $this->createMenuLink($menu);
+      $menu_item_2 = $this->createMenuLink($menu);
+
+      if ($menu_name == $en_menus[$this->tsids[$menu_name]]->menu_name) {
+        // Check that the form and action links are rendered.
+        $this->drupalGet('admin/structure/menu_manager/' . $this->tsids[$menu_name]);
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]'), 'The items table is rendered on the menu overview form.');
+        $delete_url = url('admin/structure/menu_manager/nojs/' . $menu_name . '/' . $menu_item_1['mlid'] . '/delete');
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]//td//a[@href="' . $delete_url . '"]'), 'The item delete button is rendered in the table on the menu overview form.');
+        $edit_url = url('admin/structure/menu_manager/nojs/' . $menu_name . '/' . $menu_item_1['mlid'] . '/edit');
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]//td//a[@href="' . $edit_url . '"]'), 'The item edit button is rendered in the table on the menu overview form.');
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]//td//a[@href=:url]', array(':url' => url('<front>'))), 'The item visit button is rendered in the table on the menu overview form.');
+
+        // Check that the menu links are initially in alphabetical order.
+        $menu_item_1_position = $menu_item_1['link_title'] < $menu_item_2['link_title'] ? '1' : '2';
+        $menu_item_2_position = $menu_item_1['link_title'] > $menu_item_2['link_title'] ? '1' : '2';
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]/tbody/tr[:position]/td/a[contains(text(), :title)]', array(':position' => $menu_item_1_position, ':title' => $menu_item_1['link_title'])), 'The first item is placed in alphabetical order.');
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]/tbody/tr[:position]/td/a[contains(text(), :title)]', array(':position' => $menu_item_2_position, ':title' => $menu_item_2['link_title'])), 'The second item is placed in alphabetical order.');
+
+        $this->assertItemTitleAttributeEqualsItemTitle($menu_item_1);
+        $this->assertItemPathAttributeEqualsItemPath($menu_item_1);
+        $this->assertItemTitleAttributeEqualsItemTitle($menu_item_1);
+        $this->assertItemPathAttributeEqualsItemPath($menu_item_2);
+
+        // Change the weights of the menu links.
+        $edit = array(
+          "mlid:{$menu_item_1['mlid']}[weight]" => 1,
+          "mlid:{$menu_item_2['mlid']}[weight]" => 0,
+        );
+        $this->drupalPost(NULL, $edit, t('Save configuration'));
+
+        // Check that the order of the menu links are now reversed.
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]/tbody/tr[1]/td/a[contains(text(), @title)]', array('@title' => $menu_item_2['link_title'])), 'The first item is now shown below the second item.');
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]/tbody/tr[2]/td/a[contains(text(), @title)]', array('@title' => $menu_item_1['link_title'])), 'The second item is now shown above the first item.');
+
+        // Reverse the weights of the menu links.
+        $edit = array(
+          "mlid:{$menu_item_1['mlid']}[weight]" => 1,
+          "mlid:{$menu_item_2['mlid']}[weight]" => 0,
+        );
+        $this->drupalPost(NULL, $edit, t('Save configuration'));
+
+        // Check that the order of the menu links are now reversed.
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]/tbody/tr[1]/td/a[contains(text(), :title)]', array(':title' => $menu_item_2['link_title'])), 'The first item is now shown below the second item.');
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]/tbody/tr[2]/td/a[contains(text(), :title)]', array(':title' => $menu_item_1['link_title'])), 'The second item is now shown above the first item.');
+      }
+      else {
+        $this->drupalGet('admin/structure/menu_manager/' . $this->tsids[$menu_name]);
+        $this->assertTrue($this->xpath('//table[@id="menu-overview"]'), 'The items table is rendered on the menu overview form.');
+        $this->assertFalse($this->xpath('//table[@id="menu-overview"]//td//a[@href="/admin/structure/menu/item/' . $menu_item_1['mlid'] . '/delete"]'), 'The item delete button is not rendered in the table on the menu overview form.');
+        $this->assertFalse($this->xpath('//table[@id="menu-overview"]//td//a[@href="/admin/structure/menu/item/' . $menu_item_1['mlid'] . '/edit"]'), 'The item edit button is not rendered in the table on the menu overview form.');
+        $this->assertFalse($this->xpath('//table[@id="menu-overview"]//td//a[@href="/"]'), 'The item visit button is not rendered in the table on the menu overview form.');
+      }
+    }
+  }
+
+  /**
+   * Tests support of menu types in the menu overview.
+   */
+  public function testMenuOverviewTypes() {
+    $menu = reset($this->menus);
+    $menu = menu_load($menu['menu_name']);
+
+    // Check that menu links of different types correctly show url and type.
+    // Create a node type and a node to link to.
+    $content_type = $this->drupalCreateContentType();
+    $node = $this->drupalCreateNode(array('type' => $content_type->type));
+
+    // Define a list of supported types.
+    $types = array(
+      // Node detail page.
+      array(
+        'type' => check_plain($content_type->name),
+        'url' => '/' . drupal_get_path_alias('node/' . $node->nid),
+        'link_path' => 'node/' . $node->nid,
+      ),
+      // Site frontpage.
+      array(
+        'type' => t('Frontpage'),
+        'url' => '/',
+        'link_path' => '<front>',
+      ),
+    );
+
+    // Create the menu items.
+    $menu_items = array();
+    $weight = -10;
+    foreach ($types as $type) {
+      $item = array(
+        'link_path' => $type['link_path'],
+        'weight' => $weight++,
+      );
+      $menu_items[$type['type']] = $this->createMenuLink($menu, $item);
+    }
+
+    $this->drupalGet('admin/structure/menu_manager/' . $menu['i18n_tsid']);
+
+    // Check the types and urls of the menu items.
+    $i = 1;
+    foreach ($types as $type) {
+      // Having trouble with targeting node texts in SimpleXML. This query works
+      // but matches too broadly:
+      // '//table[@id="menu-overview"]/tbody/tr[1]/td[contains(text(), "/")]'
+      // And this query should match the node text exactly, but returns nothing:
+      // '//table[@id="menu-overview"]/tbody/tr[1]/td[text() = "/")]'
+      // After some experimentation I settled on casting the entire element to
+      // a string, and matching that. Suggestions from XPath wizards welcome.
+      $element = $this->xpath('//table[@id="menu-overview"]/tbody/tr[:position]/td[3]/span', array(':position' => $i));
+      $this->assertEqual((string) $element[0], $type['url'], format_string('The url of a link of type @type is correctly set to @url', array('@type' => $type['type'], '@url' => $type['url'])));
+      $element = $this->xpath('//table[@id="menu-overview"]/tbody/tr[:position]/td[4]', array(':position' => $i));
+      $this->assertEqual((string) $element[0], $type['type'], format_string('The type of a link of type @type is correctly identified.', array('@type' => $type['type'])));
+      $i++;
+    }
+  }
+
+  /**
+   * Tests that editors cannot edit items which are linked to a published node.
+   */
+  public function testPublishedNodeMenuItemAccess() {
+    // During setUp() menus have been created in different languages. Retrieve
+    // a full set of menus in the current language.
+    $en_menus = db_select('menu_custom', 'mc')
+      ->fields('mc')
+      ->condition('i18n_tsid', $this->tsids, 'IN')
+      ->condition('language', 'en', '=')
+      ->execute()
+      ->fetchAllAssoc('i18n_tsid');
+
+    // Get only 1 menu to run tests on so we don't get overloaded by the same
+    // test over and over.
+    $random_key = array_rand($en_menus);
+    $menu = $en_menus[$random_key];
+
+    // Create a published node.
+    $node = $this->drupalCreateNode(array(
+      'type' => $this->contentType->type,
+      'title' => $this->randomString(),
+    ));
+    $node->status = 1;
+    node_save($node);
+
+    // Create a menu link linked to a published node.
+    $edit = array(
+      'link_title' => $this->randomString(),
+      'navigation' => $menu->menu_name . ':0',
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node->nid,
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/add', $edit, t('Save'));
+
+    // Create a non published node.
+    $node = $this->drupalCreateNode(array(
+      'type' => $this->contentType->type,
+      'title' => $this->randomString(),
+    ));
+
+    // Create a menu link linked to a non published node.
+    $edit = array(
+      'link_title' => $this->randomString(),
+      'navigation' => $menu->menu_name . ':0',
+      'content_button' => 'internal',
+      'internal_link' => 'node/2',
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/add', $edit, t('Save'));
+
+    $node = node_load(2);
+    $node->status = 0;
+    node_save($node);
+
+    // Get the link to check if we can access the paths for the menu link.
+    $links = menu_load_links($menu->menu_name);
+
+    // Run the tests for the chief editor.
+    $this->assertFalse($this->xpath('//input[@class="form-checkbox" and @name="mlid:' . $links[0]['mlid'] . '[hidden]"]'), 'A checkbox has not been found on the overview.');
+    $this->assertTrue($this->xpath('//a[@href=:url]', array(':url' => url('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[0]['mlid'] . '/edit'))), 'The delete link of the published link has been found on the overview.');
+    $this->assertTrue($this->xpath('//a[@href=:url]', array(':url' => url('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[0]['mlid'] . '/delete'))), 'The edit link of the published link has been found on the overview.');
+    $this->assertFalse($this->xpath('//input[@class="form-checkbox" and @name="mlid:' . $links[1]['mlid'] . '[hidden]"]'), 'A checkbox has not been found on the overview.');
+    $this->assertTrue($this->xpath('//a[@href=:url]', array(':url' => url('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[1]['mlid'] . '/edit'))), 'The delete link of the non published link has been found on the overview.');
+    $this->assertTrue($this->xpath('//a[@href=:url]', array(':url' => url('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[1]['mlid'] . '/delete'))), 'The edit link of the non published link has been found on the overview.');
+
+    $this->drupalGet('/admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[0]['mlid'] . '/edit');
+    $this->assertResponse(200, 'The user is allowed to edit the link linked to a published node.');
+    $this->drupalGet('/admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[0]['mlid'] . '/delete');
+    $this->assertResponse(200, 'The user is allowed to delete the link linked to a published node.');
+
+    $this->drupalGet('/admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[1]['mlid'] . '/edit');
+    $this->assertResponse(200, 'The user is allowed to edit the link linked to a non published node.');
+    $this->drupalGet('/admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[1]['mlid'] . '/delete');
+    $this->assertResponse(200, 'The user is allowed to delete the link linked to a non published node.');
+
+    // Run the tests for the editor.
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin/structure/menu_manager/' . $menu->i18n_tsid);
+    $this->assertFalse($this->xpath('//input[@class="form-checkbox" and @name="mlid:' . $links[0]['mlid'] . '[hidden]"]'), 'A checkbox has not been found on the overview for an editor.');
+    $this->assertTrue($this->xpath('//a[@href=:url]', array(':url' => url('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[0]['mlid'] . '/edit'))), 'The delete link of the published link has been found on the overview for an editor.');
+    $this->assertTrue($this->xpath('//a[@href=:url]', array(':url' => url('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[0]['mlid'] . '/delete'))), 'The edit link of the published link has been found on the overview for an editor.');
+    $this->assertFalse($this->xpath('//input[@class="form-checkbox" and @name="mlid:' . $links[1]['mlid'] . '[hidden]"]'), 'A checkbox has not been found on the overview.');
+    $this->assertTrue($this->xpath('//a[@href=:url]', array(':url' => url('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[1]['mlid'] . '/edit'))), 'The delete link of the non published link has been found on the overview for an editor.');
+    $this->assertTrue($this->xpath('//a[@href=:url]', array(':url' => url('admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[1]['mlid'] . '/delete'))), 'The edit link of the non published link has been found on the overview for an editor.');
+
+    $this->drupalGet('/admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[0]['mlid'] . '/edit');
+    $this->assertResponse(200, 'The user is allowed to edit the link linked to a published node.');
+    $this->drupalGet('/admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[0]['mlid'] . '/delete');
+    $this->assertResponse(200, 'The user is allowed to delete the link linked to a published node.');
+
+    $this->drupalGet('/admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[1]['mlid'] . '/edit');
+    $this->assertResponse(200, 'The user is allowed to edit the link linked to a non published node.');
+    $this->drupalGet('/admin/structure/menu_manager/nojs/' . $menu->menu_name . '/' . $links[1]['mlid'] . '/delete');
+    $this->assertResponse(200, 'The user is allowed to delete the link linked to a non published node.');
+  }
+
+  /**
+   * Tests if an editor can save the menu overview without getting errors.
+   *
+   * Bug reported in https://one-agency.atlassian.net/browse/KANWEBS-771.
+   */
+  public function testEditorSavingOverview() {
+    $this->drupalLogin($this->editor);
+
+    $menu = reset($this->menus);
+    $menu = menu_load($menu['menu_name']);
+
+    for ($i = 0; $i < 6; $i++) {
+      $this->createMenuLink($menu);
+    }
+
+    $this->drupalGet('admin/structure/menu_manager/' . $menu['i18n_tsid']);
+    $this->drupalPost(NULL, array(), t('Save configuration'));
+
+    $links = menu_load_links($menu['menu_name']);
+    foreach ($links as $link) {
+      $this->assertEqual($link['hidden'], 0, 'Default hidden state has been set to 0.');
+    }
+  }
+}

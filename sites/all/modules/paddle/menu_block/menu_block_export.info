@@ -1,0 +1,15 @@
+name = "Menu Block Export"
+description = "Provides export interface for Menu block module."
+
+core = 7.x
+dependencies[] = menu_block
+
+files[] = menu_block_export.module
+files[] = menu_block_export.admin.inc
+
+configure = admin/config/user-interface/menu-block/export
+
+; Information added by drush on 2017-07-08
+version = "7.x-2.7+4-dev"
+project = "menu_block"
+datestamp = "1499547465"

@@ -1,0 +1,12 @@
+name = Honeypot
+description = "Mitigates spam form submissions using the honeypot method."
+core = 7.x
+configure = admin/config/content/honeypot
+package = "Spam control"
+
+files[] = honeypot.test
+
+; Information added by drush on 2015-09-03
+version = "7.x-1.21"
+project = "honeypot"
+datestamp = "1441311583"

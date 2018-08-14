@@ -1,0 +1,439 @@
+<?php
+/**
+ * @file
+ * Module file for all functionality for CultureFeed Search.
+ */
+
+// Default API location. Can be overriden in settings form.
+define('CULTUREFEED_SEARCH_API_LOCATION', 'http://acc.uitid.be/uitid/rest/searchv2/');
+define('CULTUREFEED_SEARCH_CACHE_EXPIRES', 3600);
+
+// Default cdb schema version.  Can be overridden in settings form.
+define('CULTUREFEED_SEARCH_CDB_DEFAULT_VERSION', '3.2');
+
+// Default proximity search range.
+define('CULTUREFEED_SEARCH_DEFAULT_PROXIMITY_RANGE', 20);
+
+module_load_include('inc', 'culturefeed_search', 'includes/helpers');
+
+/**
+ * Implements hook_init().
+ */
+function culturefeed_search_init() {
+
+  // Set noindex metatag when Search API location points to acceptance.
+  if (culturefeed_search_acceptance_mode()) {
+    culturefeed_search_set_noindex_metatag();
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function culturefeed_search_menu() {
+
+  if (!module_exists('culturefeed')) {
+    $items['admin/config/culturefeed'] = array(
+      'title' => 'CultureFeed',
+      'description' => 'Settings related to CultureFeed.',
+      'position' => 'right',
+      'weight' => 0,
+      'page callback' => 'system_admin_menu_block_page',
+      'access arguments' => array('access administration pages'),
+      'file' => 'system.admin.inc',
+      'file path' => drupal_get_path('module', 'system'),
+    );
+  }
+
+  $items['admin/config/culturefeed/search'] = array(
+    'title' => 'CultureFeed Search',
+    'description' => 'Change CultureFeed Search API setting like API Appliction key, location, ...',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_search_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'includes/admin.inc',
+  );
+
+  // Autocomplete path for suggestions.
+  $items['autocomplete/culturefeed/suggestions'] = array(
+    'title' => 'Culturefeed suggestions autocomplete',
+    'page callback' => 'culturefeed_search_suggestions_autocomplete_page',
+    'page arguments' => array(3, FALSE, NULL, FALSE),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/pages.inc',
+  );
+
+  // Autocomplete path for actor
+  $items['autocomplete/culturefeed/actor-suggestions'] = array(
+    'title' => 'Culturefeed suggestions autocomplete',
+    'page callback' => 'culturefeed_search_suggestions_autocomplete_page',
+    'page arguments' => array(3, FALSE, 'actor', FALSE),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/pages.inc',
+  );
+
+  // Autocomplete path for all actors from production (temporary workaround for PWK-213)
+  $items['autocomplete/culturefeed/actor-suggestions/all'] = array(
+    'title' => 'Culturefeed suggestions autocomplete',
+    'page callback' => 'culturefeed_search_suggestions_autocomplete_page',
+    'page arguments' => array(4, FALSE, 'actor', TRUE),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/pages.inc',
+  );
+
+  // Autocomplete path for region suggestions.
+  $items['autocomplete/culturefeed/region-suggestion'] = array(
+    'page callback' => 'culturefeed_search_region_suggestion_autocomplete_page',
+    'page arguments' => array(3),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/pages.inc',
+  );
+
+  // Autocomplete for city and region suggestions
+  $items['autocomplete/culturefeed/city-suggestion'] = array(
+    'page callback' => 'culturefeed_search_city_suggestion_autocomplete_page',
+    'page arguments' => array(3, FALSE),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/pages.inc',
+  );
+  $items['autocomplete/culturefeed/city-region-suggestion'] = array(
+    'page callback' => 'culturefeed_search_city_suggestion_autocomplete_page',
+    'page arguments' => array(3, TRUE),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/pages.inc',
+  );
+
+  return $items;
+
+}
+
+/**
+ * Implements hook_flush_caches().
+ */
+function culturefeed_search_flush_caches() {
+  return array('cache_culturefeed_search');
+}
+
+/**
+ * Clears all cache for culturefeed search results and related activity.
+ */
+function _culturefeed_search_flush_caches($search_only = FALSE) {
+  cache_clear_all('culturefeed:', 'cache_culturefeed_search', TRUE);
+  if (!$search_only) {
+    cache_clear_all('culturefeed:', 'cache_culturefeed', TRUE);
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function culturefeed_search_form_system_performance_settings_alter(&$form, $form_state) {
+
+  // We want our stuff before the clear cache fieldset and button.
+  $form['buttons']['#weight'] = 3;
+  $form['clear_cache']['#weight'] = 2;
+
+  // Adding API cache settings to the performance settings form.
+  $form['culturefeed_search_cache'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('CultureFeed Search cache'),
+    '#weight' => 1,
+    '#description' => t('Enabling the CultureFeed Search cache will cache some parsed results of requests to the CultureFeed API. This will reduce the number of requests made directly to the API service.'),
+  );
+
+  $form['culturefeed_search_cache']['culturefeed_search_cache_enabled'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Cache API requests'),
+    '#default_value' => variable_get('culturefeed_search_cache_enabled', FALSE),
+  );
+
+  $form['culturefeed_search_cache']['culturefeed_search_cache_flush'] = array(
+    '#type' => 'submit',
+    '#value' => t('Flush the Culturefeed search cache'),
+    '#submit' => array('culturefeed_search_cache_flush_submit'),
+  );
+
+  $period = array(0 => '<' . t('none') . '>') + drupal_map_assoc(array(0, 60, 180, 300, 600, 900, 1800, 2700, 3600, 10800, 21600, 32400, 43200, 86400, 86400 * 2, 86400 * 5, 86400 * 7, 86400 * 14, 86400 * 28), 'format_interval');
+
+}
+
+/**
+ * Submit handler to flush the culturefeed search cache.
+ * @param type $form
+ * @param type $form_state
+ */
+function culturefeed_search_cache_flush_submit($form, $form_state) {
+  _culturefeed_search_flush_caches();
+
+}
+
+/**
+ * Get the query for a search url.
+ *
+ * @param string $search_query
+ *   The search query.
+ *
+ * @return string
+ *   The url.
+ */
+function culturefeed_search_get_search_url_query($search_query) {
+
+  // Check for custom filter options.
+  $known_queries = array();
+  for ($i = 1; $i <= CULTUREFEED_SEARCH_TOTAL_FILTER_BLOCKS; $i++) {
+
+    if ($i == 1) {
+      $filter_options = variable_get('culturefeed_search_filter_options', culturefeed_search_ui_default_filter_options($i));
+    }
+    else {
+      $filter_options = variable_get('culturefeed_search_filter_options_' . $i, culturefeed_search_ui_default_filter_options($i));
+    }
+
+    foreach ($filter_options as $filter) {
+      $known_queries[$filter['api-filter-query']] = $filter['query-string'];
+    }
+
+  }
+
+  $query = array();
+  $locations = array();
+  foreach (explode('&', $search_query) as $key => $value) {
+
+    $param = explode('=', $value);
+    if ($param[0] == 'group') {
+      continue;
+    }
+
+    // Param q = the search
+    if ($param[0] == 'q') {
+      if ($param[1] == '*:*') {
+        continue;
+      }
+      $param[1] = str_replace('%22', '"', $param[1]);
+      $query['search'] = $param[1];
+    }
+    // Param datetype
+    elseif ($param[0] == 'datetype') {
+      $query['datetype'][0] = $param[1];
+    }
+    // Search on location
+    elseif ($param[0] == 'zipcode') {
+      // Check if distance is included.
+      $location_distance = explode('!', $param[1]);
+
+      // If distance is included, add location and distance to url.
+      if (count($location_distance) > 1) {
+        $query['location'] = $location_distance[0];
+        $query['distance'] = rtrim($location_distance[1], "km");
+      }
+      // If distance is not included, only add location to url.
+      else {
+        $query['location'] = $param[1];
+      }
+    }
+    // Filterqueries are most of the time facets.
+    elseif ($param[0] == 'fq') {
+
+      // First check if the query is a custom filter option.
+      if (isset($known_queries[$param[1]])) {
+        $query[$known_queries[$param[1]]] = TRUE;
+        continue;
+      }
+
+      $conditions = explode(' OR ', $param[1]);
+      $previous_field = '';
+      foreach ($conditions as $condition) {
+
+        // Also check for every part of the condition.
+        if (isset($known_queries[$condition])) {
+          $query[$known_queries[$condition]] = TRUE;
+          continue;
+        }
+
+        // Add a limit because timestamps also contains ':' 
+        $search_on = explode(':', $condition, 2);
+
+        if (count($search_on) == 2) {
+          $facet_field = $search_on[0];
+          $facet_value = $search_on[1];
+        }
+        elseif (count($search_on) == 1) {
+          $facet_field = $previous_field;
+          $facet_value = $search_on[0];
+        }
+        else {
+          $facet_field = '';
+          $facet_value = '';
+        }
+
+        $facet_field = str_replace(array('(', ')', '"'), '', $facet_field);
+
+        $inverse = FALSE;
+        if (strpos($facet_field, '!') === 0) {
+          $inverse = TRUE;
+          $facet_field = substr($facet_field, 1);
+        }
+        $facet_value = str_replace(array('(', ')', '"'), '', $facet_value);
+        $previous_field = $facet_field;
+
+        // Check what type of filter it is.
+        switch ($facet_field) {
+
+          // Agefrom facet.
+          case 'agefrom':
+
+            // Multiple min ages: turn min_age into an array.
+            if (isset($query['min_age'])) {
+              $query['min_age'] = array($query['min_age']);
+              $query['min_age'][] = culturefeed_search_get_agefrom_value($facet_value);
+            }
+            else {
+              $query['min_age'] = culturefeed_search_get_agefrom_value($facet_value);
+            }
+            break;
+
+          // Filtering on an actor.
+          case 'actor':
+            $query['actor'] = $facet_value;
+            break;
+
+          // Filtering on location.
+          case 'category_flandersregion_name':
+          case 'city':
+            $query['location'] = $facet_value;
+            break;
+
+          // Filter location category facility Id.
+          case 'location_category_facility_id':
+            $query['facet']['location_category_facility_id'][] = $facet_value;
+            break;
+            
+          // Daterage  
+          case 'startdate':
+            $dates = str_replace (array('[',']','T','Z'), '' , explode('TO', $facet_value));
+            $date_range = DateTime::createFromFormat('Y-m-dH:i:s', trim($dates[0]))->format('d/m/Y');
+            if (isset($dates[1])) {
+              $end_date = DateTime::createFromFormat('Y-m-dH:i:s', trim($dates[1]))->format('d/m/Y');
+              $date_range .= ' - ' . $end_date;
+            }
+            $query['date_range'] = $date_range;
+            break;
+
+          // Normal facets.
+          case 'category_flandersregion_id':
+          case 'category_eventtype_id':
+          case 'category_theme_id':
+          case 'category_id':
+          case 'type':
+
+            if ($inverse) {
+              $facet_value = '!' . $facet_value;
+            }
+            $values = explode(',', $facet_value);
+
+            // Region facets are location searches.
+            if (substr($facet_value, 0, 4) == 'reg.') {
+              $locations[] = $facet_value;
+            }
+            else {
+              if (!isset($query['facet'][$facet_field])) {
+                $query['facet'][$facet_field] = array();
+              }
+              $query['facet'][$facet_field] = array_merge($query['facet'][$facet_field], $values);
+            }
+
+            // Don't take event and production as facet.
+            if (isset($query['facet']['type'])) {
+              foreach ($query['facet']['type'] as $key => $content_type) {
+                if (in_array($content_type, array('production', 'event', '!production', '!event'))) {
+                  unset($query['facet']['type'][$key]);
+                }
+              }
+
+              if (empty($query['facet']['type'])) {
+                unset($query['facet']['type']);
+              }
+
+            }
+
+            break;
+
+          default:
+            // unsupported filter options.
+            if ($facet_field != '!type') {
+              watchdog('culturefeed_search', 'unsupported filter option: ' . $facet_field);
+            }
+
+        }
+
+
+      }
+
+    }
+
+  }
+
+  // Get the correct categorie facets.
+  if (isset($query['facet']['category_id'])) {
+    $inverse = array();
+    $terms = array();
+    foreach($query['facet']['category_id'] as $key => $cat_id){
+      if(strpos($cat_id,'!') === 0) {
+        $inverse[$key] = $cat_id;
+        $cat_id = substr($cat_id,1);
+      }
+      $terms[] = db_select('culturefeed_search_terms', 't')
+        ->condition('tid', $cat_id)
+        ->condition('language', LANGUAGE_NONE)
+        ->fields('t', array('tid', 'did'))->execute();
+    }
+
+    foreach ($terms as $key => $term) {
+      foreach ($term as $t) {
+        if (!isset($inverse[$key])){
+          $query['facet']['category_' . $t->did . '_id'][] = $t->tid;
+        }
+        else {
+          $query['facet']['category_' . $t->did . '_id'][] = $inverse[$key];
+        }
+        unset($query['facet']['category_id'][$key]);
+      }
+    }
+
+    unset($query['facet']['category_id']);
+
+  }
+
+  // Check what location search should activate.
+  $total_locations = count($locations);
+  if ($total_locations > 1) {
+    foreach ($locations as $location) {
+      $query['facet']['category_flandersregion_id'][] = $location;
+    }
+  }
+  elseif ($total_locations == 1) {
+
+    $term = culturefeed_search_get_term_translation($locations[0], LANGUAGE_NONE);
+    $term_parts = explode(' ', $term);
+
+    // If first part is numeric: do location search.
+    if (is_numeric($term_parts[0])) {
+      $query['regId'] = $locations[0];
+      $query['location'] = $term;
+    }
+    // Otherwise set flandersregion facet active.
+    else {
+      $query['facet']['category_flandersregion_id'][] = $locations[0];
+    }
+
+  }
+
+  return $query;
+
+}

@@ -1,0 +1,63 @@
+/**
+ * @file
+ * Poll paddlet styling.
+ */
+
+// --------------------------------
+// Default styles from poll module.
+// --------------------------------
+.poll {
+  overflow: hidden;
+}
+.poll .bar {
+  height: 1em;
+  margin: 1px 0;
+  background-color: #ddd;
+}
+.poll .bar .foreground {
+  background-color: #000;
+  height: 1em;
+  float: left; /* LTR */
+}
+.poll .links {
+  text-align: center;
+}
+.poll .percent {
+  text-align: right; /* LTR */
+}
+.poll .total {
+  text-align: center;
+}
+
+// --------------------------------
+// Custom styles.
+// --------------------------------
+.pane-section-body .field-name-field-paddle-poll-question {
+  margin: 0;
+}
+
+.field-name-field-paddle-poll-question {
+  margin: 30px 0 15px;
+  font-weight: bold;
+
+  .pane-section-body & {
+    margin: 0 0 15px;
+  }
+}
+
+.poll-chart-legend__item {
+  position: relative;
+}
+
+.poll-chart-legend__color {
+  position: absolute;
+  top: 50%;
+  margin-top: -.5em;
+  width: 20px;
+  height: 1em;
+}
+
+.poll-chart-legend__label {
+  margin-left: 20px;
+  padding-left: .5em;
+}

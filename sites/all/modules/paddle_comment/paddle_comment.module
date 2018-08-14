@@ -1,0 +1,328 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Comment module.
+ */
+
+include_once 'paddle_comment.features.inc';
+
+/**
+ * Number of comments to show per page.
+ */
+define('PADDLE_COMMENTS_PER_PAGE', 30);
+
+/**
+ * Whether the users can add title to the comments.
+ */
+define('PADDLE_COMMENTS_TITLE_ALLOWED', 0);
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_comment_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_comment_configuration_form',
+  );
+}
+
+/**
+ * Paddle Comment configuration form callback.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_comment_configuration_form($form) {
+  $form['paddle_comment_skip_approval'] = array(
+    '#type' => 'radios',
+    '#title' => t('Moderation options'),
+    '#options' => array(
+      COMMENT_PUBLISHED => t("Don't approve - publish instantly"),
+      COMMENT_NOT_PUBLISHED => t('Approve comments'),
+    ),
+    '#default_value' => variable_get('paddle_comment_skip_approval', COMMENT_NOT_PUBLISHED),
+  );
+
+  $default_values = array();
+  $options = node_type_get_names();
+  foreach ($options as $type => $name) {
+    $default_values[$type] = variable_get("comment_$type", 0) ? $type : 0;
+  }
+
+  $form['paddle_comment_content_types'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Content types'),
+    '#description' => t('Apply comments to only the following node types.'),
+    '#options' => $options,
+    '#default_value' => $default_values,
+  );
+
+  $form['save'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#attributes' => array(
+      'class' => array('hidden'),
+    ),
+  );
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_comment_contextual_actions_configuration_form';
+  }
+  return $form;
+}
+
+/**
+ * Submit handler for the Paddle comment configuration form.
+ */
+function paddle_comment_configuration_form_submit($form, $form_state) {
+  // Set the permissions according to the setting.
+  $skip_approval = $form_state['values']['paddle_comment_skip_approval'];
+  if ($skip_approval != variable_get('paddle_comment_skip_approval', -1)) {
+    user_role_change_permissions(DRUPAL_ANONYMOUS_RID, array('skip comment approval' => $skip_approval));
+    $read_only_role = user_role_load_by_name('Read Only');
+    user_role_change_permissions($read_only_role->rid, array('skip comment approval' => $skip_approval));
+  }
+
+  // Save this setting to avoid checking permissions to set the value in the
+  // form in future loads of the page.
+  variable_set('paddle_comment_skip_approval', $form_state['values']['paddle_comment_skip_approval']);
+
+  // Save the content type settings.
+  foreach (node_type_get_names() as $type => $name) {
+    $value = $form_state['values']['paddle_comment_content_types'][$type] ? COMMENT_NODE_CLOSED : COMMENT_NODE_HIDDEN;
+    variable_set('comment_' . $type, $value);
+
+    // If comments are being enabled for a content type, make sure the body
+    // field of a comment is plain text.
+    if ($value == COMMENT_NODE_CLOSED) {
+      $instance = field_info_instance('comment', 'comment_body', 'comment_node_' . $type);
+      $instance['settings']['text_processing'] = 0;
+      field_update_instance($instance);
+    }
+  }
+
+  drupal_set_message(t('Your configuration has been saved.'));
+
+  // Add a cache clear like the core permissions form.
+  cache_clear_all();
+}
+
+/**
+ * After-build function of the Paddle Comment configuration form.
+ *
+ * @param array $form
+ *   Form render array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_comment_contextual_actions_configuration_form($form) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-save',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function paddle_comment_node_type_insert($info) {
+  $default = variable_get('comment_' . $info->type, COMMENT_NODE_HIDDEN);
+  variable_set('comment_' . $info->type, $default);
+}
+
+/**
+ * Sets the default values to what we want them to be.
+ *
+ * @param string $type_name
+ *   The content type name.
+ */
+function paddle_comment_set_default_comment_settings($type_name) {
+  variable_set("comment_default_mode_$type_name", COMMENT_MODE_THREADED);
+  variable_set("comment_default_per_page_$type_name", PADDLE_COMMENTS_PER_PAGE);
+  variable_set("comment_anonymous_$type_name", COMMENT_ANONYMOUS_MAYNOT_CONTACT);
+  variable_set("comment_subject_field_$type_name", PADDLE_COMMENTS_TITLE_ALLOWED);
+  variable_set("comment_form_location_$type_name", COMMENT_FORM_BELOW);
+  variable_set("comment_preview_$type_name", DRUPAL_DISABLED);
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_comment_permission() {
+  $return = array();
+
+  $return['access comment manager'] = array(
+    'title' => t('Access comment manager'),
+  );
+
+  return $return;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_comment_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_node_view_alter().
+ */
+function paddle_comment_node_view_alter(&$build) {
+  // Do not show the comment sections on node pages if the settings for
+  // the content type is hidden.
+  if (variable_get('comment_' . $build['#bundle'], COMMENT_NODE_HIDDEN) == COMMENT_NODE_HIDDEN) {
+    unset($build['comments']);
+  }
+
+  // Never show the comments links.
+  if (!empty($build['links']['comment'])) {
+    unset($build['links']['comment']);
+  }
+
+  if (empty($build['comments'])) {
+    unset($build['comments']);
+  }
+}
+
+/**
+ * Implements hook_set_allowed_notifications().
+ */
+function paddle_comment_set_allowed_notifications() {
+  return array(
+    'comment_added_responsible' => t("A comment has been added to a node I'm responsible for"),
+  );
+}
+
+/**
+ * Implements hook_entity_insert().
+ */
+function paddle_comment_entity_insert($entity, $type) {
+  global $user;
+
+  $wrapper = entity_metadata_wrapper($type, $entity);
+
+  if ($type != 'comment' || strpos($wrapper->getBundle(), 'comment_node') !== 0) {
+    return;
+  }
+
+  try {
+    // Fetch the most recent revision.
+    $node = workbench_moderation_node_current_load($entity->nid);
+    $node_wrapper = entity_metadata_wrapper('node', $node);
+    $responsible = $node_wrapper->field_page_responsible_author->value();
+
+    if (
+        $responsible &&
+        $responsible->uid != $user->uid &&
+        paddle_notifications_user_has_notification_enabled($responsible, 'comment_added_responsible')
+    ) {
+      $wrapper = entity_property_values_create_entity('message', array(
+          'type' => 'paddle_notifications_comment_added_responsible',
+          'uid' => $responsible->uid,
+          'field_paddle_notifications_node' => $entity->nid,
+      ));
+      /* @var \EntityDrupalWrapper $wrapper */
+      $wrapper->save();
+
+      // Send the actual mail.
+      message_notify_send_message($wrapper->value());
+    }
+
+  }
+  catch (\EntityMetadataWrapperException $e) {
+    watchdog(
+        'paddle_notifications',
+        'Failed to handle notification. Error was %message',
+        array('%message' => $e->getMessage())
+    );
+  }
+}
+
+/**
+ * Implements hook_default_page_manager_handlers_alter().
+ */
+function paddle_comment_default_page_manager_handlers_alter(&$export) {
+  // Add the comment pane to the node edit form.
+  if (!empty($export['node_edit_panel_context'])) {
+    $pane = new stdClass();
+    $pane->pid = 'new-768c922d-77f4-46b4-a830-ff41e7ad4ba8';
+    $pane->panel = 'left';
+    $pane->type = 'node_form_comment';
+    $pane->subtype = 'node_form_comment';
+    $pane->shown = TRUE;
+    $pane->access = array(
+        'plugins' => array(
+            0 => array(
+                'name' => 'node_type_comment_status_hidden',
+                'settings' => NULL,
+                'context' => 'argument_node_edit_1',
+                'not' => FALSE,
+            ),
+        ),
+    );
+    $pane->configuration = array(
+        'context' => 'argument_node_edit_1',
+        'override_title' => 0,
+        'override_title_text' => '',
+        'override_title_heading' => 'h2',
+    );
+    $pane->cache = array();
+    $pane->style = array(
+        'settings' => NULL,
+    );
+    $pane->css = array();
+    $pane->extras = array();
+    $pane->locks = array();
+    $pane->uuid = '768c922d-77f4-46b4-a830-ff41e7ad4ba8';
+
+
+    // Loop over the panes inside the left column of the node edit page
+    // and place the comment part in the correct position.
+    $weight = 0;
+    $panels = $export['node_edit_panel_context']->conf['display']->panels['left'];
+    foreach ($panels as $position => $uuid) {
+      $export['node_edit_panel_context']->conf['display']->panels['left'][$weight] = $panels[$position];
+      $export['node_edit_panel_context']->conf['display']->content[$uuid]->position = $weight;
+
+      // Place the comment section after the taxonomy section.
+      if ($uuid == 'new-f23903ea-452d-6de4-a5ef-fc95db473875') {
+        // Add an extra point to the weight to place the node_comment pane
+        // in between 2 other panes.
+        $weight++;
+        $pane->position = $weight;
+        $export['node_edit_panel_context']->conf['display']->content['new-768c922d-77f4-46b4-a830-ff41e7ad4ba8'] = $pane;
+        $export['node_edit_panel_context']->conf['display']->panels['left'][$weight] = 'new-768c922d-77f4-46b4-a830-ff41e7ad4ba8';
+      }
+
+      $weight++;
+    }
+  }
+}
+
+/**
+ * Implements hook_form_comment_form_alter().
+ */
+function paddle_comment_form_comment_form_alter(&$form, &$form_state, $form_id) {
+  $comment = $form_state['comment'];
+
+  if (empty($comment->cid)) {
+    $form['actions']['submit']['#value'] = t('Add comment');
+  }
+}

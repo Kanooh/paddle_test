@@ -1,0 +1,23 @@
+name = VUB Theme
+description = Applies the theming for VUB websites
+package = Core
+version = 1.0
+core = 7.x
+base theme = kanooh_theme_v2_page_wide
+
+regions[service_links] = Service Links
+regions[header_bottom] = Header Bottom
+regions[sidebar_first] = Left sidebar
+regions[sidebar_second] = Right sidebar
+regions[content_top] = Content Top
+regions[content_sub_top] = Content Sub Top
+regions[content] = Content
+regions[disclaimer] = Disclaimer
+regions[footer] = Footer
+regions[highlighted] = Highlighted
+regions[help] = Help
+regions[featured] = Featured
+
+stylesheets[all][] = assets/css/general.css
+stylesheets[all][] = assets/css/paddle-components.css
+stylesheets[all][] = assets/css/typography.css

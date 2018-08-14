@@ -1,0 +1,1107 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle i18n module.
+ */
+
+include_once 'paddle_i18n.features.inc';
+require_once DRUPAL_ROOT . '/includes/language.inc';
+
+/**
+ * Define a list of the languages that the paddlet supports.
+ *
+ * @return array
+ *   The languages in an array keyed by the language code and with value the
+ *   language name.
+ */
+function paddle_i18n_supported_languages() {
+  return array(
+    'ar' => t('Arabic'),
+    'bg' => t('Bulgarian'),
+    'hr' => t('Croatian'),
+    'cs' => t('Czech'),
+    'da' => t('Danish'),
+    'nl' => t('Dutch'),
+    'en' => t('English'),
+    'et' => t('Estonian'),
+    'fi' => t('Finnish'),
+    'fr' => t('French'),
+    'de' => t('German'),
+    'el' => t('Greek'),
+    'hu' => t('Hungarian'),
+    'ga' => t('Irish'),
+    'it' => t('Italian'),
+    'lv' => t('Latvian'),
+    'lt' => t('Lithuanian'),
+    'mt' => t('Maltese'),
+    'pl' => t('Polish'),
+    'pt' => t('Portuguese'),
+    'ro' => t('Romanian'),
+    'sk' => t('Slovak'),
+    'sl' => t('Slovenian'),
+    'es' => t('Spanish'),
+    'sv' => t('Swedish'),
+    'tr' => t('Turkish'),
+  );
+}
+
+/**
+ * The languages which are enabled by Paddle by default.
+ *
+ * @return array
+ *   The default languages by language code.
+ */
+function paddle_i18n_default_languages() {
+  $default_languages = array('nl', 'en', 'de', 'fr');
+  return array_combine($default_languages, $default_languages);
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_i18n_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_i18n_configuration_form',
+  );
+}
+
+/**
+ * App configuration form callback.
+ *
+ * @param array $form
+ *   The form array.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_i18n_configuration_form($form, &$form_state) {
+  drupal_set_title(t('Paddle Multilingual'));
+  drupal_static_reset('language_list');
+  $default_language = language_default();
+  $available_languages = language_list();
+  $options = array();
+  $enabled = array();
+  foreach (paddle_i18n_supported_languages() as $code => $language) {
+    $options[$code] = '';
+
+    if (array_key_exists($code, $available_languages) && $available_languages[$code]->enabled) {
+      $enabled[] = $code;
+    }
+    $form['language'][$code] = array('#markup' => check_plain($language));
+  }
+  $form['enabled'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Enabled languages'),
+    '#title_display' => 'invisible',
+    '#options' => $options,
+    '#default_value' => $enabled,
+  );
+
+  $form['default'] = array(
+    '#type' => 'radios',
+    '#options' => $options,
+    '#default_value' => isset($form_state['values']['default']) ? $form_state['values']['default'] : $default_language->language,
+  );
+
+  $form['#theme'] = 'paddle_i18n_configuration_form';
+
+  $form['save'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#attributes' => array(
+      'class' => array('hidden'),
+    ),
+  );
+
+  // Set the buttons in the contextual toolbar if available.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_i18n_contextual_actions_configuration_form';
+  }
+  return $form;
+}
+
+/**
+ * After-build function of the Paddle i18n configuration form.
+ *
+ * @param array $form
+ *   Form render array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_i18n_contextual_actions_configuration_form($form) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-save',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_i18n_theme() {
+  return array(
+    'paddle_i18n_configuration_form' => array(
+      'render element' => 'form',
+    ),
+  );
+}
+
+/**
+ * Returns HTML for a paddlet configuration form as 3 separate tables.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - form: A render element representing the form.
+ *
+ * @ingroup themeable
+ *
+ * @return string
+ *   The HTML generated for the form.
+ */
+function theme_paddle_i18n_configuration_form($variables) {
+  $output = '';
+  $form = $variables['form'];
+  $supported_languages = array_keys(paddle_i18n_supported_languages());
+  $allowed_languages = $form['enabled']['#value'];
+
+  // Do not allow to choose a language as default if not enabled yet.
+  foreach ($supported_languages as $language) {
+    if (!in_array($language, $allowed_languages)) {
+      $form['default'][$language]['#attributes']['disabled'] = 'disabled';
+    }
+  }
+
+  // Split the languages in two for the two tables.
+  $split = ceil(count($supported_languages) / 3);
+  $table_languages = array(
+    array_splice($supported_languages, 0, $split),
+    array_splice($supported_languages, 0, $split),
+    array_splice($supported_languages, 0, $split),
+  );
+  foreach ($table_languages as $languages) {
+    $rows = array();
+    foreach ($form['language'] as $key => $element) {
+      if (!in_array($key, $languages)) {
+        continue;
+      }
+      if (is_array($element) && element_child($key)) {
+        // Add invisible labels for the checkboxes and radio buttons in the
+        // table for accessibility. These changes are only required and valid
+        // when the form is themed as a table, so it would be wrong to perform
+        // them in the form constructor.
+        $title = drupal_render($form['language'][$key]);
+        $form['enabled'][$key]['#title'] = t('Enable !title', array('!title' => $title));
+        $form['enabled'][$key]['#title_display'] = 'invisible';
+
+        $form['default'][$key]['#title'] = t('Enable !title', array('!title' => $title));
+        $form['default'][$key]['#title_display'] = 'invisible';
+
+        $rows[] = array(
+          array(
+            'data' => '<td><strong>' . $title . '</strong></td>',
+            'style' => 'text-align: center;',
+          ),
+          array(
+            'data' => drupal_render($form['enabled'][$key]),
+            'style' => 'text-align: center;',
+          ),
+          array(
+            'data' => drupal_render($form['default'][$key]),
+            'style' => 'text-align: center;',
+          ),
+        );
+      }
+    }
+    $header = array(
+      array(),
+      array('data' => t('Language')),
+      array('data' => t('Enabled')),
+      array('data' => t('Default')),
+    );
+    $output .= theme('table', array('header' => $header, 'rows' => $rows));
+  }
+  $output .= drupal_render_children($form);
+
+  return $output;
+}
+
+/**
+ * Process the paddlet config form submissions, updating existing languages.
+ *
+ * @see locale_languages_overview_form_submit()
+ */
+function paddle_i18n_configuration_form_submit($form, &$form_state) {
+  paddle_i18n_update_language_list($form_state['values']['enabled'], $form_state['values']['default']);
+}
+
+/**
+ * Implements hook_language_language_switch_links_alter().
+ */
+function paddle_i18n_language_switch_links_alter(array &$links, $type, $path) {
+  $lang = isset($GLOBALS[$type]) ? $GLOBALS[$type] : FALSE;
+
+  if (path_is_admin(current_path())) {
+    $module_path = drupal_get_path('module', 'paddle_i18n');
+    drupal_add_js($module_path . '/js/switcher.js', array(
+      'type' => 'file',
+      'group' => JS_THEME,
+    ));
+    drupal_add_js(array('paddle_i18n' => array('language' => $lang->language)), 'setting');
+  }
+
+  if ($lang && isset($links[$lang->language])) {
+    // Add class to active language.
+    $links[$lang->language]['attributes']['class'][] = 'active-language';
+  }
+
+  // Replace label for ISO code.
+  foreach ($links as $iso_code => $link) {
+    $links[$iso_code]['title'] = $iso_code;
+  }
+
+  // When the links are rendered in the front page, the path is '<front>'.
+  // Normalize it.
+  $path = drupal_is_front_page() ? current_path() : $path;
+
+  // Change the links to the other languages to go to the translations or
+  // homepages in those languages or to the default website homepage.
+  if (preg_match("!^node/(\d+)(/.+|)!", $path, $matches)) {
+    $node = node_load((int) $matches[1]);
+
+    if ($node) {
+      $site_frontpage = variable_get('site_frontpage', '');
+      // The default homepage is always the original, so nid == tnid.
+      $homepage_nid = preg_match("!node/(\d+)!", $site_frontpage, $homepage_matches) ? (int) $homepage_matches[1] : FALSE;
+
+      foreach ($links as $langcode => $link) {
+        if ($lang->language == $langcode) {
+          continue;
+        }
+
+        if ($nid = _paddle_i18n_node_get_language_translation($node->tnid, $langcode)) {
+          // Translation in a different node.
+          $links[$langcode]['href'] = 'node/' . $nid . $matches[2];
+        }
+        elseif ($nid = _paddle_i18n_node_get_language_translation($homepage_nid, $langcode)) {
+          // If we have a translation of the homepage in this language, we
+          // send the user there.
+          $links[$langcode]['href'] = 'node/' . $nid;
+        }
+        elseif ($homepage_nid) {
+          // Go to the default homepage.
+          // Use an empty href for link generation, so there will be no path
+          // alias used and drupal_path_initialize() will take care of setting
+          // the default homepage in the $_GET['q'] variable.
+          // If the alias is present, drupal_get_normal_path() would fail to
+          // lookup the path in the requested language if not the same of the
+          // homepage node itself.
+          $links[$langcode]['href'] = '';
+        }
+        else {
+          unset($links[$langcode]['href']);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Retrieves the nid for the translation for a node.
+ *
+ * @param int $tnid
+ *   The translation nid.
+ * @param string $langcode
+ *   The language for which we want the nid.
+ *
+ * @return bool|int
+ *   The translation nid, of FALSE if not set or the user has no permission.
+ */
+function _paddle_i18n_node_get_language_translation($tnid, $langcode) {
+  $translations = translation_node_get_translations($tnid);
+
+  if (
+    // If we have a translation for this language.
+    isset($translations[$langcode]) &&
+    // Either the translation is published or the user has access to it.
+    ($translations[$langcode]->status || user_access('view all unpublished content'))
+  ) {
+    return $translations[$langcode]->nid;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function paddle_i18n_form_i18n_node_select_translation_alter(&$form, &$form_state, $form_id) {
+  global $user;
+  // Lock the node translation page for simultaneous editing.
+  $node = $form['node']['#value'];
+  if (module_exists('content_lock')) {
+    $lock = content_lock_fetch_lock($node->nid);
+    if ($lock !== FALSE && $user->uid != $lock->uid) {
+      content_lock_node($node->nid, $user->uid);
+      drupal_goto("admin/content_manager/node/{$node->nid}/view");
+    }
+    else {
+      content_lock_node($node->nid, $user->uid);
+      // Add the (un)locking js.
+      drupal_add_js(drupal_get_path('module', 'paddle_core') . '/js/paddle_content_locking.js', array('type' => 'file'));
+      $form['nid'] = array('#value' => $node->nid);
+      _content_lock_add_unload_js($form, array());
+    }
+  }
+
+  // Add a custom submit handler.
+  $form['#submit'][] = 'paddle_i18n_form_i18n_node_select_translation_submit';
+
+  // Add contextual toolbar.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_i18n_contextual_actions_translation_form';
+  }
+
+  // Change the help text on the autocomplete form.
+  $form['translations']['#description'] = t("Alternatively, you can select existing pages as translations of the source page or remove pages from this translation set. Only pages that have the right language, are published and don't belong to another translation set will be available here.");
+}
+
+/**
+ * Custom submit handler for the node translation form.
+ */
+function paddle_i18n_form_i18n_node_select_translation_submit($form, &$form_state) {
+  content_lock_release($form['nid']['#value']);
+  $form_state['redirect'] = "admin/content_manager/node/{$form['nid']['#value']}/view";
+}
+
+/**
+ * After-build function of the node translation form.
+ *
+ * @param array $form
+ *   Form render array.
+ *
+ * @return array
+ *   Updated form render array.
+ */
+function paddle_i18n_contextual_actions_translation_form($form) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  $admin_node_view = "admin/content_manager/node/{$form['nid']['#value']}/view";
+  $actions[] = array(
+    'action' => l(t('Back'), $admin_node_view, array('attributes' => array('class' => array('ui-icon', 'fa-arrow-left')))),
+    'class' => array('cancel'),
+    'weight' => 0,
+  );
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Save'), '', array(
+      'attributes' => array(
+        'data-paddle-contextual-toolbar-click' => 'edit-update',
+        'class' => array('ui-icon', 'fa-check'),
+      ),
+    )),
+    'class' => array('save'),
+    'weight' => 5,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_node_metadata_GROUP_items().
+ */
+function paddle_i18n_node_metadata_structure_items($node) {
+  $items = array();
+
+  $languages = language_list();
+  $language = $languages[$node->language];
+  $items['language'] = array(
+    'label' => t('Language'),
+    'metadata' => $language->name,
+    'raw' => $node->language,
+    'weight' => 75,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_metadata_GROUP_items().
+ */
+function paddle_i18n_node_metadata_general_items($node, $extended) {
+  $items = array();
+  if (!$extended) {
+    $languages = language_list();
+    $language = $languages[$node->language];
+    $items['language'] = array(
+      'label' => t('Language'),
+      'metadata' => $language->name,
+      'raw' => $node->language,
+      'weight' => 62,
+    );
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_i18n_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_ctools_render_alter().
+ */
+function paddle_i18n_ctools_render_alter(&$info, &$page, &$context) {
+  if (module_exists('paddle_contextual_toolbar')) {
+    if (!empty($context['subtask']['name']) && $context['subtask']['name'] == 'paddle_content_manager_node_view') {
+      if ($node = node_load($context['args'][0])) {
+        // Add link to the translation page if the user has the permission.
+        if (user_access('translate content')) {
+          $actions = paddle_contextual_toolbar_actions();
+          $actions['Translations'] = array(
+            'action' => l(
+              t('Translations'),
+              'node/' . $node->nid . '/translate',
+              array(
+                'attributes' => array('class' => array('ui-icon', 'fa-globe')),
+              )
+            ),
+            'class' => array('translate'),
+            'weight' => 10,
+            'group' => 'content',
+          );
+          paddle_contextual_toolbar_actions($actions);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_default_page_manager_handlers_alter().
+ */
+function paddle_i18n_default_page_manager_handlers_alter(&$export) {
+  // Add the multilingual pane to the node edit form.
+  if (!empty($export['node_edit_panel_context'])) {
+    $language_pane = new stdClass();
+    $language_pane->pid = 'new-917e01cf-7a81-4b27-bca3-da84f8facfd9';
+    $language_pane->panel = 'left';
+    $language_pane->type = 'node_form_language';
+    $language_pane->subtype = 'node_form_language';
+    $language_pane->shown = TRUE;
+    $language_pane->access = array();
+    $language_pane->configuration = array(
+      'context' => 'argument_node_edit_1',
+      'override_title' => 0,
+      'override_title_text' => '',
+      'override_title_heading' => 'h2',
+    );
+    $language_pane->cache = array();
+    $language_pane->style = array(
+      'settings' => NULL,
+    );
+    $language_pane->css = array();
+    $language_pane->extras = array();
+    $language_pane->position = 4;
+    $language_pane->locks = array();
+    $language_pane->uuid = '917e01cf-7a81-4b27-bca3-da84f8facfd9';
+    $panes_to_insert[] = $language_pane->pid;
+
+    $translations_pane = new stdClass();
+    $translations_pane->pid = 'new-92715ad4-f374-4084-8a32-e4ec04532399';
+    $translations_pane->panel = 'left';
+    $translations_pane->type = 'node_translations_overview';
+    $translations_pane->subtype = 'node_translations_overview';
+    $translations_pane->shown = TRUE;
+    $translations_pane->access = array();
+    $translations_pane->configuration = array(
+      'extended' => FALSE,
+      'collapsible' => FALSE,
+      'horizontal' => FALSE,
+      'context' => 'argument_node_edit_1',
+      'override_title' => 0,
+      'override_title_text' => '',
+      'override_title_heading' => 'h2',
+    );
+    $translations_pane->cache = array();
+    $translations_pane->style = array(
+      'settings' => NULL,
+    );
+    $translations_pane->css = array();
+    $translations_pane->extras = array();
+    $translations_pane->position = 5;
+    $translations_pane->locks = array();
+    $translations_pane->uuid = '92715ad4-f374-4084-8a32-e4ec04532399';
+    $panes_to_insert[] = $translations_pane->pid;
+
+    // Shortcut to the left column.
+    $left_column = &$export['node_edit_panel_context']->conf['display']->panels['left'];
+    $export['node_edit_panel_context']->conf['display']->content[$translations_pane->pid] = $translations_pane;
+    $export['node_edit_panel_context']->conf['display']->content[$language_pane->pid] = $language_pane;
+
+    // Find the taxonomy vocabularies pane key in the left column.
+    if ($key = array_search('new-f23903ea-452d-6de4-a5ef-fc95db473875', $left_column)) {
+      // Insert the new panes after the body.
+      array_splice($left_column, $key, 0, $panes_to_insert);
+    }
+    else {
+      // For some impossible reason we didn't find the taxonomy pane. Just
+      // append to the end of the page.
+      $left_column = array_merge($left_column, $panes_to_insert);
+    }
+  }
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function paddle_i18n_menu_alter(&$items) {
+  $items['node/%node/translate']['page callback'] = 'paddle_i18n_translation_node_overview';
+  $items['node/%node/translate']['file'] = 'paddle_i18n.pages.inc';
+  $items['node/%node/translate']['module'] = 'paddle_i18n';
+}
+
+/**
+ * Implements hook_views_default_views_alter().
+ */
+function paddle_i18n_views_default_views_alter(&$views) {
+  if (isset($views['content_manager'])) {
+    $handler =& $views['content_manager']->display['page']->handler;
+
+    // Get the "Actions" field and then remove it so we can re-add it after the
+    // translation field.
+    $actions = $handler->display->display_options['fields']['nothing'];
+    unset($handler->display->display_options['fields']['nothing']);
+
+    // Add a translation link to the view.
+    $handler->display->display_options['fields']['translate_node']['id'] = 'translate_node';
+    $handler->display->display_options['fields']['translate_node']['table'] = 'node';
+    $handler->display->display_options['fields']['translate_node']['field'] = 'translate_node';
+    $handler->display->display_options['fields']['translate_node']['relationship'] = 'nid';
+    $handler->display->display_options['fields']['translate_node']['label'] = '';
+    $handler->display->display_options['fields']['translate_node']['exclude'] = TRUE;
+    $handler->display->display_options['fields']['translate_node']['alter']['make_link'] = TRUE;
+    $handler->display->display_options['fields']['translate_node']['alter']['link_class'] = 'fa-globe ui-icon';
+    $handler->display->display_options['fields']['translate_node']['element_label_colon'] = FALSE;
+
+    // Add the translation link to the "Actions" field.
+    $actions['alter']['text'] = str_replace('<li>[admin_view_link]</li>', '<li>[translate_node]</li><li>[admin_view_link]</li>', $actions['alter']['text']);
+
+    // Add the translations of the nodes to the view.
+    $handler->display->display_options['fields']['translations']['id'] = 'translations';
+    $handler->display->display_options['fields']['translations']['table'] = 'node';
+    $handler->display->display_options['fields']['translations']['field'] = 'translations';
+    $handler->display->display_options['fields']['translations']['relationship'] = 'nid';
+    $handler->display->display_options['fields']['translations']['label'] = 'Translations';
+    $handler->display->display_options['fields']['translations']['separator'] = ',  ';
+
+    // Add the removed "Actions" field.
+    $handler->display->display_options['fields']['nothing'] = $actions;
+    $translatables['paddle_content_manager'][] = t('Translations');
+  }
+}
+
+/**
+ * Implements hook_views_pre_view().
+ */
+function paddle_i18n_views_pre_view(&$view, &$display_id, &$args) {
+  if ($view->name == 'content_manager') {
+    $filters = $view->display_handler->get_option('filters');
+    $filters['paddle_i18n_missing_translation'] = array(
+      'id' => 'paddle_i18n_missing_translation',
+      'table' => 'node',
+      'field' => 'paddle_i18n_missing_translation',
+      'relationship' => 'nid',
+      'operator' => 'not in',
+      'exposed' => TRUE,
+      'expose' => array(
+        'operator_id' => '',
+        'label' => t('Show missing translations in'),
+        'operator' => 'paddle_i18n_missing_translation_op',
+        'identifier' => 'paddle_i18n_missing_translation',
+        'remember_roles' => array(
+          2 => '2',
+          1 => 0,
+          3 => 0,
+          4 => 0,
+          5 => 0,
+          6 => 0,
+        ),
+      ),
+    );
+
+    $exposed_form = $view->display_handler->get_option('exposed_form');
+    $exposed_form['options']['bef']['paddle_i18n_missing_translation'] = array(
+      'bef_format' => 'default',
+      'more_options' => array(
+        'is_secondary' => 1,
+      ),
+    );
+    $view->display_handler->override_option('filters', $filters);
+    $view->display_handler->override_option('exposed_form', $exposed_form);
+  }
+}
+
+/**
+ * Implements hook_multilingual_settings_changed().
+ */
+function paddle_i18n_multilingual_settings_changed() {
+  drupal_static_reset('language_list');
+  $all_menus = paddle_menu_manager_get_paddle_menus();
+  $menu_translations_created = FALSE;
+  foreach ($all_menus as $menu_translation_set) {
+    // Get the first available menu, it doesn't matter in which language it is.
+    $menu = reset($menu_translation_set);
+    if ($menu) {
+      if (paddle_menu_manager_create_menu_translations($menu)) {
+        $menu_translations_created = TRUE;
+      }
+    }
+  }
+
+  // Only rebuild the menu if something changed.
+  if ($menu_translations_created) {
+    menu_rebuild();
+  }
+}
+
+/**
+ * Implements hook_translated_menu_link_alter().
+ *
+ * We implement this in order to avoid the default behaviour defined in
+ * i18n_menu_translated_menu_link_alter() that when a menu item is not in the
+ * current interface language it is displayed as hidden. This we need to do
+ * because our interface language always remains Dutch (at least on the
+ * back-end) so use the content language instead.
+ *
+ * @see i18n_menu_translated_menu_link_alter()
+ */
+function paddle_i18n_translated_menu_link_alter(&$item) {
+  global $language_content;
+  // Only process links to be displayed not processed before by i18n_menu.
+  if (_i18n_menu_link_process($item)) {
+    if (!_i18n_menu_link_is_visible($item, $language_content->language)) {
+      $item['hidden'] = TRUE;
+    }
+    elseif (_i18n_menu_link_is_localizable($item)) {
+      // Item has undefined language, it is a candidate for localization.
+      _i18n_menu_link_localize($item);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_paddle_content_manager_node_add_form_alter().
+ */
+function paddle_i18n_form_paddle_content_manager_node_add_form_alter(&$form, &$form_state) {
+  if (count(i18n_language_list()) > 1) {
+    $language = array(
+      '#type' => 'select',
+      '#title' => t('Language'),
+      '#options' => i18n_language_list(),
+      '#required' => TRUE,
+      '#weight' => 6,
+    );
+    if (isset($form['container']['language'])) {
+      $language_code = $form['container']['language']['#value'];
+      $form['container']['language'] = $language;
+      $form['container']['language']['#default_value'] = $language_code;
+    }
+    else {
+      $language_code = $form['language']['#value'];
+      $form['language'] = $language;
+      $form['language']['#default_value'] = $language_code;
+    }
+
+    array_unshift($form['#submit'], 'paddle_i18n_paddle_content_manager_node_add_form_submit');
+  }
+}
+
+/**
+ * Submit handler for paddle_content_manager_node_add_form.
+ */
+function paddle_i18n_paddle_content_manager_node_add_form_submit(&$form, &$form_state) {
+  global $user;
+
+  if (!empty($form_state['values']['language'])) {
+    $form_state['query'] = array('language' => $form_state['values']['language']);
+  }
+
+  // If we have a translation source node, and it has panelizer settings,
+  // use the panelizer layout for the new node.
+  if (!empty($form_state['node']->translation_source)) {
+    // Load the latest revision.
+    $source_node = workbench_moderation_node_current_load($form_state['node']->translation_source);
+
+    if (!empty($source_node->panelizer['page_manager'])) {
+      $panelizer = $source_node->panelizer['page_manager'];
+      // When the node has a default panelizer layout, but it has not been
+      // saved yet, it will be added to the node on hook_load() and we can
+      // fetch its name directly.
+      if (!empty($panelizer->name)) {
+        $layout = $panelizer->name;
+      }
+      else {
+        // The source node has already a display associated. Generate back
+        // the full name of the default layout to use.
+        $layout = "node:{$source_node->type}:{$panelizer->display->layout}";
+      }
+
+      // Some content types allow choosing a layout through a form element.
+      // Set the correct value to inherit the layout.
+      if (!empty($form['container']['panelizer']['page_manager']['name'])) {
+        form_set_value($form['container']['panelizer']['page_manager']['name'],
+          $layout, $form_state);
+      }
+      else {
+        // Let the Paddle Content Manager module load the same layout defaults.
+        $form_state['layout'] = $layout;
+      }
+    }
+  }
+
+  // Unlock the source node we are translating.
+  if (!empty($form_state['node']->translation_source)) {
+    content_lock_release($form_state['node']->translation_source->nid, $user->uid);
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_i18n_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'help') {
+    // Remove the implementation of the translation module - we want to
+    // completely override it.
+    unset($implementations['translation']);
+  }
+  if ($hook == 'language_switch_links_alter') {
+    // We need to execute our alter hook last.
+    $implementation = $implementations['paddle_i18n'];
+    unset($implementations['paddle_i18n']);
+    $implementations['paddle_i18n'] = $implementation;
+  }
+}
+
+/**
+ * Implements hook_help().
+ */
+function paddle_i18n_help($path, $arg) {
+  switch ($path) {
+    case 'node/%/translate':
+      $output = t('Add translations to existing content here. Every translation set consists of one source page and one or multiple translations.');
+      return $output;
+  }
+}
+
+/**
+ * Implements hook_themes_enabled().
+ *
+ * Enables the locale switcher when a new frontend theme is enabled.
+ */
+function paddle_i18n_themes_enabled($theme_list) {
+  $theme_info = list_themes();
+
+  foreach ($theme_list as $name) {
+    _paddle_i18n_add_frontend_language_switcher_block($theme_info[$name]);
+  }
+}
+
+/**
+ * Add the language switcher to the service links region.
+ *
+ * Only intervenes on Paddle front end themes. Doesn't mangle with Drupal core
+ * themes and the Paddle admin theme because they are not available in the
+ * Paddle Theme Store. Blacklisted.
+ * Can't use paddle_themer_available_themes() to whitelist because themes that
+ * are not in the Theme Store yet aren't yet returned from that method either.
+ *
+ * @param object $theme
+ *   A fully loaded theme object.
+ */
+function _paddle_i18n_add_frontend_language_switcher_block($theme) {
+  $ignored_themes = array(
+    'paddle_admin_theme',
+    'bartik',
+    'garland',
+    'seven',
+    'stark',
+  );
+
+  if (!in_array($theme->name, $ignored_themes) && isset($theme->info['regions']['service_links'])) {
+    db_update('block')
+      ->fields(array(
+        'status' => 1,
+        'region' => 'service_links',
+        'weight' => -50,
+        'title' => '<none>',
+      ))
+      ->condition('module', 'locale')
+      ->condition('delta', 'language')
+      ->condition('theme', $theme->name)
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_url_inbound_alter().
+ */
+function paddle_i18n_url_inbound_alter(&$path, $original_path, $path_language) {
+  // When going to the translation of a front page directly, we need to show the
+  // actual translation of the front page.
+  if (drupal_is_front_page()) {
+    $uri = request_path();
+
+    if (!empty($uri)) {
+      $menu_item = menu_get_object();
+
+      if (!empty($menu_item) && !empty($menu_item->tnid)) {
+        $translations = translation_node_get_translations($menu_item->tnid);
+
+        if (!empty($translations[$uri])) {
+          $path = 'node/' . $translations[$uri]->nid;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_i18n_form_alter(&$form, &$form_state, $form_id) {
+  if (in_array($form_id, array('user_profile_form', 'user_register_form'))) {
+    $supported_languages = paddle_core_supported_back_end_languages();
+
+    $default_lang = $form['admin_language']['admin_language']['#default_value'];
+    $form['admin_language']['#title'] = t('Language Settings');
+    $form['admin_language']['admin_language']['#title'] = '';
+
+    foreach (array_keys($form['admin_language']['admin_language']['#options']) as $lang) {
+      if (!in_array($lang, $supported_languages)) {
+        unset($form['admin_language']['admin_language']['#options'][$lang]);
+      }
+    }
+
+    $form['admin_language']['admin_language']['#default_value'] = empty($default_lang) || $default_lang == 'admin' ? language_default('language') : $default_lang;
+    $form['admin_language']['admin_language']['#type'] = 'radios';
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_i18n_form_user_register_form_alter(&$form, &$form_state) {
+  $form['locale']['#access'] = FALSE;
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function paddle_i18n_views_api() {
+  return array("api" => "3.0");
+}
+
+/**
+ * Set the default language negotiation settings for the Paddle distribution.
+ *
+ * We can't use Strongarm to manage these Drupal settings because other modules
+ * like paddle_splash_page can have different language negotiation settings. So
+ * when feature exporting paddle_i18n while paddle_splash_page is enabled then
+ * there would be too much settings in paddle_i18n and indirectly create an
+ * unwanted dependency on paddle_splash_page.
+ */
+function paddle_i18n_set_default_detection_settings() {
+  $language_negotiation_language = array();
+  $language_negotiation_language['locale-url'] = array(
+    'callbacks' => array(
+      'language' => 'locale_language_from_url',
+      'switcher' => 'locale_language_switcher_url',
+      'url_rewrite' => 'locale_language_url_rewrite_url',
+    ),
+    'file' => 'includes/locale.inc',
+  );
+
+  $language_negotiation_language['locale-user'] = array(
+    'callbacks' => array(
+      'language' => 'locale_language_from_user',
+    ),
+    'file' => 'includes/locale.inc',
+  );
+
+  $language_negotiation_language['language-default'] = array(
+    'callbacks' => array(
+      'language' => 'language_from_default',
+    ),
+  );
+
+  variable_set('language_negotiation_language', $language_negotiation_language);
+
+  $language_negotiation_language_content = array();
+  $language_negotiation_language_content['locale-url'] = array(
+    'callbacks' => array(
+      'language' => 'locale_language_from_url',
+      'switcher' => 'locale_language_switcher_url',
+      'url_rewrite' => 'locale_language_url_rewrite_url',
+    ),
+    'file' => 'includes/locale.inc',
+  );
+
+  $language_negotiation_language_content['language-default'] = array(
+    'callbacks' => array(
+      'language' => 'language_from_default',
+    ),
+  );
+
+  variable_set('language_negotiation_language_content', $language_negotiation_language_content);
+
+  language_types_set();
+  language_negotiation_purge();
+}
+
+/**
+ * Implements hook_is_configured().
+ */
+function paddle_i18n_is_configured() {
+  $enabled_language_lang_codes = paddle_i18n_get_enabled_languages_lang_codes();
+  $default_language = language_default('language');
+
+  // These are the language codes of the languages set in paddle.install.
+  $original_enabled_language_lang_codes = paddle_i18n_default_languages();
+  // Sort both arrays so they can be compared.
+  sort($enabled_language_lang_codes);
+  sort($original_enabled_language_lang_codes);
+
+  return ($default_language == 'nl' && $original_enabled_language_lang_codes == $enabled_language_lang_codes) ? FALSE : TRUE;
+}
+
+/**
+ * Retrieves a list of language codes of enabled languages.
+ *
+ * @return array
+ *   An array consisting of the language codes of enabled languages.
+ */
+function paddle_i18n_get_enabled_languages_lang_codes() {
+  $enabled_language_lang_codes = array();
+  $enabled_languages = i18n_language_list();
+
+  foreach ($enabled_languages as $lang_code => $enabled_language) {
+    $enabled_language_lang_codes[$lang_code] = $lang_code;
+  }
+
+  return $enabled_language_lang_codes;
+}
+
+/**
+ * Updates the language list.
+ *
+ * @param array $languages
+ *   A list of all the languages which are to be enabled.
+ * @param string $default_language
+ *   The language code of the 'to be' default language.
+ */
+function paddle_i18n_update_language_list($languages, $default_language) {
+  $available_languages = language_list();
+  $enabled_count = 0;
+  $something_changed = FALSE;
+
+  foreach (array_keys(paddle_i18n_supported_languages()) as $lang_code) {
+    // Reinitialize the $enabled value as non object.
+    $enabled = NULL;
+    if ($default_language == $lang_code) {
+      // Automatically enable the default language and the language
+      // which was default previously (because we will not get the
+      // value from that disabled checkbox).
+      $languages[$lang_code] = 1;
+    }
+
+    if ($languages[$lang_code]) {
+      // Add the language if it hasn't been added yet.
+      if (!array_key_exists($lang_code, $available_languages)) {
+        // Code based on the submit handler of the related Drupal core form.
+        // @see locale_languages_predefined_form_submit()
+        // Add the language, enable the language, clear caches and invoke hook
+        // multilingual_settings_changed.
+        locale_add_language($lang_code);
+        // Import available translations.
+        if ($batch = locale_batch_by_language($lang_code, '_locale_batch_language_finished')) {
+          batch_set($batch);
+        }
+      }
+      elseif (!$available_languages[$lang_code]->enabled) {
+        // Enable the language if not yet enabled.
+        $enabled = 1;
+      }
+
+      $enabled_count++;
+    }
+    elseif (array_key_exists($lang_code, $available_languages) && $available_languages[$lang_code]->enabled) {
+      // Disable the language if it was enabled before but should be disabled
+      // now.
+      $enabled = 0;
+    }
+
+    // Only change the language status when a new language has been added
+    // or when an previously existing language its 'enabled' status has been
+    // changed.
+    if (isset($enabled) && (empty($available_languages['lang_code']) || (!empty($available_languages['lang_code']) && $available_languages['lang_code']->enabled != $enabled))) {
+      paddle_i18n_update_language_status($lang_code, $enabled);
+      $something_changed = TRUE;
+    }
+  }
+
+  variable_set('language_count', $enabled_count);
+  drupal_set_message(t('Your configuration has been saved.'));
+
+  // Set the new default language.
+  variable_set('language_default', (object) $available_languages[$default_language]);
+
+  // We also reset the admin language, it will automatically show English if
+  // another language than EN, NL,  FR is used as default.
+  variable_set('admin_language_default', $default_language);
+
+  if ($something_changed) {
+    // Changing the language settings impacts the interface.
+    cache_clear_all('*', 'cache_page', TRUE);
+    module_invoke_all('multilingual_settings_changed');
+  }
+}
+
+/**
+ * Enables or disables the given language.
+ *
+ * @param string $lang_code
+ *   The language code of the to be enabled/disabled language.
+ * @param bool $enabled
+ *   Whether the language needs to be enabled or disabled.
+ */
+function paddle_i18n_update_language_status($lang_code, $enabled) {
+  db_update('languages')
+    ->fields(array(
+      'enabled' => $enabled,
+    ))
+    ->condition('language', $lang_code)
+    ->execute();
+}

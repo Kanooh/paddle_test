@@ -1,0 +1,336 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle i18n app.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_i18n_install() {
+  // Update the English language entry by adding a language prefix for it.
+  db_update('languages')
+    ->fields(array(
+      'prefix' => 'en',
+    ))
+    ->condition('language', 'en')
+    ->execute();
+
+  // Hide the translation links.
+  variable_set('i18n_hide_translation_links', 1);
+
+  // Give the (Chief) editors and site managers permission to translate content.
+  foreach (array('Chief Editor', 'Editor', 'Site Manager') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, array('translate content', 'administer content translations'));
+  }
+
+  // Show the administration menu to the node translate page.
+  $root_paths = array(
+    array(
+      'path' => 'node/%/translate',
+      'root_item' => 'admin/content_manager',
+    ),
+  );
+  _paddle_add_menu_display_path_roots('management_level_2', $root_paths);
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_i18n_enable() {
+  // Limit the pages on which the language switcher will be shown and set the
+  // region and theme.
+  $language_switcher_pages = array(
+    'admin/structure/menu_manager/*',
+    'admin/content_manager/list/search',
+    'admin/structure/taxonomy_manager/*',
+    'admin/site-settings',
+    'admin/paddlet_store/app/paddle_cookie_legislation/configure',
+  );
+  $admin_theme = variable_get('admin_theme', 'paddle_admin_theme');
+
+  db_update('block')
+    ->fields(array(
+      'visibility' => 1,
+      'pages' => implode("\n", $language_switcher_pages),
+      'region' => 'header_bottom',
+      'weight' => -10,
+      'title' => '<none>',
+      'status' => 1,
+    ))
+    ->condition('module', 'locale')
+    ->condition('delta', 'language_content')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  // Show the language switcher block for the frontend.
+  foreach (list_themes() as $name => $theme) {
+    _paddle_i18n_add_frontend_language_switcher_block($theme);
+  }
+
+  // Revert the features defined in this module so the language negotiations
+  // are detected.
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_i18n');
+
+  $permissions = array(
+    'display admin pages in another language',
+    'use all enabled languages',
+  );
+
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $permissions);
+
+  // Make sure the admin language table keeps track of previously declared
+  // defaults for existing users.
+  $users = entity_load('user');
+
+  foreach ($users as $user) {
+    if ($user->uid != '0') {
+      $language = !empty($user->language) ? $user->language : language_default()->language;
+
+      // Remove the admin_language entry before adding the updated ones (if
+      // there are any).
+      admin_language_user_delete($user);
+
+      db_insert('admin_language')->fields(array(
+        'uid' => $user->uid,
+        'language' => $language,
+      ))->execute();
+    }
+  }
+
+  paddle_i18n_set_default_detection_settings();
+  features_revert(array('paddle_i18n' => array('strongarm')));
+  paddle_i18n_set_configuration_settings();
+}
+
+/**
+ * Sets a set of default configuration settings.
+ *
+ * In case the module has been disabled before, it is possible to restore these
+ * settings.
+ */
+function paddle_i18n_set_configuration_settings() {
+  $to_be_enabled_languages = variable_get('paddle_i18n_enabled_languages', paddle_i18n_default_languages());
+  $default_language = variable_get('paddle_i18n_default_language', 'nl');
+
+  paddle_i18n_update_language_list($to_be_enabled_languages, $default_language);
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_i18n_disable() {
+  // Remove the language switcher block for the admin theme.
+  $admin_theme = variable_get('admin_theme', 'paddle_admin_theme');
+  db_update('block')
+    ->fields(array(
+      'status' => 0,
+      'region' => -1,
+    ))
+    ->condition('module', 'locale')
+    ->condition('delta', 'language_content')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  // Remove the language switcher block from the frontend.
+  $default_theme = variable_get('theme_default', 'paddle_theme');
+  db_update('block')
+    ->fields(array(
+      'region' => -1,
+      'status' => 0,
+    ))
+    ->condition('module', 'locale')
+    ->condition('delta', 'language')
+    ->condition('theme', $default_theme)
+    ->execute();
+
+  // Set back the default values.
+  $providers = language_negotiation_info();
+  $negotiation = array();
+  foreach (array('locale-session', 'locale-interface', 'language-default') as $provider) {
+    $negotiation[$provider] = $providers[$provider];
+  }
+  language_negotiation_set('language_content', $negotiation);
+
+  variable_set('language_negotiation_language_url', FALSE);
+
+  // We need to store the enabled languages so they are recoverable.
+  variable_set('paddle_i18n_enabled_languages', paddle_i18n_get_enabled_languages_lang_codes());
+  variable_set('paddle_i18n_default_language', language_default('language'));
+
+  // We need to disable all the other languages.
+  // Otherwise the default prefix will still be used.
+  paddle_i18n_reset_languages();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_i18n_uninstall() {
+  variable_set('paddle_i18n_enabled_languages', paddle_i18n_default_languages());
+  variable_set('paddle_i18n_default_language', 'nl');
+}
+
+/**
+ * Disabling all the enabled languages, leaving the default one enabled.
+ *
+ * @param string $default_languagecode
+ *   Which language code will be used as the default.
+ */
+function paddle_i18n_reset_languages($default_languagecode = 'nl') {
+  paddle_i18n_update_language_list(array($default_languagecode => $default_languagecode), $default_languagecode);
+}
+
+/**
+ * Update all enabled themes to show the frontend language switcher.
+ */
+function paddle_i18n_update_7100() {
+  foreach (list_themes() as $name => $theme) {
+    _paddle_i18n_add_frontend_language_switcher_block($theme);
+  }
+}
+
+/**
+ * Enable user to choose preferred backend language.
+ */
+function paddle_i18n_update_7101() {
+  module_enable(array('admin_language'));
+  features_revert_module('paddle_i18n');
+}
+
+/**
+ * Updated user permissions for the admin language.
+ */
+function paddle_i18n_update_7102() {
+  $permissions = array(
+    'display admin pages in another language',
+    'use all enabled languages',
+  );
+
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $permissions);
+
+  // Make sure the admin language table keeps track of previously declared
+  // defaults for existing users.
+  $users = entity_load('user');
+
+  foreach ($users as $user) {
+    if ($user->uid != '0') {
+      $language = !empty($user->language) ? $user->language : language_default()->language;
+
+      // Remove the admin_language entry before adding the updated ones (if
+      // there are any).
+      admin_language_user_delete($user);
+
+      db_insert('admin_language')->fields(array(
+        'uid' => $user->uid,
+        'language' => $language,
+      ))->execute();
+    }
+  }
+
+  // For each site setting, create a new site setting with a translate
+  // variable assigned to the default language.
+  $default_language = language_default('language');
+  i18n_variable_set('site_name', variable_get('site_name', 'Paddle'), $default_language);
+  i18n_variable_set('site_mail', variable_get('site_mail', ini_get('sendmail_from')), $default_language);
+  i18n_variable_set('site_frontpage', variable_get('site_frontpage', ''), $default_language);
+  i18n_variable_set('site_403', variable_get('site_403', ''), $default_language);
+  i18n_variable_set('site_404', variable_get('site_404', ''), $default_language);
+  i18n_variable_set('paddle_default_sharing_image', variable_get('paddle_default_sharing_image', NULL), $default_language);
+  i18n_variable_set('paddle_maintenance_mode_message', variable_get('paddle_maintenance_mode_message', t('Behind the scenes we are building a brand new website.<br>Check back soon! Need more info? Paddle to <a href="http://kanooh.be">kanooh.be</a>!')), $default_language);
+}
+
+/**
+ * Add the language switch on the site settings page.
+ */
+function paddle_i18n_update_7103() {
+  $language_switcher_pages = array(
+    'admin/structure/menu_manager/*',
+    'admin/content_manager/list/search',
+    'admin/structure/taxonomy_manager/*',
+    'admin/site-settings',
+  );
+  $admin_theme = variable_get('admin_theme', 'paddle_admin_theme');
+
+  db_update('block')
+    ->fields(array(
+      'pages' => implode("\n", $language_switcher_pages),
+    ))
+    ->condition('module', 'locale')
+    ->condition('delta', 'language_content')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  // Revert the features defined in this module so the language negotiations
+  // are detected.
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_i18n');
+}
+
+/**
+ * Enable i18n_variable.
+ */
+function paddle_i18n_update_7104() {
+  // Enable i18n_variable so that variables are translatable.
+  module_enable(array('i18n_variable'));
+  // For each site setting, create a new site setting with a translate
+  // variable assigned to the default language.
+  $default_language = language_default('language');
+  i18n_variable_set('site_name', variable_get('site_name', 'Paddle'), $default_language);
+  i18n_variable_set('site_mail', variable_get('site_mail', ini_get('sendmail_from')), $default_language);
+  i18n_variable_set('site_frontpage', variable_get('site_frontpage', ''), $default_language);
+  i18n_variable_set('site_403', variable_get('site_403', ''), $default_language);
+  i18n_variable_set('site_404', variable_get('site_404', ''), $default_language);
+  i18n_variable_set('paddle_default_sharing_image', variable_get('paddle_default_sharing_image', NULL), $default_language);
+  i18n_variable_set('paddle_maintenance_mode_message', variable_get('paddle_maintenance_mode_message', t('Behind the scenes we are building a brand new website.<br>Check back soon! Need more info? Paddle to <a href="http://kanooh.be">kanooh.be</a>!')), $default_language);
+}
+
+/**
+ * Add the language switcher on the Cookie legislation configureation page.
+ */
+function paddle_i18n_update_7105() {
+  $language_switcher_pages = array(
+    'admin/structure/menu_manager/*',
+    'admin/content_manager/list/search',
+    'admin/structure/taxonomy_manager/*',
+    'admin/site-settings',
+    'admin/paddlet_store/app/paddle_cookie_legislation/configure',
+  );
+  $admin_theme = variable_get('admin_theme', 'paddle_admin_theme');
+
+  db_update('block')
+    ->fields(array(
+      'pages' => implode("\n", $language_switcher_pages),
+    ))
+    ->condition('module', 'locale')
+    ->condition('delta', 'language_content')
+    ->condition('theme', $admin_theme)
+    ->execute();
+
+  // Revert the features defined in this module so the language negotiations
+  // are detected.
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_i18n');
+}
+
+/**
+ * Removes the strongarm variable and adds the Paddle default values through variable_set.
+ */
+function paddle_i18n_update_7106() {
+  features_revert(array('paddle_i18n' => array('strongarm')));
+
+  // Set the language_negotiation variables.
+  paddle_i18n_set_default_detection_settings();
+}
+
+/**
+ * Enable the language switcher for all front end themes.
+ *
+ * Also the ones that were missed previously.
+ */
+function paddle_i18n_update_7107() {
+  paddle_i18n_update_7100();
+}

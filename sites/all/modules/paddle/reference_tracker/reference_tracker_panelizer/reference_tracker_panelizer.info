@@ -1,0 +1,8 @@
+name = Reference Tracker Panelizer
+description = Keeps track of references in panelized entities panes.
+core = 7.x
+
+dependencies[] = reference_tracker
+dependencies[] = panelizer
+
+files[] = tests/reference_tracker_panelizer.test

@@ -1,0 +1,36 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Menu Manager.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_menu_manager_install() {
+  // Add a translation set id field to the menu_custom table.
+  module_load_install('i18n');
+  i18n_install_create_fields('menu_custom', array('i18n_tsid'));
+}
+
+/**
+ * Implements hook_schema_alter().
+ */
+function paddle_menu_manager_schema_alter(&$schema) {
+  // Describe the translation set id field that is added to menu_custom.
+  $schema['menu_custom']['fields']['i18n_tsid'] = array(
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+    'default' => 0,
+  );
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_menu_manager_uninstall() {
+  // Drop the translation set id field.
+  db_drop_field('menu_custom', 'i18n_tsid');
+}

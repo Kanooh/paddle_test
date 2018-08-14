@@ -1,0 +1,220 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Video module. Base module for all video atom types.
+ */
+
+/**
+ * Creates the video atom type with shared fields accross all video sources.
+ *
+ * @return bool
+ *   FALSE if the atom type already existed, TRUE if the atom type was created.
+ */
+function paddle_scald_video_create_atom_type() {
+  // This code comes from ScaldAtomController::addType but was adapted for our
+  // case, we do not want Scald's tags and authors fields.
+  // Check if this type already exists.
+  $types = scald_types();
+  if (!empty($types['video'])) {
+    return FALSE;
+  }
+
+  $type = 'video';
+  $title = 'Video';
+  $t = get_t();
+  $description = $t('Add video files.');
+
+  // Create a new type.
+  db_insert('scald_types')
+    ->fields(array('type', 'title', 'description', 'provider'))
+    ->values(array($type, $title, $description, 'scald'))
+    ->execute();
+
+  // And add the thumbnail and subtitle fields.
+  $instances[] = array(
+    'field_name' => 'scald_thumbnail',
+    'entity_type' => 'scald_atom',
+    'bundle' => $type,
+    'label' => 'Thumbnail',
+    'required' => FALSE,
+    'display' => array(
+      'default' => array(
+        'type' => 'hidden',
+      ),
+    ),
+    'settings' => array(
+      'file_directory' => 'thumbnails/' . $type,
+    ),
+  );
+  $instances[] = array(
+    'field_name' => 'paddle_scald_video_subtitles',
+    'entity_type' => 'scald_atom',
+    'bundle' => $type,
+    'label' => 'Subtitles',
+    'required' => FALSE,
+    'display' => array(
+      'default' => array(
+        'type' => 'hidden',
+      ),
+    ),
+    'settings' => array(
+      'file_directory' => 'subtitles',
+      'file_extensions' => 'srt',
+    ),
+  );
+
+  foreach ($instances as $instance) {
+    if (field_read_instance($instance['entity_type'], $instance['field_name'], $instance['bundle'])) {
+      continue;
+    }
+
+    field_create_instance($instance);
+    $instance = field_info_instance($instance['entity_type'], $instance['field_name'], $instance['bundle']);
+    foreach ($instance['display'] as $view_mode => $settings) {
+      $instance['display'][$view_mode]['type'] = 'hidden';
+    }
+    field_update_instance($instance);
+  }
+
+  // Associate the video atom type to the "library" image style in the library
+  // context.
+  $context_config = scald_context_config_load('sdl_library_item');
+  $context_config->transcoder['video']['*'] = 'style-Library';
+  scald_context_config_save($context_config);
+
+  // Flush our caches.
+  scald_contexts(TRUE);
+
+  return TRUE;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_scald_video_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_scald_video_render_video' => array(
+      'variables' => array(
+        'width' => '',
+        'height' => '',
+        'video_src' => '',
+        'atom_id' => '',
+        'language' => '',
+        'poster' => '',
+        'subtitles' => '',
+        'type' => '',
+        'wrap' => '',
+      ),
+      'path' => drupal_get_path('module', 'paddle_scald_video') . '/templates',
+      'template' => 'paddle_scald_video_render_video',
+    ),
+  );
+}
+
+/**
+ * Renders the HTML for video atom in the CKEditor.
+ *
+ * @param ScaldAtom $atom
+ *   Atom to render as HTML.
+ * @param array $attributes
+ *   Optional array of attributes to add to the element.
+ * @param bool $editor
+ *   Whether or not the HTML will be rendered in the CKEditor.
+ * @param bool $update
+ *   Whether or not we are updating an existing video's HTML.
+ *
+ * @return string
+ *   The HTML of the rendered video.
+ */
+function paddle_scald_video_ckeditor_html($atom, $attributes = array(), $editor = FALSE, $update = FALSE) {
+  global $language;
+
+  if (!$atom || $atom->type != 'video') {
+    return '';
+  }
+
+  $template_options = array(
+    'width' => $atom->data['video_width'],
+    'height' => $atom->data['video_height'],
+    'atom_id' => $atom->sid,
+    'language' => $language->language,
+  );
+
+  // Check if the video has poster and add it if this is the case.
+  $scald_thumbnail = field_get_items('scald_atom', $atom, 'scald_thumbnail');
+  if ($scald_thumbnail) {
+    $template_options['poster'] = file_create_url($scald_thumbnail[0]['uri']);
+  }
+
+  // Check if the video has subtitles and add them if this is the case.
+  $subtitles = field_get_items('scald_atom', $atom, 'paddle_scald_video_subtitles');
+  if ($subtitles) {
+    $template_options['subtitles'] = file_create_url($subtitles[0]['uri']);
+  }
+
+  // Process specifics.
+  if ($atom->provider == 'paddle_scald_youtube') {
+    $template_options['width'] = 640;
+    $template_options['height'] = 480;
+    $template_options['video_src'] = 'https://www.youtube.com/watch?v=' . $atom->base_id;
+    $template_options['type'] = 'youtube';
+  }
+  elseif ($atom->provider == 'paddle_scald_video_file') {
+    $template_options['video_src'] = file_create_url($atom->data['video_file']);
+    $template_options['type'] = 'mp4';
+  }
+
+  // Determine if the video tag should be wrapped in <div> or not.
+  $template_options['wrap'] = !$update && $editor;
+
+  return theme('paddle_scald_video_render_video', $template_options);
+}
+
+/**
+ * Implements hook_htmlpurifier_html_definition_alter().
+ *
+ * @param HTMLPurifier_HTMLDefinition $html_definition
+ *   The HTMLPurifier definition object to alter.
+ */
+function paddle_scald_video_htmlpurifier_html_definition_alter($html_definition) {
+  // Allow <video> inside <p>. To do this we override the <p> definition.
+  // Normally putting "Flow" in the $allowed_children param should be sufficient
+  // but it doesn't work.
+  $html_definition->addElement('div', 'Flow', 'Optional: video | #PCDATA | Inline | Flow', 'Common', array(
+    'class' => 'Text',
+  ));
+
+  $html_definition->addElement('video', 'Flow', 'Flow', 'Common', array(
+    'type' => 'Text',
+    'width' => 'Length',
+    'style' => 'Text',
+    'height' => 'Length',
+    'poster' => 'URI',
+    'preload' => 'Enum#auto,metadata,none',
+    'controls' => 'Text',
+  ));
+
+  $html_definition->addElement('track', 'Flow', 'Empty', 'Common', array(
+    'src' => 'URI',
+    'kind' => 'Text',
+    'srclang' => 'Text',
+  ));
+
+  $html_definition->addElement('source', 'Flow', 'Empty', 'Common', array(
+    'src' => 'URI',
+    'type' => 'Text',
+  ));
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_scald_video_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+  );
+
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}

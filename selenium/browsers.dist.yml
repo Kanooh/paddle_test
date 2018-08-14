@@ -1,0 +1,74 @@
+default:
+
+#  - browserName: chrome
+#    local: true
+#    sessionStrategy: isolated
+#    desiredCapabilities:
+#      version: local
+#    maximizeWindow: true
+
+  - browserName: firefox
+    local: true
+    sessionStrategy: isolated
+    desiredCapabilities:
+      version: local
+      # Currently Firefox 40 is best supported  because it's also used remotely
+      # on BrowserStack. Tests have proven to fail with more recent Firefox
+      # versions.
+      # Specifying a browser version number on your local testing environment
+      # won't influence the actual browser version.
+      #version: 40
+      # But you can downgrade your local Firefox. Here is how:
+      # https://support.mozilla.org/en-US/kb/install-older-version-of-firefox
+    maximizeWindow: true
+
+# Prepend the test command with 'selenium_location=browserstack ' to use this
+# part of the configuration.
+browserstack:
+
+  - browserName: firefox
+    project: Paddle
+    # This build name will appear at https://www.browserstack.com/automate
+    # unless it gets overridden by the script executing the test.
+    build: develop
+    # Fill in username and password to get working connection. Don't commit
+    # these credentials to a repo. Host should not start with 'http://'.
+    # hub.browserstack.com is the officially recommended host. If you get "The
+    # Selenium Server is not active on host" errors, then try
+    # hub-cloud.browsertack.com. If that slows down your test runs, connect
+    # directly to the closest region; hub-cloud-eu.browsertack.com for Europe.
+    # host: username:password@hub.browserstack.com
+    port: 80
+    sessionStrategy: isolated
+    local: true
+    seleniumServerRequestsTimeout: 120
+    desiredCapabilities:
+      version: 40
+      os: WINDOWS
+      os_version: 7
+      resolution: 1920x1200
+      nativeEvents: false
+      # BrowserStack checks that a page is loaded successfully via an HTTP HEAD
+      # request as anonymous user right after every HTTP GET page request.
+      # Disable this BrowserStack checkURL feature to be able to test things on
+      # the first anonymous page request after some other page request.
+      checkURL: false
+      # BrowserStack has an internal check that verifies whether a page is
+      # still loading after execution of click or open url command to avoid
+      # failures while testing on Firefox. If so, this exception is thrown: "An
+      # unknown server-side error occurred while processing the command".
+      # Disable this automatic waiting:
+      browserstack.autoWait: 0
+      # To make BrowserStack surf to your local website:
+      # 1. Uncomment browserstack.local below.
+      # 2. Launch BrowserStackLocal on your local machine.
+      # @see https://www.browserstack.com/local-testing#command-line
+      # 3. Initiate the test from your local environment.
+      #browserstack.local: true
+    maximizeWindow: true
+    implicitWait: 1000
+    # Apps can take quite long to install. Use the cron to avoid the
+    # BrowserStack IDLE TIMEOUT of 90 seconds.
+    # @see https://www.browserstack.com/automate/timeouts
+    enableAppsViaCron: true
+

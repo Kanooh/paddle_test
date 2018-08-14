@@ -1,0 +1,9 @@
+/**
+ * @file
+ * Styling for the Box Model plugin.
+ */
+
+.paddle-style-plugin-boxmodel .paddle-style-plugin-boxmodel-group .form-item {
+  display: inline-block;
+  min-width: 9em;
+}

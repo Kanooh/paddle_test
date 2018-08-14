@@ -1,0 +1,119 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuDisplayFrontEndTest.
+ */
+
+/**
+ * Tests for the front-end menu displays.
+ */
+class PaddleMenuDisplayFrontEndTest extends PaddleMenuDisplayTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Front-end menu displays',
+      'description' => 'Tests for the front-end menu displays.',
+      'group' => 'Paddle Menu Display',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array(
+      'paddle_menu_display',
+      'i18n_menu',
+      'paddle_menu_display_test',
+    ));
+
+    // Create a test user and log in.
+    $admin_user = $this->drupalCreateUser(array(
+      'administer menu displays',
+      'administer blocks',
+      'administer menu',
+    ));
+    $this->drupalLogin($admin_user);
+
+    // Create a content type.
+    $this->contentType = $this->drupalCreateContentType();
+
+    // Create a complex menu, menu links, nodes.
+    $this->complexMenu = $this->createMenu();
+    $this->createLinkHierarchy($this->complexHierarchy, $this->complexMenu['menu_name']);
+
+    // Create a simple menu, menu links and nodes.
+    $this->simpleMenu = $this->createMenu();
+    $this->createLinkHierarchy($this->simpleHierarchy, $this->simpleMenu['menu_name']);
+
+    // Create menu display for the two menus - by default for the complex menu.
+    $complex_menu_display = array(
+      'menu_name' => $this->complexMenu['menu_name'],
+    );
+    $this->complex_menu_display = $this->createMenuDisplay($complex_menu_display);
+
+    // Set the block for it in region header.
+    $block_form = array(
+      'regions[bartik]' => 'header',
+    );
+    $this->drupalPost('admin/structure/block/manage/paddle_menu_display/custom_menu_display/configure', $block_form, t('Save block'));
+  }
+
+  /**
+   * Tests that the menus exist.
+   */
+  public function testMenuDisplaysExistance() {
+    // Go on a random path.
+    $this->drupalGet('node/9');
+    $menu_xpath = $this->xpath(self::MENU_DISPLAY_BLOCK_XPATH_QUERY);
+    $this->assertTrue($menu_xpath, 'The menu display block is found');
+    $menu_xpath = (array) $menu_xpath[0];
+    $this->assertTrue(count($menu_xpath['li']), 'The menu display has at least 1 item');
+  }
+
+  /**
+   * Tests drupal_alter on menu display object.
+   */
+  public function testDrupalAlter() {
+    // Set up this var so that drupal_alter in the test module will switch the
+    // complex with the simple menu.
+    variable_set('paddle_menu_display_test_perform_drupal_alter', $this->simpleMenu['menu_name']);
+
+    // Go on a path from the simple menu.
+    $this->drupalGet('node/13');
+    $menu_xpath = $this->xpath(self::MENU_DISPLAY_BLOCK_XPATH_QUERY);
+    $menu_xpath = (array) $menu_xpath[0];
+    $this->assertTrue(count($menu_xpath['li']) == count($this->simpleHierarchy), 'The menu display has the correct number of items.');
+  }
+
+  /**
+   * Tests that the menu ul-s have level-x class.
+   */
+  public function testLevelClasses() {
+    // Go on a random path.
+    $this->drupalGet('node/9');
+    $xpath = str_replace('ul[contains(@class, "menu")]', 'ul[contains(@class, "level-1")]', self::MENU_DISPLAY_BLOCK_XPATH_QUERY);
+    $this->assertTrue($this->xpath($xpath), 'The menu display has the level class.');
+
+    // Assert that it doesn't have wrong classes.
+    for ($i = 0; $i < 10; $i++) {
+      if ($i == 1) {
+        continue;
+      }
+      $xpath = str_replace('ul[contains(@class, "menu")]', 'ul[contains(@class, "level-' . $i . '")]', self::MENU_DISPLAY_BLOCK_XPATH_QUERY);
+      $this->assertFalse($this->xpath($xpath), 'The menu display doesn\'t have other wrong level class.');
+    }
+
+    // Check few levels deep.
+    $xpath = str_replace('ul[contains(@class, "menu")]', 'ul[contains(@class, "level-1")]', self::MENU_DISPLAY_BLOCK_XPATH_QUERY);
+    for ($i = 2; $i < 4; $i++) {
+      $xpath .= '/li[contains(@class, "has-children")]/div[contains(@class, "menu_wrapper")]/ul[contains(@class, "level-' . $i . '")]';
+      $this->assertTrue($this->xpath($xpath), 'The menu display has the level class for deeper menu items.');
+    }
+  }
+
+}

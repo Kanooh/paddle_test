@@ -1,0 +1,30 @@
+<?php
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the cookie legislation app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_cookie_legislation_enable() {
+  // Make sure the site managers can manage widgets on Paddle websites.
+  $permissions = array('administer EU Cookie Compliance popup');
+
+  $role = user_role_load_by_name('Site Manager');
+  if (!empty($role)) {
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Make sure anonymous users can see the cookies pop-up.
+  $anonymous_permissions = array('display EU Cookie Compliance popup');
+
+  $anonymous_user = user_role_load_by_name('anonymous user');
+  if (!empty($anonymous_user)) {
+    user_role_grant_permissions($anonymous_user->rid, $anonymous_permissions);
+  }
+
+  if (module_exists('paddle_i18n')) {
+    variable_realm_set('global', 'default', 'variable_realm_list_language', array('eu_cookie_compliance'));
+  }
+}

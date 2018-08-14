@@ -1,0 +1,442 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Organizational Unit app.
+ */
+
+include_once 'paddle_organizational_unit.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_organizational_unit_apps_app_info() {
+  return array();
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_organizational_unit_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_organizational_unit_short' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-organizational-unit-short',
+    ),
+    'paddle_organizational_unit_medium' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-organizational-unit-medium',
+    ),
+    'paddle_organizational_unit_long' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-organizational-unit-long',
+    ),
+    'paddle_organizational_unit_page_contact_information' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-organizational-unit-page-contact-information',
+    ),
+    'paddle_organizational_unit_page_info' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-organizational-unit-page-info',
+    ),
+    'paddle_organizational_unit_longOpeningHours' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-organizational-unit-long-opening-hours',
+    ),
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_organizational_unit_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_organizational_unit_paddle_content_manager_additional_fields() {
+  return array(
+    module_exists('paddle_contact_person') ? 'field_paddle_ou_cp_head_unit' : 'field_paddle_ou_head_unit',
+    'field_paddle_featured_image',
+    'field_paddle_ou_parent_entity',
+    'field_paddle_ou_address',
+    'field_paddle_ou_phone',
+    'field_paddle_ou_fax',
+    'field_paddle_ou_email',
+    'field_paddle_ou_website',
+    'field_paddle_ou_vat_number',
+    'field_paddle_ou_linkedin',
+    'field_paddle_ou_twitter',
+    'field_paddle_ou_facebook',
+  );
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields_groups().
+ */
+function paddle_organizational_unit_paddle_content_manager_additional_fields_groups() {
+  return array(
+    'contact information' => array(
+      'label' => t('Contact information'),
+      'weight' => 1,
+      'fields' => array(
+        'field_paddle_ou_address',
+        'field_paddle_ou_phone',
+        'field_paddle_ou_fax',
+        'field_paddle_ou_email',
+        'field_paddle_ou_website',
+        'field_paddle_ou_linkedin',
+        'field_paddle_ou_twitter',
+        'field_paddle_ou_facebook',
+        'field_paddle_ou_vat_number',
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_organizational_unit_menu() {
+  $items = array();
+
+  $items['admin/organizational_unit/node_autocomplete_callback'] = array(
+    'page callback' => 'paddle_organizational_unit_node_autocomplete_callback',
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+
+  return $items;
+}
+
+/**
+ * Autocomplete callback for nodes by title or real path.
+ *
+ * @param string $parent_lang
+ *   The language of the parent node where the autocomplete is being called.
+ * @param string $string
+ *   The string that will be searched.
+ * @param int $nid
+ *   When the user searches for "node/<nid>" this will hold the nid.
+ *
+ * Searches for a node by title or real path, but then identifies it by nid,
+ * so the actual returned value can be used later by the form.
+ *
+ * The returned $matches array has
+ * - key: The title, with the identifying node path in brackets, like
+ *     "Some node title (node/444)"
+ * - value: the title which will be displayed in the autocompleted dropdown.
+ */
+function paddle_organizational_unit_node_autocomplete_callback($parent_lang = '', $string = '', $nid = 0) {
+  global $language_content;
+
+  $language = !empty($parent_lang) ? $parent_lang : $language_content->language;
+  $results = array();
+  if ($string) {
+    $query = db_select('node', 'n');
+    $query->join('field_data_field_computed_ou', 'cou', 'n.nid = cou.entity_id');
+    $query->join('workbench_moderation_node_history', 'wmh', 'wmh.nid = n.nid AND wmh.vid = n.vid');
+    $query->groupBy('cou.entity_id');
+    $query->fields('n', array('nid', 'title'))
+      ->fields('cou', array('field_computed_ou_value'))
+      ->condition('wmh.state', 'archived', '<>')
+      ->condition('wmh.is_current', 1, '=')
+      ->condition('n.language', $language, '=')
+      ->condition('n.type', 'organizational_unit', '=')
+      ->addTag('node_access');
+
+    if ($string == 'node' && is_numeric($nid) && $nid !== 0) {
+      // The search string is a node path.
+      $query->condition('n.nid', $nid, '=');
+    }
+    elseif ($string != 'node') {
+      // The search string is a title or something else.
+      $args = func_get_args();
+      // Remove the first param which should be the language.
+      unset($args[0]);
+      $like = db_like(implode('/', $args));
+      // If the url ends on "/" we assume that this "/" is part of the title
+      // we are looking for (of course the $nid should be 0).
+      if (substr(request_uri(), -1) == '/') {
+        $like .= '/';
+      }
+      $query->condition('cou.field_computed_ou_value', '%' . $like . '%', 'LIKE');
+    }
+
+    // If neither is true we basically show the first 10 nodes we can find.
+    $query->range(0, 10);
+    $result = $query->execute();
+    foreach ($result as $node) {
+      $results[$node->field_computed_ou_value . " (node/$node->nid)"] = check_plain($node->field_computed_ou_value) . " (node/$node->nid)";
+    }
+  }
+
+  drupal_json_output($results);
+}
+
+/**
+ * Set the value of the computed field of the organizational unit.
+ *
+ * We combine title, parent 1 and parent 2.
+ */
+function computed_field_field_computed_ou_compute(&$entity_field, $entity_type, $entity, $field, $instance, $langcode, $items) {
+  $entity_field[0]['value'] = '';
+
+  $parent1 = field_get_items($entity_type, $entity, 'field_paddle_ou_parent_1');
+  if (!empty($parent1[0]['value'])) {
+    $entity_field[0]['value'] .= $parent1[0]['value'] . ' > ';
+  }
+
+  $parent2 = field_get_items($entity_type, $entity, 'field_paddle_ou_parent_2');
+  if (!empty($parent2[0]['value'])) {
+    $entity_field[0]['value'] .= $parent2[0]['value'] . ' > ';
+  }
+
+  $entity_field[0]['value'] .= $entity->title;
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function paddle_organizational_unit_field_widget_form_alter(&$element, &$form_state, $context) {
+  if ($context['field']['field_name'] == 'field_paddle_ou_address') {
+    // Show the country list at the end of the set.
+    $element['name_block']['name_line']['#title'] = t('Building name');
+    $element['country']['#weight'] = 50;
+    // Don't display address input fields in a separate fieldset.
+    unset($element['#type']);
+  }
+  if ($context['field']['field_name'] == 'field_paddle_ou_website') {
+    // Don't display url input field in a fieldset.
+    unset($element['#type']);
+  }
+}
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_organizational_unit_paddle_content_region_content_type_info() {
+  return 'organizational_unit';
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function paddle_organizational_unit_field_formatter_info() {
+  return array(
+    'paddle_organizational_unit_logo' => array(
+      'label' => t('Organizational unit logo'),
+      'field types' => array('paddle_scald_atom'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function paddle_organizational_unit_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  foreach ($items as $index => $item) {
+    $atom = scald_atom_load($item['sid']);
+    $attributes = array('class' => array('paddle-organizational-unit-logo'));
+
+    if ($display['type'] == 'paddle_organizational_unit_logo') {
+      // Determine the image style, if any.
+      $image_style = !empty($item['style']) ? $item['style'] : 'medium';
+      // Render the image markup.
+      $element[$index]['#markup'] = theme('paddle_scald_render_atom', array(
+        'atom' => $atom,
+        'image_style' => $image_style,
+        'attributes' => $attributes,
+      ));
+    }
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function paddle_organizational_unit_modules_enabled($modules) {
+  foreach ($modules as $module) {
+    if ($module == 'paddle_contact_person') {
+      $results = paddle_core_get_entity_revisions('node', array('organizational_unit'));
+      foreach ($results as $result) {
+        paddle_organizational_unit_update_head_of_unit($result);
+      }
+    }
+    if ($module == 'paddle_maps') {
+      $organizational_unit = array('organizational_unit' => FALSE);
+      $contenttype_fields = serialize($organizational_unit + unserialize(variable_get('paddle_maps_index_contenttype_fields', array())));
+      variable_set('paddle_maps_index_contenttype_fields', $contenttype_fields);
+
+      // Check for content-type and add the indexfields.
+      paddle_maps_add_index_fields();
+
+      gmap_regenerate_markers();
+      _drupal_flush_css_js();
+      registry_rebuild();
+      drupal_clear_css_cache();
+      drupal_clear_js_cache();
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_content_region_extra_content_regions().
+ */
+function paddle_organizational_unit_paddle_content_region_extra_content_regions($content_type) {
+  $regions = array();
+
+  if ($content_type == 'organizational_unit') {
+    $regions = array(
+      'nested_6_e' => t('E'),
+      'nested_6_f' => t('F'),
+      'nested_4_g' => t('G'),
+      'nested_4_h' => t('H'),
+      'nested_4_i' => t('I'),
+    );
+  }
+
+  return $regions;
+}
+
+/**
+ * Implements hook_paddle_maps_supported_content_types_alter().
+ */
+function paddle_organizational_unit_paddle_maps_supported_content_types_alter(&$supported_types) {
+  $supported_types[] = 'organizational_unit';
+}
+
+/**
+ * Implements hook_paddle_maps_add_index_fields_alter().
+ */
+function paddle_organizational_unit_paddle_maps_add_index_fields_alter(&$index, &$paddle_maps_index_contenttype_fields, &$something_changed) {
+  $index->options['fields']['nid']['type'] = 'integer';
+  $index->options['fields']['field_paddle_ou_website:value']['type'] = 'uri';
+  $index->options['fields']['field_paddle_ou_website:title']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:country']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:country']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:name_line']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:name_line']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:first_name']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:first_name']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:last_name']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:last_name']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:organisation_name']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:organisation_name']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:administrative_area']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:administrative_area']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:sub_administrative_area']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:sub_administrative_area']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:locality']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:locality']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:dependent_locality']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:dependent_locality']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:postal_code']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:postal_code']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:thoroughfare']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:thoroughfare']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:premise']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:premise']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_address:sub_premise']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_address:sub_premise']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_ou_phone']['type'] = 'text';
+  $index->options['fields']['field_paddle_ou_phone']['boost'] = '2.0';
+  $paddle_maps_index_contenttype_fields['organizational_unit'] = TRUE;
+  $something_changed = TRUE;
+}
+
+/**
+ * Implements hook_views_default_views_alter().
+ */
+function paddle_organizational_unit_views_default_views_alter(&$views) {
+  if (isset($views['paddle_maps'])) {
+    // Load the default view handler.
+    $default_handler =& $views['paddle_maps']->display['default']->handler;
+
+    // Add the contact person as allowed filter type.
+    if (!empty($default_handler->display->display_options['filters']['type'])) {
+      $default_handler->display->display_options['filters']['type']['value']['organizational_unit'] = 'organizational_unit';
+    }
+
+    // Allow the address to be searched through the API fields.
+    if (!empty($default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields'])) {
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:administrative_area'] = 'field_paddle_ou_address:administrative_area';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:dependent_locality'] = 'field_paddle_ou_address:dependent_locality';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:first_name'] = 'field_paddle_ou_address:first_name';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:last_name'] = 'field_paddle_ou_address:last_name';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:locality'] = 'field_paddle_ou_address:locality';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:name_line'] = 'field_paddle_ou_address:name_line';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:postal_code'] = 'field_paddle_ou_address:postal_code';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:premise'] = 'field_paddle_ou_address:premise';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:premise'] = 'field_paddle_ou_address:sub_administrative_area';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:premise'] = 'field_paddle_ou_address:sub_premise';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_ou_address:premise'] = 'field_paddle_ou_address:thoroughfare';
+    }
+
+    // Loads the maps view handlers. (We pass our values by reference)
+    $maps_handlers[] =& $views['paddle_maps']->display['block_maps']->handler;
+    $maps_handlers[] =& $views['paddle_maps']->display['block_maps_text']->handler;
+
+    // Add the fields which we want to use in our maps views.
+    foreach ($maps_handlers as $maps_handler) {
+      /* Field: Address: Thoroughfare (i.e. Street address) (indexed) */
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_thoroughfare']['id'] = 'field_paddle_ou_address_thoroughfare';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_thoroughfare']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_thoroughfare']['field'] = 'field_paddle_ou_address_thoroughfare';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_thoroughfare']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_thoroughfare']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_thoroughfare']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_thoroughfare']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_thoroughfare']['link_to_entity'] = 0;
+      /* Field: Address: Postal code (indexed) */
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_postal_code']['id'] = 'field_paddle_ou_address_postal_code';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_postal_code']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_postal_code']['field'] = 'field_paddle_ou_address_postal_code';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_postal_code']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_postal_code']['exclude'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_postal_code']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_postal_code']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_postal_code']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_postal_code']['link_to_entity'] = 0;
+      /* Field: Address: Locality (i.e. City) (indexed) */
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['id'] = 'field_paddle_ou_address_locality';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['field'] = 'field_paddle_ou_address_locality';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['alter']['alter_text'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['alter']['text'] = '[field_paddle_ou_address_postal_code] [field_paddle_ou_address_locality]';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_address_locality']['link_to_entity'] = 0;
+      /* Field: Indexed Node: Phone */
+      $maps_handler->display->display_options['fields']['field_paddle_ou_phone']['id'] = 'field_paddle_ou_phone';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_phone']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_phone']['field'] = 'field_paddle_ou_phone';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_phone']['label'] = 'T';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_phone']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_phone']['empty_zero'] = TRUE;
+      /* Field: Indexed Node: Website */
+      $maps_handler->display->display_options['fields']['field_paddle_ou_website']['id'] = 'field_paddle_ou_website';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_website']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_website']['field'] = 'field_paddle_ou_website';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_website']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_paddle_ou_website']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_website']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_website']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_ou_website']['settings'] = array(
+        'trim_length' => '80',
+        'nofollow' => 0,
+      );
+    }
+  }
+}

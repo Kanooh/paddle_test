@@ -1,0 +1,271 @@
+/**
+ * @file
+ * Paddlet styling.
+ */
+@import "../variables/*";
+
+// --------------------
+// FRONTEND PANE
+// --------------------
+
+.pane-opening-hours, .pane-organizational-unit, .pane-opening-hours-calendar {
+  .opening-hours-set {
+    .fa {
+      padding-right: 5px;
+      color: #FFCC66;
+    }
+  }
+  .opening-hours-exceptions {
+    margin-top: 50px;
+
+    .exceptional-opening-hour {
+      margin-left: 20px;
+    }
+
+    .fieldsets {
+      padding-top: 15px;
+
+      fieldset {
+        border: none;
+
+        .closing-day, .exceptional-hours, .weekday-container {
+          padding-left: 15px;
+        }
+
+        .closing-day {
+          width: 100%;
+          clear: both;
+
+          .closing-day-date, .closing-day-description {
+            float: left;
+            padding-right: 20px;
+            word-break: break-word;
+          }
+        }
+
+        .exceptional-hours-info, .exceptional-hours-weekdays, .weekday-container {
+          width: 100%;
+          clear: both;
+
+          .fieldset-description, .fieldset-date {
+            float: left;
+            padding-right: 25px;
+          }
+
+          .weekday-opening-hour, .weekday-title {
+            width: 100%;
+            clear: both;
+          }
+        }
+
+        .weekday-title {
+          font-weight: bold;
+          padding-top: 10px;
+        }
+
+        .weekday-opening-hour + .weekday-opening-hour {
+          padding-top: 10px;
+        }
+      }
+    }
+  }
+}
+
+.pane-opening-hours {
+  .pane-content {
+    display: flex;
+    padding: 10px;
+  }
+}
+
+// Desktop screens.
+@media (min-width: $screen-lg-min) {
+  .ohs-upcoming-week {
+    .title-box {
+      padding-top: 0.75em;
+      padding-bottom: 0.75em;
+    }
+  }
+}
+
+@media (min-width: $screen-md-min) {
+  .opening-hours-label {
+    bottom: 30px;
+  }
+}
+
+@media (min-width: $screen-sm-min) and (max-width: $screen-md-max) {
+  .ohs-upcoming-week {
+    .title-box {
+      padding-top: 1.25em;
+      padding-bottom: 1.25em;
+    }
+  }
+}
+
+@media (max-width: $screen-xs-max) {
+  .ohs-upcoming-week {
+    .title-box {
+      padding-top: 0.5em;
+      padding-bottom: 0.5em;
+    }
+  }
+
+  .paddle-oup-page-title {
+    float: left;
+  }
+
+  .opening-hours-label {
+    bottom: -25px;
+  }
+}
+
+// Tablets.
+@media only screen and (min-device-width: $screen-sm-min) and (max-device-width: $screen-md-max) {
+  .ohs-upcoming-week {
+    .title-box {
+      padding-top: 1em;
+      padding-bottom: 1em;
+    }
+  }
+}
+
+// Smartphones.
+@media only screen and (max-device-width: $screen-xs-max) {
+  .ohs-upcoming-week {
+    .title-box {
+      padding-top: 0.5em;
+      padding-bottom: 0.5em;
+    }
+  }
+}
+
+.opening-hours-set {
+  width: 100%;
+}
+
+.ohs-upcoming-week {
+  padding-top: 15px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+
+  .title-box {
+    border: 1px solid;
+    width: 100%;
+    text-align: center;
+  }
+}
+
+.ohs-upcoming-day {
+  .opening-hour {
+    padding-top: 10px;
+    clear: both;
+    display: flex;
+    .oh-description {
+      min-width: 0;
+    }
+    .oh-time {
+      padding-right: 25px;
+    }
+  }
+}
+
+.opening-hours-set {
+  .fa {
+    padding-right: 5px;
+    color: #FFCC66;
+  }
+}
+
+.pane-section-body {
+  .opening-hours-set {
+    .opening-hours-set-calendar {
+      h3 {
+        a {
+          color: #39b9be;
+          text-decoration: none;
+        }
+      }
+    }
+  }
+}
+
+// --------------------
+// STATUS LABEL
+// --------------------
+
+.pane-opening-hours-status {
+  .pane-content {
+    border: none;
+    box-shadow: none;
+
+    .opening-hours-closed {
+      background-color: $red;
+      padding: 10px;
+      color: white;
+    }
+    .opening-hours-label {
+      padding: 10px;
+      color: white;
+
+      &.open {
+        background-color: $green;
+      }
+      &.closed {
+        background-color: $red;
+      }
+    }
+
+    .current-opening-hours {
+      padding-left: 15px;
+    }
+  }
+
+  @media (max-width: $screen-sm-max) {
+    .opening-hours-status {
+      float: left;
+      width:100%;
+      margin-bottom: 25px;
+    }
+  }
+}
+
+// ---------------------------
+// OPENING HOURS LISTING PANE
+// ---------------------------
+
+.opening-hours-sets-status-list {
+  width: 100%;
+  padding-left: 10px;
+  padding-right: 10px;
+  .opening-hours-sets-status-list-node {
+    float: left;
+    clear: both;
+    width: 100%;
+    border-bottom: 1px solid;
+
+    &:last-of-type {
+      border: none;
+    }
+    .opening-hours-sets-status-list-node-title {
+      float: left;
+      padding-top: 10px;
+      padding-bottom: 10px;
+      h3 {
+        a {
+          color: #39b9be;
+          text-decoration: none;
+
+        }
+      }
+    }
+    .opening-hours-sets-status-list-node-time-container {
+      float: right;
+      text-align: right;
+      padding-top: 15px;
+      padding-bottom: 10px;
+      padding-right: 5px;
+    }
+  }
+}

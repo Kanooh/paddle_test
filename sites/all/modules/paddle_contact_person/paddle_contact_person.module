@@ -1,0 +1,1218 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Contact Person module.
+ */
+
+include_once 'paddle_contact_person.features.inc';
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_contact_person_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_contact_person_configuration_form',
+  );
+}
+
+/**
+ * Paddle Contact person configuration form callback.
+ *
+ * @return array
+ *   Form render array.
+ */
+function paddle_contact_person_configuration_form() {
+  if (module_exists('paddle_organizational_unit')) {
+    return $view = _ou_contact_person_import_view();
+  }
+
+  return $view = _contact_person_import_view();
+}
+
+/**
+ * Contact person default export view.
+ *
+ * @return array
+ *   The view output.
+ */
+function _contact_person_import_view() {
+  $view = views_get_view('contact_person_overview');
+  $display_id = 'contact_person_overview';
+  $content = $view->execute_display($display_id);
+  $build['content'] = array(
+    'view-content' => array('#markup' => $content)
+  );
+  return $build;
+}
+
+/**
+ * Contact person export view when OU is enabled.
+ *
+ * @return array
+ *   The view output.
+ */
+function _ou_contact_person_import_view() {
+  $view = views_get_view('ou_contact_person_overview');
+  $display_id = 'ou_contact_person_overview';
+  $content = $view->execute_display($display_id);
+  $build['content'] = array(
+    'view-content' => array('#markup' => $content),
+  );
+  return $build;
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_contact_person_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'contact_person') {
+      return paddle_contact_person_additional_fields();
+    }
+  }
+  return array();
+}
+
+/**
+ * Define all additional fields for a contact person.
+ *
+ * @return array
+ *   Array containing all additional fields.
+ */
+function paddle_contact_person_additional_fields() {
+  if (paddle_contact_person_is_organizational_unit_enabled()) {
+    return array(
+      'field_paddle_cp_first_name',
+      'field_paddle_cp_last_name',
+      'field_paddle_cp_linkedin',
+      'field_paddle_featured_image',
+      'field_paddle_cp_skype',
+      'field_paddle_cp_twitter',
+      'field_paddle_cp_yammer',
+      'field_paddle_cp_company_info',
+    );
+  }
+  else {
+    return array(
+      'field_paddle_cp_first_name',
+      'field_paddle_cp_last_name',
+      'field_paddle_cp_ou_level_1',
+      'field_paddle_cp_ou_level_2',
+      'field_paddle_cp_ou_level_3',
+      'field_paddle_cp_address',
+      'field_paddle_cp_email',
+      'field_paddle_cp_fax',
+      'field_cp_office',
+      'field_paddle_cp_function',
+      'field_paddle_cp_linkedin',
+      'field_paddle_cp_location_title',
+      'field_paddle_cp_manager',
+      'field_paddle_cp_mobile_office',
+      'field_paddle_cp_phone_office',
+      'field_paddle_featured_image',
+      'field_paddle_cp_skype',
+      'field_paddle_cp_twitter',
+      'field_paddle_cp_website',
+      'field_paddle_cp_yammer',
+    );
+  }
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields_groups().
+ */
+function paddle_contact_person_paddle_content_manager_additional_fields_groups() {
+  $menu_object = menu_get_object();
+
+  if ($menu_object->type == 'contact_person') {
+    $additional_fields_groups = array();
+    $additional_fields_groups['contact person personal information'] = array(
+      'label' => t('Personal information'),
+      'weight' => 1,
+      'fields' => array(
+        'field_paddle_cp_first_name',
+        'field_paddle_cp_last_name',
+        'field_paddle_cp_skype',
+        'field_paddle_cp_twitter',
+        'field_paddle_cp_yammer',
+        'field_paddle_cp_linkedin',
+      ),
+    );
+
+    if (paddle_contact_person_is_organizational_unit_enabled()) {
+      $additional_fields_groups['contact person organisational information'] = array(
+        'label' => t('Company information'),
+        'weight' => 2,
+        'fields' => array(
+          'field_paddle_cp_company_info',
+        ),
+      );
+    }
+    else {
+      $additional_fields_groups['contact person organisational information'] = array(
+        'label' => t('Company information'),
+        'weight' => 2,
+        'fields' => array(
+          'field_paddle_cp_ou_level_1',
+          'field_paddle_cp_ou_level_2',
+          'field_paddle_cp_ou_level_3',
+          'field_paddle_cp_function',
+          'field_paddle_cp_manager',
+        ),
+      );
+
+      $additional_fields_groups['contact person contact information'] = array(
+        'label' => t('Contact information'),
+        'weight' => 3,
+        'fields' => array(
+          'field_paddle_cp_address',
+          'field_paddle_cp_location_title',
+          'field_cp_office',
+          'field_paddle_cp_website',
+          'field_paddle_cp_phone_office',
+          'field_paddle_cp_mobile_office',
+          'field_paddle_cp_fax',
+          'field_paddle_cp_email',
+        ),
+      );
+    }
+    // Add the featured image field last in the field group so it is always shown on the last spot.
+    $additional_fields_groups['contact person personal information']['fields'][] = 'field_paddle_featured_image';
+
+    return $additional_fields_groups;
+  }
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function paddle_contact_person_field_widget_form_alter(&$element, &$form_state, $context) {
+  switch ($context['field']['field_name']) {
+    case 'field_paddle_cp_address':
+      // When the organizational unit is enabled, the address will be retrieved
+      // from the field collection.
+      if (module_exists('paddle_organizational_unit')) {
+        $element['#access'] = FALSE;
+      }
+      else {
+        $element['country']['#weight'] = 50;
+        $element['name_block']['name_line']['#title'] = t('Building name');
+        unset($element['#type']);
+      }
+      break;
+
+    case 'field_paddle_cp_company_info':
+      $element['field_cp_ou_address'][LANGUAGE_NONE][0]['name_block']['name_line']['#title'] = t('Building name');
+      unset($element['field_cp_ou_address'][LANGUAGE_NONE][0]['#type']);
+      unset($element['field_cp_url'][LANGUAGE_NONE][0]['#type']);
+      break;
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_contact_person_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_contact_person_menu() {
+  $items = array();
+
+  $items['admin/contact_person/node_autocomplete_callback'] = array(
+    'page callback' => 'paddle_contact_person_node_autocomplete_callback',
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+
+  return $items;
+}
+
+/**
+ * Auto complete callback for contact persons.
+ *
+ * @param string $parent_lang
+ *   The language of the parent node where the autocomplete is being called.
+ * @param string $string
+ *   The string that will be searched.
+ * @param int $nid
+ *   When the user searches for "node/<nid>" this will hold the nid.
+ *
+ * Searches for a contact person by title, real path or hierarchy. Identifies
+ * it by nid, so the actual returned value can be used later by the form.
+ *
+ * The returned $matches array has
+ * - key: The title, with the identifying node path in brackets, like
+ *     "Some node title (node/444)"
+ * - value: the title which will be displayed in the autocompleted dropdown.
+ *
+ * @see paddle_organizational_unit_node_autocomplete_callback()
+ */
+function paddle_contact_person_node_autocomplete_callback($parent_lang = '', $string = '', $nid = 0) {
+  global $language_content;
+
+  $language = !empty($parent_lang) ? $parent_lang : $language_content->language;
+  $results = array();
+  if ($string) {
+    $query = db_select('node', 'n');
+    $query->join('field_data_field_computed_cp', 'ccp', 'n.nid = ccp.entity_id');
+    $query->join('workbench_moderation_node_history', 'wmh', 'wmh.nid = n.nid AND wmh.vid = n.vid');
+    $query->groupBy('ccp.entity_id');
+    $query->fields('n', array('nid', 'title'))
+      ->fields('ccp', array('field_computed_cp_value'))
+      ->condition('wmh.state', 'archived', '<>')
+      ->condition('wmh.is_current', 1, '=')
+      ->condition('n.language', $language, '=')
+      ->condition('n.type', 'contact_person', '=')
+      ->addTag('node_access');
+
+    if ($string == 'node' && is_numeric($nid) && $nid !== 0) {
+      // The search string is a node path.
+      $query->condition('n.nid', $nid, '=');
+    }
+    elseif ($string != 'node') {
+      // The search string is a title or something else.
+      $args = func_get_args();
+      // Remove the first param which should be the language.
+      unset($args[0]);
+      $like = db_like(implode('/', $args));
+      // If the url ends on "/" we assume that this "/" is part of the title
+      // we are looking for (of course the $nid should be 0).
+      if (substr(request_uri(), -1) == '/') {
+        $like .= '/';
+      }
+      $query->condition('ccp.field_computed_cp_value', '%' . $like . '%', 'LIKE');
+    }
+
+    // If neither is true we basically show the first 10 nodes we can find.
+    $query->range(0, 10);
+    $result = $query->execute();
+    foreach ($result as $node) {
+      $results[$node->field_computed_cp_value . " (node/$node->nid)"] = check_plain($node->field_computed_cp_value) . " (node/$node->nid)";
+    }
+  }
+
+  drupal_json_output($results);
+}
+
+/**
+ * Set the value of the computed field of the contact person.
+ *
+ * We combine title, parent 1, parent 2 and parent 3.
+ */
+function computed_field_field_computed_cp_compute(&$entity_field, $entity_type, $entity, $field, $instance, $langcode, $items) {
+  $entity_field[0]['value'] = '';
+
+  for ($i = 1; $i <= 3; $i++) {
+    $parent = field_get_items($entity_type, $entity, 'field_paddle_cp_ou_level_' . $i);
+    if (!empty($parent[0]['value'])) {
+      $entity_field[0]['value'] .= $parent[0]['value'] . ' > ';
+    }
+  }
+
+  $entity_field[0]['value'] .= $entity->title;
+}
+
+/**
+ * Decides what to output for the computed contact person field.
+ *
+ * @return string
+ *   The raw value.
+ */
+function computed_field_field_computed_cp_display($field, $entity_field_item, $entity_lang, $langcode, $entity) {
+  return $entity_field_item['value'];
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_contact_person_form_contact_person_node_form_alter(&$form, &$form_state) {
+  $form['title']['#required'] = FALSE;
+  $form['title']['#access'] = FALSE;
+  $form['field_paddle_cp_company_info'][LANGUAGE_NONE]['#after_build'] = array('cp_company_info_after_build');
+}
+
+/**
+ * Implements field_form_element_after_build($form, &$form_state).
+ */
+function cp_company_info_after_build($form, &$form_state) {
+  foreach ($form as $key => $value) {
+    if (is_numeric($key) && isset($value['#entity_type']) && $value['#entity_type'] == 'field_collection_item') {
+
+      $form[$key]['field_cp_ou_address']['#states'] = array(
+        'invisible' => array(
+          ':input[name="field_paddle_cp_company_info[' . LANGUAGE_NONE . '][' . $key . '][field_cp_load_contact_info][' . LANGUAGE_NONE . ']"]' => array('checked' => TRUE),
+        ),
+      );
+
+      $form[$key]['field_cp_manager']['#states'] = array(
+        'invisible' => array(
+          ':input[name="field_paddle_cp_company_info[' . LANGUAGE_NONE . '][' . $key . '][field_cp_load_contact_info][' . LANGUAGE_NONE . ']"]' => array('checked' => TRUE),
+        ),
+      );
+
+      $form[$key]['field_cp_url']['#states'] = array(
+        'invisible' => array(
+          ':input[name="field_paddle_cp_company_info[' . LANGUAGE_NONE . '][' . $key . '][field_cp_load_contact_info][' . LANGUAGE_NONE . ']"]' => array('checked' => TRUE),
+        ),
+      );
+    }
+  }
+
+  return $form;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_contact_person_form_paddle_content_manager_node_add_form_alter(&$form, &$form_state) {
+  // Check if the correct bundle is set.
+  if (!empty($form['#bundle']) && $form['#bundle'] == 'contact_person') {
+    $form['title']['#required'] = FALSE;
+    $form['title']['#access'] = FALSE;
+  }
+  // If no bundle set this means we're on the ajax add node form. The form
+  // fields are set in a container then.
+  elseif ($form_state['type'] == 'contact_person') {
+    $form['container']['title']['#required'] = FALSE;
+    $form['container']['title']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_node_submit().
+ */
+function paddle_contact_person_node_submit($node, $form, &$form_state) {
+  paddle_contact_person_set_title($node);
+}
+
+/**
+ * Implements hook_node_presave().
+ */
+function paddle_contact_person_node_presave($node) {
+  paddle_contact_person_set_title($node);
+}
+
+/**
+ * Implements hook_field_collection_item_presave().
+ */
+function paddle_contact_person_field_collection_item_presave(FieldCollectionItemEntity $field_collection_item) {
+  $wrapper = entity_metadata_wrapper('field_collection_item', $field_collection_item);
+
+  if (
+    !empty($wrapper->field_cp_load_contact_info) &&
+    $wrapper->field_cp_load_contact_info->value() === TRUE &&
+    !empty($wrapper->field_cp_organisation) && !empty($wrapper->field_cp_organisation->value())
+  ) {
+    $ou_node = $wrapper->field_cp_organisation->value();
+    $fields = array(
+      'field_paddle_ou_website' => 'field_cp_url',
+      'field_paddle_ou_address' => 'field_cp_ou_address',
+    );
+
+    foreach ($fields as $ou_field => $cp_field) {
+      if ($ou_field == 'field_paddle_ou_address') {
+        $key_field = field_get_items('node', $ou_node, $ou_field);
+
+        if (!empty($key_field)) {
+          $wrapper->{$cp_field}->locality->set($key_field[0]['locality']);
+          $wrapper->{$cp_field}->country->set($key_field[0]['country']);
+          $wrapper->{$cp_field}->postal_code->set($key_field[0]['postal_code']);
+          $wrapper->{$cp_field}->thoroughfare->set($key_field[0]['thoroughfare']);
+          $wrapper->{$cp_field}->premise->set($key_field[0]['premise']);
+        }
+      }
+      else {
+        $key_field = field_get_items('node', $ou_node, $ou_field);
+        if (!empty($key_field)) {
+          $wrapper->{$cp_field}->set(array('value' => $key_field[0]['value']));
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Sets the automatically generated title for the node.
+ */
+function paddle_contact_person_set_title(&$node) {
+  if ($node->type == 'contact_person') {
+    $first_name = field_get_items('node', $node, 'field_paddle_cp_first_name');
+    $last_name = field_get_items('node', $node, 'field_paddle_cp_last_name');
+    $node->title = $first_name[0]['value'] . ' ' . $last_name[0]['value'];
+  }
+}
+
+/**
+ * Get the rendered values for each additional field for the contact person.
+ *
+ * @param object $node
+ *   The node to get the additional field values for.
+ *
+ * @return array
+ *   An associative array containing the additional fields with their rendered
+ *   HTML.
+ */
+function paddle_contact_person_get_additional_field_values($node) {
+  $variables = array('full_name' => check_plain($node->title));
+  $field_names = paddle_contact_person_additional_fields();
+
+  foreach ($field_names as $field_name) {
+    $field_name_without_prefix = str_replace('field_paddle_cp_', '', $field_name);
+    $item = field_get_items('node', $node, $field_name);
+
+    if (!empty($item[0])) {
+      $value = field_view_value('node', $node, $field_name, $item[0]);
+
+      // Render the manager field as a link.
+      if ($field_name == 'field_paddle_cp_manager') {
+        // Add the correct settings to the value so the theme function
+        // displays the manager as a link to its page.
+        // @see theme_entityreference_label()
+        $value['#uri']['path'] = 'node/' . $item[0]['target_id'];
+        $value['#uri']['options'] = array();
+        $value['#settings']['display']['link'] = TRUE;
+      }
+      $variables['number_of_organizations'] = 0;
+      if ($field_name == 'field_paddle_cp_company_info') {
+        $node_wrapper = entity_metadata_wrapper('node', $node);
+        $node_url = drupal_get_path_alias('node/' . $node_wrapper->getIdentifier());
+        $field_collections = $node_wrapper->field_paddle_cp_company_info->value();
+
+        if (!empty($field_collections)) {
+          $organizations = array();
+          $published_organization_exists = FALSE;
+
+          foreach ($field_collections as $weight => $field_collection) {
+
+            if (!empty($field_collection) && !paddle_contact_person_company_info_item_is_empty($field_collection)) {
+              $fc_wrapper = entity_metadata_wrapper('field_collection_item', $field_collection);
+              $variables['number_of_organizations'] += 1;
+              $empty_address = TRUE;
+
+              $organizations[$field_collection->item_id] = array(
+                'collection_id' => $field_collection->item_id,
+                'node' => node_access('view', $fc_wrapper->field_cp_organisation->value()) ? $fc_wrapper->field_cp_organisation->value() : FALSE,
+                'title' => node_access('view', $fc_wrapper->field_cp_organisation->value()) ? $fc_wrapper->field_cp_organisation->value()->title : FALSE,
+                'path' => node_access('view', $fc_wrapper->field_cp_organisation->value()) ? l(
+                  $fc_wrapper->field_cp_organisation->value()->title,
+                  $fc_wrapper->field_cp_organisation->value()->path['source'],
+                  array('attributes' => array('class' => array('paddle-ou-link')))
+                ) : FALSE,
+                'show_contact_info_link' => l(
+                  t('show contact information'),
+                  $node_url . '?referenced_organization=' . $field_collection->item_id,
+                  array('attributes' => array('class' => array('paddle-other-organizations')))
+                ),
+                'email' => !empty($fc_wrapper->field_cp_email->value()) ? l($fc_wrapper->field_cp_email->value(), 'mailto:' . $fc_wrapper->field_cp_email->value(), array('absolute' => TRUE)) : '',
+                'function' => !empty($fc_wrapper->field_cp_function->value()) ? $fc_wrapper->field_cp_function->value() : '',
+                'mobile' => !empty($fc_wrapper->field_cp_mobile->value()) ? $fc_wrapper->field_cp_mobile->value() : '',
+                'office' => !empty($fc_wrapper->field_cp_office->value()) ? $fc_wrapper->field_cp_office->value() : '',
+                'phone' => !empty($fc_wrapper->field_cp_phone->value()) ? $fc_wrapper->field_cp_phone->value() : '',
+                'website' => !empty($fc_wrapper->field_cp_url->value->value()) ? l(preg_replace('#^https?://#', '', $fc_wrapper->field_cp_url->value->value()), $fc_wrapper->field_cp_url->value->value()) : '',
+                'manager' => !empty($fc_wrapper->field_cp_manager->value()->title) ? $fc_wrapper->field_cp_manager->value()->title : '',
+                'manager_link' => !empty($fc_wrapper->field_cp_manager->value()->title) && ($fc_wrapper->field_cp_manager->value()->status == NODE_PUBLISHED || (user_access('view all unpublished content'))) ? l(
+                  $fc_wrapper->field_cp_manager->value()->title,
+                  $fc_wrapper->field_cp_manager->value()->path['source']
+                ) : '',
+                'address' => '',
+                'weight' => $weight,
+              );
+              if ($fc_wrapper->field_cp_load_contact_info->value()) {
+                $ou_wrapper = entity_metadata_wrapper('node', $fc_wrapper->field_cp_organisation->value());
+                $organizations[$field_collection->item_id]['manager'] = '';
+                $organizations[$field_collection->item_id]['manager_link'] = '';
+
+                if (!empty($ou_wrapper->field_paddle_ou_cp_head_unit) && !empty($ou_wrapper->field_paddle_ou_cp_head_unit->value()->title)) {
+                  $organizations[$field_collection->item_id]['manager'] = $ou_wrapper->field_paddle_ou_cp_head_unit->value()->title;
+                  $organizations[$field_collection->item_id]['manager_link'] = l(
+                    $organizations[$field_collection->item_id]['manager'],
+                    $ou_wrapper->field_paddle_ou_cp_head_unit->value()->path['source']
+                  );
+                }
+
+                if (!empty($ou_wrapper->field_paddle_ou_address)) {
+                  $empty_address = paddle_core_is_address_empty($ou_wrapper->field_paddle_ou_address->value());
+                }
+
+                if (!$empty_address) {
+                  $formatted_address = field_view_value('node', $fc_wrapper->field_cp_organisation->value(), 'field_paddle_ou_address', $ou_wrapper->field_paddle_ou_address->value());
+                  $organizations[$field_collection->item_id]['address'] = render($formatted_address);
+                }
+              }
+              else {
+                $empty_address = paddle_core_is_address_empty($fc_wrapper->field_cp_ou_address->value());
+
+                if (!$empty_address) {
+                  $formatted_address = field_view_value('field_collection_item', $field_collection, 'field_cp_ou_address', $fc_wrapper->field_cp_ou_address->value());
+                  $organizations[$field_collection->item_id]['address'] = render($formatted_address);
+                }
+              }
+
+              if ($fc_wrapper->field_cp_organisation->value() && node_access('view', $fc_wrapper->field_cp_organisation->value())) {
+                $published_organization_exists = TRUE;
+                $current_organisation = $fc_wrapper->field_cp_organisation->value();
+                $node_parent_wrapper = entity_metadata_wrapper('node', $current_organisation);
+                // Add the current organization to the parents array.
+                $parents[$current_organisation->nid] = array(
+                  'link' => l(
+                    $current_organisation->title,
+                    $current_organisation->path['source'], array(
+                      'attributes' => array(
+                        'class' => array('paddle-cp-ou-parent'),
+                      ),
+                    )
+                  ),
+                  'nid' => $current_organisation->nid,
+                );
+
+                while (!empty($node_parent_wrapper->field_paddle_ou_parent_entity->value())) {
+                  $parent_ou = $node_parent_wrapper->field_paddle_ou_parent_entity->value();
+                  // We also need to check if the parent entity of the
+                  // referenced ou is published or not.
+                  if (node_access('view', $parent_ou) && !array_key_exists($parent_ou->nid, $parents)) {
+                    $parents[$parent_ou->nid] = array(
+                      'link' => l(
+                        $parent_ou->title,
+                        $parent_ou->path['source'], array(
+                          'attributes' => array(
+                            'class' => array('paddle-cp-ou-parent'),
+                          ),
+                        )
+                      ),
+                      'nid' => $parent_ou->nid,
+                    );
+
+                    $node_parent_wrapper = entity_metadata_wrapper('node', $parent_ou);
+                  }
+                  else {
+                    break;
+                  }
+                }
+
+                $organizations[$field_collection->item_id]['parents'] = array_reverse($parents);
+              }
+            }
+          }
+
+          $variables['organizations'] = $organizations;
+          $variables['published_organization_exists'] = $published_organization_exists;
+        }
+      }
+    }
+
+    if (!empty($value)) {
+      // Strip the "http://" from the url links.
+      if (isset($value['#type']) && $value['#type'] == 'link') {
+        $value['#title'] = preg_replace('#^https?://#', '', $value['#title']);
+      }
+      // If paddle OU is disabled, make sure the address wont show up if it is
+      // empty.
+      if ($field_name == 'field_paddle_cp_address') {
+        $node_wrapper = entity_metadata_wrapper('node', $node);
+        $address = !empty($node_wrapper->field_paddle_cp_address->value()) ? $node_wrapper->field_paddle_cp_address->value() : array();
+        $empty_address = paddle_core_is_address_empty($address);
+
+        if (!$empty_address) {
+          $addresses = field_get_items('node', $node, 'field_paddle_cp_address');
+          $formatted_address = field_view_value('node', $node, 'field_paddle_cp_address', $addresses[0]);
+          $variables['formatted_address'] = render($formatted_address);
+        }
+        else {
+          $value = array();
+        }
+      }
+
+      if ($field_name == 'field_paddle_featured_image') {
+        $value = array();
+        foreach ($item as $field_item) {
+          $atom = scald_atom_load($field_item['sid']);
+          $image_style = !empty($field_item['style']) ? $field_item['style'] : 'medium';
+
+          $value[] = array(
+            '#theme' => 'paddle_scald_render_atom',
+            '#atom' => $atom,
+            '#image_style' => $image_style,
+            '#attributes' => array('class' => array('paddle-contact-person-photo')),
+          );
+        }
+      }
+
+      $variables[$field_name_without_prefix] = render($value);
+      // Set an empty array for the $value variable. Otherwise the next time no
+      // item has been found, we get the previous value for this variable.
+      $value = array();
+    }
+  }
+
+  return $variables;
+}
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_contact_person_paddle_content_region_content_type_info() {
+  return 'contact_person';
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_contact_person_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_contact_person_page_meta' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-contact-person-page-meta',
+    ),
+    'paddle_contact_person_page_info' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-contact-person-page-info',
+    ),
+    'paddle_contact_person_short' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-contact-person-short',
+    ),
+    'paddle_contact_person_medium' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-contact-person-medium',
+    ),
+    'paddle_contact_person_long' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-contact-person-long',
+    ),
+  );
+}
+
+/**
+ * Implements hook_paddle_contextual_toolbar_actions_alter().
+ */
+function paddle_contact_person_paddle_contextual_toolbar_actions_alter(&$actions) {
+  $menu_item = menu_get_item();
+
+  if ($menu_item['path'] == 'admin/paddlet_store/app/paddle_contact_person/configure') {
+    $actions = array();
+
+    // Add the back button.
+    $action_link = l(
+      t('Back'),
+      'admin/paddlet_store',
+      array(
+        'attributes' => array(
+          'class' => array('ui-icon', 'fa-arrow-left'),
+        ),
+      )
+    );
+    $actions[] = array(
+      'action' => $action_link,
+      'class' => array('cancel', 'cancel-js'),
+      'weight' => 0,
+    );
+
+    paddle_contextual_toolbar_actions($actions);
+  }
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function paddle_contact_person_modules_enabled($modules) {
+  if (in_array('paddle_organizational_unit', $modules)) {
+    $entities = paddle_core_get_entity_revisions('node', array('contact_person'));
+    $sandbox['entities'] = $entities;
+    paddle_contact_person_organizational_fields_migration_batch($sandbox);
+  }
+  if (in_array('paddle_maps', $modules)) {
+    $contact_person = array('contact_person' => FALSE);
+    $contenttype_fields = serialize($contact_person + unserialize(variable_get('paddle_maps_index_contenttype_fields', array())));
+    variable_set('paddle_maps_index_contenttype_fields', $contenttype_fields);
+
+    // Check for content-type and add the indexfields.
+    paddle_maps_add_index_fields();
+
+    gmap_regenerate_markers();
+    _drupal_flush_css_js();
+    registry_rebuild();
+    drupal_clear_css_cache();
+    drupal_clear_js_cache();
+  }
+}
+
+/**
+ * Executes the batch to upgrade organizational units.
+ *
+ * @param array $sandbox
+ *   The sandbox element of the batch.
+ *
+ * @throws \DrupalUpdateException
+ */
+function paddle_contact_person_organizational_fields_migration_batch($sandbox) {
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      return count($sandbox['entities']);
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      return array_slice($sandbox['entities'], $offset, $limit);
+    },
+    // Single item update callback.
+    function ($entity, &$sandbox) {
+      try {
+        paddle_contact_person_create_organization_from_ou_level_1($entity);
+
+        return TRUE;
+      } catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "Contact person {$item->nid} rev {$item->vid} lang {$item->language}";
+      $action = $updated ? "has been updated" : "could NOT be updated";
+
+      return $id_string . " " . $action . ".";
+    }
+  );
+  // @codingStandardsIgnoreEnd
+}
+
+/**
+ * Implements hook_field_collection_is_empty_alter().
+ */
+function paddle_contact_person_field_collection_is_empty_alter(&$is_empty, FieldCollectionItemEntity $item) {
+  if ($item->field_name === 'field_paddle_cp_company_info') {
+    $is_empty = paddle_contact_person_company_info_item_is_empty($item);
+  }
+}
+
+/**
+ * Checks if the organization from the company info is empty.
+ *
+ * @param FieldCollectionItemEntity $item
+ *   The Company info organization.
+ *
+ * @return bool
+ *   Whether the organization is empty.
+ */
+function paddle_contact_person_company_info_item_is_empty(FieldCollectionItemEntity $item) {
+  $wrapper = entity_metadata_wrapper('field_collection_item', $item);
+
+  if (!empty($wrapper->field_cp_organisation->value())) {
+    return FALSE;
+  }
+  elseif (!empty($wrapper->field_cp_ou_address->value()) && !paddle_core_is_address_empty($wrapper->field_cp_ou_address->value())) {
+    return FALSE;
+  }
+  elseif (!empty($wrapper->field_cp_email->value())) {
+    return FALSE;
+  }
+  elseif (!empty($wrapper->field_cp_manager->value())) {
+    return FALSE;
+  }
+  elseif (!empty($wrapper->field_cp_url->value())) {
+    return FALSE;
+  }
+  elseif (!empty($wrapper->field_cp_function->value())) {
+    return FALSE;
+  }
+  elseif (!empty($wrapper->field_cp_mobile->value())) {
+    return FALSE;
+  }
+  elseif (!empty($wrapper->field_cp_phone->value())) {
+    return FALSE;
+  }
+  else {
+    return TRUE;
+  }
+}
+
+/**
+ * Create an Organizational Unit from field_paddle_cp_ou_level_1 and link to it.
+ *
+ * @property $revision
+ *   The revision of the contact person node.
+ */
+function paddle_contact_person_create_organization_from_ou_level_1($revision) {
+  /** @var EntityDrupalWrapper $cp_wrapper */
+  $cp_wrapper = entity_metadata_wrapper('node', $revision);
+  $organisation = $cp_wrapper->field_paddle_cp_ou_level_1->value();
+  $address = $cp_wrapper->field_paddle_cp_address->value();
+  $filtered_address = array();
+
+  if (!empty($organisation)) {
+    // First check if there is an OU with the same title & address info.
+    $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', 'organizational_unit')
+      ->propertyCondition('title', $organisation, '=');
+
+    if (paddle_core_is_address_empty($address) === FALSE) {
+      foreach ($address as $key => $value) {
+        if (!empty($value)) {
+          $query->fieldCondition('field_paddle_ou_address', $key, $value);
+          $filtered_address[$key] = $value;
+        }
+      }
+    }
+
+    $existing_results = $query->execute();
+
+    if (!empty($existing_results)) {
+      // Retrieve the node ID from the first result.
+      $nid = key(reset($existing_results));
+    }
+    else {
+      // Create a new organizational unit.
+      $default_values = array(
+        'type' => 'organizational_unit',
+        'language' => $cp_wrapper->language->value(),
+        'uid' => $revision->uid,
+      );
+      $ou_entity = entity_create('node', $default_values);
+      // The node needs to be prepared and submitted to be shown in the content
+      // manager.
+      node_object_prepare($ou_entity);
+      $ou_entity = node_submit($ou_entity);
+      node_save($ou_entity);
+      $ou = node_load($ou_entity->nid);
+
+      /** @var EntityDrupalWrapper $ou_wrapper */
+      $ou_wrapper = entity_metadata_wrapper('node', $ou);
+      $ou_wrapper->title = $organisation;
+
+      if (!empty($filtered_address)) {
+        $ou_wrapper->field_paddle_ou_address->set($filtered_address);
+      }
+
+      $ou_wrapper->save();
+      $nid = $ou_wrapper->getIdentifier();
+    }
+  }
+
+  $existing_fc_items = $cp_wrapper->field_paddle_cp_company_info;
+  $fc_item_exists = FALSE;
+
+  foreach ($existing_fc_items as $existing_fc_item) {
+    if (isset($existing_fc_item) && isset($existing_fc_item->id)) {
+      // Check if the field collection exists already, if it does not
+      // a new collection item will be created. This check has been
+      // inserted because we want to enable or disable paddlets in the future.
+      if (empty($existing_fc_item->field_cp_organisation->value()) || $existing_fc_item->field_cp_organisation->value()->nid != $nid) {
+        $fc_item_exists = FALSE;
+      }
+      elseif (paddle_core_is_address_empty($existing_fc_item->field_cp_ou_address->value()) === TRUE || $existing_fc_item->field_cp_ou_address->value() != $cp_wrapper->field_paddle_cp_address->value()) {
+        $fc_item_exists = FALSE;
+      }
+      elseif (!empty($existing_fc_item->field_cp_email->value()) || $existing_fc_item->field_cp_email->value() != $cp_wrapper->field_paddle_cp_email->value()) {
+        $fc_item_exists = FALSE;
+      }
+      elseif (!empty($existing_fc_item->field_cp_manager->value()) || $existing_fc_item->field_cp_manager->value() != $cp_wrapper->field_paddle_cp_manager->value()) {
+        $fc_item_exists = FALSE;
+      }
+      elseif (!empty($existing_fc_item->field_cp_url->value()) || $existing_fc_item->field_cp_url->value() != $cp_wrapper->field_paddle_cp_website->value()) {
+        $fc_item_exists = FALSE;
+      }
+      elseif (!empty($existing_fc_item->field_cp_function->value()) || $existing_fc_item->field_cp_function->value() != $cp_wrapper->field_paddle_cp_function->value()) {
+        $fc_item_exists = FALSE;
+      }
+      elseif (!empty($existing_fc_item->field_cp_mobile->value()) || $existing_fc_item->field_cp_mobile->value() != $cp_wrapper->field_paddle_cp_mobile_office->value()) {
+        $fc_item_exists = FALSE;
+      }
+      elseif (!empty($existing_fc_item->field_cp_phone->value()) || $existing_fc_item->field_cp_phone->value() != $cp_wrapper->field_paddle_cp_phone_office->value()) {
+        $fc_item_exists = FALSE;
+      }
+      else {
+        $fc_item_exists = TRUE;
+        break;
+      }
+    }
+  }
+
+  if (!$fc_item_exists) {
+    /** @var FieldCollectionItemEntity $fc_item */
+    $fc_item = entity_create('field_collection_item', array('field_name' => 'field_paddle_cp_company_info'));
+    $fc_item->setHostEntity('node', $revision);
+    /** @var EntityDrupalWrapper $fc_wrapper */
+    $fc_wrapper = entity_metadata_wrapper('field_collection_item', $fc_item);
+    $set_collection = FALSE;
+
+    if (!empty($nid)) {
+      $fc_wrapper->field_cp_organisation->set($nid);
+      $fc_wrapper->field_cp_load_contact_info->set(1);
+      $set_collection = TRUE;
+    }
+    else {
+      $fc_wrapper->field_cp_load_contact_info->set(0);
+    }
+
+    if (!empty($cp_wrapper->field_paddle_cp_phone_office->value())) {
+      $fc_wrapper->field_cp_phone->set($cp_wrapper->field_paddle_cp_phone_office->value());
+      $set_collection = TRUE;
+    }
+
+    if (!empty($cp_wrapper->field_paddle_cp_mobile_office->value())) {
+      $fc_wrapper->field_cp_mobile->set($cp_wrapper->field_paddle_cp_mobile_office->value());
+      $set_collection = TRUE;
+    }
+
+    if (!empty($cp_wrapper->field_paddle_cp_function->value())) {
+      $fc_wrapper->field_cp_function->set($cp_wrapper->field_paddle_cp_function->value());
+      $set_collection = TRUE;
+    }
+
+    if (!empty($cp_wrapper->field_paddle_cp_website->value->value())) {
+      $fc_wrapper->field_cp_url->set(array('value' => $cp_wrapper->field_paddle_cp_website->value->value()));
+      $set_collection = TRUE;
+    }
+
+    if (!empty($cp_wrapper->field_paddle_cp_manager->value()->nid)) {
+      $fc_wrapper->field_cp_manager->set($cp_wrapper->field_paddle_cp_manager->value()->nid);
+      $set_collection = TRUE;
+    }
+
+    if (!empty($cp_wrapper->field_paddle_cp_email->value())) {
+      $fc_wrapper->field_cp_email->set($cp_wrapper->field_paddle_cp_email->value());
+      $set_collection = TRUE;
+    }
+
+    if (!empty($address)) {
+      unset($address['data']);
+      foreach ($address as $key => $value) {
+        $fc_wrapper->field_cp_ou_address->{$key}->set($value);
+        $set_collection = TRUE;
+      }
+    }
+
+    if ($set_collection) {
+      $fc_wrapper->save();
+      $revision = node_submit($revision);
+      node_save($revision);
+    }
+  }
+}
+
+/**
+ * Implements hook_panels_pane_content_alter().
+ */
+function paddle_contact_person_panels_pane_content_alter($content, $pane, $args, $contexts) {
+  // Remove the body field content entirely if there is no body text.
+  if ($pane->subtype == "node:body" && !empty($contexts['panelizer']) && $contexts['panelizer']->data->type == 'contact_person' && empty($content->content['#items'][0]['value'])) {
+    $content->content = "";
+  }
+}
+
+/**
+ * Checks if the Paddle Organizational Unit module is enabled.
+ *
+ * @return bool
+ *   Whether the Organizational Unit is enabled.
+ */
+function paddle_contact_person_is_organizational_unit_enabled() {
+  return module_exists('paddle_organizational_unit');
+}
+
+/**
+ * Implements hook_paddle_maps_add_index_fields_alter().
+ */
+function paddle_contact_person_paddle_maps_add_index_fields_alter(&$index, &$paddle_maps_index_contenttype_fields, &$something_changed) {
+  $index->options['fields']['nid']['type'] = 'integer';
+  $index->options['fields']['field_paddle_cp_website:value']['type'] = 'uri';
+  $index->options['fields']['field_paddle_cp_website:title']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:country']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:country']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:name_line']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:name_line']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:first_name']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:first_name']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:last_name']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:last_name']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:organisation_name']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:organisation_name']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:administrative_area']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:administrative_area']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:sub_administrative_area']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:sub_administrative_area']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:locality']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:locality']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:dependent_locality']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:dependent_locality']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:postal_code']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:postal_code']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:thoroughfare']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:thoroughfare']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:premise']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:premise']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_address:sub_premise']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_address:sub_premise']['boost'] = '2.0';
+  $index->options['fields']['field_paddle_cp_phone_office']['type'] = 'text';
+  $index->options['fields']['field_paddle_cp_phone_office']['boost'] = '2.0';
+  $paddle_maps_index_contenttype_fields['contact_person'] = TRUE;
+  $something_changed = TRUE;
+}
+
+/**
+ * Implements hook_paddle_maps_supported_content_types_alter().
+ */
+function paddle_contact_person_paddle_maps_supported_content_types_alter(&$supported_types) {
+  $supported_types[] = 'contact_person';
+}
+
+/**
+ * Implements hook_views_default_views_alter().
+ */
+function paddle_contact_person_views_default_views_alter(&$views) {
+  if (isset($views['paddle_maps'])) {
+    // Load the default view handler.
+    $default_handler =& $views['paddle_maps']->display['default']->handler;
+
+    // Add the contact person as allowed filter type.
+    if (!empty($default_handler->display->display_options['filters']['type'])) {
+      $default_handler->display->display_options['filters']['type']['value']['contact_person'] = 'contact_person';
+    }
+
+    // Allow the address to be searched through the API fields.
+    if (!empty($default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields'])) {
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:administrative_area'] = 'field_paddle_cp_address:administrative_area';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:dependent_locality'] = 'field_paddle_cp_address:dependent_locality';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:first_name'] = 'field_paddle_cp_address:first_name';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:last_name'] = 'field_paddle_cp_address:last_name';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:locality'] = 'field_paddle_cp_address:locality';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:name_line'] = 'field_paddle_cp_address:name_line';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:postal_code'] = 'field_paddle_cp_address:postal_code';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:premise'] = 'field_paddle_cp_address:premise';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:premise'] = 'field_paddle_cp_address:sub_administrative_area';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:premise'] = 'field_paddle_cp_address:sub_premise';
+      $default_handler->display->display_options['arguments']['search_api_views_fulltext']['fields']['field_paddle_cp_address:premise'] = 'field_paddle_cp_address:thoroughfare';
+    }
+
+    // Loads the maps view handlers. (We pass our values by reference)
+    $maps_handlers['maps'] =& $views['paddle_maps']->display['block_maps']->handler;
+    $maps_handlers['maps_text'] =& $views['paddle_maps']->display['block_maps_text']->handler;
+
+    // Add the fields which we want to use in our maps views.
+    foreach ($maps_handlers as $key => $maps_handler) {
+      /* Field: Address: Thoroughfare (i.e. Street address) (indexed) */
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_thoroughfare']['id'] = 'field_paddle_cp_address_thoroughfare';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_thoroughfare']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_thoroughfare']['field'] = 'field_paddle_cp_address_thoroughfare';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_thoroughfare']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_thoroughfare']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_thoroughfare']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_thoroughfare']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_thoroughfare']['link_to_entity'] = 0;
+      /* Field: Address: Postal code (indexed) */
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_postal_code']['id'] = 'field_paddle_cp_address_postal_code';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_postal_code']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_postal_code']['field'] = 'field_paddle_cp_address_postal_code';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_postal_code']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_postal_code']['exclude'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_postal_code']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_postal_code']['link_to_entity'] = 0;
+      /* Field: Address: Locality (i.e. City) (indexed) */
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['id'] = 'field_paddle_cp_address_locality';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['field'] = 'field_paddle_cp_address_locality';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['alter']['alter_text'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['alter']['text'] = '[field_paddle_cp_address_postal_code] [field_paddle_cp_address_locality]';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_address_locality']['link_to_entity'] = 0;
+      /* Field: Indexed Node: Phone */
+      $maps_handler->display->display_options['fields']['field_paddle_cp_phone_office']['id'] = 'field_paddle_cp_phone_office';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_phone_office']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_phone_office']['field'] = 'field_paddle_cp_phone_office';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_phone_office']['label'] = 'T';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_phone_office']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_phone_office']['empty_zero'] = TRUE;
+      /* Field: Indexed Node: Website */
+      $maps_handler->display->display_options['fields']['field_paddle_cp_website']['id'] = 'field_paddle_cp_website';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_website']['table'] = 'search_api_index_node_index';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_website']['field'] = 'field_paddle_cp_website';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_website']['label'] = '';
+      $maps_handler->display->display_options['fields']['field_paddle_cp_website']['element_label_colon'] = FALSE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_website']['hide_empty'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_website']['empty_zero'] = TRUE;
+      $maps_handler->display->display_options['fields']['field_paddle_cp_website']['settings'] = array(
+        'trim_length' => '80',
+        'nofollow' => 0,
+      );
+
+      if (module_exists('paddle_organizational_unit')) {
+        if ($key = 'maps_text') {
+          /* Field: Indexed Node: Organizations */
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['id'] = 'field_paddle_cp_company_info';
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['table'] = 'search_api_index_node_index';
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['field'] = 'field_paddle_cp_company_info';
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['label'] = '';
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['exclude'] = TRUE;
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['element_label_colon'] = FALSE;
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['link_to_entity'] = 0;
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['display'] = 'id';
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['view_mode'] = 'full';
+          $maps_handler->display->display_options['fields']['field_paddle_cp_company_info']['bypass_access'] = 1;
+          /* Field: General: Display */
+          $maps_handler->display->display_options['fields']['view']['id'] = 'view';
+          $maps_handler->display->display_options['fields']['view']['table'] = 'views';
+          $maps_handler->display->display_options['fields']['view']['field'] = 'view';
+          $maps_handler->display->display_options['fields']['view']['label'] = '';
+          $maps_handler->display->display_options['fields']['view']['element_label_colon'] = FALSE;
+          $maps_handler->display->display_options['fields']['view']['view'] = 'organisations_view';
+          $maps_handler->display->display_options['fields']['view']['arguments'] = '[%field_paddle_cp_company_info]';
+        }
+        else {
+          /* Relationship: Indexed Node: Organizations */
+          $maps_handler->display->display_options['relationships']['field_paddle_cp_company_info']['id'] = 'field_paddle_cp_company_info';
+          $maps_handler->display->display_options['relationships']['field_paddle_cp_company_info']['table'] = 'search_api_index_node_index';
+          $maps_handler->display->display_options['relationships']['field_paddle_cp_company_info']['field'] = 'field_paddle_cp_company_info';
+          $maps_handler->display->display_options['relationships']['field_paddle_cp_company_info']['label'] = 'Organisaties';
+          /* Field: Field collection item: Geofield » Latitude */
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lat_1']['id'] = 'field_paddle_address_geocode_lat_1';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lat_1']['table'] = 'entity_field_collection_item';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lat_1']['field'] = 'field_paddle_address_geocode_lat';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lat_1']['relationship'] = 'field_paddle_cp_company_info';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lat_1']['label'] = '';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lat_1']['exclude'] = TRUE;
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lat_1']['element_label_colon'] = FALSE;
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lat_1']['precision'] = '0';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lat_1']['link_to_entity'] = 0;
+          /* Field: Field collection item: Geofield » Longitude */
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lon_1']['id'] = 'field_paddle_address_geocode_lon_1';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lon_1']['table'] = 'entity_field_collection_item';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lon_1']['field'] = 'field_paddle_address_geocode_lon';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lon_1']['relationship'] = 'field_paddle_cp_company_info';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lon_1']['label'] = '';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lon_1']['exclude'] = TRUE;
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lon_1']['element_label_colon'] = FALSE;
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lon_1']['precision'] = '0';
+          $maps_handler->display->display_options['fields']['field_paddle_address_geocode_lon_1']['link_to_entity'] = 0;
+
+          $maps_handler->display->display_options['style_options']['field_purposes']['field_paddle_address_geocode_lat_1'] = 'latitude';
+          $maps_handler->display->display_options['style_options']['field_purposes']['field_paddle_address_geocode_lon_1'] = 'longitude';
+        }
+      }
+    }
+  }
+}

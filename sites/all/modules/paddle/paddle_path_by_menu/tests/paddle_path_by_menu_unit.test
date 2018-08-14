@@ -1,0 +1,65 @@
+<?php
+/**
+ * @file
+ * Contains unit tests for Paddle Path by Menu.
+ */
+
+/**
+ * Unit tests for Paddle Path by Menu.
+ */
+class PaddlePathByMenuUnitTestCase extends DrupalUnitTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp();
+
+    module_load_include('module', 'paddle_path_by_menu');
+  }
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Path by Menu unit tests',
+      'description' => 'Paddle Path by Menu unit tests.',
+      'group' => 'Paddle Path by Menu',
+    );
+  }
+
+  /**
+   * Tests that paddle_path_by_menu_resolve() uses static caching.
+   */
+  public function testResolveUsesStaticCaching() {
+    // Get the static cache, by reference.
+    $cache = & drupal_static('paddle_path_by_menu_resolve', array());
+
+    // Intentionally pollute the static cache with random values
+    // for 3 paths.
+    $map = array();
+    for ($i = 0; $i < 3; $i++) {
+      $path = $this->randomName();
+      $resolved_path = $this->randomName();
+      $map[$path] = array(
+        'link_path' => $resolved_path,
+      );
+
+      $cache[$path] = array(
+        'link_path' => $resolved_path,
+      );
+    }
+
+    // Check if we get our random values back.
+    foreach ($map as $path => $expected_resolved_path) {
+      $actual_resolved_path = paddle_path_by_menu_resolve($path);
+
+      $this->assertEqual(
+        $expected_resolved_path,
+        $actual_resolved_path,
+        'paddle_path_by_menu_resolve() uses drupal_static().'
+      );
+    }
+  }
+}

@@ -1,0 +1,38 @@
+/**
+* @file
+* Styling for forms.
+*
+* Contains all styles related to foldable panels
+*/
+.foldable .pane-title {
+  cursor: pointer;
+  margin: 10px 3px 5px 0;
+  text-indent: 7px;
+}
+.foldable-ui-icon {
+  float: left;
+  height: 15px;
+  margin-top: 5px;
+  width: 15px;
+}
+.foldable-ui-icon {
+  background: url(../images/arrows.png) no-repeat top left;
+}
+.folded .foldable-ui-icon {
+  background-position: 0 -16px;
+}
+.foldable .pane-title:focus {
+  outline: none;
+}
+.foldable {
+  border-bottom: 1px solid #a7bfc8;
+}
+.folded {
+  padding-bottom: 10px;
+}
+.pane-title:hover .foldable-ui-icon {
+  background-position: 0 -32px;
+}
+.folded .pane-title:hover .foldable-ui-icon {
+  background-position: 0 -48px;
+}

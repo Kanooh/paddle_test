@@ -1,0 +1,199 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle News app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_news_enable() {
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions. Otherwise our new content type is not yet
+  // known.
+  drupal_load('module', 'paddle_news');
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_news');
+  node_type_cache_reset();
+  drupal_static_reset();
+
+  $permissions = array(
+    'create news_item content',
+    'edit any news_item content',
+    'edit paddle_news content in landing pages',
+    'delete any news_item content',
+    'override news_item authored on option',
+    'administer panelizer node news_item layout',
+    'administer panelizer node news_item content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  paddle_content_region_panelize_node_type('news_item');
+  paddle_content_region_grant_node_type_permissions('news_item');
+}
+
+/**
+ * Implements hook_install().
+ */
+function paddle_news_install() {
+  paddle_news_create_overview_page();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_news_uninstall() {
+  variable_del('paddle_news_overview_page_nid');
+}
+
+/**
+ * Create a Paddle overview page node for the news.
+ */
+function paddle_news_create_overview_page() {
+  if (variable_get('paddle_news_overview_page_nid', 0) === 0) {
+    global $language;
+
+    $node = new stdClass();
+    $node->title = t('News');
+    $node->type = 'paddle_overview_page';
+    node_object_prepare($node);
+
+    $node->language = $language->language;
+    $node->uid = 1;
+    $node->status = 0;
+    $node->promote = 0;
+    $node->comment = 0;
+
+    $node = node_submit($node);
+    node_save($node);
+
+    // Save the node id into the variable indicating which is the node.
+    variable_set('paddle_news_overview_page_nid', $node->nid);
+  }
+}
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function paddle_news_update_dependencies() {
+  $dependencies = array();
+
+  // Create the featured image master field instance before syncing it to
+  // Paddle news pages.
+  $dependencies['paddle_news'][7001] = array(
+    'paddle_content_manager' => 7000,
+  );
+
+  return $dependencies;
+}
+
+/**
+ * Migrate the lead image field to the featured image field.
+ */
+function paddle_news_update_7001(&$sandbox) {
+  // Enable the featured image field.
+  features_revert_module('paddle_news');
+
+  $limit = 5;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      // We use db_select instead EntityFieldQuery to get all revisions.
+      return db_select('field_revision_field_paddle_news_image')
+        ->countQuery()
+        ->execute()
+        ->fetchField();
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+
+      $results = db_select('field_revision_field_paddle_news_image', 'frfpni')
+        ->fields('frfpni')
+        ->range($offset, $limit)
+        ->execute()
+        ->fetchAllAssoc('revision_id');
+
+      $nodes = array();
+      foreach ($results as $vid => $item) {
+        $nodes[] = node_load($item->entity_id, $vid);
+      }
+
+      return $nodes;
+    },
+    // Single item update callback.
+    function ($node, &$sandbox) {
+      try {
+        $value = field_get_items('node', $node, 'field_paddle_news_image');
+        $node->field_paddle_featured_image[LANGUAGE_NONE] = $value;
+        field_attach_presave('node', $node);
+        field_attach_update('node', $node);
+
+        return TRUE;
+      }
+      catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "News page {$item->nid} rev {$item->vid} lang {$item->language}";
+      $action = $updated ? "has been updated" : "could NOT be updated";
+      return $id_string . " " . $action . ".";
+    }
+  );
+  // @codingStandardsIgnoreEnd
+
+  // Delete the news lead image field that now got redundant.
+  field_delete_field('field_paddle_news_image');
+  field_info_cache_clear();
+}
+
+/**
+ * Enable the smart_trim module.
+ */
+function paddle_news_update_7002() {
+  module_enable(array('smart_trim'));
+}
+
+/**
+ * Grant permissions to edit the panels for the news item content type.
+ */
+function paddle_news_update_7003() {
+  $permissions = array(
+    'administer panelizer node news_item layout',
+    'administer panelizer node news_item content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Grant permissions to edit the the news pane.
+ */
+function paddle_news_update_7004() {
+  $permissions = array(
+    'edit paddle_news content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}

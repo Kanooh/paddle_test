@@ -1,0 +1,1762 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Themer module.
+ */
+
+/**
+ * A global context for plugins that do not need to target a CSS selector.
+ */
+define('PADDLE_THEMER_CONTEXT_GLOBAL', 'context_global');
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_themer_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && in_array($plugin_type, array('contexts', 'export_ui'))) {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_themer_permission() {
+  $return = array();
+
+  $return['administer paddle_themer'] = array(
+    'title' => t('Administer themes'),
+    'description' => t('Administer themes'),
+  );
+
+  $return['manage paddle_themer'] = array(
+    'title' => t('Manage themes'),
+    'description' => t('Manage themes: create your own based on existing ones, enable, ...'),
+  );
+
+  return $return;
+}
+
+/**
+ * Returns a list of all currently enabled Drupal themes.
+ *
+ * @return array
+ *   An associative array of the currently available themes in the same format
+ *   as used by list_themes().
+ *
+ * @see list_themes()
+ */
+function paddle_themer_get_enabled_themes() {
+  $themes = list_themes();
+
+  // Filter out disabled themes.
+  $enabled_themes = array_filter($themes, function($theme) {
+    return $theme->status;
+  });
+
+  return $enabled_themes;
+}
+
+/**
+ * Returns all style sets for a given theme.
+ *
+ * @see hook_paddle_themer_style_set()
+ *
+ * @param stdClass $theme
+ *   A theme object as provided by list_themes(). Defaults to the default theme.
+ * @param bool $reset
+ *   Whether to reset the internal style sets cache. Defaults to FALSE.
+ *
+ * @return array
+ *   All theming information applicable to the given theme, keyed by style set.
+ */
+function paddle_themer_style_sets(stdClass $theme = NULL, $reset = FALSE) {
+  $style_sets = &drupal_static(__FUNCTION__);
+
+  // Default to the default theme.
+  if (empty($theme)) {
+    $theme = paddle_themer_get_theme_by_name();
+  }
+
+  if (empty($style_sets[$theme->name]) || $reset) {
+    // Get theme-specific settings. These override app styles with the same key.
+    $style_sets[$theme->name] = paddle_themer_theme_invoke($theme, 'paddle_themer_style_set', array());
+
+    // Merge in the theme sets from all modules and apps.
+    $style_sets[$theme->name] += module_invoke_all('paddle_themer_style_set');
+
+    if (!isset($style_sets[$theme->name])) {
+      // @todo Provide sensible defaults that would apply to each theme.
+      $style_sets[$theme->name] = array();
+    }
+  }
+
+  return $style_sets[$theme->name];
+}
+
+/**
+ * Returns CSS, Javascript, libraries to be loaded on the styles edit form.
+ *
+ * Tries to find an implementation of
+ * hook_paddle_themer_edit_wizard_form_attachments() in the theme-settings.php
+ * file of the theme. If missing, it tries to find it in the base themes until
+ * it is found.
+ *
+ * @param stdClass $theme
+ *   A theme object as provided by list_themes().
+ *
+ * @return array
+ *   An array to be used as the value of the #attached Form API element
+ *   property.
+ *
+ * @see paddle_themer_styles_edit_wizard_form()
+ * @see hook_paddle_themer_styles_edit_wizard_form_attachments()
+ */
+function paddle_themer_styles_edit_wizard_form_attachments(stdClass $theme) {
+  return paddle_themer_theme_invoke($theme, 'paddle_themer_styles_edit_wizard_form_attachments', array());
+}
+
+/**
+ * Calls an implementation of a specific hook in a theme.
+ *
+ * First the implementation is searched for in the theme-settings.php file of
+ * the theme itself, if not found there the list of base themes is searched
+ * through.
+ *
+ * @param stdClass $theme
+ *   A theme object as provided by list_themes().
+ * @param string $hook
+ *   The name of the hook to invoke.
+ * @param mixed $default
+ *   The default value to return if the hook implementation is not found.
+ *
+ * @return string
+ *   The full name of the implementation found.
+ */
+function paddle_themer_theme_invoke(stdClass $theme, $hook, $default = NULL) {
+  $themes = list_themes();
+
+  // Create a list which includes the current theme and all its base themes.
+  $theme_keys = array();
+  if (isset($theme->base_themes)) {
+    $theme_keys = array_keys($theme->base_themes);
+  }
+
+  $theme_keys[] = $theme->name;
+  $theme_keys = array_reverse($theme_keys);
+
+  // Process the theme and all its base themes.
+  foreach ($theme_keys as $theme_name) {
+    // Include the theme-settings.php file.
+    $filename = DRUPAL_ROOT . '/' . str_replace("/$theme_name.info", '', $themes[$theme_name]->filename) . '/theme-settings.php';
+    if (file_exists($filename)) {
+      require_once $filename;
+    }
+
+    $function = $theme_name . '_' . $hook;
+    if (function_exists($function)) {
+      return $function();
+    }
+  }
+
+  return $default;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_themer_menu() {
+  $items = array();
+
+  // @todo Define the right place to put this in the menu.
+  $items['admin/themes'] = array(
+    'title' => 'Themes',
+    'description' => '',
+    'page callback' => 'paddle_themer_themes_page',
+    'page arguments' => array(),
+    'access arguments' => array('manage paddle_themer'),
+  );
+
+  $items['admin/themes/create'] = array(
+    'title' => 'Create',
+    'description' => 'Create a new theme',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_themer_create_new_theme_form'),
+    'access arguments' => array('manage paddle_themer'),
+    'file' => 'paddle_themer.admin.inc',
+  );
+
+  $items['admin/themes/%paddle_themer/edit'] = array(
+    'title callback' => 'paddle_themer_theme_title',
+    'title arguments' => array(2),
+    'description' => 'Edit a theme',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_themer_theme_edit_form', 2),
+    'access callback' => 'paddle_themer_theme_access',
+    'access arguments' => array(2, 'edit'),
+    'type' => MENU_CALLBACK,
+    'file' => 'paddle_themer.admin.inc',
+  );
+
+  $items['admin/themes/%paddle_themer/edit_screenshot'] = array(
+    'title callback' => 'paddle_themer_theme_title',
+    'title arguments' => array(2),
+    'description' => 'Edit the screenshot of a theme',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_themer_theme_image_form', 2),
+    'access callback' => 'paddle_themer_theme_access',
+    'access arguments' => array(2, 'edit'),
+    'type' => MENU_CALLBACK,
+    'file' => 'paddle_themer.admin.inc',
+  );
+
+  $items['admin/themes/%/enable'] = array(
+    'page callback' => 'paddle_themer_enable_theme',
+    'page arguments' => array(2),
+    'access arguments' => array('manage paddle_themer'),
+  );
+
+  $items['admin/themes/%paddle_themer/delete'] = array(
+    'title callback' => 'paddle_themer_theme_title',
+    'title arguments' => array(2),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paddle_themer_theme_delete_confirm', 2),
+    'access callback' => 'paddle_themer_theme_access',
+    'access arguments' => array(2, 'delete'),
+    'type' => MENU_CALLBACK,
+    'file' => 'paddle_themer.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Title callback for theme detail pages.
+ *
+ * @param stdClass $theme
+ *   The Paddle theme.
+ *
+ * @return string
+ *   The human-readable title of the Paddle theme.
+ */
+function paddle_themer_theme_title(stdClass $theme) {
+  return $theme->human_name;
+}
+
+/**
+ * Access callback for theme detail pages.
+ *
+ * @param stdClass $theme
+ *   The Paddle theme.
+ * @param string $op
+ *   Operation to be performed, either 'edit' or 'delete'.
+ *
+ * @return bool
+ *   If access is allowed or not.
+ */
+function paddle_themer_theme_access(stdClass $theme, $op = 'edit') {
+  $is_standard_theme = $theme->export_type & EXPORT_IN_CODE;
+
+  if ($op == 'delete' && $theme->name == variable_get('paddle_theme')) {
+    return FALSE;
+  }
+
+  return user_access('manage paddle_themer') && !$is_standard_theme;
+}
+
+/**
+ * Page callback for the enable theme function.
+ */
+function paddle_themer_enable_theme($theme_name) {
+  // Get the theme object.
+  $theme = paddle_themer_load($theme_name);
+
+  if (!empty($theme) && is_object($theme)) {
+    // Set the paddle_theme variable to the enabled theme.
+    variable_set('paddle_theme', $theme_name);
+
+    // Set the default theme if changed.
+    variable_set('theme_default', $theme->theme);
+
+    // Will call all modules implementing hook_paddle_themer_enable_theme_alter.
+    drupal_alter('paddle_themer_enable_theme', $theme);
+
+    // Return to the overview.
+    drupal_goto('admin/themes');
+  }
+
+  return MENU_NOT_FOUND;
+}
+
+/**
+ * Delete callback for CTools exportable API.
+ */
+function paddle_themer_delete_theme($theme) {
+  $transaction = db_transaction();
+
+  try {
+    // Delete the screenshot of the theme.
+    _paddle_themer_delete_theme_image($theme);
+
+    // Call the onDelete function for all plugins implementing this function.
+    if ($theme && !empty($theme->style)) {
+      $plugin_instances = paddle_themer_get_plugin_instances(paddle_themer_get_theme_by_name($theme->theme));
+
+      // Get the style settings.
+      foreach ($theme->style as $plugin_name => $values) {
+        if (isset($plugin_instances[$plugin_name])) {
+          $plugin_instance = $plugin_instances[$plugin_name];
+          $plugin = paddle_style_get_plugin($plugin_instance['plugin']);
+
+          if ($plugin instanceof PaddleStyleConfigurablePluginInterface) {
+            // Provide data as ctools context to the plugins.
+            $context = paddle_themer_create_context($plugin_instance, $plugin_name, $theme);
+
+            // Allow the plugin to react to the deletion.
+            $plugin->onDelete($values, $context);
+          }
+        }
+      }
+    }
+
+    // Delete the theme itself.
+    db_delete('paddle_themer_theme')
+      ->condition('id', $theme->id)
+      ->execute();
+  }
+  catch (Exception $e) {
+    $transaction->rollback();
+    watchdog_exception('paddle_themer', $e);
+    throw $e;
+  }
+}
+
+/**
+ * Page callback for themes overview page.
+ */
+function paddle_themer_themes_page() {
+  drupal_add_css(drupal_get_path('module', 'paddle_themer') . '/paddle_themer.css');
+
+  $themes = paddle_themer_available_themes();
+
+  // Add the contextual actions.
+  if (module_exists('paddle_contextual_toolbar')) {
+    $actions = array(
+      'paddle_themer_create_theme' => array(
+        'action' => l(t('Create theme'), 'admin/themes/create', array(
+          'attributes' => array(
+            'class' => array('ui-icon', 'fa-plus'),
+          ),
+          'html' => TRUE,
+        )),
+        'class' => array('add'),
+        'weight' => -10,
+      ),
+    );
+    paddle_contextual_toolbar_actions($actions);
+  }
+
+  $standard_themes = array();
+  $my_themes = array();
+
+  $active_theme = NULL;
+  $active_theme_name = variable_get('paddle_theme');
+
+  foreach ($themes as $key => $theme) {
+    if ($theme->name != $active_theme_name) {
+      if ($theme->export_type & EXPORT_IN_CODE) {
+        $standard_themes[$key] = $theme;
+      }
+      else {
+        $my_themes[$key] = $theme;
+      }
+    }
+    else {
+      $active_theme = $theme;
+    }
+  }
+
+  uasort($my_themes, function($a, $b) {
+    return ($a->changed > $b->changed) ? -1 : 1;
+  });
+
+  $output = theme('paddle_themer_themes_overview', array(
+    'standard_themes' => $standard_themes,
+    'my_themes' => $my_themes,
+    'active_theme' => $active_theme,
+  ));
+
+  return $output;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_themer_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_themer_themes_overview' => array(
+      'arguments' => array(
+        'my_themes' => array(),
+        'standard_themes' => array(),
+        'active_theme' => '',
+      ),
+      'template' => 'paddle_themer_themes_overview',
+    ),
+    'paddle_themer_theme_detail' => array(
+      'arguments' => array(
+        'theme' => NULL,
+      ),
+      'template' => 'paddle_themer_theme_detail',
+    ),
+    'paddle_themer_preview_selection' => array(
+      'arguments' => array(
+        'previous' => NULL,
+        'current' => NULL,
+        'next' => NULL,
+        'path' => NULL,
+      ),
+      'template' => 'paddle_themer_preview_selection',
+    ),
+    'paddle_themer_theme_image' => array(
+      'arguments' => array(
+        'theme' => NULL,
+        'style_name' => 'thumbnail',
+      ),
+    ),
+    'paddle_themer_section' => array(
+      'render element' => 'sections',
+    ),
+  );
+}
+
+/**
+ * Preprocess function for the paddle_themer_theme_detail theme function.
+ *
+ * Implements hook_preprocess_HOOK().
+ */
+function paddle_themer_preprocess_paddle_themer_theme_detail(&$vars) {
+  $theme = $vars['theme'];
+  $operations = array();
+
+  $enabled_theme = variable_get('paddle_theme', '');
+
+  $is_enabled = $theme->name == $enabled_theme;
+
+  // Add a preview link.
+  $operations[] = l(t('Preview'), paddle_themer_preview_url($theme, '<front>'), array(
+    'external' => TRUE,
+    'attributes' => array('data-action' => 'preview'),
+  ));
+
+  // Add a link to enable the theme, or mark it as enabled.
+  if (!$is_enabled) {
+    $operations[] = l(t('Enable'), "admin/themes/{$theme->name}/enable", array(
+      'attributes' => array('data-action' => 'enable'),
+    ));
+  }
+  else {
+    $operations[] = t('Enabled');
+  }
+
+  // If the theme is not a 'preset' allow to edit it.
+  if (!($theme->export_type & EXPORT_IN_CODE)) {
+    $edit_path = "admin/themes/{$theme->name}/edit";
+
+    $screenshot_edit_path = "admin/themes/{$theme->name}/edit_screenshot";
+    if (drupal_valid_path($screenshot_edit_path)) {
+      $operations[] = l(t('Edit Screenshot'), $screenshot_edit_path, array(
+        'query' => array('destination' => 'admin/themes'),
+        'attributes' => array('data-action' => 'edit-screenshot'),
+      ));
+    }
+
+    if (drupal_valid_path($edit_path)) {
+      $operations[] = l(t('Edit'), $edit_path, array(
+        'query' => array('destination' => 'admin/themes'),
+        'attributes' => array('data-action' => 'edit'),
+      ));
+    }
+  }
+
+  // Add a link to delete the theme.
+  $delete_path = "admin/themes/{$theme->name}/delete";
+  if (drupal_valid_path($delete_path)) {
+    $operations[] = l(t('Delete'), $delete_path, array(
+      'attributes' => array('data-action' => 'delete'),
+    ));
+  }
+
+  $vars['operations'] = $operations;
+}
+
+/**
+ * Loads a style set.
+ *
+ * These are provided by implementations of hook_paddle_themer_style_set().
+ *
+ * @param string $style_set_name
+ *   The machine name of the style set to load.
+ * @param string $theme
+ *   The machine name of the theme for which to retrieve the style set.
+ * @param bool $reset
+ *   Whether to reset the internal style sets cache. Defaults to FALSE.
+ *
+ * @return array
+ *   The requested style set.
+ */
+function paddle_themer_style_set_load($style_set_name, $theme = NULL, $reset = FALSE) {
+  $style_set = paddle_themer_style_set_load_multiple(array($style_set_name), $theme, $reset);
+  return $style_set ? reset($style_set) : FALSE;
+}
+
+/**
+ * Theme function for a Paddle theme's image.
+ *
+ * @param array $variables
+ *   Theme variables.
+ */
+function theme_paddle_themer_theme_image($variables) {
+  $theme = $variables['theme'];
+
+  if (isset($theme->image_path)) {
+    // Get the image style uri for a path to a module-managed file.
+    $image_style_path = image_style_path($variables['style_name'], $theme->image_path);
+    if (!file_exists($image_style_path)) {
+      $style = image_style_load($variables['style_name']);
+      $img_created = image_style_create_derivative($style, $theme->image_path, $image_style_path);
+      if (!$img_created) {
+        return t('No image set');
+      }
+    }
+
+    $variables['path'] = $image_style_path;
+  }
+  else {
+    if (empty($theme->image_id)) {
+      // @todo Provide a default image.
+      return t('No image set');
+    }
+
+    $file = file_load($theme->image_id);
+
+    if (!$file) {
+      return t('No image set');
+    }
+
+    $variables['path'] = $file->uri;
+  }
+
+  return theme('image_style', $variables);
+}
+
+/**
+ * Renders a section of a style set.
+ *
+ * @param array $variables
+ *   An array containing a 'section' render element, of which the following keys
+ *   are of interest:
+ *   - '#id': The id for the surrounding div.
+ *   - '#title': The title of the section.
+ *   - '#depth': The nesting level of the section. Root level sections are at 0.
+ *   - '#children': The content of the section.
+ *
+ * @return string
+ *   The rendered style set.
+ */
+function theme_paddle_themer_section($variables) {
+  $section = !empty($variables['sections']) ? $variables['sections'] : array();
+  if ($section) {
+    $output = '<div class="paddle-themer-section" id="' . drupal_html_id(check_plain($section['#id'])) . '">';
+    // Output the title if any.
+    if (!empty($section['#title'])) {
+      // Render different headings according to the depth, starting at H3.
+      $depth = $section['#depth'] + 3;
+      $output .= '<h' . $depth . ' class="paddle-themer-section-title">' . check_plain($section['#title']) . '</h' . $depth . '>';
+    }
+    // Render the children if they are present.
+    if (!empty($section['#children'])) {
+      $output .= $section['#children'];
+    }
+
+    $output .= '</div>';
+
+    return $output;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Loads style sets.
+ *
+ * These are provided by implementations of hook_paddle_themer_style_set().
+ *
+ * @param array $style_set_names
+ *   An array of machine names of style sets to load.
+ * @param string $theme
+ *   The machine name of the theme for which to retrieve the style sets.
+ * @param bool $reset
+ *   Whether to reset the internal style sets cache. Defaults to FALSE.
+ *
+ * @return array
+ *   An array of style sets, keyed by machine name.
+ */
+function paddle_themer_style_set_load_multiple(array $style_set_names, $theme = NULL, $reset = FALSE) {
+  // Default to the active theme.
+  if (empty($theme)) {
+    $theme = variable_get('theme_default', 'bartik');
+  }
+  $themes = list_themes();
+  $style_sets = paddle_themer_style_sets($themes[$theme]);
+  return array_intersect_key($style_sets, array_flip($style_set_names));
+}
+
+/**
+ * Creates a new clone of an existing theme.
+ *
+ * @param string $theme_name
+ *   The machine name of the theme to clone.
+ * @param string $human_name
+ *   The human readable name that will be given to the clone.
+ * @param string $machine_name
+ *   An optional machine name to give to the clone. If omitted a UUID will be
+ *   generated.
+ *
+ * @return object|FALSE
+ *   The cloned object, or FALSE if the clone could not be generated.
+ */
+function paddle_themer_clone_theme($theme_name, $human_name, $machine_name = NULL) {
+  global $user;
+  $theme = paddle_themer_load($theme_name);
+
+  if (!$theme) {
+    return FALSE;
+  }
+
+  $new_theme = clone $theme;
+
+  // Clone the theme properly so all settings are being cloned.
+  if ($new_theme && !empty($new_theme->style)) {
+    $plugin_instances = paddle_themer_get_plugin_instances(paddle_themer_get_theme_by_name($new_theme->theme));
+    $new_theme->style = array_merge(paddle_themer_add_styles_for_new_themes_cloned_from_paddle_theme($new_theme->name), $new_theme->style);
+
+    // Get the style settings.
+    foreach ($new_theme->style as $plugin_name => $values) {
+      if (isset($plugin_instances[$plugin_name])) {
+        $plugin_instance = $plugin_instances[$plugin_name];
+        $plugin = paddle_style_get_plugin($plugin_instance['plugin']);
+
+        if ($plugin instanceof PaddleStyleConfigurablePluginInterface) {
+          // Provide data as ctools context to the plugins.
+          $context = paddle_themer_create_context($plugin_instance, $plugin_name, $new_theme);
+
+          // Allow the plugin to react to the cloning.
+          $plugin->onClone($values, $context);
+        }
+      }
+    }
+  }
+
+  $new_theme->human_name = $human_name;
+  // Generate a UUID if a machine name was not given.
+  $new_theme->name = $machine_name ?: uuid_generate();
+
+  // If the original theme is handled by code and contains an image path,
+  // copy the image over as a managed file.
+  if (!isset($new_theme->image_id) && isset($new_theme->image_path)) {
+    // Check if directory exists and create one if not.
+    if (file_prepare_directory($directory = "public://paddle_themer", FILE_CREATE_DIRECTORY)) {
+      // Get extension from file path.
+      $ext = pathinfo($new_theme->image_path, PATHINFO_EXTENSION);
+      $mime = file_get_mimetype($new_theme->image_path);
+      $filename = $new_theme->name . '.' . $ext;
+      // Move existing file under public files directory.
+      if ($uri = file_unmanaged_copy($new_theme->image_path, "public://paddle_themer/{$filename}", FILE_EXISTS_REPLACE)) {
+        // Create file object and insert into database.
+        $file = new stdClass();
+        $file->uid = $user->uid;
+        $file->filename = "{$filename}";
+        $file->uri = $uri;
+        $file->status = FILE_STATUS_PERMANENT;
+        $file->filemime = $mime;
+
+        $file = file_save($file);
+
+        $new_theme->image_id = $file->fid;
+      }
+    }
+  }
+
+  // Make sure to generate a new theme.
+  $new_theme->export_type = NULL;
+  unset($new_theme->id);
+
+  ctools_export_crud_save('paddle_themer_theme', $new_theme);
+
+  return $new_theme;
+}
+
+/**
+ * Adds settings for new themes cloned from a Paddle base theme.
+ *
+ * @param $theme_name
+ *   The name of the theme.
+ *
+ * @return array
+ *   Return the new style settings.
+ */
+function paddle_themer_add_styles_for_new_themes_cloned_from_paddle_theme($theme_name) {
+  $styles = array();
+
+  $inherits_from_paddle_theme = in_array($theme_name, array(
+    'vo_standard',
+    'paddle_theme_branded',
+    'kanooh_theme_v2',
+    'kanooh_theme_v2_page_wide',
+    'kanooh_theme_v2_vertical_navigation',
+    'vo_strict',
+    'go_theme',
+    'vub_theme',
+  ));
+
+  if ($inherits_from_paddle_theme) {
+    $styles['display_pane_top_as_h2']['display_pane_top_as_h2'] = 1;
+  }
+
+  return $styles;
+}
+
+/**
+ * Form to select one of the themes.
+ */
+function paddle_themer_theme_selection_form($form, &$form_state) {
+  ctools_form_include($form_state, 'export');
+  ctools_form_include($form_state, 'export-ui');
+
+  $themes = paddle_themer_get_enabled_themes();
+  $theme_options = array();
+
+  foreach ($themes as $theme) {
+    $theme_options[$theme->name] = $theme->info['name'];
+  }
+
+  $form['theme'] = array(
+    '#type' => 'select',
+    '#options' => $theme_options,
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for the theme choice.
+ */
+function paddle_themer_theme_selection_form_submit(&$form, &$form_state) {
+  $form_state['item']->theme = $form_state['values']['theme'];
+}
+
+/**
+ * Edit the styles.
+ */
+function paddle_themer_styles_edit_wizard_form($form, &$form_state) {
+  ctools_form_include($form_state, 'export');
+  ctools_form_include($form_state, 'export-ui');
+  ctools_include('plugins');
+
+  $theme = paddle_themer_get_theme_by_name($form_state['item']->theme);
+
+  // Retrieve the previously saved form values.
+  $values = !empty($form_state['item']->style) ? $form_state['item']->style : array();
+
+  // Attach optional form attachments.
+  $form['#attached'] = paddle_themer_styles_edit_wizard_form_attachments($theme);
+
+  // Provide a vertical tabs anchor for mooring style sets to.
+  $form['style_sets'] = array(
+    '#type' => 'vertical_tabs',
+  );
+
+  // Loop over all the given style sets.
+  $weight = 0;
+  foreach (paddle_themer_style_sets($theme) as $style_set_name => $style_set) {
+    if (empty($style_set['title'])) {
+      throw new Exception(format_string('The "@style_set" style set does not have a title. This is required.', array('@style_set' => $style_set_name)));
+    }
+
+    // Add a vertical tab for the current style set.
+    $form['style_sets'][$style_set_name] = array(
+      '#type' => 'fieldset',
+      '#title' => check_plain($style_set['title']),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#group' => 'style_sets',
+      '#attributes' => array(
+        'id' => 'paddle-themer-style-set-' . $style_set_name,
+      ),
+      '#tree' => TRUE,
+      '#weight' => $weight++,
+    );
+
+    // Unset the title, so it is not rendered a second time by the form builder.
+    unset($style_set['title']);
+
+    $form['style_sets'][$style_set_name] += paddle_themer_styles_edit_wizard_form_build($theme, $style_set, $values, 0, $style_set_name);
+  }
+
+  return $form;
+}
+
+/**
+ * Recursively builds a style set form from a given style set.
+ *
+ * @param stdClass $theme
+ *   The theme for which the style set is built.
+ * @param array $style_set
+ *   The style set to use for building the form.
+ * @param array $values
+ *   Default values to use for the form elements.
+ * @param int $depth
+ *   The depth of the recursion. Defaults to 0.
+ * @param string $parent_id
+ *   The HTML ID of the parent. This is used to generate unique IDs for each
+ *   child.
+ *
+ * @return array
+ *   An array of form elements.
+ */
+function paddle_themer_styles_edit_wizard_form_build(stdClass $theme, array $style_set, array $values, $depth = 0, $parent_id = '') {
+  $elements = array();
+
+  // Render sections that are defined at the current depth.
+  if (!empty($style_set['sections'])) {
+    foreach ($style_set['sections'] as $key => $section) {
+      // Recur to add the content to the section.
+      $html_id = $parent_id . '_' . $key;
+      $elements[$key] = array(
+        '#theme_wrappers' => array('paddle_themer_section'),
+        '#id' => check_plain($html_id),
+        '#title' => !empty($section['title']) ? $section['title'] : '',
+        '#depth' => $depth,
+        'sections' => paddle_themer_styles_edit_wizard_form_build($theme, $section, $values, $depth + 1, $html_id),
+      );
+    }
+  }
+  // This is done when there are no sections in the root of the style set array
+  // given by the theme-settings.php.
+  elseif (!empty($style_set['plugins'])) {
+    $elements['form_elements'] = paddle_themer_generate_form_elements($theme, $style_set['plugins'], $values);
+  }
+
+  return $elements;
+}
+
+/**
+ * Validate handler for the styles form.
+ */
+function paddle_themer_styles_edit_wizard_form_validate($form, &$form_state) {
+  ctools_include('context');
+
+  $theme = paddle_themer_get_theme_by_name($form_state['item']->theme);
+  foreach (paddle_themer_style_sets($theme) as $style_set_name => $style_set) {
+    // We are using the CTools Exportable UI to generate this form, and it has a
+    // multistep variant that does not always have the style sets in the values.
+    if (!empty($form_state['values'][$style_set_name])) {
+      // Loop over the plugin instances and execute validate handlers for each.
+      foreach (paddle_themer_get_form_values($form_state['values'][$style_set_name]) as $machine_name => $plugin_values) {
+        $plugin_instance = paddle_themer_get_plugin_instance($machine_name, $theme);
+        $plugin = paddle_style_get_plugin($plugin_instance['plugin']);
+
+        // Generate the contextual data to pass to the plugin.
+        $context = paddle_themer_create_context($plugin_instance, $machine_name, $form_state['item']);
+
+        // Run the plugin's validate handler.
+        foreach ($plugin->validate($plugin_values['values'], $context) as $element => $error) {
+          $name = "${style_set_name}][${plugin_values['name']}][${element}";
+          form_set_error($name, $error);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Recursively parses hierarchical form values and returns them as a flat list.
+ *
+ * @see paddle_themer_styles_edit_wizard_form_validate()
+ *
+ * @param array $elements
+ *   Form element values, as found in $form_state['values'].
+ * @param array $ancestors
+ *   An indexed array containing the names of the parent form elements.
+ *
+ * @return array
+ *   An flat array containing plugin form values. Each item is an associative
+ *   array with the following keys:
+ *   - name: the part of the form element name leading up to the location of the
+ *     plugin instance in the form, in the 'foo][bar][baz' format expected by
+ *     form_set_error():
+ *   - values: an array of form values as returned by the plugin.
+ */
+function paddle_themer_get_form_values(array $elements, array $ancestors = array()) {
+  $values = array();
+
+  foreach ($elements as $key => $element) {
+    // If form elements are found, add them to the list.
+    if ($key == 'form_elements') {
+      foreach ($element as $machine_name => $plugin_values) {
+        $values[$machine_name] = array(
+          'name' => implode('][', array_merge($ancestors, array('form_elements', $machine_name))),
+          'values' => $plugin_values,
+        );
+      }
+    }
+    // Recurse if the element has children.
+    elseif (is_array($element) && !empty($element)) {
+      $values = array_merge($values, paddle_themer_get_form_values($element, array_merge($ancestors, (array) $key)));
+    }
+  }
+
+  return $values;
+}
+
+/**
+ * Submit handler for the styles form.
+ *
+ * Stores the form values that are returned by each plugin instance in an array
+ * keyed by the machine name of the plugin instance.
+ */
+function paddle_themer_styles_edit_wizard_form_submit($form, &$form_state) {
+  ctools_include('context');
+  $theme = paddle_themer_get_theme_by_name($form_state['item']->theme);
+
+  $values = array();
+  foreach (paddle_themer_style_sets($theme) as $style_set_name => $style_set) {
+    // Loop over the plugin instances in the style set.
+    foreach (paddle_themer_get_form_values($form_state['values'][$style_set_name]) as $machine_name => $plugin_values) {
+      // Store the values.
+      $values[$machine_name] = $plugin_values['values'];
+
+      // Execute the plugin's submit handler.
+      $plugin_instance = paddle_themer_get_plugin_instance($machine_name, $theme);
+      $plugin = paddle_style_get_plugin($plugin_instance['plugin']);
+      $context = paddle_themer_create_context($plugin_instance, $machine_name, $form_state['item']);
+      $plugin->submit($plugin_values, $context);
+    }
+  }
+
+  // The values are stored in the database through a CTools export_ui plugin. It
+  // will find them here.
+  $form_state['item']->style = $values;
+}
+
+/**
+ * Wrapper to load the theme object of the needed theme.
+ *
+ * @param string $theme_name
+ *   A string containing the theme name of the theme we need to load.
+ *
+ * @return object
+ *   Return the theme object we requested.
+ */
+function paddle_themer_load($theme_name) {
+  ctools_include('export');
+  $result = ctools_export_load_object('paddle_themer_theme', 'names', array($theme_name));
+
+  if (isset($result[$theme_name])) {
+    return $result[$theme_name];
+  }
+  return FALSE;
+}
+
+/**
+ * Renders the given theme as a string of CSS.
+ *
+ * @param string $theme_name
+ *   The name of the theme where we need to fetch the style from. This is
+ *   optional. When no $theme_name is given, we take the enabled theme.
+ *
+ * @return string
+ *   A string containing the CSS which belongs to the loaded theme.
+ */
+function paddle_themer_render_css($theme_name = NULL) {
+  ctools_include('plugins');
+
+  $theme = $theme_name ? paddle_themer_load($theme_name) : paddle_themer_enabled_theme();
+  if ($theme && !empty($theme->style)) {
+    $plugin_instances = paddle_themer_get_plugin_instances(paddle_themer_get_theme_by_name($theme->theme));
+    $css = '';
+
+    // Get the style settings.
+    foreach ($theme->style as $machine_name => $values) {
+      if (isset($plugin_instances[$machine_name])) {
+        $plugin_instance = $plugin_instances[$machine_name];
+        $plugin = paddle_style_get_plugin($plugin_instance['plugin']);
+
+        // Provide data as ctools context to the plugins.
+        $context = paddle_themer_create_context($plugin_instance, $machine_name, $theme);
+
+        if (!empty($plugin_instance['selector'])) {
+          // Only try to retrieve CSS properties if the plugin implements
+          // PaddleStyleStylesPluginInterface.
+          if ($plugin instanceof PaddleStyleStylesPluginInterface) {
+            // Get the properties with their values.
+            if ($properties = $plugin->getProperties($values, $context)) {
+              // Open a new CSS selector, prefixes with a line of whitespace.
+              $prefix = $css ? "\n\n" : '';
+              $css .= $prefix . $plugin_instance['selector'] . " {\n";
+
+              // Add the CSS properties.
+              foreach ($properties as $property => $value) {
+                $css .= '  ' . $property . ': ' . $value . ";\n";
+              }
+
+              // Close the selector.
+              $css .= '}';
+            }
+          }
+        }
+
+        // Append styles from plugins that provide fully rendered CSS.
+        if ($plugin instanceof PaddleStyleCssPluginInterface) {
+          $prefix = $css ? "\n\n" : '';
+          $css .= $prefix . $plugin->getCss($values, $context);
+        }
+      }
+      else {
+        // Settings were saved for a plugin instance that is no longer found.
+        watchdog('Paddle Themer', 'Settings were saved for the %machine_name plugin instance but it can not be found. You probably need to resave your theme settings.', array('%machine_name' => $machine_name), WATCHDOG_WARNING);
+      }
+    }
+    return $css;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Store the css in cache file and add the file to the css.
+ *
+ * @param string $theme_name
+ *   A string containing the theme name of the theme we need to load.
+ */
+function paddle_themer_store_css($theme_name = NULL) {
+  // Get the active theme.
+  !empty($theme_name) ? $theme_name : variable_get('paddle_theme');
+
+  if (!empty($theme_name)) {
+    if ($GLOBALS['base_url'] == 'http://default') {
+      // Don't proceed if the base url is set to the fallback because otherwise
+      // images linked in CSS won't show up.
+      // That's because file_create_url() uses $GLOBALS['base_url'] and it's
+      // called from PaddleStyleBackgroundPlugin, indirectly called from
+      // paddle_themer_render_css().
+      // We mostly get here when called from CLI with Drush commands.
+      // To keep Drush from showing http://default in links, add the following
+      // line of code to sites/default/drushrc.php:
+      // <?php $options['uri'] = 'http://yourwebsitedomain.com';
+      // @see https://www.drupal.org/node/1158144
+      // The Drush fix is not needed for the correct working of Paddle Themer.
+      // But if you do implement the fix, Drush commands will generate correct
+      // urls because base_url will be set to 'http://yourwebsitedomain.com'.
+      return;
+    }
+
+    // Get the css string.
+    $css = paddle_themer_render_css($theme_name);
+    if ($css) {
+      // Cache the CSS and get the filename.
+      ctools_include('css');
+      ctools_css_store($theme_name, $css, FALSE);
+    }
+  }
+}
+
+/**
+ * Implements hook_init().
+ */
+function paddle_themer_init() {
+  // Ignore ajax requests.
+  if (isset($_POST['ajax_page_state'])) {
+    return;
+  }
+
+  global $theme;
+
+  // Get the active paddle theme.
+  $paddle_theme = paddle_themer_active_theme();
+
+  // Only apply Paddle Theme styles when there is a Paddle Theme active and the
+  // currently active Drupal theme is its base theme. If the Drupal themes do
+  // not match, another module might have changed the active Drupal theme after
+  // our hook_custom_theme() implementation.
+  if (empty($paddle_theme)) {
+    return;
+  }
+
+  ctools_include('context');
+  ctools_include('css');
+  ctools_include('plugins');
+
+  // Get the filename of the css of the active theme.
+  $filename = ctools_css_retrieve($paddle_theme->name);
+
+  if (empty($filename)) {
+    paddle_themer_store_css($paddle_theme->name);
+    $filename = ctools_css_retrieve($paddle_theme->name);
+  }
+
+  if (!empty($filename)) {
+    // Add the css.
+    $options = array(
+      'type' => 'file',
+      'group' => CSS_THEME,
+      'every_page' => TRUE,
+    );
+
+    drupal_add_css($filename, $options);
+  }
+
+  // Allow plugins to run custom code on hook_init().
+  if (!empty($paddle_theme->style)) {
+    $plugin_instances = paddle_themer_get_plugin_instances(paddle_themer_get_theme_by_name($theme));
+
+    foreach ($paddle_theme->style as $machine_name => $values) {
+      if (isset($plugin_instances[$machine_name])) {
+        $plugin_instance = $plugin_instances[$machine_name];
+        $plugin = paddle_style_get_plugin($plugin_instance['plugin']);
+
+        // Execute the callback, allowing the plugin to do its thing.
+        if ($plugin instanceof PaddleStyleExecutePluginInterface) {
+          $context = paddle_themer_create_context($plugin_instance, $machine_name, $paddle_theme);
+          $plugin->execute($values, $context);
+        }
+      }
+      else {
+        // Settings were saved for a plugin instance that is no longer found.
+        watchdog('Paddle Themer', 'Settings were saved for the %machine_name plugin instance but it can not be found. You probably need to resave your theme settings.', array('%machine_name' => $machine_name), WATCHDOG_WARNING);
+      }
+    }
+  }
+}
+
+/**
+ * Save callback for CTools exportable API.
+ *
+ * Ensures the changed date is always updated, images are correctly
+ * stored and deleted.
+ *
+ * @param stdClass $theme
+ *   The Paddle theme.
+ *
+ * @throws Exception
+ *   When the save did not succeed and the database transaction has been rolled
+ *   back.
+ */
+function paddle_themer_save_theme(stdClass $theme) {
+  $transaction = db_transaction();
+
+  try {
+    $theme->changed = REQUEST_TIME;
+
+    if ($theme->export_type & EXPORT_IN_DATABASE) {
+      // Existing record.
+      $update = array('id');
+
+      // Delete old image.
+      $original = ctools_export_crud_load('paddle_themer_theme', $theme->name);
+      if ($original->image_id && $theme->image_id !== $original->image_id) {
+        _paddle_themer_delete_theme_image($original);
+      }
+    }
+    else {
+      // New record.
+      $update = array();
+      $theme->export_type = EXPORT_IN_DATABASE;
+    }
+
+    drupal_write_record('paddle_themer_theme', $theme, $update);
+
+    ctools_include('css');
+    ctools_css_clear($theme->name);
+
+    if (!empty($theme->image_id)) {
+      // Load the file via file.fid.
+      $file = file_load($theme->image_id);
+      // Change status to permanent.
+      if ($file) {
+        if ($file->status != FILE_STATUS_PERMANENT) {
+          $file->status = FILE_STATUS_PERMANENT;
+          file_save($file);
+        }
+
+        $usage = file_usage_list($file);
+
+        if (!isset($usage['paddle_themer']['theme'][$theme->id]) || $usage['paddle_themer']['theme'][$theme->id] == 0) {
+          file_usage_add($file, 'paddle_themer', 'theme', $theme->id);
+        }
+      }
+    }
+
+    return $theme;
+  }
+  catch (Exception $e) {
+    $transaction->rollback();
+    watchdog_exception('paddle_themer', $e);
+    throw $e;
+  }
+}
+
+/**
+ * Deletes the image from a theme.
+ *
+ * @param stdClass $theme
+ *   The Paddle theme.
+ *
+ * @return mixed
+ *   TRUE for success, FALSE in the event of an error, or an array if the file
+ *   is being used by any modules.
+ */
+function _paddle_themer_delete_theme_image(stdClass $theme) {
+  if (!empty($theme->image_id)) {
+    // Get the corresponding file.
+    $file = file_load($theme->image_id);
+
+    if ($file) {
+      // Delete the record in the file_usage table.
+      file_usage_delete($file, 'paddle_themer', 'theme', $theme->id);
+      return file_delete($file);
+    }
+  }
+
+  return TRUE;
+}
+
+/**
+ * Implements hook_custom_theme().
+ */
+function paddle_themer_custom_theme() {
+  if (!user_access('view the administration theme') || !path_is_admin(current_path())) {
+
+    if (user_access('manage paddle_themer')) {
+      module_load_include('inc', 'paddle_themer', 'paddle_themer.preview');
+      $paddle_theme = paddle_themer_preview_theme();
+    }
+
+    if (!isset($paddle_theme)) {
+      $paddle_theme = paddle_themer_enabled_theme();
+    }
+
+    if ($paddle_theme) {
+      // Set the theme as the active theme.
+      paddle_themer_active_theme($paddle_theme);
+
+      // Return the Drupal theme associated with the active Paddle theme.
+      return $paddle_theme->theme;
+    }
+  }
+}
+
+/**
+ * Sets or gets the active Paddle theme for the current page request.
+ *
+ * @param stdClass $paddle_theme
+ *   Paddle theme to set active.
+ *
+ * @return object
+ *   The active Paddle Theme.
+ */
+function paddle_themer_active_theme(stdClass $paddle_theme = NULL) {
+  $theme = &drupal_static(__FUNCTION__);
+
+  if ($paddle_theme) {
+    $theme = $paddle_theme;
+  }
+
+  return $theme;
+}
+
+/**
+ * Gets the enabled Paddle theme.
+ *
+ * This is the Paddle theme that has been set as the default theme by the site
+ * administrator.
+ *
+ * @return object
+ *   The enabled paddle theme.
+ */
+function paddle_themer_enabled_theme() {
+  $theme_name = variable_get('paddle_theme');
+  if ($theme_name) {
+    $theme = paddle_themer_load($theme_name);
+
+    return $theme;
+  }
+}
+
+/**
+ * Implements hook_url_outbound_alter().
+ */
+function paddle_themer_url_outbound_alter(&$path, &$options, $original_path) {
+  // When the user is previewing themes, append a query parameter to every url
+  // so the user can click around without losing the preview dialog.
+  if (user_access('manage paddle_themer')) {
+    module_load_include('inc', 'paddle_themer', 'paddle_themer.preview');
+    $preview_theme = paddle_themer_preview_theme();
+    if ($preview_theme) {
+      paddle_themer_preview_outbound_url_add_id($path, $options, $preview_theme);
+    }
+  }
+}
+
+/**
+ * Implements hook_page_build().
+ *
+ * Outputs the preview modal dialog on the page when needed.
+ */
+function paddle_themer_page_build(&$page) {
+  if (!user_access('manage paddle_themer')) {
+    return;
+  }
+
+  // Performance: Skip this entirely for AJAX requests.
+  if (strpos($_GET['q'], 'js/') === 0) {
+    return;
+  }
+
+  if (!variable_get('paddle_themer_show_js_dialog_on_preview', TRUE)) {
+    return;
+  }
+
+  module_load_include('inc', 'paddle_themer', 'paddle_themer.preview');
+  $preview_theme = paddle_themer_preview_theme();
+  if (!$preview_theme) {
+    return;
+  }
+
+  $active_theme = paddle_themer_active_theme();
+
+  if ($preview_theme !== $active_theme) {
+    return;
+  }
+
+  $attached = array();
+
+  $path = drupal_get_path('module', 'paddle_themer');
+  $options = array('every_page' => TRUE);
+
+  $attached['library'][] = array('system', 'ui.dialog');
+  $attached['library'][] = array('system', 'cookie');
+
+  $attached['js'][$path . '/paddle_themer_preview.js'] = $options;
+
+  $preview_themes = paddle_themer_preview_themes($preview_theme);
+  $next = reset($preview_themes);
+  $previous = end($preview_themes);
+
+  $theme_slider = theme('paddle_themer_preview_selection', array(
+    'current' => $preview_theme,
+    'previous' => $previous,
+    'next' => $next,
+  ));
+
+  $page['page_bottom']['paddle_themer_preview_selection'] = array(
+    '#type' => 'container',
+    '#attributes' => array(
+      'id' => 'paddle-themer-preview-selection',
+      'title' => t('Preview theme'),
+    ),
+    '#attached' => $attached,
+    'content' => array(
+      '#markup' => $theme_slider,
+    ),
+  );
+
+  if (is_callable('admin_menu_suppress')) {
+    admin_menu_suppress();
+  }
+}
+
+/**
+ * Get the Paddle Themer themes available to theme managers.
+ *
+ * @return array
+ *   A list of Paddle Themer theme objects.
+ */
+function paddle_themer_available_themes() {
+  ctools_include('export');
+
+  $themes = ctools_export_load_object('paddle_themer_theme');
+
+  // Exclude disabled themes.
+  $themes = array_filter($themes, function($theme) {
+    return !isset($theme->disabled) || $theme->disabled !== TRUE;
+  });
+
+  return $themes;
+}
+
+/**
+ * Implements hook_image_default_styles().
+ */
+function paddle_themer_image_default_styles() {
+  $styles = array();
+
+  // Exported image style: paddle_themer_thumbnail.
+  $styles['paddle_themer_thumbnail'] = array(
+    'name' => 'paddle_themer_thumbnail',
+    'effects' => array(
+      2 => array(
+        'label' => 'Scale and crop',
+        'help' => 'Scale and crop will maintain the aspect-ratio of the original image, then crop the larger dimension. This is most useful for creating perfectly square thumbnails without stretching the image.',
+        'effect callback' => 'image_scale_and_crop_effect',
+        'dimensions callback' => 'image_resize_dimensions',
+        'form callback' => 'image_resize_form',
+        'summary theme' => 'image_resize_summary',
+        'module' => 'image',
+        'name' => 'image_scale_and_crop',
+        'data' => array(
+          'width' => 290,
+          'height' => 163,
+          'upscale' => 1,
+        ),
+        'weight' => 1,
+      ),
+    ),
+  );
+
+  return $styles;
+}
+
+/**
+ * Implements hook_menu_link_alter().
+ */
+function paddle_themer_menu_link_alter(&$item) {
+  if ($item['link_path'] == 'admin/themes/create' && $item['module'] == 'system' && module_exists('paddle_contextual_toolbar')) {
+    $item['hidden'] = 1;
+  }
+}
+
+/**
+ * Returns all plugin instances for a given theme.
+ *
+ * @see hook_paddle_themer_plugin_instances()
+ *
+ * @param stdClass $theme
+ *   A theme object as provided by list_themes(). Defaults to the default theme.
+ *
+ * @return array
+ *   All theming information applicable to the given theme, keyed by machine
+ *   name.
+ */
+function paddle_themer_get_plugin_instances(stdClass $theme = NULL) {
+  // Default to the default theme.
+  if (empty($theme)) {
+    $theme = paddle_themer_get_theme_by_name();
+  }
+
+  // Get theme-specific settings.
+  $plugin_instances = paddle_themer_theme_invoke($theme, 'paddle_themer_plugin_instances', array());
+
+  // Get plugin instances from all apps.
+  $plugin_instances += module_invoke_all('paddle_themer_plugin_instances');
+
+  return $plugin_instances;
+}
+
+/**
+ * Returns a given plugin instance by machine name.
+ *
+ * @param string $machine_name
+ *   A string containing the machine name of the plugin instance.
+ * @param stdClass $theme
+ *   A theme object as provided by list_themes(). Defaults to the default theme.
+ *
+ * @return array
+ *   An array containing the settings for the given machine name.
+ *
+ * @throws Exception
+ *   Throws an exception when an undefined plugin instance is requested.
+ */
+function paddle_themer_get_plugin_instance($machine_name, stdClass $theme = NULL) {
+  // Default to the default theme.
+  if (empty($theme)) {
+    $theme = paddle_themer_get_theme_by_name();
+  }
+
+  // Retrieve the plugin instances from the theme.
+  $instances = paddle_themer_get_plugin_instances($theme);
+
+  if (empty($instances[$machine_name])) {
+    throw new Exception(format_string('The definition for a plugin instance with machine name "@machine_name" does not exist.', array('@machine_name' => $machine_name)));
+  }
+
+  // Merge in default values before returning the plugin instance.
+  return $instances[$machine_name] += array(
+    'selector' => PADDLE_THEMER_CONTEXT_GLOBAL,
+    'allowed_values' => array(),
+  );
+}
+
+/**
+ * Returns all plugin instances of a given type defined in the given theme.
+ *
+ * @param string $plugin_type
+ *   The plugin type (eg. 'font').
+ * @param stdClass $theme
+ *   The theme for which the plugin instances are defined. Defaults to the
+ *   default theme.
+ *
+ * @return array
+ *   An associative array of plugin instances, keyed by machine name.
+ */
+function paddle_themer_get_plugin_instances_by_type($plugin_type, stdClass $theme = NULL) {
+  return array_filter(paddle_themer_get_plugin_instances($theme), function ($instance) use ($plugin_type) {
+    return $instance['plugin'] == $plugin_type;
+  });
+}
+
+/**
+ * Returns the default values that have been saved for a given plugin instance.
+ *
+ * If the values have not yet been saved, the default values from the plugin
+ * instance definition are returned.
+ *
+ * @param string $machine_name
+ *   The machine name for which to retrieve the values.
+ * @param stdClass $paddle_theme
+ *   The Paddle theme for which the values were saved. Defaults to the enabled
+ *   theme.
+ *
+ * @return array
+ *   An array of default values.
+ */
+function paddle_themer_get_default_values($machine_name, stdClass $paddle_theme = NULL) {
+  // Default to the enabled Paddle theme.
+  $paddle_theme = $paddle_theme ? $paddle_theme : paddle_themer_enabled_theme();
+
+  $values = !empty($paddle_theme->style[$machine_name]) ? $paddle_theme->style[$machine_name] : array();
+
+  // If the values have not yet been saved, use the default values from the
+  // plugin instance definition.
+  if (!$values) {
+    $plugin_instance = paddle_themer_get_plugin_instance($machine_name);
+    $values = isset($plugin_instance['default_values']) ? $plugin_instance['default_values'] : array();
+  }
+
+  return $values;
+}
+
+/**
+ * Returns the form elements for the plugins.
+ *
+ * @param stdClass $theme
+ *   The Paddle Theme for which the form elements should be returned.
+ * @param array $plugins
+ *   An associative array containing the plugins.
+ *
+ * @return array
+ *   An associative array containing the form elements.
+ *
+ * @throws Exception
+ *   Throws an exception when a plugin instance is used more than once in a
+ *   style set.
+ * @throws Exception
+ *   Throws an exception when a plugin instance is used in a style set that
+ *   does not have a matching entry in hook_paddle_themer_plugin_instances().
+ * @throws Exception
+ *   Throws an exception when a plugin instance specifies a plugin that can not
+ *   be loaded.
+ * @throws Exception
+ *   Throws an exception when a plugin instance has a machine name that contains
+ *   invalid characters.
+ */
+function paddle_themer_generate_form_elements(stdClass $theme, $plugins, $values) {
+  $machine_names = &drupal_static(__FUNCTION__);
+
+  $form_elements = array();
+  foreach ($plugins as $machine_name => $title) {
+    // A plugin instance is uniquely identified by its machine name and should
+    // not appear more than once. Throw an exception if a duplicate is found.
+    if (isset($machine_names[$machine_name])) {
+      throw new Exception(format_string('The "@machine_name" style plugin is used more than once in the style sets.', array('@machine_name' => $machine_name)));
+    }
+    $machine_names[$machine_name] = TRUE;
+
+    if (!$plugin_instance = paddle_themer_get_plugin_instance($machine_name, $theme)) {
+      throw new Exception(format_string('The "@machine_name" plugin instance is not defined in hook_paddle_themer_plugin_instances().', array('@machine_name' => $machine_name)));
+    }
+
+    if (!$plugin = paddle_style_get_plugin($plugin_instance['plugin'])) {
+      throw new Exception(format_string('The "@plugin" style plugin is not found.', array('@plugin' => $plugin_instance['plugin'])));
+    }
+
+    if (!preg_match("/^[_a-z0-9]+$/", $machine_name)) {
+      throw new Exception(format_string('The "@machine_name" plugin instance machine name should only contain lowercase characters, numbers and underscores.', array('@machine_name' => $machine_name)));
+    }
+    // Use the allowed values from the plugin instance.
+    $allowed_values = !empty($plugin_instance['allowed_values']) ? $plugin_instance['allowed_values'] : array();
+    // Use the default values from the plugin instance definition if there are
+    // no previously saved values.
+    $default_values = !empty($values[$machine_name]) ? $values[$machine_name] : array();
+    $default_values = !$default_values && !empty($plugin_instance['default_values']) ? $plugin_instance['default_values'] : $default_values;
+    // Provide data as CTools context to the plugins.
+    $context = paddle_themer_create_context($plugin_instance, $machine_name);
+    $theme_options = array(
+      'form' => $plugin->form($allowed_values, $default_values, $context),
+      'title' => $title,
+      'name' => $plugin_instance['plugin'],
+      'id' => 'paddle-style-plugin-instance-' . $machine_name,
+    );
+    $form_elements[$machine_name] = theme('paddle_style_plugin_form', $theme_options);
+  }
+
+  return $form_elements;
+}
+
+/**
+ * Run recursivly over the given array.
+ *
+ * @param array $value
+ *   Array containing the values.
+ *
+ * @return array
+ *   An array containing the form elements.
+ */
+function paddle_themer_get_properties($value) {
+  $properties = array();
+
+  if (!empty($value['form_elements'])) {
+    $properties = $value;
+  }
+  elseif (!empty($value['sections'])) {
+    foreach ($value['sections'] as $section) {
+      $properties += paddle_themer_get_properties($section);
+    }
+  }
+
+  return $properties;
+}
+
+/**
+ * Returns a theme object given a theme name.
+ *
+ * @param string $theme_name
+ *   (Optional) The name of the theme to retrieve. Defaults to the default
+ *   theme.
+ *
+ * @return object
+ *   A theme object as provided by list_themes().
+ */
+function paddle_themer_get_theme_by_name($theme_name = NULL) {
+  // Default to the default theme.
+  if (empty($theme_name)) {
+    $theme_name = variable_get('theme_default', 'bartik');
+  }
+  $themes = list_themes();
+  return !empty($themes[$theme_name]) ? $themes[$theme_name] : FALSE;
+}
+
+/**
+ * Creates a Paddle Themer CTools context plugin instance.
+ *
+ * @param array $instance
+ *   A plugin instance definition.
+ * @param string $machine_name
+ *   The plugin instance's unique machine name.
+ * @param stdClass $paddle_theme
+ *   The Paddle theme for which the context should be set, if applicable.
+ *
+ * @return ctools_context
+ *   The CTools context plugin instance.
+ */
+function paddle_themer_create_context(array $instance, $machine_name, stdClass $paddle_theme = NULL) {
+  ctools_include('context');
+
+  $context_data = array(
+    'instance' => $instance,
+    'machine_name' => $machine_name,
+    'paddle_theme' => $paddle_theme,
+  );
+
+  return ctools_context_create('paddle_themer', $context_data);
+}
+
+/**
+ * After-build function of the theme edit form.
+ */
+function paddle_themer_add_contextual_actions_theme_edit($form, $form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $actions = array();
+
+  // Add the back button.
+  $action_link = l(
+    t('Back'),
+    'admin/themes',
+    array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-arrow-left'),
+      ),
+    )
+  );
+  $actions[] = array(
+    'action' => $action_link,
+    'class' => array('cancel', 'cancel-js'),
+    'weight' => -10,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function paddle_themer_node_insert($node) {
+  $node_wrapper = entity_metadata_wrapper('node', $node);
+
+  // Set the responsible author to be equal to the creation author if the node
+  // is newly created.
+  if (isset($node_wrapper->field_page_responsible_author) && !empty($node->uid)) {
+    $node_wrapper->field_page_responsible_author->set($node->uid);
+  }
+
+  // Set the show level below default to the enabled front end theme's setting.
+  if (isset($node_wrapper->field_paddle_show_next_level)) {
+    try {
+      $show_level_below = paddle_themer_get_default_values('show_level_below_' . $node->type);
+    } catch (\Exception $exception) {
+      // Don't require themes to have a 'show_level_below_' plugin.
+      watchdog_exception('paddle_themer', $exception, NULL, array(), WATCHDOG_INFO);
+      $show_level_below = array();
+    }
+    $node->field_paddle_show_next_level[LANGUAGE_NONE][0]['value'] = !empty($show_level_below['show_level_below_' . $node->type]) ? $show_level_below['show_level_below_' . $node->type] : 0;
+  }
+
+  // Set the show breadcrumb default to the enabled front end theme's setting.
+  if (isset($node_wrapper->field_show_breadcrumb)) {
+    try {
+      $show_breadcrumbs = paddle_themer_get_default_values('show_breadcrumbs_for_' . $node->type);
+    } catch (\Exception $exception) {
+      // Don't require themes to have a 'show_breadcrumbs_for_' plugin.
+      watchdog_exception('paddle_themer', $exception, NULL, array(), WATCHDOG_INFO);
+      $show_breadcrumbs = array();
+    }
+    $node->field_show_breadcrumb[LANGUAGE_NONE][0]['value'] = !empty($show_breadcrumbs['show_breadcrumbs_for_' . $node->type]) ? $show_breadcrumbs['show_breadcrumbs_for_' . $node->type] : 0;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * @TODO: remove this alter after updating the plugins to accept form states.
+ * @See paddle theme theme_settings.php.
+ */
+function paddle_themer_form_paddle_themer_theme_edit_form_alter(&$form, &$form_state, $form_id) {
+  $form['style_sets']['header']['search_box']['sections']['form_elements']['search_placeholder_popup_checkbox']['search_placeholder_popup_checkbox']['#states'] = array(
+    'visible' => array(
+      '#edit-header-search-box-sections-form-elements-show-search-box-show-search-box' => array('checked' => TRUE),
+    ),
+  );
+}

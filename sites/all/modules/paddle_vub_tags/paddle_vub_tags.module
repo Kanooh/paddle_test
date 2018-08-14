@@ -1,0 +1,64 @@
+<?php
+/**
+ * @file
+ * Drupal needs this blank file.
+ */
+
+/**
+ * Implements hook_menu_alter().
+ */
+function paddle_vub_tags_menu_alter(&$items) {
+  $vocabularies = taxonomy_get_vocabularies();
+  foreach ($vocabularies as $vocabulary) {
+    if ($vocabulary->machine_name == 'vub_tags') {
+      $items['admin/structure/taxonomy_manager/' . $vocabulary->vid]['access arguments'] = array('manage vub tags');
+    }
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_vub_tags_permission() {
+  $return = array();
+
+  $return['manage vub tags'] = array(
+    'title' => t('Manage VUB tags'),
+  );
+
+  return $return;
+}
+
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_vub_tags_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'news_item') {
+      return array(
+        'field_vub_tags',
+      );
+    }
+  }
+  return array();
+}
+
+/**
+ * Implements hook_entity_property_info_alter().
+ *
+ * Recognize the language as property so it will be displayed
+ * when calling the properties through a REST service.
+ */
+function paddle_vub_tags_entity_property_info_alter(&$info) {
+  $info['taxonomy_term']['properties']['language'] = array(
+    'label' => t("Language"),
+    'type' => 'token',
+    'description' => t("The language the taxonomy term is written in."),
+    'setter callback' => 'entity_property_verbatim_set',
+    'options list' => 'entity_metadata_language_list',
+    'schema field' => 'language',
+    'setter permission' => 'administer taxonomy',
+  );
+}

@@ -1,0 +1,108 @@
+<?php
+
+/**
+ * @file
+ * Contains \PaddleWebServiceFilterTestCase.
+ */
+class PaddleWebServiceFilterTestCase extends PaddleWebTestCase {
+
+  /**
+   * Overrides DrupalWebTestCase::getInfo().
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Filter',
+      'description' => 'Tests filters for the web service.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp($modules = array()) {
+    parent::setUp('paddle_web_service');
+  }
+
+  /**
+   * Test filtering pages on multiple terms.
+   */
+  public function testFilterOnMultipleTerms() {
+    // Create three terms.
+    $terms = array();
+    foreach (array(1, 2, 3) as $id) {
+      $terms[$id] = $this->drupalCreateTerm('paddle_general', array('name' => 'term' . $id));
+    }
+
+    // Get a file to upload.
+    $files = $this->drupalGetTestFiles('image');
+    $file = reset($files);
+
+    // Add a filesize property to files as would be read by file_load().
+    $file->filesize = filesize($file->uri);
+    $file->filemime = file_get_mimetype($file->uri);
+    $file = file_save($file);
+
+    // Create an atom and add the terms to the atom.
+    $atom = new ScaldAtom('image', 'paddle_scald_image');
+    $atom->file_source = $file->uri;
+    $atom->title = $file->filename;
+    $atom->base_id = $file->fid;
+    scald_atom_save($atom);
+
+    // Add terms to the atom.
+    $wrapper = entity_metadata_wrapper('scald_atom', $atom);
+    $wrapper->field_paddle_general_tags->set(array_keys($terms));
+    $wrapper->save();
+
+    // Create some nodes with different combinations of terms linked to them.
+    $combinations = array(
+      array(1),
+      array(2),
+      array(1, 2),
+    );
+    foreach ($combinations as $combination) {
+      $edit = array();
+      $edit['type'] = 'basic_page';
+      foreach ($combination as $key => $term_key) {
+        $term = $terms[$term_key];
+        $edit['field_paddle_general_tags'][LANGUAGE_NONE][$key]['tid'] = $term->tid;
+      }
+      $this->drupalCreateNode($edit);
+    }
+
+    $resource_manager = restful()->getResourceManager();
+    $handler = $resource_manager->getPlugin('pages:1.0');
+
+    $input['filter'] = array(
+      'general-vocabulary.term' => array(
+        'value' => 'term1',
+      ),
+    );
+    $response = drupal_json_decode(restful()
+      ->getFormatterManager()
+      ->format($handler->doGet('', $input), 'json'));
+    $this->assertEqual(count($response['data']), 2, 'Filtering on term 1 gives 2 results.');
+
+    $input['filter'] = array(
+      'general-vocabulary.term' => array(
+        'value' => array('term1', 'term2'),
+      ),
+    );
+    $response = drupal_json_decode(restful()
+      ->getFormatterManager()
+      ->format($handler->doGet('', $input), 'json'));
+    $this->assertEqual(count($response['data']), 1, 'Filtering on term 1 and 2 gives only 1 result.');
+
+    $input['filter'] = array(
+      'general-vocabulary.term' => array(
+        'value' => 'term3',
+      ),
+    );
+    $response = drupal_json_decode(restful()
+      ->getFormatterManager()
+      ->format($handler->doGet('', $input), 'json'));
+    $this->assertEqual(count($response['data']), 0, 'Filtering on term 3 gives no results.');
+  }
+
+}

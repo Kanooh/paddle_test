@@ -1,0 +1,51 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleContentRegionsAccessTest.
+ */
+
+/**
+ * Tests the access the users have to the Content Regions functionality.
+ *
+ * @see https://one-agency.atlassian.net/browse/KANWEBS-1426
+ */
+class PaddleContentRegionsAccessTest extends PaddleWebTestCase {
+  /**
+   * Provides the necessary test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'User access',
+      'description' => 'Tests the access the users have to the Content Regions functionality.',
+      'group' => 'Paddle Content Region',
+    );
+  }
+
+  /**
+   * Tests the user access to the Content Regions functionality.
+   */
+  public function testUserAccess() {
+    // Login as chief editor first and verify they have permissions.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Go to the Content Regions configuration page and assert the access.
+    $this->drupalGet('admin/structure/content_region');
+    $this->assertResponse(200, 'Chief editor can access the Content Regions configuration page');
+
+    // Go to the Content Region pane edit page and assert the access.
+    $this->drupalGet('admin/content_manager/entity/1/panels_content');
+    $this->assertResponse(200, 'Chief editor can access the Content Regions page for all content types');
+
+    // Verify the Editors and anonymous users cannot access the configuration
+    // page.
+    $this->drupalLogin($this->editor);
+    foreach (array('Editor', 'Anonymous') as $role) {
+      $this->drupalGet('admin/structure/content_region');
+      $this->assertResponse(403, $role . ' users cannot access the Content Regions configuration page');
+
+      $this->drupalGet('admin/content_manager/entity/1/panels_content');
+      $this->assertResponse(403, $role . ' users cannot access the Content Regions page for all content types');
+    }
+  }
+}

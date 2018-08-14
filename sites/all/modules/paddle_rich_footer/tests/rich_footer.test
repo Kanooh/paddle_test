@@ -1,0 +1,61 @@
+<?php
+
+/**
+ * @file
+ * Contains RichFooterTest.
+ */
+
+/**
+ * Test the footer plugin.
+ */
+class RichFooterTest extends PaddleWebTestCase {
+
+  /**
+   * Stores an instance of the Footer plugin.
+   *
+   * @var object PaddleCoreFooterPlugin
+   */
+  public $instance;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Rich footer'),
+      'description' => t('Test the functionality of the Rich footer plugin.'),
+      'group' => t('Paddle Style'),
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp(array('paddle_rich_footer'));
+
+    // Create an instance of the Footer plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'paddle_core_footer');
+    $this->instance = new $plugin['handler']['class']();
+  }
+
+  /**
+   * Tests the execute() function of the Footer plugin.
+   */
+  public function testExecute() {
+    global $conf;
+
+    // Values array to give to the execute function.
+    $values = array(
+      'footer_style' => 'rich_footer',
+    );
+    $this->instance->execute($values);
+
+    // Check if the variable is set.
+    foreach ($values as $name => $value) {
+      $this->assertEqual($conf['paddle_core_footer_' . $name], check_plain($value), format_string('The global configuration of the %name is set correctly.', array('%name' => $name)));
+    }
+  }
+
+}

@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * @file
+ * Install actions for Paddle CKEditor profiles.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_ckeditor_profiles_install() {
+  module_load_include('inc', 'ckeditor', 'includes/ckeditor.admin');
+
+  // Delete default profiles.
+  ckeditor_profile_delete('Advanced');
+  ckeditor_profile_delete('Full');
+}
+
+/**
+ * Update CKEditor library path reference because it was moved to 'libraries'.
+ */
+function paddle_ckeditor_profiles_update_7000() {
+  module_load_include('inc', 'ckeditor', 'includes/ckeditor.lib');
+  // Check and update path to CKEditor in the global profile.
+  _ckeditor_requirements_isinstalled();
+}

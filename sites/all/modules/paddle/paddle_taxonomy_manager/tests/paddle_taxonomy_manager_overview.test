@@ -1,0 +1,140 @@
+<?php
+
+/**
+ * @file
+ * Tests the vocabulary overview for the Paddle Taxonomy Manager module.
+ */
+
+class PaddleTaxonomyVocabularyOverviewTestCase extends PaddleTaxonomyManagerTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Vocabulary overview tests',
+      'description' => 'Test the vocabulary overview of the Paddle Taxonomy Manager module.',
+      'group' => 'Paddle Taxonomy Manager',
+    );
+  }
+
+  /**
+   * Sets up a Drupal site for running functional and integration tests.
+   */
+  public function setUp() {
+    // Enable required modules.
+    parent::setUp(array(
+      'taxonomy',
+      'i18n_taxonomy',
+      'paddle_taxonomy_manager',
+    ));
+
+    $this->admin_user = $this->drupalCreateUser(array('manage paddle_taxonomy_manager'));
+    $this->drupalLogin($this->admin_user);
+  }
+
+  /**
+   * Tests the overview of the vocabulary.
+   */
+  public function testVocabularyOverview() {
+    $machine_name = strtolower($this->randomName());
+    // Create a vocabulary.
+    taxonomy_vocabulary_save((object) array(
+      'name' => $this->randomName(),
+      'machine_name' => $machine_name,
+      'i18n_mode' => I18N_MODE_TRANSLATE,
+    ));
+    $vocabulary = taxonomy_vocabulary_machine_name_load($machine_name);
+
+    $term = new stdClass();
+    $term->name = $this->randomName();
+    $term->description = $this->randomName();
+    // Use the first available text format.
+    $term->format = db_query_range('SELECT format FROM {filter_format}', 0, 1)->fetchField();
+    $term->vid = $vocabulary->vid;
+    $term->language = 'en';
+    taxonomy_term_save($term);
+
+    $term_nl = new stdClass();
+    $term_nl->name = $this->randomName();
+    $term_nl->description = $this->randomName();
+    // Use the first available text format.
+    $term_nl->format = db_query_range('SELECT format FROM {filter_format}', 0, 1)->fetchField();
+    $term_nl->vid = $vocabulary->vid;
+    $term_nl->language = 'nl';
+    taxonomy_term_save($term_nl);
+
+    $this->drupalGet('admin/structure/taxonomy_manager/' . $vocabulary->vid);
+    $this->assertResponse(200, 'The vocabulary overview page is shown.');
+    $link = url('admin/structure/taxonomy_manager/nojs/' . $vocabulary->vid . '/' . $term->tid . '/delete');
+    $this->assertTrue($this->xpath('//a[@href="' . $link . '"]'), 'The delete link of the created term is shown on the vocabulary overview page.');
+    $link = url('admin/structure/taxonomy_manager/nojs/' . $vocabulary->vid . '/' . $term_nl->tid . '/delete');
+    $this->assertFalse($this->xpath('//a[@href="' . $link . '"]'), 'The delete link of the created term in a different language is not shown on the vocabulary overview page.');
+  }
+
+  /**
+   * Test if terms of flat vocabularies have no weight.
+   */
+  public function testFlatVocabulariesWeightless() {
+    // Create a flat vocabulary.
+    $flat_vocabulary = $this->createVocabulary(TRUE);
+
+    // Create a few terms.
+    $this->createTerm($flat_vocabulary->vid);
+    $this->createTerm($flat_vocabulary->vid);
+    $this->createTerm($flat_vocabulary->vid);
+
+    // Assert if the overview form contains no weight column.
+    $this->drupalGet('admin/structure/taxonomy_manager/' . $flat_vocabulary->vid, array('query' => array('language' => 'en')));
+    $this->assertFalse($this->xpath('//table[@id="taxonomy"]/thead/tr/th[contains(@class, "row-weight")]'), 'The vocabulary overview doesn\'t contain "Weight" column');
+    $this->assertFalse($this->xpath('//table[@id="taxonomy"]/tbody/tr[contains(@class, "draggable")]'), 'The term for this vocabulary cannot be reordered');
+
+    // Create a normal vocabulary.
+    $vocabulary = $this->createVocabulary();
+
+    // Create a few terms.
+    $first_term = $this->createTerm($vocabulary->vid);
+    $child_of_first_term = array('parent' => $first_term->tid);
+
+    $second_term = $this->createTerm($vocabulary->vid, $child_of_first_term);
+    $child_of_second_term = array('parent' => $second_term->tid);
+
+    $this->createTerm($vocabulary->vid, $child_of_second_term);
+    $this->createTerm($vocabulary->vid, $child_of_second_term);
+    $this->createTerm($vocabulary->vid, $child_of_first_term);
+    $this->createTerm($vocabulary->vid);
+
+    // Assert if the overview form contains the weight column.
+    $this->drupalGet('admin/structure/taxonomy_manager/' . $vocabulary->vid, array('query' => array('language' => 'en')));
+    $this->assertTrue($this->xpath('//table[@id="taxonomy"]/thead/tr/th[contains(@class, "row-weight")]'), 'The vocabulary overview contains "Weight" column');
+    $this->assertTrue($this->xpath('//table[@id="taxonomy"]/tbody/tr[contains(@class, "draggable")]'), 'The term for this vocabulary can be reordered');
+  }
+
+  /**
+   * Tests if terms of flat vocabularies are ordered alphabetically.
+   */
+  public function testFlatVocabularyOrdering() {
+    // Create a flat vocabulary.
+    $vocabulary = $this->createVocabulary(TRUE);
+
+    // Create a few terms.
+    $terms = array();
+    for ($i = 0; $i < 25; $i++) {
+      $term = $this->createTerm($vocabulary->vid);
+      $terms[] = $term->name;
+    }
+
+    // Sort the terms using the same ordering method as in drupal_sort_title().
+    usort($terms, function ($a, $b) {
+      return strcasecmp($a, $b);
+    });
+
+    // Go to the overview and check if the terms are in alphabetical order.
+    $this->drupalGet('admin/structure/taxonomy_manager/' . $vocabulary->vid, array('query' => array('language' => 'en')));
+    $i = 0;
+    foreach ($this->xpath('//table[@id="taxonomy"]/tbody/tr/td[1]') as $element) {
+      $this->assertEqual((string) $element, $terms[$i++], format_string('The term %term has taken its rightful place in the alphabetical vocabulary ordering scheme.', array('%term' => (string) $element)));
+    }
+  }
+
+}

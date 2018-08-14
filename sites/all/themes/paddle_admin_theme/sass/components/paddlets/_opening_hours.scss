@@ -1,0 +1,136 @@
+/**
+ * @file
+ * Opening hours paddlet styling.
+ */
+
+.field-name-field-ous-ou-hours {
+  div.form-type-textfield:nth-of-type(1) {
+    display: none;
+  }
+}
+
+#opening-hours-set-form {
+  table {
+    table-layout: auto;
+  }
+
+  .field-multiple-table {
+    th.field-label {
+      padding-left: 10px;
+    }
+
+    legend {
+      display: none;
+    }
+  }
+
+  .field-name-field-ous-ou-hours, .field-name-field-ous-closing-days-date, .field-name-field-ous-exc-oh-date {
+    width: 35%;
+    float: left;
+  }
+
+  .container-inline-date {
+    float: left;
+    width: 50%;
+
+    label {
+      padding: 10px 0 0 10px;
+      float: left;
+    }
+  }
+
+  .field-name-field-ous-ou-description, .field-name-field-ous-closing-description {
+    float: left;
+    padding: 18px 0 0 10px;
+
+    label {
+      float: left;
+      padding-right: 10px;
+    }
+
+    + .form-submit {
+      margin: 18px 0 0 10px;
+    }
+  }
+
+  .field-name-field-ous-closing-description {
+    padding-top: 40px;
+
+    + .form-submit {
+      margin-top: 40px;
+    }
+  }
+
+  fieldset {
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .form-item {
+    margin-top: 0;
+    margin-right: 0;
+  }
+
+  .date-float {
+    float: none;
+  }
+
+  .date-padding {
+    padding-right: 0;
+
+    label {
+      display: none;
+    }
+  }
+
+  // Exceptional Opening Hours.
+  .field-name-field-ous-exc-opening-hours {
+    .field-multiple-table {
+      .form-submit {
+        margin: 10px 20px 10px 20px;
+        display: block;
+        float: right;
+      }
+    }
+
+    .field-name-field-ous-exc-oh-description {
+      float: left;
+      padding: 40px 0 0 10px;
+
+      label {
+        float: left;
+        padding-right: 10px;
+      }
+    }
+  }
+
+  .field-multiple-table {
+    fieldset.collapsible {
+      clear: both;
+      legend {
+        display: block;
+        font-weight: bold;
+      }
+      .date-combo {
+        legend {
+          display: none;
+        }
+      }
+      .form-submit {
+        margin: 18px 0 0 10px;
+      }
+      table {
+        tbody, th {
+          border: 2px solid #2c8fc6;
+        }
+        tr {
+          background: white;
+          border-bottom: 1px solid lightgrey;
+          &:last-of-type{
+            border-bottom: none;
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,272 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleColorPalettesPluginTest.
+ */
+
+/**
+ * Tests the color palettes plugin.
+ *
+ * @todo Remove hard dependency on the Paddle Themer test case when we have a
+ *   generic way of choosing palettes.
+ */
+class PaddleColorPalettesPluginTest extends PaddleThemerTestCase {
+
+  /**
+   * Stores an instance of the color palette plugin.
+   *
+   * @var object PaddleColorPalettesPlugin
+   */
+  public $instance;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Color palettes',
+      'description' => 'Tests the color palette plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    // Enable the test module in addition to the given modules.
+    $modules = func_get_args();
+    $modules = isset($modules[0]) && is_array($modules[0]) ? $modules[0] : array();
+    $modules[] = 'paddle_color_palettes_test';
+    parent::setUp($modules);
+
+    // Create an instance of the plugin.
+    $this->instance = paddle_style_get_plugin('color_palettes');
+  }
+
+  /**
+   * Tests the form() function of the color palettes plugin.
+   */
+  public function testForm() {
+    // Test that if no palettes are available the form will return nothing.
+    $form_elements = $this->instance->form();
+    $this->assertTrue(empty($form_elements), 'When palettes are not available the form returns nothing.');
+
+    // Now try with the allowed values. First get the palettes definitions.
+    $theme_palettes = paddle_color_palettes_test_palette_definitions();
+    $form_elements = $this->instance->form($theme_palettes);
+    $this->assertEqual(array_keys($theme_palettes), array_keys($form_elements['primary_color_palettes']['#options']), 'All palettes represented by a radio option.');
+
+    // Check if the value of the radios is set if we pass default values.
+    $palette_names = array_keys($theme_palettes);
+    $values = array('primary_color_palettes' => $palette_names[0]);
+    $form_elements = $this->instance->form($theme_palettes, $values);
+    $this->assertEqual($form_elements['primary_color_palettes']['#default_value'], $palette_names[0], 'Default values correctly set');
+  }
+
+  /**
+   * Tests the getCss() function of the color palettes plugin.
+   */
+  public function testGetCss() {
+    $theme_palettes = paddle_color_palettes_test_palette_definitions();
+    $palette_names = array_keys($theme_palettes);
+    $active_palette_name = $palette_names[0];
+    $expected_css = $this->expectedCss();
+
+    // First check that if no palette has been set in the form the first palette
+    // will be used.
+    $css = $this->instance->getCss(array());
+    $this->assertTrue($this->assertElementsPresent($css, $theme_palettes[$active_palette_name][$active_palette_name]['colors']), 'If no palette has been set in the form the first palette is used');
+    $this->assertEqual($css, $expected_css['palette_a']);
+
+    // Now select palette_b and check the generated CSS.
+    $css = $this->instance->getCss(array('primary_color_palettes' => $palette_names[1]));
+    $this->assertTrue($this->assertElementsPresent($css, $theme_palettes[$palette_names[1]][$palette_names[1]]['colors']), 'The colors of the palette are present in the CSS');
+    $this->assertEqual($css, $expected_css['palette_b']);
+  }
+
+  /**
+   * Asserts that the values of the passed array are present in the css code.
+   *
+   * @param string $css
+   *   The raw CSS to check.
+   * @param array $elements
+   *   Array containing the elements which should be present in the CSS.
+   *
+   * @return bool
+   *   True if all the elements are found in the CSS, false otherwise.
+   */
+  public function assertElementsPresent($css, $elements) {
+    foreach ($elements as $element) {
+      if (strpos($css, $element) === FALSE) {
+        return FALSE;
+      }
+    }
+
+    return TRUE;
+  }
+
+  /**
+   * Returns the expected CSS for both palettes.
+   *
+   * @return array
+   *   An associative array containing the expected CSS for both palettes.
+   */
+  public function expectedCss() {
+    $expected_css = array();
+    $expected_css['palette_a'] = <<<CSS
+h1,
+.block.paddle-color-palettes-subpalette-0 {
+  color: #aabb44;
+}
+
+h2 {
+  color: rgba(170, 187, 68, 0.5);
+}
+
+p {
+  background-color: #aabb44;
+}
+
+a,
+a:visited,
+a:hover {
+  color: rgb(255, 15, 185);
+}
+
+p.paddle-color-palettes-subpalette-0 {
+  background-color: rgb(255, 15, 185);
+}
+
+#page-content {
+  background-color: #98fb44;
+}
+
+#logo .paddle-color-palettes-subpalette-0 {
+  background-color: rgba(152, 251, 68, 0.1);
+}
+
+footer,
+header .region .paddle-color-palettes-subpalette-0 {
+  color: #cb561a;
+}
+
+header {
+  background-color: #99cc22;
+}
+
+.block.paddle-color-palettes-subpalette-1 {
+  color: #AAA;
+}
+
+p.paddle-color-palettes-subpalette-1 {
+  background-color: hsl(120, 100%, 25%);
+}
+
+#logo .paddle-color-palettes-subpalette-1 {
+  background-color: rgba(52, 136, 204, 0.1);
+}
+
+header .region .paddle-color-palettes-subpalette-1 {
+  color: rgb(155, 21, 81);
+}
+
+.block.paddle-color-palettes-subpalette-2 {
+  color: #cda2f5;
+}
+
+p.paddle-color-palettes-subpalette-2 {
+  background-color: #8a31de;
+}
+
+#logo .paddle-color-palettes-subpalette-2 {
+  background-color: rgba(88, 59, 115, 0.1);
+}
+
+header .region .paddle-color-palettes-subpalette-2 {
+  color: #5aaf5c;
+}
+
+
+CSS;
+
+    $expected_css['palette_b'] = <<<'CSS'
+h1,
+.block.paddle-color-palettes-subpalette-0 {
+  color: #d404d0;
+}
+
+h2 {
+  color: rgba(212, 4, 208, 0.5);
+}
+
+p {
+  background-color: #d404d0;
+}
+
+a,
+a:visited,
+a:hover {
+  color: #a164a0;
+}
+
+p.paddle-color-palettes-subpalette-0 {
+  background-color: #a164a0;
+}
+
+#page-content {
+  background-color: #5c115b;
+}
+
+#logo .paddle-color-palettes-subpalette-0 {
+  background-color: rgba(92, 17, 91, 0.1);
+}
+
+footer,
+header .region .paddle-color-palettes-subpalette-0 {
+  color: #fcaa00;
+}
+
+header {
+  background-color: #aafca0;
+}
+
+.block.paddle-color-palettes-subpalette-1 {
+  color: #e32727;
+}
+
+p.paddle-color-palettes-subpalette-1 {
+  background-color: #fc8700;
+}
+
+#logo .paddle-color-palettes-subpalette-1 {
+  background-color: rgba(92, 17, 91, 0.1);
+}
+
+header .region .paddle-color-palettes-subpalette-1 {
+  color: #a4aca0;
+}
+
+.block.paddle-color-palettes-subpalette-2 {
+  color: #d404d0;
+}
+
+p.paddle-color-palettes-subpalette-2 {
+  background-color: #a164a0;
+}
+
+#logo .paddle-color-palettes-subpalette-2 {
+  background-color: rgba(92, 17, 91, 0.1);
+}
+
+header .region .paddle-color-palettes-subpalette-2 {
+  color: #fcaa00;
+}
+
+
+CSS;
+    return $expected_css;
+  }
+
+}

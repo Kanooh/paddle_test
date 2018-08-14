@@ -1,0 +1,407 @@
+<?php
+/**
+ * @file
+ * Tests the terms forms of the Paddle Taxonomy Manager module.
+ */
+
+/**
+ * UI tests for the term create/edit/delete forms.
+ */
+class PaddleTaxonomyManagerTermFormTest extends PaddleTaxonomyManagerTestCase {
+  /**
+   * XPath query to find the parent dropdown.
+   */
+  const VOCABULARY_DROPDOWN_OPTION_XPATH_QUERY = '//select[@id="edit-parent"]/option[@value="0"]';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Term forms'),
+      'description' => t('Create, edit and delete term forms.'),
+      'group' => t('Paddle Taxonomy Manager'),
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    parent::setUp(array(
+      'ctools',
+      'taxonomy',
+      'i18n_taxonomy',
+      'paddle_taxonomy_manager',
+    ));
+
+    $this->admin_user = $this->drupalCreateUser(array('manage paddle_taxonomy_manager'));
+    $this->drupalLogin($this->admin_user);
+  }
+
+  /**
+   * Tests creation of duplicate terms.
+   */
+  public function testDuplicateTermCreation() {
+    // Create a flat vocabulary to test against.
+    $vocabulary = $this->createVocabulary(TRUE);
+
+    // Create a term through the user interface with a lowercased name so we can
+    // verify the case sensitivity.
+    $original = array('name' => 'duplicate');
+    $term = $this->createTermThroughForm($vocabulary, $original);
+    $this->assertTermCreatedThroughForm($vocabulary, $term);
+
+    // Try to create a duplicate of the term through the user interface,
+    // capitalizing the name to verify case sensitivity.
+    $duplicate = array('name' => 'Duplicate');
+    $term = $this->createTermThroughForm($vocabulary, $duplicate);
+
+    // Check that the duplicate term is not created and that the user is
+    // informed about it.
+    $this->assertNoDuplicateTerms($original['name'], $vocabulary->vid);
+    $this->assertNoText(t('The term has been saved succesfully.'), 'Confirmation message is not displayed.');
+    $this->assertRaw(t('The term %term already exists in this vocabulary.', array('%term' => $duplicate['name'])), 'The user is informed that the term already exists.');
+
+    // Create a term programmatically.
+    $options = array('name' => 'another test term');
+    $term = $this->createTerm($vocabulary->vid, $options);
+
+    // Try to create a duplicate.
+    $this->createTerm($vocabulary->vid, $options);
+
+    // Check that no duplicate has been created.
+    $this->assertNoDuplicateTerms($options['name'], $vocabulary->vid);
+
+    // Now repeat the test with a hierarchical vocabulary. This should allow
+    // duplicates.
+    $vocabulary = $this->createVocabulary();
+
+    // Create a term through the user interface with a lowercased name so we can
+    // verify the case sensitivity.
+    $original = array('name' => 'duplicate');
+    $term = $this->createTermThroughForm($vocabulary, $original);
+    $this->assertTermCreatedThroughForm($vocabulary, $term);
+
+    // Try to create a duplicate of the term through the user interface,
+    // capitalizing the name to verify case sensitivity.
+    $duplicate = array('name' => 'Duplicate');
+    $term = $this->createTermThroughForm($vocabulary, $duplicate);
+    $this->assertTermCreatedThroughForm($vocabulary, $term);
+
+    // Check that a duplicate has been created.
+    $this->assertDuplicateTerms($original['name'], $vocabulary->vid);
+
+    // Create a term programmatically.
+    $options = array('name' => 'another test term');
+    $term = $this->createTerm($vocabulary->vid, $options);
+
+    // Try to create a duplicate.
+    $this->createTerm($vocabulary->vid, $options);
+
+    // Check that a duplicate has been created.
+    $this->assertDuplicateTerms($options['name'], $vocabulary->vid);
+  }
+
+  /**
+   * Tests term creation without js.
+   */
+  public function testCreateTermNoJs() {
+    // Create a flat vocabulary first.
+    $vocabulary = $this->createVocabulary();
+    // Create term without parents.
+    $term = $this->createTermThroughForm($vocabulary);
+    $this->assertTermCreatedThroughForm($vocabulary, $term);
+
+    // Create term with parent.
+    $term = $this->createTermThroughForm($vocabulary, array(), TRUE);
+    $this->assertTermCreatedThroughForm($vocabulary, $term);
+  }
+
+  /**
+   * Tests term editing without js.
+   */
+  public function testEditTermNoJs() {
+    // Create a flat vocabulary first.
+    $vocabulary = $this->createVocabulary();
+
+    // Create term without parents.
+    $first_term = $this->createTermThroughForm($vocabulary);
+    $this->assertTermCreatedThroughForm($vocabulary, $first_term);
+
+    // Try to edit it now.
+    $term = $this->getTerm($first_term['name'], $vocabulary->vid);
+    $this->editTermForVocabulary($vocabulary, $term);
+
+    // Create term with parent.
+    $second_term = $this->createTermThroughForm($vocabulary, array(), TRUE);
+    $this->assertTermCreatedThroughForm($vocabulary, $second_term);
+
+    // Try to edit it now.
+    $term = $this->getTerm($second_term['name'], $vocabulary->vid);
+    $this->editTermForVocabulary($vocabulary, $term, TRUE);
+  }
+
+  /**
+   * Tests term editing without js.
+   */
+  public function testParentDropdownContainsVocabularyName() {
+    // Create a non-flat vocabulary first.
+    $vocabulary = $this->createVocabulary(FALSE);
+
+    // Check if in the add form the vocabulary name is pressent in the options.
+    $url = 'admin/structure/taxonomy_manager/nojs/' . $vocabulary->machine_name . '/add';
+    $this->assertParentDropdownContainsVocabularyName($vocabulary, $url);
+
+    // Test the edit form now.
+    $options = array('name' => 'another test term');
+    $term = $this->createTerm($vocabulary->vid, $options);
+
+    $url = 'admin/structure/taxonomy_manager/nojs/' . $vocabulary->machine_name . '/' . $term->tid . '/edit';
+    $this->assertParentDropdownContainsVocabularyName($vocabulary, $url);
+  }
+
+  /**
+   * Asserts if the vocabulary name is pressent in the term parent dropdown.
+   *
+   * @param string $vocabulary
+   *   The vocabulary for which we assert.
+   *
+   * @param string $url
+   *   URL to visit and assert.
+   */
+  protected function assertParentDropdownContainsVocabularyName($vocabulary, $url) {
+    $this->drupalGet($url);
+    $vocab_option = $this->xpath(self::VOCABULARY_DROPDOWN_OPTION_XPATH_QUERY);
+    // Peel one level of the variable.
+    $vocab_option = (array) $vocab_option[0];
+    // Since value 0 is reserved for the vocabulary itself (no parent), if it's
+    // text is the vocabulary name (the assertion below) it logically follows
+    // that the text is not "<root>".
+    $this->assertEqual($vocab_option[0], $vocabulary->name, 'The vocabulary is present in the term parent dropdown.');
+  }
+
+  /**
+   * Creates a term through the user interface.
+   *
+   * @param object $vocabulary
+   *   The vocabulary for which the term will be created/edited.
+   * @param array $edit
+   *   An optional associative array as passed to drupalPost(), with the keys:
+   *   - name: The term name.
+   *   - description: The term description.
+   * @param bool $with_parent
+   *   Flag indicating whether the term should have parents or not.
+   *
+   * @return array
+   *   The $edit array as passed to drupalPost().
+   */
+  protected function createTermThroughForm($vocabulary, $edit = array(), $with_parent = FALSE) {
+    // Add defaults.
+    $edit += array(
+      'name' => $this->randomString(32),
+      'description' => $this->randomString(20),
+    );
+
+    // Create a parent term if requested.
+    if ($with_parent && variable_get('taxonomy_vocabulary_' . $vocabulary->machine_name . '_type', 'hierarchical') != 'flat') {
+      $parent = $this->createTerm($vocabulary->vid);
+      $edit['parent'] = $parent->tid;
+    }
+
+    $this->drupalPost('admin/structure/taxonomy_manager/nojs/' . $vocabulary->machine_name . '/add', $edit, t('Save'));
+
+    // The term name has been automatically trimmed when saved by
+    // taxonomy_term_save(), therefore we need to trim the randomly generated
+    // name here as well.
+    $edit['name'] = trim($edit['name']);
+
+    return $edit;
+  }
+
+  /**
+   * Checks that a term has been created through the user interface.
+   *
+   * @see createTermThroughForm()
+   *
+   * @param object $vocabulary
+   *   The vocabulary to which the term belongs.
+   * @param array $edit
+   *   The $edit array that was used to create the term.
+   * @param string $message
+   *   Message to display.
+   * @param string $group
+   *   The group this message belongs to, defaults to 'Other'.
+   *
+   * @return bool
+   *   TRUE on pass, FALSE on fail.
+   */
+  protected function assertTermCreatedThroughForm($vocabulary, $edit, $message = '', $group = 'Other') {
+    // Set a default message.
+    $message = $message ?: format_string('The term was added to the database');
+
+    // Test if confirmation message is shown.
+    $this->assertText(t('The term has been saved succesfully.'), 'Confirmation message displayed.');
+
+    // Test if the save was successful.
+    return $this->assertTrue($this->getTerm($edit['name'], $vocabulary->vid), $message, $group);
+  }
+
+  /**
+   * Checks that duplicates exist of a given term.
+   *
+   * @param string $name
+   *   The term name.
+   * @param int $vid
+   *   The vocabulary id of the vocabulary to which the term belongs.
+   * @param string $message
+   *   Message to display.
+   * @param string $group
+   *   The group this message belongs to, defaults to 'Other'.
+   *
+   * @return bool
+   *   TRUE on pass, FALSE on fail.
+   */
+  protected function assertDuplicateTerms($name, $vid, $message = '', $group = 'Other') {
+    $terms = $this->getTerms($name, $vid);
+    $message = $message ?: format_string('@count duplicates were found for the term %name', array('@count' => count($terms), '%name' => $name));
+    return $this->assertTrue(count($terms) > 1, $message, $group);
+  }
+
+  /**
+   * Checks that no duplicates exist of a given term.
+   *
+   * @param string $name
+   *   The term name.
+   * @param int $vid
+   *   The vocabulary id of the vocabulary to which the term belongs.
+   * @param string $message
+   *   Message to display.
+   * @param string $group
+   *   The group this message belongs to, defaults to 'Other'.
+   *
+   * @return bool
+   *   TRUE on pass, FALSE on fail.
+   */
+  protected function assertNoDuplicateTerms($name, $vid, $message = '', $group = 'Other') {
+    $message = $message ?: format_string('No duplicates were found for the term %name', array('%name' => $name));
+    $terms = $this->getTerms($name, $vid);
+    return $this->assertEqual(count($terms), 1, $message, $group);
+  }
+
+  /**
+   * Retrieves duplicate terms from the database.
+   *
+   * @param string $name
+   *   The term name.
+   * @param int $vid
+   *   The vocabulary id of the vocabulary to which the terms belong.
+   * @param string $langcode
+   *   An ISO-639-1 language code for the term. Defaults to the simulated global
+   *   $language_content variable.
+   *
+   * @return array
+   *   The term objects, or FALSE if no terms were found.
+   */
+  protected function getTerms($name, $vid, $langcode = NULL) {
+    $langcode = $langcode ?: $this->languageContent->language;
+    return db_select('taxonomy_term_data', 'ttd')
+      ->fields('ttd')
+      ->condition('ttd.name', $name)
+      ->condition('ttd.vid', $vid)
+      ->condition('ttd.language', $langcode)
+      ->execute()
+      ->fetchAll();
+  }
+
+  /**
+   * Retrieves a term from the database.
+   *
+   * @param string $name
+   *   The term name.
+   * @param int $vid
+   *   The vocabulary id of the vocabulary to which the term belongs.
+   * @param string $langcode
+   *   An ISO-639-1 language code for the term. Defaults to the simulated global
+   *   $language_content variable.
+   *
+   * @return object
+   *   The term object, or FALSE if no term was found.
+   */
+  protected function getTerm($name, $vid, $langcode = NULL) {
+    $terms = $this->getTerms($name, $vid, $langcode);
+    return $terms ? reset($terms) : FALSE;
+  }
+
+  /**
+   * Method doing the actual test for the form. Used for repeating code.
+   *
+   * @param object $vocabulary
+   *   The vocabulary for which the term will be created/edited.
+   * @param object $term
+   *   The term which will be created/edited.
+   * @param string $with_parent
+   *   Flag indicating whether the term should have parents or not.
+   */
+  protected function editTermForVocabulary($vocabulary, $term, $with_parent = FALSE) {
+    // Create a parent term if requested.
+    if ($with_parent) {
+      $parent = $this->createTerm($vocabulary->vid);
+    }
+    $edit = array(
+      'name' => $this->randomString(32),
+      'description' => $this->randomString(20),
+      'parent' => isset($parent) ? $parent->tid : 0,
+    );
+
+    $this->drupalPost('admin/structure/taxonomy_manager/nojs/' . $vocabulary->machine_name . '/' . $term->tid . '/edit', $edit, t('Save'));
+
+    // Test if confirmation message appeared.
+    $this->assertText(t('The term has been saved succesfully.'), 'Confirmation message displayed.');
+
+    // Test if the save was successful.
+    $result = db_select('taxonomy_term_data', 'ttd')
+      ->fields('ttd')
+      ->condition('ttd.tid', $term->tid)
+      ->execute();
+
+    $new_term = $result->fetchAssoc();
+
+    // The term name has been automatically trimmed when saved by
+    // taxonomy_term_save(), therefore we need to trim the randomly generated
+    // name here as well.
+    $edit['name'] = trim($edit['name']);
+
+    $this->assertEqual($new_term['name'], $edit['name'], 'The term was edited successfully.');
+  }
+
+  /**
+   * Tests term deletion without js.
+   */
+  public function testDeleteTermNoJs() {
+    $machine_name = strtolower($this->randomName());
+    // Create a vocabulary.
+    taxonomy_vocabulary_save((object) array(
+      'name' => $this->randomName(),
+      'machine_name' => $machine_name,
+      'hierarchy' => PADDLE_TAXONOMY_MANAGER_HIERARCHY_DISABLED,
+      'i18n_mode' => I18N_MODE_TRANSLATE,
+    ));
+    $vocabulary = taxonomy_vocabulary_machine_name_load($machine_name);
+
+    $term = new stdClass();
+    $term->name = $this->randomName();
+    $term->description = $this->randomName();
+    // Use the first available text format.
+    $term->format = db_query_range('SELECT format FROM {filter_format}', 0, 1)->fetchField();
+    $term->vid = $vocabulary->vid;
+    $term->language = 'en';
+    taxonomy_term_save($term);
+
+    $this->drupalPost('admin/structure/taxonomy_manager/nojs/' . $vocabulary->vid . '/' . $term->tid . '/delete', array(), t('Confirm'));
+
+    $term = taxonomy_term_load($term->tid);
+    $this->assertFalse($term, 'The term has been deleted.');
+  }
+
+}

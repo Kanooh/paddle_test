@@ -1,0 +1,9 @@
+/**
+ * @file
+ * Styling for the Font plugin.
+ */
+
+.paddle-style-plugin-font .form-item {
+  display: inline-block;
+  margin-right: 2em;
+}

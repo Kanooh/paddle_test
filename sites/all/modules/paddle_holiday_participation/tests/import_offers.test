@@ -1,0 +1,73 @@
+<?php
+/**
+ * @file
+ * Definition of ImportOffersTest.
+ */
+
+module_load_include('inc', 'paddle_holiday_participation_test', 'paddle_holiday_participation_test.feeds_tamper');
+
+/**
+ * Test the offers import.
+ */
+class ImportOffersTest extends DrupalWebTestCase {
+  protected $profile = 'testing';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Test the offer import',
+      'description' => 'Test the functionality of the offer import.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * @inheritdoc.
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp(array('paddle_holiday_participation_test'));
+  }
+
+  /**
+   * Test the import.
+   */
+  public function testImport() {
+    // Run the import itself. We're not going to import all 4 feeds. This would
+    // take too long.
+    if (paddle_holiday_participation_import_feed('padvak_holiday_accomodations') !== FALSE) {
+      $query = new \EntityFieldQuery();
+      $query->entityCondition('entity_type', 'node')
+        ->entityCondition('bundle', 'offer')
+        ->fieldCondition('field_hp_category', 'value', 'holiday accommodations', '=');;
+      $result = $query->execute();
+
+      // Verify that offers are imported.
+      $this->assertNotNull($result['node']);
+      $node = reset($result['node']);
+
+      $node = node_load($node->nid);
+
+      $wrapper = entity_metadata_wrapper('node', $node);
+      $this->assertNotNull($wrapper->field_hp_category->value());
+      $this->assertNotNull(workbench_moderation_node_live_load($node));
+
+      // Create a random node title.
+      $original_title = $node->title;
+      $title_changed = $this->randomName();
+      $wrapper->title->set($title_changed);
+      $wrapper->save();
+
+      // Import again to update the nodes.
+      while ($node->title != $original_title) {
+        paddle_holiday_participation_import_feed('padvak_holiday_accomodations');
+        $node = node_load($node->nid);
+      }
+
+      // Check if the title and province default values are back.
+      $this->assertEqual($original_title, $node->title);
+    }
+  }
+
+}

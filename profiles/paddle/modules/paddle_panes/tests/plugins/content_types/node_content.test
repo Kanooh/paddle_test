@@ -1,0 +1,333 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddlePanesNodeContentUnitTest.
+ */
+
+/**
+ * Tests the "Node Content" content type plugin.
+ */
+class PaddlePanesNodeContentUnitTest extends PaddlePanesContentTypeTestCase {
+
+  /**
+   * A test content type that is supported by the Node Content plugin.
+   *
+   * This is a content type from the Node module, not to be confused with
+   * $this->contentType which contains a *CTools* content type.
+   *
+   * @var object $nodeType
+   */
+  protected $nodeType;
+
+  /**
+   * A test content type that is not supported by the Node Content plugin.
+   *
+   * This is a content type from the Node module, not to be confused with
+   * $this->contentType which contains a *CTools* content type.
+   *
+   * @var object $unsupportedNodeType
+   */
+  protected $unsupportedNodeType;
+
+  /**
+   * A test node that is supported by the Node Content plugin.
+   *
+   * @var object $node
+   */
+  protected $node;
+
+  /**
+   * A test node that is not supported by the Node Content plugin.
+   *
+   * @var object $invalidNode
+   */
+  protected $unsupportedNode;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Node Content',
+      'description' => 'Tests the "Node Content" content type plugin.',
+      'group' => 'Paddle Landing Page',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp($modules = array()) {
+    parent::setUp($modules);
+
+    // Declare the node_content content type plugin definition and subtype.
+    $this->contentType = ctools_get_content_type('node_content');
+    $this->subtype = ctools_content_get_subtype($this->contentType, 'node_content');
+
+    // Create a mock pane, display and context to feed to the plugin.
+    $this->pane = panels_new_pane('node_content', 'node_content');
+    $this->display = panels_new_display();
+    $this->context = new ctools_context();
+
+    // Create two content types, one of which having customized view modes for
+    // content panes.
+    $this->nodeType = $this->drupalCreateContentType();
+    $this->unsupportedNodeType = $this->drupalCreateContentType();
+    variable_set('field_bundle_settings_node__' . $this->nodeType->type, array(
+      'view_modes' => array(
+        'node_content_pane_summary' => array('custom_settings' => TRUE),
+        'node_content_pane_full' => array('custom_settings' => TRUE),
+      ),
+    ));
+    // Make sure the body field is displayed in both view modes.
+    $body_field_instance = field_read_instance('node', 'body', $this->nodeType->type);
+    foreach (array('summary', 'full') as $mode) {
+      $view_mode = 'node_content_pane_' . $mode;
+      $type = $mode == 'summary' ? 'text_summary_or_trimmed' : 'text_default';
+      $settings = $mode == 'summary' ? array('trim_length' => 600) : array();
+      $body_field_instance['display'][$view_mode] = array(
+        'label' => 'hidden',
+        'type' => $type,
+        'weight' => 0,
+        'settings' => $settings,
+      );
+      field_update_instance($body_field_instance);
+    }
+
+    // Create two nodes, one with and one without support for content panes.
+    $settings = array(
+      'type' => $this->nodeType->type,
+      'body' => array(
+        LANGUAGE_NONE => array(
+          0 => array(
+            'value' => $this->randomString(),
+            'summary' => $this->randomString(),
+            'format' => 'plain_text',
+          ),
+        ),
+      ),
+    );
+    $this->node = $this->drupalCreateNode($settings);
+
+    $settings = array('type' => $this->unsupportedNodeType->type);
+    $this->unsupportedNode = $this->drupalCreateNode($settings);
+  }
+
+  /**
+   * Tests the add form callback of the Node Content plugin.
+   */
+  public function testAddForm() {
+    // Define mock form state, form info and configuration.
+    $form_state = $this->getMockPaneFormState();
+    $form_info = array();
+    $conf = array();
+
+    // Request the add form.
+    $form = ctools_content_form('add', $form_info, $form_state, $this->contentType, 'node_content', $this->subtype, $conf, NULL);
+
+    // Check that the form fields are present.
+    $this->assertTrue($form['pane_settings']['section_body']['node'], 'The text field to enter a node is present.');
+    $this->assertTrue($form['pane_settings']['section_body']['view_mode'], 'The radio buttons to select a view mode are present.');
+
+    // Check that the user can select different view modes.
+    $this->assertTrue($form['pane_settings']['section_body']['view_mode']['#options'], 'The user can choose between different view modes.');
+
+    // Check that our modifications to the Top and Bottom sections are present.
+    $this->assertTrue($form['pane_settings']['top']['section_wrapper']['section_content_type']['#options']['title'], 'The additional "title" radio button has been added to the Top section.');
+    $this->assertEqual($form['pane_settings']['top']['section_wrapper']['section_content_type']['#default_value'], 'title', 'The additional "title" radio button has been selected by default.');
+    $this->assertTrue($form['pane_settings']['top']['section_wrapper']['section_url_type']['#options']['node_link'], 'The additional "node_link" radio button has been added to the Top section.');
+    $this->assertTrue($form['pane_settings']['bottom']['section_wrapper']['section_url_type']['#options']['more_link'], 'The additional "more_link" radio button has been added to the Bottom section.');
+    $this->assertEqual($form['pane_settings']['bottom']['section_wrapper']['section_url_type']['#default_value'], 'more_link', 'The additional "more_link" radio button has been selected by default.');
+
+    // Disable the 'Top' and 'Bottom' sections for now, these are tested later.
+    $form_state['values']['top']['enable_section'] = FALSE;
+    $form_state['values']['bottom']['enable_section'] = FALSE;
+
+    // Build the form so we can run validation tests on it.
+    form_builder($form['#form_id'], $form, $form_state);
+
+    // Test that the "Please enter a valid page" form validation error is thrown
+    // with default settings.
+    $errors = array('node' => t('Please enter a valid page.'));
+    $this->assertFormValidationErrors($form, $form_state, $errors, 'The "Please enter a valid page" form validation error is thrown when the page field is left empty.');
+
+    // Test that the "Please enter a valid page" form validation error is thrown
+    // with invalid input.
+    $test_cases = array(
+      'abc',
+      'node/0',
+      'node/' . $this->unsupportedNode->nid,
+      $this->randomString() . ' (node/' . $this->unsupportedNode->nid . ')',
+    );
+    foreach ($test_cases as $test_case) {
+      $form_state['values']['node'] = $test_case;
+      $this->assertFormValidationErrors($form, $form_state, $errors, format_string('The "Please enter a valid page" form validation error is thrown when the invalid string %test_case is input.', array('%test_case' => $test_case)));
+    }
+
+    // Test that no form validation errors are thrown when the input is valid.
+    $test_cases = array(
+      'node/' . $this->node->nid,
+      $this->randomString() . ' (node/' . $this->node->nid . ')',
+    );
+    foreach ($test_cases as $test_case) {
+      $form_state['values']['node'] = $test_case;
+      $this->assertNoFormValidationErrors($form, $form_state, format_string('No form validation errors are thrown when the valid string %test_case is input.', array('%test_case' => $test_case)));
+    }
+
+    // Test the form validation errors of the "Top" section.
+    $form_state['values']['top']['enable_section'] = TRUE;
+
+    $test_cases = array(
+      'title' => array(),
+      'text' => array(
+        'top][section_wrapper][section_text' => t('@field field is required for section @section.', array('@field' => t('Text'), '@section' => t('Top'))),
+      ),
+      'image' => array(
+        'top][section_wrapper][section_image][sid' => t('@field field is required for section @section.', array('@field' => t('Image file'), '@section' => t('Top'))),
+      ),
+    );
+
+    foreach ($test_cases as $option => $errors) {
+      $form_state['values']['top']['section_wrapper']['section_content_type'] = $option;
+      if (empty($errors)) {
+        $this->assertNoFormValidationErrors($form, $form_state, format_string('No fields are required when %option is chosen for the Top section.', array('%option' => $option)));
+      }
+      else {
+        $this->assertFormValidationErrors($form, $form_state, $errors, format_string('Form validation errors are thrown for required fields when %option is chosen for the Top section.', array('%option' => $option)));
+      }
+    }
+
+    // Test the form validation errors of the "Bottom" section.
+    $form_state['values']['top']['enable_section'] = FALSE;
+    $form_state['values']['bottom']['enable_section'] = TRUE;
+
+    $test_cases = array(
+      'no_link' => array(
+        'bottom][section_wrapper][section_text' => t('@field field is required for section @section.', array('@field' => t('Text'), '@section' => t('Bottom'))),
+      ),
+      'internal' => array(
+        'bottom][section_wrapper][section_text' => t('@field field is required for section @section.', array('@field' => t('Text'), '@section' => t('Bottom'))),
+        'bottom][section_wrapper][section_internal_url' => t('Please enter a valid page for @section', array('@section' => t('Bottom'))),
+      ),
+      'external' => array(
+        'bottom][section_wrapper][section_text' => t('@field field is required for section @section.', array('@field' => t('Text'), '@section' => t('Bottom'))),
+        'bottom][section_wrapper][section_external_url' => t('Please enter a valid page for @section', array('@section' => t('Bottom'))),
+      ),
+      'more_link' => array(),
+    );
+
+    foreach ($test_cases as $option => $errors) {
+      $form_state['values']['bottom']['section_wrapper']['section_url_type'] = $option;
+      if (empty($errors)) {
+        $this->assertNoFormValidationErrors($form, $form_state, format_string('No fields are required when %option is chosen for the Bottom section.', array('%option' => $option)));
+      }
+      else {
+        $this->assertFormValidationErrors($form, $form_state, $errors, format_string('Form validation errors are thrown for required fields when %option is chosen for the Bottom section.', array('%option' => $option)));
+      }
+    }
+  }
+
+  /**
+   * Tests the rendering function of the Node Content plugin.
+   */
+  public function testRender() {
+    // Test that nothing is returned when the configuration is not valid. An
+    // empty configuration is invalid, since the required node is missing.
+    $configuration = array();
+    $this->assertFalse($this->render($configuration)->content, 'Nothing is rendered when the configuration is not valid.');
+
+    // Get the body and summary text from the node.
+    $field_items = field_get_items('node', $this->node, 'body');
+    $body_text = trim($field_items[0]['value']);
+    $summary_text = trim($field_items[0]['summary']);
+
+    // Check that the body text is present when the pane is rendered using the
+    // 'full' view mode.
+    $configuration = array(
+      'node' => 'node/' . $this->node->nid,
+      'view_mode' => 1,
+    );
+    $output = $this->render($configuration);
+    $this->assertNodeRendered($output, $this->node->nid);
+    $this->assertBodyContent($output, $body_text, 'The body text is displayed when the pane is rendered using the "full" view mode.');
+
+    // Check that the summary text is present when the pane is rendered using
+    // the 'summary' view mode.
+    $configuration['view_mode'] = 0;
+    $output = $this->render($configuration);
+    $this->assertNodeRendered($output, $this->node->nid);
+    $this->assertBodyContent($output, $summary_text, 'The summary text: "' . $summary_text . '" is displayed when the pane with text: "' . trim(strip_tags($output->content)) . '"is rendered using the "summary" view mode.');
+
+    // Check that the node title is rendered in the Top section when configured
+    // to do so.
+    $configuration['top']['enable_section'] = TRUE;
+    $configuration['top']['section_content_type'] = 'title';
+    $output = $this->render($configuration);
+    $xpath = '//h2[contains(@class, "top-section-text")]';
+    $elements = $output->elements->xpath($xpath);
+    $this->assertEqual((string) $elements[0], $this->node->title, 'The title is rendered in the top section when the "title" option is chosen.');
+
+    // Check that the node title is rendered as a link to the node in the Top
+    // section when configured to do so.
+    $configuration['top']['section_url_type'] = 'node_link';
+    $output = $this->render($configuration);
+    $xpath = '//div[contains(@class, "pane-section-top")]/a/h2';
+    $elements = $output->elements->xpath($xpath);
+    $this->assertEqual((string) $elements[0],$this->node->title , 'The title is rendered as a link in the top section when the "node_link" option is chosen.');
+
+    // Check that the read more link is rendered in the Bottom section when
+    // configured to do so.
+    $configuration['bottom']['enable_section'] = TRUE;
+    $configuration['bottom']['section_url_type'] = 'more_link';
+    $output = $this->render($configuration);
+    $xpath = '//div[contains(@class, "pane-section-bottom")]/a';
+    $elements = $output->elements->xpath($xpath);
+    $this->assertEqual($elements[0]->asXML(), l(t('Read more') . '<i class="fa fa-chevron-right"/>', 'node/' . $this->node->nid, array('html' => TRUE)), 'The title is rendered as a link in the top section when the "node_link" option is chosen.');
+  }
+
+  /**
+   * Checks that the body field of the rendered output contains given content.
+   *
+   * @param array $output
+   *   The output of the content type plugin.
+   * @param string $content
+   *   The content that should be present in the content type output.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertBodyContent($output, $content, $message = '', $group = 'Other') {
+    $xpath = '//div[contains(@class, "field-name-body")]//*[contains(text(), :text)]';
+    $elements = $output->elements->xpath($this->buildXPathQuery($xpath, array(':text' => $content)));
+
+    return $this->assertEqual((string) $elements[0], $content, $message ?: 'The given content is found in the body field.', $group);
+  }
+
+  /**
+   * Checks that the given node is rendered in the rendered output.
+   *
+   * @param array $output
+   *   The output of the content type plugin.
+   * @param int $nid
+   *   The nid of the node that should be present in the rendered output.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertNodeRendered($output, $nid, $message = '', $group = 'Other') {
+    $xpath = '//div[contains(@class, "node-' . $nid . '")]//p';
+    $elements = $output->elements->xpath($xpath);
+
+    return $this->assertTrue($elements, $message ?: 'The given node is present in the rendered output.', $group);
+  }
+
+}

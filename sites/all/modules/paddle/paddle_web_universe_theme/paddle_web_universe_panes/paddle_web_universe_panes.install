@@ -1,0 +1,37 @@
+<?php
+/**
+ * @file
+ * Install code for the Paddle Web Universe components.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_web_universe_panes_enable() {
+  ctools_modules_enabled('paddle_web_universe_panes');
+
+  $pane_permissions = array(
+    'edit web_universe_introduction content in landing pages',
+    'edit web_universe_side_navigation content in landing pages',
+  );
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    if ($role = user_role_load_by_name($role_name)) {
+      user_role_grant_permissions($role->rid, $pane_permissions);
+    }
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_web_universe_panes_disable() {
+  $pane_permissions = array(
+    'edit web_universe_introduction content in landing pages',
+    'edit web_universe_side_navigation content in landing pages',
+  );
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    if ($role = user_role_load_by_name($role_name)) {
+      user_role_revoke_permissions($role->rid, $pane_permissions);
+    }
+  }
+}

@@ -1,0 +1,198 @@
+/**
+ * @file
+ * Contact person paddlet styling.
+ */
+
+.node-contact_person-form {
+  .contact-person-personal-information,
+  .contact-person-company-information,
+  .contact-person-contact-information,
+  .contact-person-organisational-information {
+
+    width: 100%;
+    margin-bottom: 10px;
+    clear: both;
+  }
+
+  .contact-person-personal-information {
+    #field-paddle-cp-twitter-add-more-wrapper {
+      margin: 1em 0;
+    }
+  }
+
+  .pane-node-body {
+    clear: both;
+  }
+
+  div.addressfield-container-inline.name-block > div.form-item {
+    float: none;
+    margin-right: 0;
+  }
+
+  .field-type-text,
+  .field-type-url,
+  .field-type-paddle-scald-atom,
+  .field-type-entityreference,
+  .field-type-telephone,
+  .field-type-addressfield,
+  .field-type-email {
+    float: left;
+    width: 50%;
+    min-height: 60px;
+
+    .form-item input {
+      width: 90%;
+    }
+  }
+  .field-type-list-boolean {
+    float: left;
+    width: 50%;
+  }
+
+  .field-type-url {
+    .form-item {
+      margin: 0px;
+      padding: 0;
+    }
+
+    .field-value {
+      label {
+        display: none;
+      }
+    }
+
+    fieldset {
+      margin: 0;
+      padding: 0;
+
+      legend {
+        span {
+          font-size: 16px;
+          font-weight: bold;
+        }
+      }
+    }
+  }
+
+  .contact-person-organisational-information {
+    .form-item {
+      table {
+        thead {
+          tr {
+            th {
+              background: $c-white;
+
+              label {
+                color: $dark-grey;
+                text-transform: capitalize;
+                font-size: 1.231em;
+              }
+            }
+          }
+        }
+        tbody {
+          tr {
+            th {
+              vertical-align: inherit;
+            }
+          }
+        }
+        thead + tbody {
+          tr {
+            background: $c-white;
+            border-top: 1px solid $dark-grey;
+            border-bottom: none;
+            display: table;
+            margin-bottom: 20px;
+
+            &:first-of-type {
+              border: none;
+            }
+
+            .field-type-url,
+            .field-type-addressfield {
+              fieldset {
+                legend {
+                  span {
+                    display: none;
+                  }
+                }
+              }
+            }
+
+            .field-name-field-cp-load-contact-info {
+              min-height: 40px;
+              margin-top: 40px;
+            }
+
+            .field-name-field-cp-url {
+              width: 54%;
+
+              .field-value {
+                label {
+                  display: block;
+                }
+              }
+
+              input.form-text {
+                width: 83%;
+              }
+            }
+
+            .field-name-field-cp-ou-address {
+              margin-top: -120px;
+            }
+
+            .field-name-field-cp-organisation {
+              margin-top: 10px;
+            }
+
+            input.form-text {
+              width: 90%;
+            }
+
+            input.form-submit {
+              float: left;
+              position: absolute;
+              top: 0;
+              right: 0;
+              background: $c-white;
+              color: $dark-grey;
+            }
+          }
+        }
+      }
+
+      div.clearfix {
+        .field-add-more-submit {
+          background: $c-white;
+          color: $dark-grey;
+          margin: 0px;
+        }
+      }
+
+      div.clearfix:before {
+        content: '\f067';
+        font-family: FontAwesome;
+        display: inline-block;
+      }
+    }
+
+    .field-multiple-table {
+      .draggable {
+        td:nth-child(2) {
+          position: relative;
+        }
+
+        td:nth-child(2):after {
+          content: '\f056';
+          font-family: FontAwesome;
+          display: inline-block;
+          position: absolute;
+          right: 110px;
+          top: 6px;
+        }
+      }
+    }
+  }
+}

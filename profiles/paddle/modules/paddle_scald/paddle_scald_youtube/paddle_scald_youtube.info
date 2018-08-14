@@ -1,0 +1,6 @@
+name = Paddle Scald YouTube
+description = Scald YouTube integration for Paddle.
+package = Paddle
+core = 7.x
+dependencies[] = scald
+dependencies[] = paddle_scald_video

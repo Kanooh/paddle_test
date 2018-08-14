@@ -1,0 +1,219 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Contextual Toolbar
+ * module.
+ */
+
+/**
+ * Implements hook_block_info().
+ *
+ * @see menu_block_info()
+ */
+function paddle_contextual_toolbar_block_info() {
+  $blocks['contextual_toolbar'] = array(
+    'info' => t('Contextual Toolbar block'),
+    'status' => 1,
+    'region' => 'content',
+    'visibility' => BLOCK_VISIBILITY_NOTLISTED,
+    // Menu blocks can't be cached because each menu item can have
+    // a custom access callback. menu.inc manages its own caching.
+    'cache' => DRUPAL_NO_CACHE,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function paddle_contextual_toolbar_block_view($delta = '') {
+  switch ($delta) {
+    case 'contextual_toolbar':
+      $block['content'] = paddle_contextual_toolbar_render();
+      break;
+  }
+
+  return $block;
+}
+
+/**
+ * Set and get the actions which need to be used in the contextual toolbar.
+ *
+ * @param array $actions
+ *   An array which specifies all actions which need to be shown in the
+ *   contextual toolbar.
+ *   Each action is an associative array which contains the settings for the
+ *   action.
+ *     - 'action': The action itself.
+ *     - 'class': An array with classes.
+ *     - 'weight': The weight of the action.
+ *
+ * @return array
+ *   An array with all the settings for the contextual toolbar actions
+ */
+function paddle_contextual_toolbar_actions($actions = NULL) {
+  $toolbar_actions = &drupal_static(__FUNCTION__, array());
+
+  if (!empty($actions)) {
+    $toolbar_actions = $actions;
+  }
+
+  return $toolbar_actions;
+}
+
+/**
+ * Set and get the action groups of the contextual toolbar.
+ *
+ * @param array $groups
+ *   An array which specifies all groups that buttons can be put in.
+ *   Each group is defined by its key, and has an associative array with the
+ *   following info:
+ *     - 'weight': The weight of the group.
+ *   We use an associative array so we can add more info later without breaking
+ *   backwards compatibility.
+ *
+ * @return array
+ *   An array with all the info about the groups.
+ */
+function paddle_contextual_toolbar_groups($groups = NULL) {
+  $toolbar_groups = &drupal_static(__FUNCTION__, array());
+
+  if (is_array($groups)) {
+    $toolbar_groups = $groups;
+  }
+
+  return $toolbar_groups;
+}
+
+/**
+ * Renders the contextual toolbar.
+ */
+function paddle_contextual_toolbar_render() {
+  $actions = paddle_contextual_toolbar_actions();
+  $groups = paddle_contextual_toolbar_groups();
+
+  // Allow other modules and themes to alter the toolbar.
+  drupal_alter('paddle_contextual_toolbar_actions', $actions);
+  drupal_alter('paddle_contextual_toolbar_groups', $groups);
+
+  if (!empty($actions)) {
+    // Attach the javascript to perform click delegation if an action requires
+    // it. This can be recognized by the presence of the data property
+    // 'data-paddle-contextual-toolbar-click'.
+    foreach ($actions as $action) {
+      if (strpos($action['action'], 'data-paddle-contextual-toolbar-click') !== FALSE) {
+        paddle_contextual_toolbar_add_js('click_delegator');
+        break;
+      }
+    }
+
+    $items = paddle_contextual_toolbar_grouped_items($groups, $actions);
+
+    return theme('item_list', array(
+      'items' => $items,
+      'attributes' => array(
+        'id' => 'contextual-actions-list',
+      ),
+    ));
+  }
+
+  return FALSE;
+}
+
+/**
+ * Prepare a toolbar array that can be rendered by the item_list theme function.
+ *
+ * @param array $groups
+ *   Contextual toolbar groups array, can be retrieved using the
+ *   paddle_contextual_toolbar_groups() function.
+ * @param array $actions
+ *   Contextual toolbar actions array, can be retrieved using the
+ *   paddle_contextual_toolbar_actions() function.
+ *
+ * @return array
+ *   Array of all contextual toolbar actions, sorted by group and weight and
+ *   divided by separators between each group.
+ */
+function paddle_contextual_toolbar_grouped_items($groups, $actions) {
+  // Add the default group, in which we put the actions without a group
+  // attribute.
+  $groups += array(
+    'default' => array(
+      'weight' => 0,
+    ),
+  );
+
+  // Sort the groups by their weight.
+  uasort($groups, function($a, $b) {
+    return ($a['weight'] < $b['weight']) ? -1 : 1;
+  });
+
+  // Sort the actions by weight before grouping them, so we don't have to
+  // sort each group individually.
+  uasort($actions, function($a, $b) {
+    return ($a['weight'] < $b['weight']) ? -1 : 1;
+  });
+
+  // Add the sorted actions to their groups.
+  foreach ($actions as $action) {
+    // Make sure the action has at least a default group.
+    $action += array(
+      'group' => 'default',
+    );
+
+    $groups[$action['group']]['actions'][] = $action;
+  }
+
+  // Loop over each group, format their actions and add separators add the end
+  // of each group.
+  $items = array();
+  foreach ($groups as $group) {
+    // If the group contains no actions, skip it.
+    // We don't want an empty group with a separator.
+    if (!isset($group['actions']) || empty($group['actions'])) {
+      continue;
+    }
+
+    // Add all of the group's actions.
+    foreach ($group['actions'] as $action) {
+      $item = array(
+        'data' => $action['action'],
+        'class' => $action['class'],
+      );
+      $items[] = $item;
+    }
+
+    // Add a separator at the end of the group.
+    $items[] = array(
+      'data' => theme('html_tag', array(
+        'element' => array(
+          '#tag' => 'div',
+          '#attributes' => array(
+            'class' => 'paddle-contextual-toolbar-separator',
+          ),
+          '#value' => '',
+        ),
+      )),
+      'class' => array('paddle-contextual-toolbar-separator'),
+    );
+  }
+
+  // Remove the last group's separator because it might cause styling issues.
+  if (!empty($items)) {
+    array_pop($items);
+  }
+
+  return $items;
+}
+
+/**
+ * Add js to the page where needed.
+ *
+ * @param string $js
+ *   A string representing the needed js file.
+ */
+function paddle_contextual_toolbar_add_js($js) {
+  drupal_add_js(drupal_get_path('module', 'paddle_contextual_toolbar') . '/js/paddle_contextual_toolbar_' . $js . '.js', array('type' => 'file', 'preprocess' => FALSE));
+}

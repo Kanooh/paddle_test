@@ -1,0 +1,33 @@
+<?php
+/**
+ * @file
+ * Mock CommerceCartTestCase to prevent PHP Fatal errors.
+ *
+ * When running any Simpletest, without this file, we always get a fatal PHP
+ * error: Class 'CommerceCartTestCase' not found.
+ *
+ * Alternative options are:
+ * - include the Commerce module in the Paddle distribution.
+ * - include the Project Dependency module in the Paddle distribution so every
+ *   missing module dependency automatically gets downloaded like the Drupal
+ *   test bots do.
+ * - implement hook_registry_files_alter() in a module that's always enabled
+ *   to remove authcache_commerce.test from the registry so Drupal doesn't try
+ *   to include authcache_commerce.test, nor load AuthcacheCommerceTest.
+ */
+
+/**
+ * Tests for markup substitution.
+ */
+class CommerceCartTestCase extends DrupalWebTestCase {
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Mock Commerce Cart',
+      'description' => 'Workaround to prevent PHP error: Class \'CommerceCartTestCase\' not found',
+      'group' => 'Mock Commerce Cart',
+    );
+  }
+}

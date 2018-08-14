@@ -1,0 +1,24 @@
+/**
+ * @file
+ * Paddlet styling.
+ */
+
+// --------------------
+// FRONTEND PANE
+// -------------------
+//
+.field-type-fivestar {
+  padding-top: 25px;
+  float: right;
+  padding-bottom: 15px;
+}
+
+.node-calendar-item {
+  .field-type-fivestar {
+    float: none;
+    .fivestar-widget {
+      float: right;
+      padding-top: 10px;
+    }
+  }
+}

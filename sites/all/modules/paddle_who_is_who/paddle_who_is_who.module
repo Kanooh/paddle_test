@@ -1,0 +1,265 @@
+<?php
+/**
+ * @file
+ * Code for the paddle_who_is_who feature.
+ */
+
+include_once 'paddle_who_is_who.features.inc';
+/**
+ * @file
+ * Code for the Paddle who is who module.
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_who_is_who_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_who_is_who_theme($existing, $type, $theme, $path) {
+  return array(
+    'team_members' => array(
+      'render element' => 'elements',
+      'path' => drupal_get_path('module', 'paddle_who_is_who') . '/theme',
+      'template' => 'team_members',
+    ),
+    'who_is_who_organization' => array(
+      'render element' => 'elements',
+      'path' => drupal_get_path('module', 'paddle_who_is_who') . '/theme',
+      'template' => 'who_is_who_organization',
+    ),
+    'paddle_who_is_who_team_member' => array(
+      'variables' => array(
+        'node' => NULL,
+        'company_info' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * Theme function for a team member.
+ *
+ * @param array $variables
+ *   An associative array with the following keys:
+ *   - 'node': the contact person node.
+ *
+ * @return string
+ *   The rendered HTML.
+ */
+function theme_paddle_who_is_who_team_member($variables) {
+  $html = array();
+
+  if (!empty($variables['node'])) {
+    $node_wrapper = entity_metadata_wrapper('node', $variables['node']);
+
+    $html['container'] = array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'class' => array('team-member-info'),
+      ),
+    );
+
+    $featured_image = $node_wrapper->field_paddle_featured_image->value();
+
+    if (!empty($featured_image['sid'])) {
+      $atom = scald_atom_load($featured_image['sid']);
+      $alt = field_get_items('scald_atom', $atom, 'field_scald_alt_tag');
+      $alt = !empty($alt) ? $alt[0]['value'] : '';
+
+      $html['featured_image'] = array(
+        '#theme' => 'image_style',
+        '#style_name' => 'who_is_who_thumbnail',
+        '#path' => $atom->file_source,
+        '#alt' => $alt,
+      );
+    }
+
+    $html['container']['top_info'] = array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'class' => array('team-member-top-info'),
+      ),
+    );
+
+    $name = $node_wrapper->title->value();
+    $html['container']['top_info']['name'] = array(
+      '#markup' => $name,
+      '#prefix' => '<h3 class="team-member-name">',
+      '#suffix' => '</h3>',
+    );
+
+    $company_wrapper = entity_metadata_wrapper('field_collection_item', $variables['company_info']);
+
+    $function = $company_wrapper->field_cp_function->value();
+
+    if (!empty($function)) {
+      $html['container']['top_info']['function'] = array(
+        '#markup' => $function,
+        '#prefix' => '<div class="team-member-function">',
+        '#suffix' => '</div>',
+      );
+    }
+
+    $email = $company_wrapper->field_cp_email->value();
+
+    if (!empty($email)) {
+      $html['container']['email'] = array(
+        '#markup' => $email,
+        '#prefix' => '<div class="team-member-email">',
+        '#suffix' => '</div>',
+      );
+    }
+
+    $mobile = $company_wrapper->field_cp_mobile->value();
+
+    if (!empty($mobile)) {
+      $html['container']['office'] = array(
+        '#markup' => $mobile,
+        '#prefix' => '<div class="team-member-mobile">',
+        '#suffix' => '</div>',
+      );
+    }
+
+    $phone = $company_wrapper->field_cp_phone->value();
+
+    if (!empty($phone)) {
+      $html['container']['phone'] = array(
+        '#markup' => $phone,
+        '#prefix' => '<div class="team-member-phone">',
+        '#suffix' => '</div>',
+      );
+    }
+  }
+
+  return $html;
+}
+
+/**
+ * Retrieves the children of the OU whose ID is given.
+ *
+ * @param int $ou_nid
+ *    The ID of the organizational unit.
+ *
+ * @return array
+ *   An array of Organizational Units which are the children of the
+ *   OU whose ID is given.
+ */
+function paddle_who_is_who_organizational_units_by_parent($ou_nid) {
+  $entities = array();
+
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'organizational_unit')
+    ->fieldCondition('field_paddle_ou_parent_entity', 'target_id', $ou_nid, '=')
+    ->propertyOrderBy('title', 'ASC');
+
+  $result = $query->execute();
+  if (!empty($result)) {
+    $entities = node_load_multiple(array_keys($result['node']));
+  }
+
+  return $entities;
+}
+
+/**
+ * Gets the contact persons which reference a certain organizational unit.
+ *
+ * Checks access. We allow users that can't view all unpublished content to
+ * view published content. The others get the current, non archived, revision.
+ *
+ * @param int $ou_nid
+ *   The ID of the organizational unit.
+ *
+ * @return array
+ *   Associative array containing query result objects with properties:
+ *   - node_revision.nid
+ *   - node_revision.vid
+ *   - field_revision_field_paddle_cp_company_info.field_paddle_cp_company_info_revision_id
+ *   - field_revision_field_paddle_cp_last_name.field_paddle_cp_last_name_value
+ *   - workbench_moderation_node_history.state
+ */
+function paddle_who_is_who_get_contact_persons_by_organizational_unit($ou_nid) {
+  // Run the query to get all contact persons referencing the organizational
+  // unit. We also must keep in mind the published revision and not the latest.
+  // We also need the reference to the field collection holding the values.
+  $query = db_select('node_revision', 'n');
+  $query->join('workbench_moderation_node_history', 'wmh', 'wmh.vid = n.vid');
+  $query->join('field_revision_field_paddle_cp_company_info', 'ci', 'ci.revision_id = wmh.vid');
+  $query->join('field_revision_field_cp_organisation', 'cpo', 'cpo.revision_id = ci.field_paddle_cp_company_info_revision_id');
+  $query->join('field_revision_field_paddle_cp_last_name', 'cpln', 'cpln.revision_id = n.vid');
+  $query->fields('n', array('nid', 'vid'))
+    ->fields('ci', array('field_paddle_cp_company_info_revision_id'))
+    ->fields('cpln', array('field_paddle_cp_last_name_value'))
+    ->fields('wmh', array('state'));
+  $query->condition('cpo.field_cp_organisation_target_id', $ou_nid, '=');
+  $query->condition('wmh.is_current', 1, '=');
+  if (!user_access('view all unpublished content')) {
+    // We allow users that can't view all unpublished content to view published
+    // content.
+    $query->condition('wmh.state', 'published', '=');
+  }
+  else {
+    // But even when they are allowed to view all unpublished content, don't
+    // show archived contact persons.
+    $query->condition('wmh.state', 'archived', '<>');
+  }
+  // Don't show contact persons that are hidden by eg. the Protected Content
+  // app.
+  $query->addTag('node_access');
+  // Order alphabetically by last name, and then first name.
+  $query->orderBy('cpln.field_paddle_cp_last_name_value', 'ASC')
+    ->orderBy('n.title', 'ASC');
+
+  return $query->execute()->fetchAll();
+}
+
+/**
+ * We retrieve the company info item which contains a link to the required OU.
+ *
+ * @param array $company_info
+ *   The group of field collections associated to the organizations linked
+ *   to the contact person.
+ * @param int $nid
+ *   The node ID of the Organizational Unit which is linked.
+ *
+ * @return array
+ *   The company info item which contains an OU with the given ID.
+ */
+function paddle_who_is_who_retrieve_organization_from_company_info_by_ou_id($company_info, $nid) {
+  $organization = array();
+  foreach ($company_info as $company_info_item) {
+    if (!empty($company_info_item->field_cp_organisation->value()) && $company_info_item->field_cp_organisation->value()->nid == $nid) {
+      $organization = $company_info_item;
+      break;
+    }
+  }
+
+  return $organization;
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors_alter().
+ */
+function paddle_who_is_who_paddle_color_palettes_color_selectors_alter(&$data, $theme) {
+  $data[0]['color'][] = '.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body .ou-child h3 a';
+  $data[1]['color'][] = '.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body .ou-child h3 a:hover';
+  $data[0]['color'][] = '.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body .ou-team-member h3 a';
+  $data[1]['color'][] = '.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body .ou-team-member h3 a:hover';
+}
+
+/**
+ * Implements template_preprocess_panels_pane().
+ */
+function paddle_who_is_who_preprocess_panels_pane(&$vars) {
+  // Adds a class to the who is who pane list/team members so that we can style it in a different way.
+  if ($vars['pane']->type == 'who_is_who' && $vars['pane']->configuration['view_mode'] == 'team_members') {
+    $vars['classes_array'][] = 'pane-team-members';
+  }
+}

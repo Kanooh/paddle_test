@@ -1,0 +1,31 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Web Universe components.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_web_universe_panes_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_web_universe_theme_introduction' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-web-universe-theme-introduction',
+    ),
+    'paddle_web_universe_theme_side_navigation' => array(
+      'path' => $path . '/templates',
+      'template' => 'paddle-web-universe-theme-side-navigation',
+    ),
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_web_universe_panes_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}

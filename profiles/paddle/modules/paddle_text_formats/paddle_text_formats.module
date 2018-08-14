@@ -1,0 +1,134 @@
+<?php
+/**
+ * @file
+ * Module for handling the Paddle text formats and filters.
+ */
+
+
+/**
+ * Implements hook_element_info_alter().
+ */
+function paddle_text_formats_element_info_alter(&$elements) {
+  $elements['text_format']['#value_callback'] = 'paddle_text_formats_text_format_value';
+  array_unshift($elements['text_format']['#pre_render'], 'paddle_text_formats_text_format_pre_render');
+}
+
+/**
+ * Value callback for the text_format FAPI element.
+ */
+function paddle_text_formats_text_format_value($element, $input = FALSE, $form_state = array()) {
+  $value = NULL;
+
+  // Set value to what we want to get stored in the database.
+  if ($input) {
+    global $base_url;
+    $value = str_replace($base_url . '/', 'local://', $input);
+  }
+
+  return $value;
+}
+
+/**
+ * Pre render callback for the text_format FAPI element.
+ */
+function paddle_text_formats_text_format_pre_render($element) {
+  // Set value to what we want to get rendered in the textarea for editing.
+  if (isset($element['#value'])) {
+    $element['#value'] = _paddle_text_formats_text_format_filter_process($element['#value']);
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_filter_info().
+ */
+function paddle_text_formats_filter_info() {
+  return array(
+    'paddle_text_formats' => array(
+      'title' => t('Correct local scheme URLs with absolute path'),
+      'process callback' => '_paddle_text_formats_text_format_filter',
+      'weight' => -50,
+    ),
+    'remove_p_wrapping_img' => array(
+      'title' => t('Remove the p wrapper from the image tag.'),
+      'process callback' => '_paddle_text_formats_remove_p_wrapping_img',
+      'weight' => -50,
+    ),
+    'wrap_table_in_div' => array(
+      'title' => t('Wrap a table in an extra div for responsive support.'),
+      'process callback' => '_paddle_text_formats_wrap_table_in_div',
+      'weight' => -50,
+    ),
+  );
+}
+
+/**
+ * Paddle text_format filter callback.
+ */
+function _paddle_text_formats_text_format_filter($text, $filter, $format, $langcode, $cache, $cache_id) {
+  return _paddle_text_formats_text_format_filter_process($text);
+}
+
+/**
+ * Removes the p-wrapper from image tags.
+ */
+function _paddle_text_formats_remove_p_wrapping_img($text, $filter, $format, $langcode, $cache, $cache_id) {
+  return preg_replace('/<p>(<img[^>]*>)<\/p>/', '$1', $text);
+}
+
+/**
+ * Wraps table tags with a responsive div.
+ */
+function _paddle_text_formats_wrap_table_in_div($text, $filter, $format, $langcode, $cache, $cache_id) {
+  $text = preg_replace('/<table/', '<div class="responsive-table"><table', $text);
+  $text = preg_replace('/<\/table>/', '</table></div>', $text);
+  return $text;
+}
+
+/**
+ * Replace the schemed URLSs with absolute urls.
+ */
+function _paddle_text_formats_text_format_filter_process($text) {
+  global $base_url;
+  return str_replace('local://', $base_url . '/', $text);
+}
+
+/**
+ * Implements hook_htmlpurifier_html_definition_alter().
+ *
+ * @param HTMLPurifier_HTMLDefinition $html_definition
+ *   The HTMLPurifier definition object to alter.
+ */
+function paddle_text_formats_htmlpurifier_html_definition_alter($html_definition) {
+  // Allow some specific data attributes on div and span elements.
+  foreach (array('div', 'span') as $element) {
+    $html_definition->addAttribute($element, 'data-docid', 'Text');
+    $html_definition->addAttribute($element, 'data-fiche', 'Text');
+    $html_definition->addAttribute($element, 'data-pubdatum', 'Text');
+    $html_definition->addAttribute($element, 'data-thema', 'Text');
+    $html_definition->addAttribute($element, 'data-zoekdiepte', 'Text');
+    $html_definition->addAttribute($element, 'data-sector', 'Text');
+    $html_definition->addAttribute($element, 'data-doelgroep', 'Text');
+    $html_definition->addAttribute($element, 'data-doctype', 'Text');
+    $html_definition->addAttribute($element, 'data-veldid', 'Text');
+    $html_definition->addAttribute($element, 'data-veldwaarde', 'Text');
+    $html_definition->addAttribute($element, 'data-jaar', 'Text');
+    $html_definition->addAttribute($element, 'data-groepeerveld', 'Text');
+    $html_definition->addAttribute($element, 'data-metdetail', 'Text');
+    $html_definition->addAttribute($element, 'data-extra', 'Text');
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function paddle_text_formats_module_implements_alter(&$implementations, $hook) {
+  // We need to make sure that this hook runs last because
+  // paddle_scald_video_htmlpurifier_html_definition_alter() does addElement()
+  // on the div element.
+  if ($hook == 'htmlpurifier_html_definition_alter' && isset($implementations['paddle_text_formats'])) {
+    $group = $implementations['paddle_text_formats'];
+    unset($implementations['paddle_text_formats']);
+    $implementations['paddle_text_formats'] = $group;
+  }
+}

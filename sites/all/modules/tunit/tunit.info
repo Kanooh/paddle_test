@@ -1,0 +1,13 @@
+name = TUnit
+description = twistor's unit testing helpers.
+package = Testing
+files[] = src/TUnit.test
+files[] = src/Tests/TUnit.test
+core = 7.x
+
+; Information added by Drupal.org packaging script on 2015-04-10
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "tunit"
+datestamp = "1428696482"
+

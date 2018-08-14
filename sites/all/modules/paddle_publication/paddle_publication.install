@@ -1,0 +1,364 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Publication app.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_publication_install() {
+  paddle_taxonomy_manager_create_vocabularies(array(
+    'paddle_authors' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Authors',
+          'nl' => 'Auteurs',
+        ),
+        'description' => array(
+          'en' => 'Description for Authors',
+          'nl' => 'Beschrijving voor Auteurs',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+    'paddle_keywords' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Keywords',
+          'nl' => 'Sleutelwoorden',
+        ),
+        'description' => array(
+          'en' => 'Description for Keywords',
+          'nl' => 'Beschrijving voor Sleutelwoorden',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+    'paddle_publication_year' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Year of publication',
+          'nl' => 'Jaar van publicatie',
+        ),
+        'description' => array(
+          'en' => 'Description for Year of publication',
+          'nl' => 'Beschrijving voor Jaar van publicatie',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+    'paddle_mesh_terms' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Mesh terms',
+          'nl' => 'Mesh termen',
+        ),
+        'description' => array(
+          'en' => 'Description for Mesh terms',
+          'nl' => 'Beschrijving voor Mesh termen',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+  ));
+
+  _paddle_publication_create_advanced_search_page_publication_fields();
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_publication_enable() {
+  // Prepare our content type to add permissions.
+  paddle_apps_prepare_module_for_permissions('paddle_publication');
+
+  $permissions = array(
+    'create paddle_publication content',
+    'edit any paddle_publication content',
+    'delete any paddle_publication content',
+    'override paddle_publication authored on option',
+    'administer panelizer node paddle_publication layout',
+    'administer panelizer node paddle_publication content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  paddle_content_region_panelize_node_type('paddle_publication');
+  paddle_content_region_grant_node_type_permissions('paddle_publication');
+
+  features_revert_module('paddle_search');
+}
+
+/**
+ * Creates the required fields for paddle_advanced_search.
+ */
+function _paddle_publication_create_advanced_search_page_publication_fields() {
+  $fields = array();
+
+  if (!field_info_field('field_paddle_kce_adv_authors')) {
+    $fields[] = array(
+      'base' => array(
+        'field_name' => 'field_paddle_kce_adv_authors',
+        'type' => 'list_boolean',
+        'active' => 1,
+        'cardinality' => 1,
+        'deleted' => 0,
+        'entity_types' => array(),
+        'foreign keys' => array(),
+        'indexes' => array(
+          'value' => array(
+            0 => 'value',
+          ),
+        ),
+        'locked' => 0,
+        'module' => 'list',
+        'settings' => array(
+          'allowed_values' => array(
+            0 => '',
+            1 => '',
+          ),
+          'allowed_values_function' => '',
+        ),
+      ),
+      'label' => t('Add filter by authors'),
+    );
+  }
+
+  if (!field_info_field('field_paddle_kce_adv_pub_year')) {
+    $fields[] = array(
+      'base' => array(
+        'field_name' => 'field_paddle_kce_adv_pub_year',
+        'type' => 'list_boolean',
+        'active' => 1,
+        'cardinality' => 1,
+        'deleted' => 0,
+        'entity_types' => array(),
+        'foreign keys' => array(),
+        'indexes' => array(
+          'value' => array(
+            0 => 'value',
+          ),
+        ),
+        'locked' => 0,
+        'module' => 'list',
+        'settings' => array(
+          'allowed_values' => array(
+            0 => '',
+            1 => '',
+          ),
+          'allowed_values_function' => '',
+        ),
+      ),
+      'label' => t('Add filter by publication year'),
+    );
+  }
+
+  if (!field_info_field('field_paddle_kce_adv_keywords')) {
+    $fields[] = array(
+      'base' => array(
+        'field_name' => 'field_paddle_kce_adv_keywords',
+        'type' => 'list_boolean',
+        'active' => 1,
+        'cardinality' => 1,
+        'deleted' => 0,
+        'entity_types' => array(),
+        'foreign keys' => array(),
+        'indexes' => array(
+          'value' => array(
+            0 => 'value',
+          ),
+        ),
+        'locked' => 0,
+        'module' => 'list',
+        'settings' => array(
+          'allowed_values' => array(
+            0 => '',
+            1 => '',
+          ),
+          'allowed_values_function' => '',
+        ),
+      ),
+      'label' => t('Add filter by keyword'),
+    );
+  }
+
+  foreach ($fields as $field) {
+    field_create_field($field['base']);
+
+    $instance = array(
+      'field_name' => $field['base']['field_name'],
+      'label' => $field['label'],
+      'entity_type' => 'node',
+      'bundle' => 'paddle_advanced_search_page',
+      'default_value' => array(
+        0 => array(
+          'value' => 0,
+        ),
+      ),
+      'settings' => array(
+        'field_instance_sync' => FALSE,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'options',
+        'settings' => array(
+          'display_label' => 1,
+        ),
+        'type' => 'options_onoff',
+        'weight' => 0,
+      ),
+    );
+
+    if (!field_read_instance($instance['entity_type'], $instance['field_name'], $instance['bundle'])) {
+      field_create_instance($instance);
+    }
+  }
+}
+
+/**
+ * Create the needed field instances for the advanced search page.
+ */
+function paddle_publication_update_7001() {
+  module_enable(array('paddle_advanced_search'));
+  _paddle_publication_create_advanced_search_page_publication_fields();
+}
+
+/**
+ * Fix term language wherever a non-language aware widget was used.
+ */
+function paddle_publication_update_7002() {
+  db_query('UPDATE taxonomy_index ti
+    INNER JOIN node n ON ti.nid = n.nid
+    INNER JOIN taxonomy_term_data ttd ON ttd.tid = ti.tid
+    SET ti.tid = (SELECT tid
+      FROM taxonomy_term_data ttd2
+      WHERE name = ttd.name AND ttd2.language = n.language AND ttd2.vid = ttd.vid )
+    WHERE n.language != ttd.language
+    AND n.type=\'paddle_publication\''
+  );
+
+  // Query for the Authors.
+  db_query('UPDATE field_data_field_paddle_kce_authors au
+    INNER JOIN node n ON au.entity_id = n.nid
+    INNER JOIN taxonomy_term_data ttd ON ttd.tid = au.field_paddle_kce_authors_tid
+    SET au.field_paddle_kce_authors_tid = (SELECT tid
+      FROM taxonomy_term_data ttd2
+      WHERE name = ttd.name AND ttd2.language = n.language AND ttd2.vid = ttd.vid)
+    WHERE n.language != ttd.language
+    AND n.type=\'paddle_publication\''
+  );
+
+  db_query('UPDATE field_revision_field_paddle_kce_authors au
+    INNER JOIN node n ON au.entity_id = n.nid
+    INNER JOIN taxonomy_term_data ttd ON ttd.tid = au.field_paddle_kce_authors_tid
+    SET au.field_paddle_kce_authors_tid = (SELECT tid
+      FROM taxonomy_term_data ttd2
+      WHERE name = ttd.name AND ttd2.language = n.language AND ttd2.vid = ttd.vid)
+    WHERE n.language != ttd.language
+    AND n.type=\'paddle_publication\''
+  );
+
+  // Query for the Publication Year.
+  db_query('UPDATE field_data_field_paddle_kce_publication_y py
+    INNER JOIN node n ON py.entity_id = n.nid
+    INNER JOIN taxonomy_term_data ttd ON ttd.tid = py.field_paddle_kce_publication_y_tid
+    SET py.field_paddle_kce_publication_y_tid = (SELECT tid
+      FROM taxonomy_term_data ttd2
+      WHERE name = ttd.name AND ttd2.language = n.language AND ttd2.vid = ttd.vid)
+    WHERE n.language != ttd.language
+    AND n.type=\'paddle_publication\''
+  );
+
+  db_query('UPDATE field_revision_field_paddle_kce_publication_y py
+    INNER JOIN node n ON py.entity_id = n.nid
+    INNER JOIN taxonomy_term_data ttd ON ttd.tid = py.field_paddle_kce_publication_y_tid
+    SET py.field_paddle_kce_publication_y_tid = (SELECT tid
+      FROM taxonomy_term_data ttd2
+      WHERE name = ttd.name AND ttd2.language = n.language AND ttd2.vid = ttd.vid)
+    WHERE n.language != ttd.language
+    AND n.type=\'paddle_publication\''
+  );
+
+  // Query for the publication collections.
+  db_query('UPDATE field_data_field_paddle_kce_collections pc
+    INNER JOIN node n ON pc.entity_id = n.nid
+    INNER JOIN taxonomy_term_data ttd ON ttd.tid = pc.field_paddle_kce_collections_tid
+    SET pc.field_paddle_kce_collections_tid = (SELECT tid
+      FROM taxonomy_term_data ttd2
+      WHERE name = ttd.name AND ttd2.language = n.language AND ttd2.vid = ttd.vid)
+    WHERE n.language != ttd.language
+    AND n.type=\'paddle_publication\''
+  );
+
+  db_query('UPDATE field_revision_field_paddle_kce_collections pc
+    INNER JOIN node n ON pc.entity_id = n.nid
+    INNER JOIN taxonomy_term_data ttd ON ttd.tid = pc.field_paddle_kce_collections_tid
+    SET pc.field_paddle_kce_collections_tid = (SELECT tid
+      FROM taxonomy_term_data ttd2
+      WHERE name = ttd.name AND ttd2.language = n.language AND ttd2.vid = ttd.vid)
+    WHERE n.language != ttd.language
+    AND n.type=\'paddle_publication\''
+  );
+
+  // Update all corrected terms linked to nodes in the node search index. The
+  // queries above did that only in the database.
+  // Mark all nodes as needing re-indexing at once, without having to save them
+  // individually. This probably re-indexes more nodes than needed but does so
+  // in a way that spreads load on the server more evenly.
+  search_api_index_reindex('node_index');
+}
+
+/**
+ * Set the correct search page for the Publication paddlet.
+ */
+function paddle_publication_update_7003() {
+  features_revert_module('paddle_search');
+
+  // This is hard coded for now. This is a variable that should be editable.
+  // @todo Make this generic through a settings form. Even if this paddlet is only
+  // for 1 client.
+  if ($node = node_load(3)) {
+    $set = translation_node_get_translations($node->tnid);
+    variable_set('publications_advanced_search_page', $set);
+  }
+}
+
+/**
+ * Add the newest needed field instances for the advanced search page.
+ */
+function paddle_publication_update_7004() {
+  // Adds the keywords field here.
+  _paddle_publication_create_advanced_search_page_publication_fields();
+
+  // Mark the node_index for reindexing.
+  search_api_index_reindex('node_index');
+}
+
+/**
+ * Changed the publications_advanced_search_page variable value to a nid.
+ */
+function paddle_publication_update_7005() {
+  variable_set('publications_advanced_search_page', 3);
+}
+
+/**
+ * Enable the paddle_apps module in case it hasn't been enabled yet.
+ */
+function paddle_publication_update_7006() {
+  module_enable(array('paddle_apps'));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_publication_uninstall() {
+  paddle_apps_remove_field('field_paddle_kce_adv_authors');
+  paddle_apps_remove_field('field_paddle_kce_adv_pub_year');
+  paddle_apps_remove_field('field_paddle_kce_adv_keywords');
+}

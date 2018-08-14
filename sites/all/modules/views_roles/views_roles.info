@@ -1,0 +1,11 @@
+name = Views Roles
+description = Expose roles as a base table for views
+core = 7.x
+
+package = Views
+
+dependencies[] = views
+; Information added by drush on 2013-03-08
+version = "7.x-1.x-dev"
+project = "views_roles"
+datestamp = "1362757241"

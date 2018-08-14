@@ -1,0 +1,49 @@
+/**
+* @file
+* Paddle admin theme
+*
+* Contains all styles related to the language switcher
+*/
+#block-locale-language-content {
+  float: right;
+}
+#block-locale-language-content ul {
+  font-size: 90%;
+  list-style: none outside none;
+  overflow: hidden;
+  margin-right: -1px;
+}
+#block-locale-language-content li {
+  display: block;
+  float: left;
+  margin-left: 5px;
+}
+#block-locale-language-content li:first-child {
+  margin-left: 0;
+}
+a.language-link,
+a.language-link:hover,
+a.active-language,
+a.active-language:visited,
+#block-locale-language-content li.active-language a:hover {
+  border: 1px solid #ececec;
+  display: block;
+  float: left;
+  padding: 6px 11px 9px;
+  text-decoration: none;
+}
+a.language-link {
+  background-color: #ececec;
+  color: #43474a;
+}
+a.language-link:hover,
+a.active-language,
+a.active-language:visited,
+#block-locale-language-content li.active-language a:hover {
+  background-color: #1ab097;
+  color: white;
+}
+a.translated_content_available {
+  background: #005284;
+  color: #fff;
+}

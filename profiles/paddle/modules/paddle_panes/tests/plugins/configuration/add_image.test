@@ -1,0 +1,102 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddlePanesAddImageConfigurationInfoUnitTest.
+ */
+
+/**
+ * Test the "Add image" content type.
+ */
+class PaddlePanesAddImageConfigurationInfoUnitTest extends ScaldWebTestCase {
+
+  /**
+   * The atom created for the test.
+   *
+   * @var object
+   */
+  protected $atom;
+
+  /**
+   * The content type plugin definition.
+   *
+   * @var array
+   */
+  public $contentType;
+
+  /**
+   * The user created for the test.
+   *
+   * @var object
+   */
+  protected $user;
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Configuration info: add image',
+      'description' => 'Tests the "Add image" content type plugin configuration information.',
+      'group' => 'Paddle Landing Page',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp() {
+    parent::setUp(array('paddle_panes'));
+
+    $this->user = $this->drupalCreateUser(array(
+      'access content',
+      'create atom of any type',
+    ));
+
+    $this->drupalLogin($this->user);
+
+    // Create an image atom.
+    $this->atom = $this->createAtom();
+
+    // Store the content type plugin definition.
+    ctools_include('content');
+    $this->contentType = ctools_get_content_type('add_image');
+  }
+
+  /**
+   * Tests the results of the configuration info callback.
+   */
+  public function testPaneConfigurationInfo() {
+    // Prepare a configuration for an old version of the pane.
+    $conf = array(
+      'image_scald' => $this->atom->sid,
+    );
+
+    // Get the configuration callback.
+    $callback = ctools_plugin_get_function($this->contentType, 'configuration info');
+
+    // Run the callback.
+    $info = $callback($conf);
+
+    // Prepare the expected configuration info.
+    $expected = array(
+      $this->atom->title . ' ',
+    );
+
+    // Verify that we have the correct configuration.
+    $this->assertEqual($expected, $info);
+
+    // Prepare a configuration for a newer version of the pane.
+    $conf = array(
+      'image_scald' => array(
+        'sid' => array($this->atom->sid),
+        'style' => '',
+      ),
+    );
+
+    // Run again the callback and verify that the result is the same.
+    $info = $callback($conf);
+    $this->assertEqual($expected, $info);
+  }
+
+}

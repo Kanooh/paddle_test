@@ -1,0 +1,475 @@
+/**
+* @file
+* Paddle style plugins.
+*/
+
+header,
+footer,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-top,
+.pane-facetapi .pane-title,
+.menuslider-controls button {
+  background-color: $c-pelorous;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body blockquote,
+#menu-display-top-menu a:hover {
+  color: $c-pelorous;
+}
+
+div.pane-listing .paddle-landing-page-listing-teaser .node,
+#block-paddle-menu-display-first-level .level-1 > .menu-item.active-trail,
+#block-paddle-menu-display-first-level .level-1 > .menu-item:hover {
+  border-color: $c-pelorous;
+}
+
+.pane-google-custom-search .form-submit,
+.form-submit-container .form-submit,
+.form-submit,
+#block-paddle-menu-display-first-level .level-1 > .active-trail,
+.menuslider-controls button:hover,
+figcaption.image-pane-caption:before {
+  background-color: $c-jelly-bean;
+}
+
+.region-content a:hover,
+#block-paddle-menu-display-first-level .level-1 > .menu-item:hover > a,
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a.megadropdown-expanded {
+  color: $c-jelly-bean;
+}
+
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a.megadropdown-expanded {
+  border-top-color: $c-jelly-bean;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-bottom {
+  background-color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-0 .menu,
+.panel-pane.paddle-color-palettes-subpalette-0 .menu a {
+  color: $c-scorpion;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-0 table th,
+.pane-incoming-rss .entity.paddle-incoming-rss-feed-item--magazine > h2 > a,
+.panel-pane.paddle-color-palettes-subpalette-0 .listing.table-listing a {
+  color: $c-pelorous;
+}
+
+.header-title,
+.header-subtitle,
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a,
+#block-paddle-menu-display-footer-menu a,
+#menu-display-disclaimer-menu .menu-item a,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-0 .pane-section-top a h2 {
+  color: $c-white;
+}
+
+#block-paddle-menu-display-current-level-plus-one .menu-item a:hover,
+#block-paddle-menu-display-first-level .level-2 > .menu-item > a:hover,
+.region-content blockquote,
+.region-content h3,
+.region-content a,
+.search-api-page-results h3 a {
+  color: $c-elm;
+}
+
+#main-nav,
+#fake-menu-bg,
+.pane-google-custom-search .form-submit:hover,
+.form-submit-container .form-submit:hover,
+.form-submit:hover,
+hr,
+a.label-link.active-facet.active,
+#menu-display-current-level-plus-one .menuslider-controls button:hover {
+  background-color: $c-elm;
+}
+
+#block-paddle-menu-display-first-level .level-1 > .menu-item > a,
+#block-paddle-menu-display-first-level .level-1 > .menu-item {
+  border-color: $c-elm;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-top {
+  background-color: $c-elm-green;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body blockquote {
+  color: $c-elm-green;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-bottom {
+  background-color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-1 .menu,
+.panel-pane.paddle-color-palettes-subpalette-1 .menu a {
+  color: $c-scorpion;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 table th,
+.panel-pane.paddle-color-palettes-subpalette-1 .listing.table-listing a {
+  color: $c-elm-green;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-1 table tr {
+  border-color: $c-elm-green;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-1 .pane-section-top a h2 {
+  color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-top {
+  background-color: $c-rum;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body blockquote {
+  color: $c-rum;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-bottom {
+  background-color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-2 .menu,
+.panel-pane.paddle-color-palettes-subpalette-2 .menu a {
+  color: $c-scorpion;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 table th,
+.panel-pane.paddle-color-palettes-subpalette-2 .listing.table-listing a {
+  color: $c-rum;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-2 table tr {
+  border-color: $c-rum;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-2 .pane-section-top a h2 {
+  color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-top {
+  background-color: $c-curious-blue;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body blockquote {
+  color: $c-curious-blue;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-bottom {
+  background-color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-3 .menu,
+.panel-pane.paddle-color-palettes-subpalette-3 .menu a {
+  color: $c-scorpion;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 table th,
+.panel-pane.paddle-color-palettes-subpalette-3 .listing.table-listing a {
+  color: $c-curious-blue;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-3 table tr {
+  border-color: $c-curious-blue;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-3 .pane-section-top a h2 {
+  color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-top {
+  background-color: $c-apple;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body blockquote {
+  color: $c-apple;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-bottom {
+  background-color: $c-mantis;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-4 .menu,
+.panel-pane.paddle-color-palettes-subpalette-4 .menu a {
+  color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 table th,
+.panel-pane.paddle-color-palettes-subpalette-4 .listing.table-listing a {
+  color: $c-white;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-4 table tr {
+  border-color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-4 .pane-section-top a h2 {
+  color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-top {
+  background-color: $c-rum;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body blockquote {
+  color: $c-rum;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-bottom {
+  background-color: $c-trendy-pink;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-5 .menu,
+.panel-pane.paddle-color-palettes-subpalette-5 .menu a {
+  color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 table th,
+.panel-pane.paddle-color-palettes-subpalette-5 .listing.table-listing a {
+  color: $c-white;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-5 table tr {
+  border-color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-5 .pane-section-top a h2 {
+  color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-top {
+  background-color: $c-jelly-bean-second;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body blockquote {
+  color: $c-jelly-bean-second;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-bottom {
+  background-color: $c-curious-blue;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body p,
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body,
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body a,
+.panel-pane.paddle-color-palettes-subpalette-6 .menu,
+.panel-pane.paddle-color-palettes-subpalette-6 .menu a {
+  color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-bottom a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h2,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h3,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h4,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h4 a,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 .pane-section-body h5,
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 table th,
+.panel-pane.paddle-color-palettes-subpalette-6 .listing.table-listing a {
+  color: $c-white;
+}
+
+.region-content .panel-pane.paddle-color-palettes-subpalette-6 table tr {
+  border-color: $c-white;
+}
+
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-top a,
+.panel-pane.paddle-color-palettes-subpalette-6 .pane-section-top a h2 {
+  color: $c-white;
+}
+
+.header-title {
+  font-size: 35px;
+}
+
+.header-subtitle {
+  font-size: 25px;
+}
+
+h1#page-title {
+  font-size: 35px;
+}
+
+.breadcrumb-item a,
+.breadcrumb-item > span {
+  font-size: 14px;
+}
+
+.region-content .landing-page-body p {
+  font-size: 25px;
+}
+.pane-section-body .paddle-landing-page-listing-teaser h4 {
+    margin-top: 0px;
+}
+.pane-section-body .paddle-landing-page-listing-teaser h4 a {
+  font-size: 15px;
+}
+
+.region-content h2 {
+  font-size: 30px;
+}
+
+.region-content h3 {
+  font-size: 20px;
+}
+
+.region-content h4 {
+  font-size: 18px;
+}
+
+.region-content h5 {
+  font-size: 15px;
+}
+
+.region-content p {
+  font-size: 15px;
+}
+
+.node-type-basic-page .region-content a:link {
+  font-size: 15px;
+}
+
+.node-type-basic-page .region-content a:visited {
+  font-size: 15px;
+}
+
+.node-type-basic-page .region-content a:hover {
+  font-size: 15px;
+}
+
+.node-type-basic-page .region-content h2 a,
+.node-type-basic-page .region-content h3 a,
+.node-type-basic-page .region-content h4 a,
+.node-type-basic-page .region-content h5 a,
+.node-type-basic-page .region-content h6 a,
+.node-type-basic-page .region-content h2 a:link,
+.node-type-basic-page .region-content h3 a:link,
+.node-type-basic-page .region-content h4 a:link,
+.node-type-basic-page .region-content h5 a:link,
+.node-type-basic-page .region-content h6 a:link,
+.node-type-basic-page .region-content h2 a:hover,
+.node-type-basic-page .region-content h3 a:hover,
+.node-type-basic-page .region-content h4 a:hover,
+.node-type-basic-page .region-content h5 a:hover,
+.node-type-basic-page .region-content h6 a:hover,
+.node-type-basic-page .region-content h2 a:visited,
+.node-type-basic-page .region-content h3 a:visited,
+.node-type-basic-page .region-content h4 a:visited,
+.node-type-basic-page .region-content h5 a:visited,
+.node-type-basic-page .region-content h6 a:visited {
+  font-size: inherit;
+}
+
+.node-type-basic-page .region-content li {
+  font-size: 15px;
+}
+
+.panel-pane .pane-section-body p {
+  font-size: 15px;
+}
+
+.panel-pane .pane-section-body a {
+  font-size: 15px;
+}
+
+.panel-pane .pane-section-body li {
+  font-size: 15px;
+}
+
+.region-content blockquote {
+  font-size: 25px;
+}
+
+footer {
+  background-attachment: scroll;
+  background-repeat: repeat;
+  background-position: center center;
+}
+
+#block-paddle-menu-display-footer-menu a {
+  font-size: 15px;
+}
+
+#block-paddle-menu-display-footer-menu .level-2 a {
+  font-size: 14px;
+}
+
+#menu-display-disclaimer-menu .menu-item a {
+  font-size: 15px;
+}
+
+@media (min-width: $screen-md-min) {
+  #logo img[src$=".svg"] {
+    max-height: 97px;
+    max-width: 400px;
+  }
+}

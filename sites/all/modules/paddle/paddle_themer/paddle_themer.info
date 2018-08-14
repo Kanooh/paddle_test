@@ -1,0 +1,20 @@
+name = Paddle Themer
+description = Exportable theme customizations (styling, settings, ...).
+core = 7.x
+php = 5.3
+
+dependencies[] = ctools
+dependencies[] = file
+dependencies[] = paddle_style
+dependencies[] = uuid
+dependencies[] = image
+
+files[] = tests/paddle_themer_plugin_implementation.test
+files[] = tests/paddle_themer_test_case.test
+files[] = tests/paddle_themer_ui.test
+files[] = tests/paddle_themer_unit.test
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_themer"
+datestamp = "1455518250"

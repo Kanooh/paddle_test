@@ -1,0 +1,23 @@
+name = Fly-out menu
+description = Show the second level of the main navigation of each menu-item by showing the child pages
+core = 7.x
+package = Paddle
+
+apps[logo] = apps/logo.png
+
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+
+stylesheets[all][] = css/paddle_fly_out_menu.css
+
+; Information added by drush on 2015-10-22
+version = "7.x-1.x-dev"
+project = "paddle_fly_out_menu"
+datestamp = "1445513497"
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_fly_out_menu"
+datestamp = "1473170412"
+

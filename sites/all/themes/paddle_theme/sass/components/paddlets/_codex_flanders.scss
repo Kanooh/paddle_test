@@ -1,0 +1,35 @@
+/**
+ * @file
+ * Codex Flanders Paddlet styling.
+ */
+
+.pane-codex-flanders {
+  .pane-section-body {
+    .item-list {
+      ul {
+        list-style-type: none;
+
+        li {
+          margin-bottom: 20px;
+        }
+      }
+    }
+
+    .codex-text {
+      margin-bottom: 10px;
+    }
+
+    .codex-name {
+      font-weight: 900;
+    }
+
+    .codex-source-container {
+      padding-bottom: 5px;
+
+      span, a:link, a:hover, a:visited {
+        font-size: 12px;
+        font-weight: 900;
+      }
+    }
+  }
+}

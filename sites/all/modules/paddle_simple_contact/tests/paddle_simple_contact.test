@@ -1,0 +1,229 @@
+<?php
+/**
+ * @file
+ * Definition of PaddleSimpleContactAppTest.
+ */
+
+/**
+ * Test the Paddle Simple Contact Settings Form.
+ */
+class PaddleSimpleContactAppTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Test settings for Paddle Simple Contact',
+      'description' => 'Test the functionality of the Site Settings for Paddle Simple Contact.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * @inheritdoc.
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp(array('paddle_simple_contact'));
+  }
+
+  /**
+   * Test the functionality and permissions of the
+   * Simple Contact Paddlet Site Settings.
+   */
+  public function testPaddletSimpleContactSettingsForm() {
+
+    $this->drupalLogin($this->chiefEditor);
+
+    $recipients = array();
+    for ($i = 0; $i < 3; $i++) {
+      $recipients[] = "{$this->randomName()}@example.com";
+    }
+
+    $this->drupalGet('admin/paddlet_store/app/paddle_simple_contact/configure');
+
+    $elements = $this->xpath($this->constructFieldXpath('name', 'paddle_simple_contact_field_default_thank_you[format]'));
+    $this->assertFalse($elements, 'Text format selection of thank you field is not present.');
+
+    // Assert that the "Help text" checkbox is not present.
+    $this->assertFalse($this->xpath('//input[@name="paddle_simple_contact_field_default_help_text"]'), '"Help text" checkbox is not present');
+
+    // Submit the form with random data.
+    $edit = array(
+      'paddle_simple_contact_field_default_label_name' => $this->randomString(),
+      'paddle_simple_contact_field_default_label_email' => $this->randomString(),
+      'paddle_simple_contact_field_default_label_subject' => $this->randomString(),
+      'paddle_simple_contact_field_default_label_body' => $this->randomString(),
+      'paddle_simple_contact_field_default_label_submit' => $this->randomString(),
+      'paddle_simple_contact_field_default_thank_you[value]' => $this->randomString(),
+      'paddle_simple_contact_field_default_recipients' => implode(',', $recipients),
+    );
+
+    $this->drupalPost(NULL, $edit, t('Save configuration'));
+
+    $this->assertText('The configuration options have been saved.');
+
+    $variables = array_map('unserialize', db_query('SELECT name, value FROM {variable}')->fetchAllKeyed());
+
+    foreach ($edit as $name => $expected_value) {
+      if ($name == 'paddle_simple_contact_field_default_thank_you[value]') {
+        $name = 'paddle_simple_contact_field_default_thank_you';
+        $expected_value = array(
+          'format' => 'full_html',
+          'value' => $expected_value,
+        );
+      }
+
+      $actual_value = $variables[$name];
+
+      $this->assertEqual($expected_value, $actual_value);
+    }
+  }
+
+  /**
+   * Tests the show next level menu display checkbox for simple contact pages.
+   */
+  public function testPaddletShowNextLevelSimpleContactPage() {
+
+    $this->drupalLogin($this->chiefEditor);
+
+    // Run the tests with "show menu items +1 level" checked in the themer.
+    // Verify the default value of the show next level checkbox while adding a
+    // simple contact page is set correctly.
+
+    $node = $this->drupalCreateUiNode('simple_contact_page');
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    // Check if the show_level_below checkbox is present.
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a simple contact page.');
+    $this->assertFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is checked by default.');
+
+    // Create a simple contact page for testing.
+    $node = $this->createSimpleContactPage();
+
+    // Create a menu link for the simple contact page.
+    $menu_item = $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node->nid,
+    ));
+    $show_level_below = field_get_items('node', $node, 'field_paddle_show_next_level');
+    $this->assertEqual($show_level_below[0]['value'], '1', 'The show level below checkbox is set to TRUE.');
+
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    // Check if the show_level_below checkbox is present.
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a simple contact page.');
+    $this->assertFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is checked by default.');
+    $this->drupalPost(NULL, array(), t('Save'));
+    // @todo Convert to a POST request.
+    // @see https://one-agency.atlassian.net/browse/KANWEBS-1038
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/moderate/published');
+
+    // Create a second node for testing purposes.
+    $node2 = $this->createSimpleContactPage();
+    // @todo Convert to a POST request.
+    // @see https://one-agency.atlassian.net/browse/KANWEBS-1038
+    $this->drupalGet('admin/content_manager/node/' . $node2->nid . '/moderate/published');
+
+    // Create a menu link for the simple contact page.
+    $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node2->nid,
+      'navigation' => 'main_menu_nl:' . $menu_item['mlid'],
+    ));
+
+    // Check if the menu + 1 is shown on the page.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('menu-display-current-level-plus-one', 'The level below plus one is shown on the simple contact page.');
+
+    // Uncheck the checkbox for the level plus one and test that the menu is no
+    // longer shown.
+    $this->drupalPost('node/' . $node->nid . '/edit', array('field_paddle_show_next_level[und]' => FALSE), t('Save'));
+    // @todo Convert to a POST request.
+    // @see https://one-agency.atlassian.net/browse/KANWEBS-1038
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/moderate/published');
+
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertNoRaw('menu-display-current-level-plus-one', 'The level below plus one is not shown on the simple contact page.');
+
+    // Run the tests without "show menu items +1 level" checked in the themer.
+    // Disable the show level below globally.
+    $theme = paddle_themer_enabled_theme();
+    $theme->style['show_level_below_simple_contact_page']['show_level_below_simple_contact_page'] = 0;
+    paddle_themer_save_theme($theme);
+
+    // Verify the default value of the show next level checkbox while adding a
+    // simple contact page is set correctly.
+    $node = $this->drupalCreateUiNode('simple_contact_page');
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a simple contact page.');
+    $this->assertNoFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is not checked by default.');
+
+    // Create a simple contact page for testing.
+    $node = $this->createSimpleContactPage();
+    $menu_item = $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node->nid,
+    ));
+
+    // Check that the newly created simple contact page has the correct default
+    // value for the show_level_below field.
+    $show_level_below = field_get_items('node', $node, 'field_paddle_show_next_level');
+    $this->assertEqual($show_level_below[0]['value'], '0', 'The show level below checkbox is set to FALSE.');
+
+    // Check if the show_level_below checkbox is present.
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertRaw('edit-field-paddle-show-next-level-und', 'The checkbox to show the level below is present on the edit screen of a simple contact page.');
+    $this->assertNoFieldChecked('edit-field-paddle-show-next-level-und', 'The show next level checkbox is not checked by default.');
+    $this->drupalPost(NULL, array(), t('Save'));
+    // @todo Convert to a POST request.
+    // @see https://one-agency.atlassian.net/browse/KANWEBS-1038
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/moderate/published');
+
+    // Create a second node for testing purposes.
+    $node2 = $this->createSimpleContactPage();
+    // @todo Convert to a POST request.
+    // @see https://one-agency.atlassian.net/browse/KANWEBS-1038
+    $this->drupalGet('admin/content_manager/node/' . $node2->nid . '/moderate/published');
+
+    // Create a menu link for the simple contact page.
+    $this->createUiMenuItem(array(
+      'link_title' => $this->randomString(),
+      'content_button' => 'internal',
+      'internal_link' => 'node/' . $node2->nid,
+      'navigation' => 'main_menu_nl:' . $menu_item['mlid'],
+    ));
+
+    // Check that the menu is not present on the page.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertNoRaw('menu-display-current-level-plus-one', 'The level below plus one is not shown on the simple contact page.');
+
+    // Toggle the checkbox for the level plus one and check that the menu is now
+    // shown.
+    $this->drupalPost('node/' . $node->nid . '/edit', array('field_paddle_show_next_level[und]' => TRUE), t('Save'));
+    // @todo Convert to a POST request.
+    // @see https://one-agency.atlassian.net/browse/KANWEBS-1038
+    $this->drupalGet('admin/content_manager/node/' . $node->nid . '/moderate/published');
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('menu-display-current-level-plus-one', 'The level below plus one is shown on the simple contact page.');
+  }
+
+  /**
+   * Creates a node of type simple contact page.
+   *
+   * @return object
+   *   The node that has been created.
+   */
+  protected function createSimpleContactPage() {
+    // We prepend the randomly generated title with potentially HTML / Xpath /
+    // regex unsafe characters.
+    $data = array('title' => self::POTENTIAL_HTML_UNSAFE_SEQUENCE . $this->randomString());
+    // Create a new page.
+    $this->drupalCreateUiNode('simple_contact_page', $data);
+
+    $node = $this->drupalGetNodeByTitle($data['title']);
+
+    return $node;
+  }
+}

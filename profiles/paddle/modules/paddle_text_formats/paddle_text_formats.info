@@ -1,0 +1,16 @@
+name = Paddle text formats
+description = Text formats for the Paddle distribution.
+core = 7.x
+package = Paddle
+php = 5.2.4
+version = 7.x-1.0
+
+dependencies[] = ckeditor_link
+dependencies[] = features
+dependencies[] = filter
+dependencies[] = htmlpurifier
+
+features[features_api][] = api:2
+features[filter][] = full_html
+
+files[] = tests/paddle_text_formats_filter.test

@@ -1,0 +1,485 @@
+/**
+ * @file
+ * Styles for the media library.
+ */
+
+.paddle-scald-library-form .empty-text {
+  font-size: 1.3em;
+  color: #a9a9a9;
+  text-align: center;
+  padding: 60px 0;
+}
+.paddle-scald-atom-field .hidden {
+  display: none;
+}
+.paddle-scald-atom-field .preview {
+  text-align: center;
+  font-weight: 700;
+  min-width: 100px;
+}
+.paddle-scald-atom-field .preview .image img {
+  float: left;
+}
+.paddle-scald-atom-field .remove-button {
+  float: none;
+  display: inline-block;
+  position: relative;
+  top: 3px;
+}
+.paddle-scald-library-form .library-filter div.form-item {
+  display: inline-block;
+}
+.paddle-library-item {
+  border-bottom: 0;
+  display: inline-block;
+  text-align: center;
+  width: 25%;
+  min-width: 140px;
+  padding: 11px 1px 10px 1px;
+  box-sizing: border-box;
+  vertical-align: top;
+}
+.paddle-scald-library-page-form .paddle-library-item,
+.view-media-library .paddle-library-item {
+  width: 16.66%;
+}
+.view-media-library .view-content {
+  font-size: 0;
+}
+.view-media-library .paddle-library-item {
+  font-size: 16px;
+}
+.paddle-library-item:hover {
+  border: 1px solid #ccc;
+  background: #f3f3f3;
+  box-shadow: 0px 4px 14px -1px #b5b5b5;
+  border-bottom: 0;
+  padding: 10px 1px 10px 1px;
+  box-sizing: border-box;
+}
+.paddle-library-item .image {
+  width: 120px;
+  margin: 0 auto;
+  height: 120px;
+  line-height: 120px;
+  display: inline-block;
+}
+.paddle-library-item .image img {
+  vertical-align: middle;
+}
+.paddle-library-item .title {
+  font-size: 13px;
+  max-width: 130px;
+  margin: 0 auto;
+  word-wrap: break-word;
+}
+.paddle-library-item .action-links a {
+  margin-right: 7px;
+  text-transform: lowercase;
+  color: #09689e;
+}
+.paddle-library-item .action-links a:hover {
+  text-decoration: underline;
+}
+#edit-atoms {
+  padding-bottom: 15px;
+}
+.image img {
+  vertical-align: bottom;
+}
+.meta.clearfix {
+  margin: 5px 0;
+}
+.paddle-scald-library-form .form-buttons .form-item {
+  margin: 0;
+}
+.show-more a {
+  width: 38%;
+  margin: 3% 0;
+}
+.show-more {
+  margin: 0 auto;
+  text-align: center;
+  overflow: hidden;
+}
+.wizard-trail {
+  display: none;
+}
+/* Undo the hiding of the cancel button in the scald modals. */
+#scald-atom-add-form-source input#edit-cancel,
+#scald-atom-add-form-add input#edit-cancel,
+#scald-atom-add-form-options input#edit-cancel,
+#paddle-scald-atom-delete-confirm input#edit-cancel {
+  display: inline-block;
+}
+
+/* @group media item list */
+
+.item-list .media-display-switch {
+  float: right;
+  line-height: 0;
+}
+.item-list .media-display-switch li {
+  float: left;
+  list-style: none;
+  margin-left: -1px;
+}
+.item-list .media-display-switch li a {
+  background: #f2f1f1;
+  border: 1px solid;
+  border-color: #e4e4e4 #d2d2d2 #b4b4b4 #d3d3d3;
+  display: block;
+  padding: 7px 9px;
+}
+.item-list .media-display-switch li a.active {
+  position: relative;
+  background: #666;
+  border: 1px solid #555;
+  color: #fff;
+}
+
+/* Set the height to auto */
+#media_content_browser .media-thumbnail {
+  height: auto;
+  width: 120px;
+}
+
+/* Push content under the tabs */
+#media_content_browser_tabs {
+  margin-bottom: 30px;
+}
+
+/* This is some stuff to just get some basic mockup done on the
+   content navigator. Should be removed/revised soon */
+
+.result_limit {
+  float: right;
+}
+.result_limit li {
+  display: inline;
+  list-style: none;
+}
+.item-list .media_content_navigator li {
+  display: inline;
+  list-style: none;
+}
+
+/** This is a massive hack. There must be a better way. See media.fields.inc **/
+
+.media-widget .fid {
+  display: none;
+}
+.media-widget a.button + a.button {
+  margin-left: 15px;
+  display: none;
+}
+
+/* @end */
+
+/* @group media item */
+
+.media-item {
+  background: #fff;
+  border: 1px solid #b5b6b7;
+  margin: 10px 10px 10px 0;
+  padding: 6px 6px 2px;
+  width: 100px;
+}
+.media-item.selected,
+.media-item:hover {
+  background: #c3eaf6;
+}
+.media-item a {
+  display: block;
+}
+.media-item img {
+  border: 2px solid transparent;
+  display: inline-block;
+  margin-left: -2px;
+  height: auto;
+  width: 100%;
+}
+.media-item-icons img {
+  height: 25px;
+  width: 25px;
+  float: left;
+}
+.media-item .label-wrapper {
+  overflow: hidden;
+  margin-left: 14px;
+}
+.preview .media-item .label-wrapper {
+  margin-left: 0;
+}
+.preview {
+  display: inline-block;
+  vertical-align: middle;
+}
+.media-item .media-filename {
+  color: #43474a;
+  font-size: 76%;
+  white-space: nowrap;
+  text-align: center;
+}
+.media-modal-frame {
+  overflow: hidden;
+}
+.media-display-thumbnails .media-list-thumbnails {
+  margin: 0 -10px;
+}
+.media-list-thumbnails > li {
+  float: left;
+  list-style: none;
+}
+.media-list-thumbnails .form-type-checkbox {
+  margin: -35px 0 0 16px;
+  position: absolute;
+}
+
+.media-item .media-type-icon {
+  border: none;
+  margin: 0 0 -5px;
+  width: auto;
+}
+.ui-dialog.media-wrapper .ui-dialog-buttonpane {
+  display: none;
+}
+.ui-widget.ui-widget-content.media-wrapper {
+  background: #fff;
+  border: none;
+  border: 1px solid #b5b6b7;
+}
+
+/* @end */
+
+/* @group media browser */
+
+body.page-media-browser {
+  background: none;
+  overflow: hidden;
+}
+div#media-browser-tabs {
+  -moz-border-radius: 0;
+  -webkit-border-radius: 0;
+  border-radius: 0;
+  border: 0;
+}
+
+/* show the throbber on the page */
+div#media-browser .throbber {
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  background: transparent url('../images/loading.gif') no-repeat center center;
+}
+
+#media-browser .ui-tabs-panel {
+  height: 410px;
+  overflow-y: auto;
+}
+#media-browser-library-list .label-wrapper {
+  margin-left: 0;
+}
+#mediaBrowser body {
+  background: none;
+}
+#media-browser-tabset,
+#media-browser-tabset.ui-tabs {
+  background: #fff;
+  padding: 0;
+}
+#media-browser-tabset.ui-widget-content {
+  background: none;
+  color: inherit;
+}
+#media-browser-tabset.ui-tabs .ui-tabs-nav {
+  background: url(../images/tabs-border-bottom.png) left bottom repeat-x;
+  overflow: hidden;
+}
+#media-browser-tabset.ui-tabs .ui-tabs-nav li {
+  background: #c4ebf7;
+  border-bottom: 1px solid #b5b6b7;
+  border-right: 1px solid #b5b6b7;
+  margin: 0;
+  top: 0;
+}
+#media-browser-tabset.ui-tabs .ui-tabs-nav .ui-tabs-selected {
+  background: #fff;
+  top: auto;
+  border-bottom: 1px solid #fff;
+  position: relative;
+}
+#media-browser-tabset.ui-tabs .ui-tabs-nav {
+  margin: 1px 0 0 0;
+  padding: 0;
+}
+#media-browser-tabset .media-browser-tab {
+  overflow: hidden;
+}
+#media-browser-tabset .ui-tabs-nav {
+  overflow: hidden;
+}
+.fake-ok {
+  margin-right: 5px;
+}
+#media-browser a.button {
+  display: inline-block;
+  line-height: 21px;
+}
+
+/* @end media browser */
+
+/* @group media edit page */
+
+.no-overflow {
+  overflow: hidden;
+}
+
+.media-image-left .field-name-file {
+  float: left;
+  margin-bottom: 2em;
+  margin-right: 2em;
+  padding-top: 12px;
+}
+
+.media-image-left .field-name-file .field-item {
+  width: 180px;
+  word-wrap: break-word;
+}
+
+.media-image-left .styles-field-file {
+  background-color: #fff;
+  border: 1px solid #ccc;
+  padding: 2%;
+  width: 96%;
+}
+
+.media-image-left .field-name-file img {
+  height: auto;
+  width: 100%;
+}
+
+.media-image-left .form-actions {
+  clear: both;
+}
+
+/* @end media edit page */
+
+/* @group media format form */
+
+#media-format-form {
+  padding: 20px 0 20px 20px;
+}
+
+#media-admin #edit-options {
+  border: 1px solid #ccc;
+  clear: both;
+  margin: 0;
+}
+
+.media-clear {
+  clear: both;
+}
+
+.media-thumbnails-select {
+  float: left;
+}
+
+#edit-options .form-item-format label {
+  display: inline;
+}
+
+#media-format-form .media-item {
+  float: left;
+  margin-left: 0;
+  margin-top: 0;
+}
+
+#media-format-form .label-wrapper {
+  margin-left: 0;
+}
+
+.media-multiedit-form .media-edit-form {
+  border-bottom: 1px solid #aaa;
+  margin-bottom: 1em;
+  margin-top: 1.5em;
+}
+
+body.page-media-format-form {
+  background: none;
+}
+
+#media-browser-page {
+  background: #fff;
+}
+
+#media-browser-page .plupload_start {
+  display: none;
+}
+#media-browser-page .button {
+  display: inline-block;
+  float: right;
+  margin: 10px 3px 0 0;
+}
+#media-browser-page .button.fake-cancel {
+  float: left;
+}
+#media-browser-tabset .form-submit {
+  margin-top: 0;
+  margin-left: 5px;
+}
+.fake-cancel:hover,
+.exposed-button:hover,
+.fake-ok:hover {
+  background: none repeat scroll 0 0 #55c5e9;
+  border-top: 1px solid #aae2f4;
+}
+#media-browser-page .exposed-button {
+  margin-top: 13px;
+}
+
+/* @fixes iframe overflowous scroll. */
+iframe#mediaStyleSelector html {
+  height: auto;
+}
+body.page-media-format-form {
+  overflow-y: auto;
+  height: auto;
+}
+/* @ sticky buttons */
+.media-dialog-footer-wrapper {
+  background: #fff;
+  border-top: 1px solid #aaa;
+  bottom: 0;
+  height: 50px;
+  left: 8px;
+  position: fixed;
+  width: 555px;
+}
+.ui-dialog .media-modal-frame.ui-dialog-content {
+  padding: 0;
+}
+#media-tab-library #container {
+  padding: 20px 0 0 0;
+}
+.ui-dialog.media-wrapper {
+  padding: 0;
+}
+#media-add-dialog-footer-wrapper #edit-submit,
+#media-metadata-dialog-footer-wrapper #edit-submit {
+  margin-right: 3px;
+  margin-top: 10px;
+  float: right;
+}
+#media-library-dialog-footer-wrapper .fake-cancel {
+  float: left;
+}
+#media-format-form .title {
+  margin-bottom: 10px;
+}
+#media-format-form  fieldset {
+  margin-top: 0;
+}
+.input-file-wrapper + .description {
+  clear: both;
+}

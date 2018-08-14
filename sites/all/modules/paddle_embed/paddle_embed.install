@@ -1,0 +1,82 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Embed app.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_embed_schema() {
+  return array(
+    'paddle_embed_widget' => array(
+      'description' => 'Base table for the Paddle embed widgets.',
+      'fields' => array(
+        'wid' => array(
+          'description' => 'The primary identifier for an embed widget.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'title' => array(
+          'description' => 'The title of this embed widget, always treated as non-markup plain text.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'embed_code' => array(
+          'description' => 'The embed code of the widget.',
+          'type' => 'text',
+          'size' => 'medium',
+          'not null' => TRUE,
+        ),
+      ),
+      'unique keys' => array(
+        'wid' => array('wid'),
+      ),
+      'primary key' => array('wid'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_embed_enable() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  module_implements('permission', FALSE, TRUE);
+  ctools_modules_enabled(array('paddle_embed'));
+
+  // Make sure the site managers can manage widgets on Paddle websites.
+  $permissions = array(
+    'manage paddle embed widgets',
+  );
+
+  $role = user_role_load_by_name('Site Manager');
+  if (!empty($role)) {
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Make sure all editors can use the embed widget pane.
+  $permissions = array(
+    'edit embed_widget content in landing pages',
+  );
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    if (!empty($role)) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+}
+
+/**
+ * Update the embed_code textfield size from normal (default) to medium.
+ */
+function paddle_embed_update_7001() {
+  db_change_field('paddle_embed_widget', 'embed_code', 'embed_code',
+    array('type' => 'text', 'not null' => TRUE, 'size' => 'medium'));
+}

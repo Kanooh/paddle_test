@@ -1,0 +1,292 @@
+/**
+* @file
+* Paddlet styling.
+*/
+@import "../variables/*";
+@import "../abstractions/*";
+
+.pane-who-is-who {
+  .pane-section-bottom.view-mode-team_members, .pane-section-top.view-mode-team_members {
+    border: 1px solid $c-gallery;
+    border-bottom: 0;
+    box-shadow: 0 5px 5px -4px $c-nobel;
+    margin-bottom: 5px;
+  }
+}
+.pane-who-is-who.pane-team-members {
+  .pane-content{
+    border: none;
+    border-bottom: none;
+    box-shadow: none;
+    .pane-section-body{
+      padding: 0px 15px 14px 15px;
+    }
+  }
+}
+
+.all-members {
+  // Includes the flexbox alike properties for all browsers, old or new.
+  @include flexbox();
+  @include flex-wrap(wrap);
+  @include justify-content(space-between);
+  @include flex-direction(row);
+
+  .member-info {
+    text-decoration: none;
+    float: left;
+    margin: 1em 0;
+    display: table;
+    table-layout: fixed;
+    border: 1px solid #EBEBEB;
+    border-bottom: 0;
+    box-shadow: 0 5px 5px -4px #B5B5B5;
+    height: 166px;
+
+    .team-member {
+      overflow: hidden;
+      display: table-row;
+      background-color: $c-white;
+
+      .team-member-featured-image {
+        width: 30%;
+        display: table-cell;
+        padding-left: 5%;
+        vertical-align: middle;
+      }
+      .team-member-info {
+        width: 65%;
+        display: table-cell;
+        padding: 2% 0 2% 5%;
+
+        // Makes sure that too long text ends on ... instead of a word break.
+        div {
+          white-space: nowrap;
+          overflow: hidden;
+          // Make ellipsis work on IE 10.
+          // @see http://stackoverflow.com/questions/14664195/text-overflowellipsis-doesnt-work-on-ie
+          word-wrap: normal;
+          text-overflow: ellipsis;
+          max-width: 100%;
+          padding-right: 5%;
+        }
+      }
+      .team-member-top-info {
+        margin-bottom: 25px;
+      }
+
+    }
+  }
+}
+
+@media (max-width: $screen-sm-max) {
+  .all-members {
+    .member-info {
+      width: 98%;
+    }
+  }
+}
+
+@media (min-width: $screen-md-min) {
+  .all-members {
+    .member-info {
+      width: 47.5%;
+    }
+  }
+
+  .col-md-9 .col-md-12 {
+    .all-members .member-info .team-member .team-member-info {
+      padding-top: 8%;
+    }
+  }
+
+  .col-md-6, .col-md-9 .col-lg-9, .col-md-9 .col-lg-7, .col-md-8 .col-md-12 {
+    .member-info {
+      width: 98%;
+    }
+  }
+
+  .col-md-3, .col-md-4, .col-lg-3, .col-md-9 .col-lg-6, .col-md-9 .col-lg-4, .col-md-9 .col-lg-3, .col-md-8 .col-md-6 {
+    .all-members {
+      .member-info {
+        display: block;
+        height: auto;
+        width: 98%;
+
+        .team-member {
+          display: block;
+
+          .team-member-featured-image {
+            padding: 5% 0 0;
+
+            img {
+              margin: 0 auto;
+              display: block;
+            }
+          }
+          .team-member-info {
+            text-align: center;
+            display: block;
+            width: 100%;
+            padding: 5% 0;
+          }
+          .team-member-top-info {
+            margin-bottom: 10px;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: $screen-xs-max) {
+  .all-members {
+    .member-info {
+      display: block;
+      height: auto;
+
+      .team-member {
+        display: block;
+
+        .team-member-featured-image {
+          padding: 5% 0 0;
+
+          img {
+            margin: 0 auto;
+            display: block;
+          }
+        }
+        .team-member-info {
+          text-align: center;
+          display: block;
+          width: 100%;
+          padding: 5% 0;
+        }
+        .team-member-top-info {
+          margin-bottom: 10px;
+        }
+      }
+    }
+  }
+}
+
+@media (min-width: $screen-lg-min) {
+  .col-md-12.col-lg-6 {
+    .member-info {
+      width: 98%;
+    }
+  }
+
+  .col-md-9 .col-lg-5, .col-md-6.col-lg-4, .col-md-12.col-lg-6 .col-md-6, .col-md-12 .col-md-12.col-lg-4 {
+    .all-members {
+      .member-info {
+        display: block;
+        height: auto;
+        width: 98%;
+
+        .team-member {
+          display: block;
+
+          .team-member-featured-image {
+            padding: 5% 0 0;
+
+            img {
+              margin: 0 auto;
+              display: block;
+            }
+          }
+          .team-member-info {
+            text-align: center;
+            display: block;
+            width: 100%;
+            padding: 5% 0;
+          }
+          .team-member-top-info {
+            margin-bottom: 10px;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max) {
+  .col-md-12.col-lg-6, .col-md-9 .col-lg-5 {
+    .member-info {
+      width: 47.5%;
+    }
+  }
+
+  .col-md-6.col-lg-4, .col-md-12.col-lg-6 .col-md-6 {
+    .member-info {
+      width: 98%
+    }
+  }
+
+  .row > .col-md-12 > .panel-panel, .row > .row > .col-xs-12 {
+    .all-members .member-info .team-member .team-member-info {
+      padding-top: 4%;
+    }
+  }
+}
+
+@media (min-width: $screen-md-min) {
+  .who-is-who-pane-organization-view-mode {
+    .ou-children, .ou-team-members {
+      float: right;
+      width: 50%;
+
+      &.float-left {
+        float: left;
+        width: 100%;
+      }
+
+      a {
+        text-decoration: none;
+      }
+    }
+  }
+
+  .col-md-3, .col-md-4, .col-lg-3, .col-md-9 .col-lg-6, .col-md-9 .col-lg-4, .col-md-9 .col-lg-3, .col-md-8 .col-md-6, .col-md-6, .col-md-9 .col-lg-9, .col-md-9 .col-lg-7, .col-md-8 .col-md-12 {
+    .who-is-who-pane-organization-view-mode {
+      .ou-children, .ou-team-members {
+        float: none;
+        width: auto;
+      }
+
+      .ou-children {
+        padding-bottom: 30px;
+      }
+    }
+  }
+}
+
+@media (max-width: $screen-xs-max) {
+  .who-is-who-pane-organization-view-mode {
+    .ou-children, .ou-team-members {
+      float: none;
+      width: auto;
+    }
+
+    .ou-children {
+      padding-bottom: 30px;
+    }
+  }
+}
+
+@media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) {
+  .who-is-who-pane-organization-view-mode {
+    .ou-children, .ou-team-members {
+      float: right;
+      width: 50%;
+
+      &.float-left {
+        float: left;
+        width: 100%;
+      }
+
+      a {
+        text-decoration: none;
+      }
+    }
+  }
+}

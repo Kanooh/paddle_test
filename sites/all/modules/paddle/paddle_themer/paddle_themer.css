@@ -1,0 +1,32 @@
+.paddle-themer-theme-list .theme-selector {
+  padding-top: 20px;
+}
+
+.paddle-themer-theme-list .paddle-themer-operations {
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.paddle-themer-theme-list .clearfix:after {
+  content: ".";
+  display: block;
+  height: 0;
+  clear: both;
+  visibility: hidden;
+}
+
+.paddle-themer-theme-image {
+  min-width: 250px;
+  min-height: 175px;
+  float: left;
+  margin: 0 20px 0 0;
+  text-align: center;
+}
+
+.paddle-themer-theme-name h3 {
+  margin-top: 0;
+}
+
+.paddle-themer-theme-controls {
+  float: left;
+}

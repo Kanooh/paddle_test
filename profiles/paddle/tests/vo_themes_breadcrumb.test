@@ -1,0 +1,276 @@
+<?php
+/**
+ * @file
+ * Tests the breadcrumb using VO themes.
+ */
+
+/**
+ * Tests for breadcrumbs.
+ */
+class VoThemesBreadcrumb extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Breadcrumb - VO Themes',
+      'description' => 'Tests the breadcrumb using VO themes.',
+      'group' => 'Paddle - Usability',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp($enable_modules);
+
+    $this->drupalLogin($this->chiefEditor);
+  }
+
+  /**
+   * Tests the page title under L1 is not displayed within breadcrumb.
+   */
+  public function testPageTitleWithinBreadcrumb() {
+    // Create a node, place it in a menu and publish it so it appears in menus.
+    $title = $this->randomName();
+
+    $edit = array(
+      'title' => $title,
+    );
+    $node = $this->drupalCreateUiNode('basic_page', $edit);
+    $edit = array(
+      'link_title' => $title,
+      'navigation' => 'main_menu_nl',
+    );
+    $this->drupalPost('admin/structure/menu_manager/nojs/node/' . $node->nid .  '/add_menu_link', $edit, t('Add menu link'));
+    $this->moderateNode($node, 'Publish');
+
+    // Create a second node and publish to be child of first one.
+    $child_title = $this->randomName();
+    $child_edit = array(
+      'title' => $child_title,
+    );
+    $child_node = $this->drupalCreateUiNode('basic_page', $child_edit);
+    $this->moderateNode($child_node, 'Publish');
+
+    // Get the mlid of the menu item for the first node.
+    $mlid = db_select('menu_links', 'ml')
+      ->condition('ml.link_path', "node/{$node->nid}")
+      ->fields('ml', array('mlid'))
+      ->execute()
+      ->fetchField();
+
+    // Add the second node as its child.
+    $item = array(
+      'link_title' => $this->randomName(),
+      'link_path' => 'node/' . $child_node->nid,
+      'menu_name' => 'main_menu_nl',
+      'plid' => $mlid,
+    );
+    $child_mlid = menu_link_save($item);
+
+    // Check that the node title is not present in the breadcrumb.
+    $this->drupalGet("node/{$child_node->nid}");
+    $this->assertFalse($this->xpath('//div[@id="breadcrumb"]/ul/li[contains(@class, "breadcrumb-active")]'), 'The created node title is not displayed in the breadcrumb under L1');
+    // Check the node menu item is also not present.
+    $this->assertRaw($item['link_title'], 'The created node menu item is displayed in the breadcrumb under L1');
+
+    // Remove the menu link from the child node.
+    $this->drupalPost('admin/structure/menu_manager/nojs/main_menu_nl/' . $child_mlid . '/delete/remove', array(), t('Confirm'));
+
+    // Check that node title is not displayed within breadcrumb when at L1.
+    $this->drupalGet("node/{$child_node->nid}");
+    $this->assertFalse($this->xpath('//div[@id="breadcrumb"]/ul/li[contains(@class, "breadcrumb-active")]'), 'The created node title is not displayed in the breadcrumb at L1');
+
+    // Set the second node as the frontpage.
+    variable_set('site_frontpage', 'node/2');
+
+    // Check that no breadcrumbs are shown on the frontpage.
+    $this->drupalGet('');
+    $this->assertFalse($this->xpath('//div[@id="breadcrumb"]'), 'No breadcrumbs are shown on the frontpage.');
+  }
+
+  /**
+   * Tests landing page breadcrumb.
+   */
+  public function testLandingPageBreadcrumbs() {
+    // Create a landing page.
+    $node = $this->createLandingPage();
+
+    // Check that the breadcrumb is displayed by default.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('<div id="breadcrumb">', 'The breadcrumb is shown on the front-end view of a landing page with default settings.');
+
+    // Disable the breadcrumbs and check that they are no longer visible.
+    $this->drupalPost('node/' . $node->nid . '/edit', array('field_show_breadcrumb[und]' => FALSE), t('Save'));
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertNoRaw('<div id="breadcrumb">', 'The breadcrumb is not shown on the front-end view of a landing page with "show_breadcrumb" unchecked.');
+  }
+
+  /**
+   * Tests the effect of globally disabling breadcrumbs in a Paddle Theme.
+   */
+  public function testGlobalBreadcrumbs() {
+    // Create a landing page.
+    $node = $this->createLandingPage();
+
+    // Check that the breadcrumb is displayed by default.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('<div id="breadcrumb">', 'The breadcrumb is shown on the front-end view of a landing page with default settings.');
+
+    // Disable the breadcrumbs globally.
+    $theme = paddle_themer_enabled_theme();
+    $theme->style['show_breadcrumbs_for_landing_page']['show_breadcrumbs_for_landing_page'] = FALSE;
+    paddle_themer_save_theme($theme);
+
+    // Check that the breadcrumbs are still shown on the landing page.
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('<div id="breadcrumb">', 'The breadcrumb is still shown on the front-end view of a landing page when breadcrumbs are disabled globally.');
+  }
+
+  /**
+   * Tests the breadcrumb when the node is linked in different menu links.
+   */
+  public function testBreadCrumbsSetCorrectly() {
+    // Create nodes and publish them so it appears in menus.
+    $edit_parent_1 = array(
+      'title' => $this->randomString(),
+    );
+    $node_parent_1 = $this->drupalCreateUiNode('basic_page', $edit_parent_1);
+    $this->moderateNode($node_parent_1, 'Publish');
+
+    $edit_parent_2 = array(
+      'title' => $this->randomString(),
+    );
+    $node_parent_2 = $this->drupalCreateUiNode('basic_page', $edit_parent_2);
+    $this->moderateNode($node_parent_2, 'Publish');
+
+    $edit = array(
+      'title' => $this->randomString(),
+    );
+    $node_multiple = $this->drupalCreateUiNode('basic_page', $edit);
+    $this->moderateNode($node_multiple, 'Publish');
+
+    // Create the parent.
+    $item_parent_1 = array(
+      'link_path' => 'node/' . $node_parent_1->nid,
+      'link_title' => strtolower($this->randomName()),
+      'menu_name' => 'main_menu_nl',
+    );
+    $mlid_parent_1 = menu_link_save($item_parent_1);
+
+    // Create the child linked to the node.
+    $item_child_1 = array(
+      'link_path' => 'node/' . $node_multiple->nid,
+      'link_title' => strtolower($this->randomName()),
+      'menu_name' => 'main_menu_nl',
+      'plid' => $mlid_parent_1,
+    );
+    menu_link_save($item_child_1);
+
+    // Create another menu item with a child item linked to. The child item
+    // needs to link to the same node as the child of the previous item tree.
+    // Create the parent.
+    $item_parent_2 = array(
+      'link_path' => 'node/' . $node_parent_2->nid,
+      'link_title' => strtolower($this->randomName()),
+      'menu_name' => 'main_menu_nl',
+    );
+    $mlid_parent_2 = menu_link_save($item_parent_2);
+
+    // Create the child linked to the node.
+    $item_child_2 = array(
+      'link_path' => 'node/' . $node_multiple->nid,
+      'link_title' => strtolower($this->randomName()),
+      'menu_name' => 'main_menu_nl',
+      'plid' => $mlid_parent_2,
+    );
+    menu_link_save($item_child_2);
+
+    // We need to check when following the first and second scenario the
+    // breadcrumb and active trail are always set correctly.
+    $this->drupalGet('<front>');
+    $href_parent_1 = url($item_parent_1['link_title']);
+    $this->assertTrue($this->menuDisplayElementPresent('block-paddle-menu-display-first-level', FALSE, $href_parent_1), 'The parent menu item of the first tree is shown in the main menu.');
+
+    $this->drupalGet($item_parent_1['link_title']);
+    $this->assertTrue($this->breadcrumbElementPresent(), 'The "Home" breadcrumb item is shown.');
+    $href = url($item_parent_1['link_title'] . '/' . $item_child_1['link_title']);
+    $this->assertTrue($this->menuDisplayElementPresent('menu-display-current-level-plus-one', FALSE, $href), 'The child menu item of the first tree is shown in the second level of the main menu.');
+
+    $this->drupalGet(pathauto_cleanstring($item_parent_1['link_title']) . '/' . pathauto_cleanstring($item_child_1['link_title']));
+    $this->assertTrue($this->breadcrumbElementPresent(), 'The "Home" breadcrumb item is shown.');
+    $this->assertTrue($this->breadcrumbElementPresent($href_parent_1), 'The parent item breadcrumb item is shown.');
+    $this->assertTrue($this->menuDisplayElementPresent('block-paddle-menu-display-first-level', TRUE, $href_parent_1), 'The parent item in the first item tree still has the active trail.');
+
+    // Do the same for the second item tree.
+    $this->drupalGet('<front>');
+    $href_parent_2 = url($item_parent_2['link_title']);
+    $this->assertTrue($this->menuDisplayElementPresent('block-paddle-menu-display-first-level', FALSE, $href_parent_2), 'The parent menu item of the second tree is shown in the main menu.');
+
+    $this->drupalGet($item_parent_2['link_title']);
+    $this->assertTrue($this->breadcrumbElementPresent(), 'The "Home" breadcrumb item is shown.');
+    $href = url($item_parent_2['link_title'] . '/' . $item_child_2['link_title']);
+    $this->assertTrue($this->menuDisplayElementPresent('menu-display-current-level-plus-one', FALSE, $href), 'The child menu item of the second tree is shown in the second level of the main menu.');
+
+    $this->drupalGet(pathauto_cleanstring($item_parent_2['link_title']) . '/' . pathauto_cleanstring($item_child_2['link_title']));
+    $this->assertTrue($this->breadcrumbElementPresent(), 'The "Home" breadcrumb item is shown.');
+    $this->assertTrue($this->breadcrumbElementPresent($href_parent_2), 'The parent item breadcrumb item is shown.');
+    $this->assertTrue($this->menuDisplayElementPresent('block-paddle-menu-display-first-level', TRUE, $href_parent_2), 'The parent item in the second item tree still has the active trail.');
+  }
+
+  /**
+   * Constructs a XPath query for a breadcrumb element and assert it's presence.
+   *
+   * @param string $href
+   *   The breadcrumb element to search for by href.
+   */
+  public function breadcrumbElementPresent($href = NULL) {
+    $args = array();
+
+    if (empty($href)) {
+      $xpath = '//li[contains(@class, "breadcrumb-home")]';
+    }
+    else {
+      $xpath = '//li[contains(@class, "breadcrumb-item")]/a[@href=:href]';
+      $args[':href'] = $href;
+    }
+
+    return $this->xpath($this->buildXPathQuery($xpath, $args));
+  }
+
+  /**
+   * Constructs a XPath query to find a menu item  and assert it's presence.
+   *
+   * @param string $id
+   *   The id for the menu display to search for.
+   * @param string $active_trail
+   *   The active trail to search for.
+   * @param string $href
+   *   The breadcrumb element to search for by href.
+   */
+  public function menuDisplayElementPresent($id, $active_trail = FALSE, $href = NULL) {
+    $args = array(
+      ':id' => $id,
+    );
+    $parts = array(
+      '//div[@id=:id]',
+    );
+
+    if ($active_trail) {
+      $parts[] = '//li[contains(@class, "active-trail")]';
+    }
+
+    if (!empty($href)) {
+      $parts[] = '//a[@href=:href]';
+      $args[':href'] = $href;
+    }
+
+    $query = implode('', $parts);
+
+    return $this->xpath($this->buildXPathQuery($query, $args));
+  }
+
+}

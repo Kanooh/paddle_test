@@ -1,0 +1,94 @@
+<?php
+/**
+ * @file
+ * Hooks necessary to install the module.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_simple_contact_enable() {
+  drupal_load('module', 'paddle_simple_contact_field');
+  paddle_apps_prepare_module_for_permissions('paddle_simple_contact');
+
+  // We need to clear the CTools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to that
+  // plugin.
+  ctools_modules_enabled(array('paddle_simple_contact'));
+
+  $permissions = array(
+    'create simple_contact_page content',
+    'edit any simple_contact_page content',
+    'edit simple_contact_form content in landing pages',
+    'delete any simple_contact_page content',
+    'administer panelizer node simple_contact_page layout',
+    'administer panelizer node simple_contact_page content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Panelize the simple contact form bundle.
+ */
+function paddle_simple_contact_update_7000() {
+  paddle_content_region_panelize_node_type('simple_contact_page');
+  paddle_content_region_grant_node_type_permissions('simple_contact_page');
+}
+
+/**
+ * Remove the customized Page Manager page.
+ */
+function paddle_simple_contact_update_7001() {
+  $page = page_manager_cache_load('node_edit');
+  if (!empty($page->handler_info['node_edit_panel_context_3'])) {
+    $page->handler_info['node_edit_panel_context_3']['changed'] |= PAGE_MANAGER_CHANGED_DELETED;
+    page_manager_save_page_cache($page);
+  }
+}
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function paddle_simple_contact_update_dependencies() {
+  $dependencies = array();
+
+  $dependencies['paddle_simple_contact'][7000] = array(
+    'paddle' => 7038,
+  );
+
+  $dependencies['paddle'][7040] = array(
+    'paddle_simple_contact' => 7000,
+  );
+
+  return $dependencies;
+}
+
+/**
+ * Allow (chief) editors to add Simple contact form panes to page layouts.
+ */
+function paddle_simple_contact_update_7002() {
+  $permissions = array('edit simple_contact_form content in landing pages');
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Grant permissions to edit the panels for the simple contact content type.
+ */
+function paddle_simple_contact_update_7003() {
+  $permissions = array(
+    'administer panelizer node simple_contact_page layout',
+    'administer panelizer node simple_contact_page content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}

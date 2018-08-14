@@ -1,0 +1,45 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleMenuManagerPagesTest.
+ */
+
+/**
+ * UI tests for simple page callbacks for the Paddle Menu Manager module.
+ */
+class PaddleMenuManagerPagesTest extends PaddleMenuManagerTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'UI pages tests',
+      'description' => 'Test the user interface components for simple pages.',
+      'group' => 'Paddle Menu Manager',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    // Additionally enable i18n_menu module.
+    parent::setUp(array('i18n_menu', 'paddle_menu_manager'));
+
+    $admin_user = $this->drupalCreateUser(array(
+      'administer content types',
+      'manage paddle_menu_manager',
+    ));
+    $this->drupalLogin($admin_user);
+  }
+
+  /**
+   * Test the message on the menu overview when no menus have been created yet.
+   */
+  public function testEmptyOverview() {
+    $this->drupalGet('admin/structure/menu_manager');
+    $this->assertRaw(t('No menus have been created yet.'), 'The "no results" text is shown on the menu overview.');
+  }
+}

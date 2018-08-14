@@ -1,0 +1,139 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleScheduledContentTestCase.
+ *
+ * @see PaddleModeratedContentTestCase
+ */
+
+/**
+ * Tests scheduled content in the dashboard and on the content search page.
+ */
+class PaddleScheduledContentTestCase extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Display scheduled content',
+      'description' => 'Tests display of scheduled content in the dashboard and on the content search page.',
+      'group' => 'Paddle - Scheduling',
+    );
+  }
+
+  /**
+   * Tests if scheduled content is shown correctly in the dashboard.
+   */
+  public function testScheduledNodesDashboard() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a new draft of a basic page which is scheduled for publication.
+    $edit = array(
+      'publish_on' => strtotime('+1 day'),
+    );
+    $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+
+    // The basic page should appear on the dashboard in the list of drafts but
+    // not in the list of planned publications.
+    $this->drupalGet('admin');
+    $this->assertNodePresentInDashboardList('my_concepts', $node);
+    $this->assertNodeNotPresentInDashboardList('planned_publications', $node);
+    $this->assertNodeNotPresentInDashboardList('planned_unpublications', $node);
+
+    // Create a new basic page which is scheduled for publication.
+    $edit = array(
+      'publish_on' => strtotime('+1 day'),
+    );
+    $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+    $this->moderateNode($node, 'Scheduled');
+
+    // The basic page should appear on the dashboard in the list of planned
+    // publications.
+    $this->drupalGet('admin');
+    $this->assertNodePresentInDashboardList('planned_publications', $node);
+    $this->assertNodeNotPresentInDashboardList('planned_unpublications', $node);
+
+    // Create a new basic page which is scheduled for unpublication.
+    $edit = array(
+      'unpublish_on' => strtotime('+1 day'),
+    );
+    $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+    $this->moderateNode($node, 'Publish');
+
+    // The basic page should appear on the dashboard in the list of planned
+    // unpublications.
+    $this->drupalGet('admin');
+    $this->assertNodePresentInDashboardList('planned_unpublications', $node);
+    $this->assertNodeNotPresentInDashboardList('planned_publications', $node);
+
+    // Create a new basic page which is scheduled for publication and
+    // unpublication.
+    $edit = array(
+      'publish_on' => strtotime('+1 day'),
+      'unpublish_on' => strtotime('+2 day'),
+    );
+    $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+    $this->moderateNode($node, 'Scheduled');
+
+    // The basic page should appear on the dashboard in the list of planned
+    // publications and planned unpublications.
+    $this->drupalGet('admin');
+    $this->assertNodePresentInDashboardList('planned_publications', $node);
+    $this->assertNodePresentInDashboardList('planned_unpublications', $node);
+
+    // Test more links.
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-planned-publications")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('state' => 'scheduled'))) . '"]'), 'The more link is shown for the scheduled for publication view.');
+    $this->assertTrue($this->xpath('//div[contains(@class, "panel-pane")][contains(@class, "pane-paddle-dashboard-status-panel-pane-planned-unpublications")]//div[@class="view-footer"]//a[@href="' . url('admin/content_manager/list/search', array('query' => array('state' => 'scheduled_depublication'))) . '"]'), 'The more link is shown for the scheduled for unpublication view.');
+  }
+
+  /**
+   * Tests if scheduled content is shown correctly on the content search page.
+   */
+  public function testScheduledNodesContentSearchPage() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a new basic page which is scheduled for publication.
+    $edit = array(
+      'publish_on' => strtotime('+1 day'),
+    );
+    $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+    $this->moderateNode($node, 'Scheduled');
+
+    // The basic page now appears in the content manager.
+    $this->assertNodePresentInContentManager($node, array(), NULL, 'Scheduled for publication');
+
+    // Create a new basic page which is scheduled for depublication.
+    $edit = array(
+      'unpublish_on' => strtotime('+1 day'),
+    );
+    $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+    $this->moderateNode($node, 'Publish');
+
+    // The basic page now appears in the content manager.
+    $this->assertNodePresentInContentManager($node, array(), NULL, 'Scheduled for depublication');
+
+    // Create a new basic page which is scheduled for publication and
+    // depublication.
+    $edit = array(
+      'publish_on' => strtotime('+1 day'),
+      'unpublish_on' => strtotime('+2 day'),
+    );
+    $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+    $this->moderateNode($node, 'Scheduled');
+
+    // The basic page now appears in the content manager.
+    $this->assertNodePresentInContentManager($node, array(), NULL, 'Scheduled for publication');
+
+    // Create a new draft of a basic page which is scheduled for publication and
+    // verify that it is being shown in the content manager.
+    $edit = array(
+      'publish_on' => strtotime('+1 day'),
+    );
+    $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+    // The basic page now appears in the content manager.
+    $this->assertNodePresentInContentManager($node, array(), NULL, 'Concept');
+  }
+
+}

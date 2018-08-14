@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Photo Album app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_photo_album_enable() {
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_photo_album'));
+
+  // Give permissions to work with the poll content type.
+  $permissions = array(
+    'edit photo_album content in landing pages',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    if ($role = user_role_load_by_name($role_name)) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+}

@@ -1,0 +1,34 @@
+/* The default theme file of the CIRRO paddlet, independent of the Paddle theme selected. */
+
+.pane-cirro-contact-info .logo-section {
+  padding-bottom: 15px;
+  border-bottom: solid 1px black;
+}
+.pane-cirro-contact-info .contact-info-section {
+  padding-top: 15px;
+}
+.pane-cirro-materials ul {
+  list-style: none;
+}
+
+.pane-cirro-materials .pane-cirro-children,
+.pane-cirro-materials .links-section,
+.pane-cirro-materials .files-section {
+  padding-bottom: 15px;
+}
+
+.materials-disclaimer{
+  font-style: italic;
+}
+
+.cirro-resource-description {
+  padding-top: 15px;
+}
+
+.facetapi-facet-paddle-cirro-action-strategies-filter li, .facetapi-facet-paddle-cirro-policy-themes-filter li, .facetapi-facet-paddle-cirro-settings-filter li, .facetapi-facet-field-paddle-cirro-methodology li {
+  list-style: none;
+}
+
+.pane-cirro-description .pane-description {
+  padding: 21px 15px 14px 15px;
+}

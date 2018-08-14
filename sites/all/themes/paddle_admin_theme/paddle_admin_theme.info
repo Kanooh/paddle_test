@@ -1,0 +1,35 @@
+name = Paddle Admin Theme
+description = Administration theme for the Paddle distribution
+package = Paddle
+core = 7.x
+
+stylesheets[all][] = css/contextual-toolbar.css
+stylesheets[all][] = css/foldable.css
+stylesheets[all][] = css/forms.css
+stylesheets[all][] = css/landing-page.css
+stylesheets[all][] = css/language-switcher.css
+stylesheets[all][] = css/paddle_admin.css
+stylesheets[all][] = css/paddle_themer.css
+stylesheets[all][] = css/resets.css
+stylesheets[all][] = css/structure.css
+stylesheets[all][] = css/style.css
+stylesheets[all][] = css/tables.css
+
+regions[header_top] = Header Top
+regions[header_bottom] = Header Bottom
+regions[help] = Help
+regions[highlighted] = Highlighted
+regions[featured] = Featured
+regions[content] = Content
+regions[content_top] = Content top
+regions[sidebar_first] = Sidebar first
+regions[sidebar_second] = Sidebar second
+
+regions[footer] = Footer
+
+settings[shortcut_module_link] = 0
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_admin_theme"
+datestamp = "1455493432"

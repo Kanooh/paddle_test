@@ -1,0 +1,17 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle VUB Client.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_vub_client_enable() {
+  // Clear the cache to display the plugin in Feeds as available plugin.
+  cache_clear_all('plugins:feeds:plugins', 'cache');
+
+  // Enable the sub module.
+  module_enable(array('paddle_vub_client_tags', 'paddle_vub_client_scald'));
+}

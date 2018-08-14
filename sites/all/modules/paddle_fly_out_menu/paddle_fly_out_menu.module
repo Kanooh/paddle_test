@@ -1,0 +1,30 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Fly-out Menu app.
+ */
+
+/**
+ * Implements hook_paddle_menu_display_menu_items_alter().
+ */
+function paddle_fly_out_menu_paddle_menu_display_block_display_alter(&$menu_display) {
+  if (variable_get('paddle_menu_style', 'no_dropdown') == 'fly_out') {
+    // Only act on the first_level menu display used in the frontend.
+    if ($menu_display->name == 'first_level') {
+      $menu_display->to_level = '2';
+      drupal_add_js(drupal_get_path('module', 'paddle_fly_out_menu') . '/js/fly_out_menu.js');
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_menu_styles().
+ */
+function paddle_fly_out_menu_paddle_menu_styles() {
+  return array(
+    'fly_out' => array(
+      'text' => t('Fly-out menu'),
+    ),
+  );
+}

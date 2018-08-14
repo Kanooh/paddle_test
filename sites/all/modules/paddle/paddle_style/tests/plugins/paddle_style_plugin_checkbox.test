@@ -1,0 +1,96 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleStyleCheckboxPluginTest.
+ */
+
+/**
+ * Test the generic checkbox plugin.
+ */
+class PaddleStyleCheckboxPluginTest extends DrupalWebTestCase {
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'testing';
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Plugin: Checkbox'),
+      'description' => t('Test the functionality of the generic checkbox plugin.'),
+      'group' => t('Paddle Style'),
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array('ctools', 'paddle_style'));
+
+    // Create Ctools context.
+    $this->context = new ctools_context();
+    $this->context->data = array(
+      'instance' => array(
+        'plugin' => 'checkbox',
+        'label' => t('Test label for checkbox'),
+      ),
+      'machine_name' => 'checkbox_machine_name',
+    );
+
+    // Instantiate the Checkbox plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'checkbox');
+    $this->instance = new $plugin['handler']['class']();
+  }
+
+  /**
+   * Test the functionality of the form method.
+   */
+  public function testGenericCheckboxForm() {
+    // If no context is passed the form should throw an exception.
+    try {
+      $form_elements = $this->instance->form();
+      $this->fail('An exception is thrown when no context is passed to the form() method.');
+    }
+    catch (Exception $e) {
+      $this->pass('An exception is thrown when no context is passed to the form() method.');
+    }
+
+    // Use the context and add default values.
+    $default_values = array('checkbox_machine_name' => TRUE);
+    $form_elements = $this->instance->form(array(), $default_values, $this->context);
+
+    // Check that the context is used.
+    $machine_name = $this->context->data['machine_name'];
+    $this->assertTrue(isset($form_elements[$machine_name]), 'Element machine name set when passed by context');
+    $this->assertEqual($form_elements[$machine_name]['#title'], $this->context->data['instance']['label'], 'Element title set when passed by context');
+    // Check the default_values.
+    $this->assertTrue($form_elements[$machine_name]['#default_value'], 'Element default value set when passed by context');
+  }
+
+  /**
+   * Tests the execute() method.
+   */
+  public function testGenericCheckboxExecute() {
+    // Try running it without context.
+    $values = array('generic_checkbox' => TRUE);
+    try {
+      $this->instance->execute($values);
+      $this->fail('An exception is thrown when no context is passed to the execute() method.');
+    }
+    catch (Exception $e) {
+      $this->pass('An exception is thrown when no context is passed to the execute() method.');
+    }
+
+    // Now check with the context.
+    $values = array($this->context->data['machine_name'] => TRUE);
+    $this->instance->execute($values, $this->context);
+    $variable = 'paddle_style_' . $this->context->data['machine_name'];
+    $this->assertTrue(variable_get($variable, FALSE), 'Variable set correctly when context is given');
+  }
+
+}

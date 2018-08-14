@@ -1,0 +1,11 @@
+name = Reference Tracker
+description = Keeps track of references between entities.
+core = 7.x
+configure = admin/config/content/reference-tracker
+
+dependencies[] = field
+
+files[] = tests/node_reference_page_test_case.test
+files[] = tests/reference_tracker.workbench_moderation.test
+files[] = tests/track_entity_references.test
+files[] = tests/array_unique_recursive.test

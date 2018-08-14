@@ -1,0 +1,566 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Quiz app.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_quiz_schema() {
+  return array(
+    'paddle_quiz' => array(
+      'description' => 'Base table for the Paddle quizzes.',
+      'fields' => array(
+        'qid' => array(
+          'description' => 'The primary identifier for a quiz.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'title' => array(
+          'description' => 'The title of the quiz, always treated as non-markup plain text.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'status' => array(
+          'description' => 'The status (published/unpublished) of the quiz.',
+          'type' => 'int',
+          'size' => 'tiny',
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+      ),
+      'primary key' => array('qid'),
+    ),
+    'paddle_quiz_participation' => array(
+      'description' => 'Table for each participation of a specific quiz.',
+      'fields' => array(
+        'pid' => array(
+          'description' => 'Participation identifier.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'qid' => array(
+          'description' => 'Identifier of the quiz that was participated in.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'email' => array(
+          'description' => 'E-mail of the participant.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'name' => array(
+          'description' => 'Name of the participant.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'score' => array(
+          'description' => 'Score of the participant.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'score_max' => array(
+          'description' => 'Maximum possible score.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'score_percentage' => array(
+          'description' => 'Percentage of correct answers based on total amount of questions',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'start' => array(
+          'description' => 'Start time of the participation, stored as a timestamp.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'end' => array(
+          'description' => 'End time of the participation, stored as a timestamp.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'tiebreaker' => array(
+          'description' => 'Answer to the tiebreaker question.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+      ),
+      'primary key' => array('pid'),
+    ),
+    'paddle_quiz_answer' => array(
+      'description' => 'Table for the answers of a participation in a quiz.',
+      'fields' => array(
+        'aid' => array(
+          'description' => 'Identifier of the answer',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'pid' => array(
+          'description' => 'Participation identifier.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'question' => array(
+          'description' => 'Question.',
+          'type' => 'text',
+          'size' => 'medium',
+          'not null' => TRUE,
+        ),
+        'answer' => array(
+          'description' => 'Answer.',
+          'type' => 'text',
+          'size' => 'medium',
+          'not null' => TRUE,
+        ),
+        'correct' => array(
+          'description' => 'Whether the answer was correct (1) or incorrect (0).',
+          'type' => 'int',
+          'size' => 'tiny',
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+      ),
+      'primary key' => array('aid'),
+    ),
+    'paddle_quiz_export' => array(
+      'description' => 'Table for keeping track of exports.',
+      'fields' => array(
+        'eid' => array(
+          'description' => 'Identifier for the export',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'qid' => array(
+          'description' => 'Quiz identifier.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'uid' => array(
+          'description' => 'User identifier.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'fid' => array(
+          'description' => 'File identifier.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+          'default' => NULL,
+        ),
+        'requested' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'created' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+          'default' => NULL,
+        ),
+      ),
+      'primary key' => array('eid'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_schema_alter().
+ */
+function paddle_quiz_schema_alter(&$schema) {
+  $schema['paddle_quiz_answer']['fields']['question'] = array(
+    'description' => 'Question.',
+    'type' => 'text',
+    'size' => 'medium',
+    'not null' => TRUE,
+  );
+
+  $schema['paddle_quiz_answer']['fields']['answer'] = array(
+    'description' => 'Answer.',
+    'type' => 'text',
+    'size' => 'medium',
+    'not null' => TRUE,
+  );
+}
+
+/**
+ * Implements hook_install().
+ */
+function paddle_quiz_install() {
+  // Get the current paths and their root paths for the Management level 4 menu
+  // display.
+  $path_roots = db_select('menu_displays', 'm')
+    ->fields('m', array('path_roots'))
+    ->condition('name', 'management_level_2', '=')
+    ->execute()
+    ->fetchAssoc();
+  $path_roots = (empty($path_roots)) ? array() : unserialize($path_roots['path_roots']);
+
+  // Put the "create quiz" and "edit quiz" pages underneath the paddle store in
+  // the menu display, so the active trail is correct.
+  $path_roots[] = array(
+    'path' => 'admin/content/paddle_quiz/add',
+    'root_item' => 'admin/paddlet_store',
+  );
+  $path_roots[] = array(
+    'path' => 'admin/content/paddle_quiz/%/edit',
+    'root_item' => 'admin/paddlet_store',
+  );
+
+  // Save the updated paths and their roots.
+  db_update('menu_displays')
+    ->fields(array(
+      'path_roots' => serialize($path_roots),
+    ))
+    ->condition('name', 'management_level_2', '=')
+    ->execute();
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_quiz_enable() {
+  // We cannot just do db_add_index() because for text types we need to set a
+  // specific length to index. Also, this cannot be set in hook_schema(_alter)
+  // because e cannot specify the length for the text.
+  db_query('alter table paddle_quiz_answer add index paddle_quiz_answer_question (question (255))');
+
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions. Otherwise our new content type is not yet
+  // known.
+  drupal_load('module', 'paddle_quiz');
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_quiz');
+  node_type_cache_reset();
+  drupal_static_reset();
+
+  // Make sure the site managers and chief editors can manage quizzes on Paddle
+  // websites.
+  $permissions = array(
+    'manage paddle quizzes',
+  );
+
+  foreach (array('Site Manager', 'Chief Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    if (!empty($role)) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+
+  // Make sure all editors can create, edit and delete quiz pages.
+  $permissions = array(
+    'create quiz_page content',
+    'edit any quiz_page content',
+    'delete any quiz_page content',
+    'administer panelizer node quiz_page layout',
+    'administer panelizer node quiz_page content',
+  );
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Configure panelizer and page regions for the new content type.
+  paddle_content_region_panelize_node_type('quiz_page');
+  paddle_content_region_grant_node_type_permissions('quiz_page');
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_quiz_disable() {
+  // Drop the index to update the columns. This is done to avoid errors when
+  // re-enableing the paddle_quiz module.
+  db_drop_index('paddle_quiz_answer', 'paddle_quiz_answer_question');
+}
+
+/**
+ * Update columns to text instead of varchar.
+ */
+function paddle_quiz_update_7001() {
+  // Drop the index to update the columns.
+  db_drop_index('paddle_quiz_answer', 'paddle_quiz_answer_question');
+
+  // Update the paddle_quiz_answer table to be able to get long strings.
+  db_change_field('paddle_quiz_answer', 'question', 'question', array(
+    'type' => 'text',
+    'size' => 'medium',
+    'not null' => TRUE,
+  ));
+
+  db_change_field('paddle_quiz_answer', 'answer', 'answer', array(
+    'type' => 'text',
+    'size' => 'medium',
+    'not null' => TRUE,
+  ));
+
+  // Get the stored values for the questions.
+  $questions = db_select('field_data_field_paddle_quiz_question', 'q')
+    ->fields('q', array('entity_id', 'revision_id', 'field_paddle_quiz_question_value', 'delta'))
+    ->execute()
+    ->fetchAll();
+
+  // Get the stored values for answers.
+  $answers = db_select('field_data_field_paddle_quiz_answers', 'q')
+    ->fields('q', array('entity_id', 'revision_id', 'field_paddle_quiz_answers_value', 'delta'))
+    ->execute()
+    ->fetchAll();
+
+  // Delete the fields.
+  field_delete_field('field_paddle_quiz_question');
+  field_delete_field('field_paddle_quiz_answers');
+
+  // Recreate the question + answers field + instances.
+  field_create_field(array(
+    'active' => 1,
+    'cardinality' => -1,
+    'deleted' => 0,
+    'entity_types' => array(),
+    'field_name' => 'field_paddle_quiz_answers',
+    'foreign keys' => array(
+      'format' => array(
+        'columns' => array(
+          'format' => 'format',
+        ),
+        'table' => 'filter_format',
+      ),
+    ),
+    'indexes' => array(
+      'format' => array(
+        0 => 'format',
+      ),
+    ),
+    'locked' => 0,
+    'module' => 'text',
+    'settings' => array(
+      'max_length' => 400,
+    ),
+    'translatable' => 0,
+    'type' => 'text',
+  ));
+
+  field_create_instance(array(
+    'bundle' => 'field_paddle_quiz_questions',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 1,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_paddle_quiz_answers',
+    'label' => 'Answers',
+    'required' => 1,
+    'settings' => array(
+      'better_formats' => array(
+        'allowed_formats' => array(
+          'full_html' => 'full_html',
+          'plain_text' => 'plain_text',
+        ),
+        'allowed_formats_toggle' => 0,
+        'default_order_toggle' => 0,
+        'default_order_wrapper' => array(
+          'formats' => array(
+            'full_html' => array(
+              'weight' => -10,
+            ),
+            'plain_text' => array(
+              'weight' => 10,
+            ),
+          ),
+        ),
+      ),
+      'field_instance_sync' => 0,
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'text',
+      'settings' => array(
+        'size' => 60,
+      ),
+      'type' => 'text_textfield',
+      'weight' => 2,
+    ),
+  ));
+
+  field_create_field(array(
+    'active' => 1,
+    'cardinality' => 1,
+    'deleted' => 0,
+    'entity_types' => array(),
+    'field_name' => 'field_paddle_quiz_question',
+    'foreign keys' => array(
+      'format' => array(
+        'columns' => array(
+          'format' => 'format',
+        ),
+        'table' => 'filter_format',
+      ),
+    ),
+    'indexes' => array(
+      'format' => array(
+        0 => 'format',
+      ),
+    ),
+    'locked' => 0,
+    'module' => 'text',
+    'settings' => array(
+      'max_length' => 400,
+    ),
+    'translatable' => 0,
+    'type' => 'text',
+  ));
+
+  field_create_instance(array(
+    'bundle' => 'field_paddle_quiz_questions',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 0,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_paddle_quiz_question',
+    'label' => 'Question',
+    'required' => 1,
+    'settings' => array(
+      'better_formats' => array(
+        'allowed_formats' => array(
+          'full_html' => 'full_html',
+          'plain_text' => 'plain_text',
+        ),
+        'allowed_formats_toggle' => 0,
+        'default_order_toggle' => 0,
+        'default_order_wrapper' => array(
+          'formats' => array(
+            'full_html' => array(
+              'weight' => -10,
+            ),
+            'plain_text' => array(
+              'weight' => 10,
+            ),
+          ),
+        ),
+      ),
+      'field_instance_sync' => 0,
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'text',
+      'settings' => array(
+        'size' => 60,
+      ),
+      'type' => 'text_textfield',
+      'weight' => 0,
+    ),
+  ));
+
+  // Create a new record for each question.
+  foreach ($questions as $question) {
+    db_insert('field_data_field_paddle_quiz_question')
+      ->fields(array(
+        'entity_type' => 'field_collection_item',
+        'bundle' => 'field_paddle_quiz_questions',
+        'deleted' => 0,
+        'entity_id' => $question->entity_id,
+        'revision_id' => $question->revision_id,
+        'language' => LANGUAGE_NONE,
+        'delta' => $question->delta,
+        'field_paddle_quiz_question_value' => $question->field_paddle_quiz_question_value,
+      ))
+      ->execute();
+  }
+
+  // Create a new record for each answer.
+  foreach ($answers as $answer) {
+    db_insert('field_data_field_paddle_quiz_answers')
+      ->fields(array(
+        'entity_type' => 'field_collection_item',
+        'bundle' => 'field_paddle_quiz_questions',
+        'deleted' => 0,
+        'entity_id' => $answer->entity_id,
+        'revision_id' => $answer->revision_id,
+        'language' => LANGUAGE_NONE,
+        'delta' => $answer->delta,
+        'field_paddle_quiz_answers_value' => $answer->field_paddle_quiz_answers_value,
+      ))
+      ->execute();
+  }
+
+  // We cannot just do db_add_index() because for text types we need to set a
+  // specific length to index.
+  db_query('alter table paddle_quiz_answer add index paddle_quiz_answer_question (question (255))');
+}
+
+/**
+ * Grant permissions to edit the panels for the quiz content type.
+ */
+function paddle_quiz_update_7002() {
+  $permissions = array(
+    'administer panelizer node quiz_page layout',
+    'administer panelizer node quiz_page content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Change the default value of the info location field to NULL.
+ *
+ * Existing Quizzes had the default value of the info location set to 'start',
+ * so even if they do not include any personal info they still contain the
+ * value to that field.
+ */
+function paddle_quiz_update_7007() {
+  db_query(
+    'UPDATE field_data_field_paddle_quiz_info_location AS l ' .
+    'JOIN field_data_field_paddle_quiz_info_required AS r ' .
+    'ON r.revision_id = l.revision_id ' .
+    'SET l.field_paddle_quiz_info_location_value = NULL ' .
+    'WHERE r.field_paddle_quiz_info_required_value = 0');
+
+  // Revert the feature to change the field property of new quizzes.
+  features_revert('paddle_quiz');
+}

@@ -1,0 +1,321 @@
+<?php
+/**
+ * @file
+ * Hook implementations for Paddle WebDriver.
+ */
+
+/**
+ * Implements hook_init().
+ */
+function paddle_webdriver_init() {
+  if (isset($_SESSION['webdriver_delay_submits'])) {
+    drupal_add_js(drupal_get_path('module', 'paddle_webdriver') . '/js/delay_submits.js', array('preprocess' => FALSE));
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_webdriver_menu() {
+  $items = array();
+
+  $items['webdriver/enable/%'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'paddle_webdriver_enable_feature',
+    'page arguments' => array(2),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['webdriver/disable/%'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'paddle_webdriver_disable_feature',
+    'page arguments' => array(2),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['webdriver/variable/%'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'paddle_webdriver_variable_api',
+    'page arguments' => array(2),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['webdriver/node/%'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'paddle_webdriver_node_api',
+    'page arguments' => array(2),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['webdriver/create_node/%/%/%'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'paddle_webdriver_create_node_api',
+    'page arguments' => array(2, 3, 4),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['webdriver/atom/%/%/%'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'paddle_webdriver_atom_api',
+    'page arguments' => array(2, 3, 4),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['webdriver/search-api/commit/%'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'paddle_webdriver_search_api_commit',
+    'page arguments' => array(3),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['webdriver/search-api/index/%/%'] = array(
+    'access callback' => TRUE,
+    'page callback' => 'paddle_webdriver_search_api_index',
+    'page arguments' => array(3, 4),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Enables a specific feature in the module, for the current session.
+ *
+ * @param string $feature
+ *   Identifier of the feature to enable.
+ */
+function paddle_webdriver_enable_feature($feature) {
+  $_SESSION['webdriver_' . $feature] = TRUE;
+}
+
+/**
+ * Disables a specific feature in the module, for the current session.
+ *
+ * @param string $feature
+ *   Identifier of the feature to disable.
+ */
+function paddle_webdriver_disable_feature($feature) {
+  unset($_SESSION['webdriver_' . $feature]);
+}
+
+/**
+ * Returns and/or updates a variable, depending on the HTTP method used.
+ *
+ * @param string $variable
+ *   Variable to be returned and/or updated.
+ */
+function paddle_webdriver_variable_api($variable) {
+  // We don't clean the POST data because the module is only enabled when
+  // running Selenium tests, plus we might want to store data that might cause
+  // security problems while testing.
+  if (!empty($_POST['delete'])) {
+    // Delete the variable.
+    variable_del($variable);
+    die();
+  }
+
+  if (isset($_POST[$variable])) {
+    $value = $_POST[$variable];
+    variable_set($variable, $value);
+  }
+
+  $data = array(
+    $variable => variable_get($variable),
+  );
+  drupal_json_output($data);
+}
+
+/**
+ * Returns a node object as JSON.
+ *
+ * Useful for tests that need to know certain properties like 'created' and
+ * 'changed' that they can't know any other way.
+ *
+ * @param int $nid
+ *   The nid of the node that should be returned.
+ */
+function paddle_webdriver_node_api($nid) {
+  $node = node_load($nid);
+  drupal_json_output($node);
+}
+
+/**
+ * Creates a node of the passed type programmatically.
+ *
+ * Useful if the users don't have the permissions to create a node through the
+ * interface.
+ *
+ * @param string $type
+ *   The content type.
+ * @param string $title
+ *   The title of the node.
+ * @param string $user_name
+ *   The name of the user creating the node.
+ */
+function paddle_webdriver_create_node_api($type = 'basic_page', $title = 'node title', $user_name = '') {
+  global $language;
+
+  $node = new stdClass();
+  $node->title = $title;
+  $node->type = $type;
+  node_object_prepare($node);
+
+  $node->language = $language->language;
+  $node->uid = 1;
+  // If a specific user has been given, use it as author.
+  if ($user_name) {
+    $user = user_load_by_name($user_name);
+    if ($user && !empty($user->uid)) {
+      $node->uid = $user->uid;
+    }
+  }
+  $node->status = 0;
+  $node->promote = 0;
+  $node->comment = 0;
+
+  node_save($node);
+
+  drupal_json_output($node);
+}
+
+/**
+ * Performs actions on Scald atoms.
+ *
+ * @param int $atom_id
+ *   The id of an atom to edit or delete. Set this to '-1' if all atoms should
+ *   be affected by the operation. Will be ignored if the action is 'create'.
+ * @param string $action
+ *   Action to take. Can be 'count', 'create', 'edit' or 'delete'.
+ * @param string $type
+ *   The atom type for which the operation is going to be performed. Supported
+ *   types: "image", "file" and "video".
+ */
+function paddle_webdriver_atom_api($atom_id, $action, $type = 'all') {
+  $result = FALSE;
+
+  switch ($action) {
+    case 'count':
+      $types = array('image', 'video', 'file');
+      if ($type != 'all') {
+        $types = array($type);
+      }
+
+      $result = (int) db_select('scald_atoms', 'sa')
+        ->fields('sa', array('sid'))
+        ->condition('type', $types, 'IN')
+        ->countQuery()
+        ->execute()
+        ->fetchField();
+      break;
+
+    case 'create':
+      // Pick a random file from our test assets.
+      $files = file_scan_directory(DRUPAL_ROOT . '/selenium/tests/Kanooh/Paddle/assets', '/.*\.(gif|jpg|jpeg|png)/');
+      $key = array_rand($files);
+      $file = file_copy($files[$key], 'public://');
+
+      // Create a new atom and save it.
+      $atom = new ScaldAtom('image', 'paddle_scald_image', array(
+        'title' => $file->name . ' ' . sprintf('%04d', rand(0, 9999)),
+        'base_id' => $file->fid,
+      ));
+      $result = scald_atom_save($atom);
+      break;
+
+    case 'edit':
+      // @todo Implement.
+      break;
+
+    case 'delete':
+      if ($atom_id == -1) {
+        $sids = db_select('scald_atoms', 'sa')
+          ->fields('sa', array('sid'))
+          ->execute()
+          ->fetchCol();
+      }
+      else {
+        $sids = array($atom_id);
+      }
+      scald_atom_delete_multiple($sids);
+      $result = 'OK';
+      break;
+  }
+
+  if ($action != 'count') {
+    paddle_scald_process_queue_and_commit();
+  }
+
+  drupal_add_http_header('Status', $result !== FALSE ? '200 OK' : '500 Internal server error');
+  print $result !== FALSE ? $result : 'ERROR';
+  drupal_exit();
+}
+
+/**
+ * Commits new items to the given search index.
+ *
+ * By default Apache Solr commits new items to the index every two minutes to
+ * conserve processing power. We cannot wait for this asynchronous process in
+ * tests. This provides a way to force the commit.
+ *
+ * This has been taken from paddle_scald_search_api_commit() which is currently
+ * in development in KANWEBS-2078.
+ *
+ * @todo Deduplicate this code once KANWEBS-2078 is in. See KANWEBS-2285.
+ *
+ * @see paddle_scald_search_api_commit()
+ * @see https://one-agency.atlassian.net/browse/KANWEBS-2285
+ *
+ * @param string $index_id
+ *   The search index for which a commit should be forced.
+ */
+function paddle_webdriver_search_api_commit($index_id) {
+  $index = search_api_index_load($index_id);
+  $server = search_api_server_load($index->server);
+
+  // There's no reasonable way to access the protected $proxy property of
+  // $server here, so let's built up the object ourselves.
+  // See SearchApiSolrService::ensureProxy().
+  $class = search_api_get_service_info($server->class);
+  if ($class && class_exists($class['class'])) {
+    if (empty($server->options)) {
+      // We always have to provide the options.
+      $server->options = array();
+    }
+    $service = new $class['class']($server);
+    $wait_searcher = TRUE;
+    $response = $service->getSolrConnection()->commit($wait_searcher);
+  }
+
+  // Reload the current solr proxy.
+  search_api_server_load($index->server, TRUE);
+
+  // Report if the commit was successful.
+  $result = !empty($response) && $response->status_message == 'OK';
+  drupal_add_http_header('Status', $result !== FALSE ? '200 OK' : '500 Internal server error');
+  print $result ? 'OK' : 'ERROR';
+  drupal_exit();
+}
+
+/**
+ * Instructs Search API to index a number of items on a given index.
+ *
+ * @param string $index_id
+ *   The search index for which items should be indexed.
+ * @param int $limit
+ *   The maximum number of items to index. Pass -1 to index all items. Defaults
+ *   to -1.
+ */
+function paddle_webdriver_search_api_index($index_id, $limit) {
+  $index = search_api_index_load($index_id);
+  try {
+    $number = search_api_index_items($index, $limit);
+  }
+  catch (SearchApiException $e) {
+    $number = FALSE;
+  }
+
+  // Report the number of items that were index, or if an error occurred.
+  drupal_add_http_header('Status', $number !== FALSE ? '200 OK' : '500 Internal server error');
+  print $number !== FALSE ? $number : 'ERROR';
+  drupal_exit();
+}

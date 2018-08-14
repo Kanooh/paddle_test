@@ -1,0 +1,5 @@
+name = Paddle Webform Post
+description = Adds a post request on a webform submission.
+core = 7.x
+package = Paddle
+dependencies[] = paddle_formbuilder

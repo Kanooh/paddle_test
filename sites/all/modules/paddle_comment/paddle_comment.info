@@ -1,0 +1,38 @@
+name = Interaction/Blog
+description = Increase interactions on your website by allowing visitors to post comments on an article. Comments will be published after approval by a moderator. You can also use this Paddlet to create a blog on your website.
+core = 7.x
+package = Paddle
+
+dependencies[] = comment
+dependencies[] = ctools
+dependencies[] = entity
+dependencies[] = entityreference
+dependencies[] = features
+dependencies[] = message
+dependencies[] = paddle_notifications
+dependencies[] = strongarm
+dependencies[] = views
+
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2
+features[views_view][] = comment_manager
+
+apps[logo] = apps/logo.png
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+apps[paddle][vendor_link] = http://kanooh.be
+apps[paddle][third_party_service] = 0
+
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[field_instance][] = message-paddle_notifications_comment_added_responsible-field_paddle_notifications_node
+features[message_type][] = paddle_notifications_comment_added_responsible
+features[variable][] = field_bundle_settings_message__paddle_notifications_comment_added_responsible
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_comment"
+datestamp = "1473170403"
+

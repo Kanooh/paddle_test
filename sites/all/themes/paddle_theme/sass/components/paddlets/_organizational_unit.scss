@@ -1,0 +1,235 @@
+/**
+ * @file
+ * Paddlet styling.
+ */
+@import "../variables/*";
+@import "../abstractions/*";
+
+// --------------------
+// FRONTEND PANE
+// --------------------
+.col-lg-4,
+.col-lg-3 {
+  .pane-organizational-unit .col-md-6 {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+/* oup Pane titles */
+.paddle-oup-title {
+  font-weight: bold;
+  font-size: 1.2em;
+  margin-bottom: 5px;
+}
+
+/* oup page contact info headings */
+.paddle-oup-heading {
+  text-indent: 17px;
+  margin-bottom: 5px;
+}
+
+.paddle-oup-address {
+  margin-bottom: 15px;
+}
+
+.row .col-md-3 .pane-organizational-unit .col-md-6 {
+  width: 100%;
+  float: none;
+  display: inline-block;
+  margin: 0;
+}
+
+.node-type-organizational-unit {
+  #page-title {
+    display: none;
+  }
+  .pane-node-field-paddle-featured-image {
+    margin-right: 20px;
+  }
+  .pane-organizational-unit-info {
+    .paddle-oup-page-info {
+      float: left;
+      .paddle-oup {
+        padding: 3px 0px;
+      }
+    }
+  }
+
+  .pane-contact-information {
+    .paddle-oup-heading {
+      text-indent: 0px;
+    }
+    .paddle-oup-other-info {
+      .paddle-oup-parents {
+        padding-top: 15px;
+        .paddle-oup-parent-units {
+          padding: 3px 0;
+        }
+      }
+    }
+
+    .paddle-oup-online,
+    .paddle-oup-other-info,
+    .paddle-oup-address {
+      padding-left: 10px;
+    }
+  }
+}
+
+.pane-node-field-paddle-ou-logo {
+  float: left;
+  margin-right: 40px;
+}
+
+.paddle-oup-page-title {
+  margin-bottom: 10px;
+}
+
+.panel-pane.pane-node-field-paddle-ou-parent-1 {
+  margin-bottom: 0;
+}
+
+.col-md-3 .paddle-oup-email .inline-block {
+  max-width: 85%;
+}
+
+.region-content {
+  .pane-node-field-paddle-ou-logo, .pane-node-field-paddle-featured-image {
+    .pane-content {
+      border: 0;
+      box-shadow: none;
+      margin-bottom: 0;
+    }
+  }
+}
+
+.pane-contact-information .pane-content {
+  padding: 21px 15px 14px 15px;
+
+  .paddle-oup-website, .paddle-oup-linkedin, .paddle-oup-facebook, .paddle-oup-twitter {
+    @include inline-flex();
+    a {
+      word-break: break-all;
+      word-wrap: break-word;
+      display: inline;
+      padding-left: 2px;
+    }
+  }
+}
+
+.paddle-oup a {
+  display: inline-block;
+}
+
+/* changing how the grid works to anticipate different  */
+/* container sizes for the contact person  */
+.col-md-7 > .pane-organizational-unit,
+.col-md-6 .col-md-6 > .pane-organizational-unit,
+.col-md-3 > .pane-organizational-unit,
+.col-md-4 .pane-organizational-unit,
+.col-md-5 > .pane-organizational-unit {
+  .col-md-6 {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+.col-md-7 > .pane-organizational-unit .col-md-6,
+.col-md-6 .col-md-6 > .pane-organizational-unit,
+.col-md-3 > .pane-organizational-unit,
+.col-md-4 .pane-organizational-unit,
+.col-md-5 > .pane-organizational-unit {
+  .inline-block {
+    a {
+      display: inline-block;
+      width: 89%;
+    }
+  }
+}
+
+.node-type-organizational-unit {
+  .col-md-12.panel-region-nested-top {
+    border: 1px solid #EBEBEB;
+    border-bottom: 0;
+    box-shadow: 0 5px 5px -4px #B5B5B5;
+    margin-bottom: 30px;
+    overflow: hidden;
+    background-color: $c-white;
+  }
+
+  .pane-opening-hours-status {
+    .opening-hours-status {
+      .opening-hours-label {
+        float: left;
+        margin-bottom: 15px;
+      }
+      .current-opening-hours {
+        padding-top: 10px;
+        float: left;
+      }
+    }
+  }
+  .current-opening-hours-description {
+    padding-left: 15px;
+    padding-top: 10px;
+    float: left;
+    width: 30%;
+  }
+}
+
+.pane-organizational-unit-info {
+  .pane-content {
+    border: 0;
+    box-shadow: none;
+    margin-bottom: 0;
+
+    .paddle-oup-page-info {
+      padding: 15px;
+    }
+  }
+}
+
+@media screen and (max-width: $screen-md-max) {
+  .node-type-organizational-unit {
+    .current-opening-hours-description {
+      width: 70%;
+    }
+  }
+}
+
+@media screen and (max-width: $screen-xs-max) {
+  .pane-organizational-unit-info .pane-content .paddle-oup-page-info {
+    .paddle-oup-page-title {
+      float: left;
+      width: 100%;
+    }
+  }
+  .node-type-organizational-unit .pane-node-field-paddle-featured-image {
+    float: none;
+    margin-right: 0;
+    img {
+      width: 100%;
+    }
+  }
+
+  .pane-organizational-unit-info .pane-content {
+    padding-left: 0;
+
+    .paddle-oup-parent-units, .paddle-oup-head-unit {
+      clear: left;
+    }
+  }
+}
+
+@media screen and (min-width: $screen-md-min) {
+  .pane-opening-hours-status {
+    clear: left;
+  }
+}
+
+@media screen and (min-width: $screen-xs-max) {
+  .pane-organizational-unit-info .pane-content {
+    padding: 0;
+  }
+}

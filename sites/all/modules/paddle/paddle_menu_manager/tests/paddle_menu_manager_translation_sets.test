@@ -1,0 +1,64 @@
+<?php
+
+/**
+ * @file
+ * Tests the translation sets functionality of the Paddle Menu Manager module.
+ */
+
+class PaddleMenuManagerTranslationSetsTest extends PaddleMenuManagerTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Translation sets',
+      'description' => 'Test the translation sets.',
+      'group' => 'Paddle Menu Manager',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    // Enable the required modules.
+    parent::setUp(array('i18n_menu', 'paddle_menu_manager'));
+
+    // Enable 3 random languages in addition to English.
+    include_once DRUPAL_ROOT . '/includes/iso.inc';
+    $language_list = _locale_get_predefined_list();
+    unset($language_list['en']);
+    foreach (array_rand($language_list, 3) as $langcode) {
+      locale_add_language($langcode);
+    }
+  }
+
+  /**
+   * Tests if new menus handle translation sets correctly when being cloned.
+   */
+  public function testMenuClone() {
+    // Create a menu in every enabled language and clone it in every language.
+    $menus = array();
+    $tsids = array();
+    $languages = locale_language_list('name');
+    foreach ($languages as $langcode => $language) {
+      $menu = $this->createMenu($langcode);
+      $menus[$menu['menu_name']] = $menu;
+      paddle_menu_manager_create_menu_translations($menu);
+      $tsids[$menu['menu_name']] = $menu['i18n_tsid'];
+    }
+
+    // Test that a clone of each menu has been made for each language, and that
+    // they belong to the same translation sets.
+    foreach ($menus as $menu_name => $menu) {
+      $translation_set = i18n_translation_set_load($tsids[$menu_name]);
+      $translations = $translation_set->get_translations();
+      $this->assertEqual(count($translations), 4, format_string('There are 4 translations available for the menu item that was created in %language.', array('%language' => $languages[$menu['language']])));
+      foreach ($languages as $langcode => $language) {
+        $this->assertTrue(array_key_exists($langcode, $translations), format_string('The %source_language menu item is available in %target_language.', array('%source_language' => $languages[$menu['language']], '%target_language' => $language)));
+      }
+    }
+  }
+
+}

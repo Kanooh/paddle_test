@@ -1,0 +1,20 @@
+name = Paddle Taxonomy Manager
+description = contains paddle_taxonomy_manager code
+core = 7.x
+package = Paddle
+
+files[] = tests/paddle_taxonomy_manager_contextual_toolbar.test
+files[] = tests/paddle_taxonomy_manager_overview.test
+files[] = tests/paddle_taxonomy_manager_term_form.test
+files[] = tests/paddle_taxonomy_manager_test_case.test
+
+dependencies[] = ctools
+dependencies[] = i18n_taxonomy
+dependencies[] = taxonomy
+
+test_dependencies[] = paddle_contextual_toolbar
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_taxonomy_manager"
+datestamp = "1455516313"

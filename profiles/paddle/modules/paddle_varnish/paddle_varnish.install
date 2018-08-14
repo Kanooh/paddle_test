@@ -1,0 +1,14 @@
+<?php
+
+/**
+ * @file
+ * Install code for the Paddle Varnish integration.
+ */
+
+/**
+ * Revert the varnish_flush_cron setting to its default.
+ */
+function paddle_varnish_update_7000() {
+  // Do not flush all caches on cron runs.
+  variable_set('varnish_flush_cron', 0);
+}

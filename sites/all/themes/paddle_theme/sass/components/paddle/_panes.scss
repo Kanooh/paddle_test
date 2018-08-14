@@ -1,0 +1,368 @@
+/**
+* @file
+* Styling for content in panes of landingspages.
+*
+*/
+
+/* @common */
+.pane-content {
+  border: 1px solid $c-gallery;
+  border-bottom: 0;
+  box-shadow: 0 5px 5px -4px $c-nobel;
+  background-color: $c-white;
+  word-wrap: break-word;
+  margin-bottom: 30px;
+}
+
+.pane-facetapi .pane-content,
+.pane-pm-existing-pages .pane-content,
+.pane-entity-revision-view .pane-content,
+.pane-node-body .pane-content,
+.pane-entity-view .pane-content {
+  padding: 21px 15px 14px 15px;
+}
+
+.pane-content-region > .pane-content {
+  border: 0;
+  box-shadow: none;
+}
+
+.pane-section-top,
+.pane-section-bottom {
+  padding: 15px 15px 15px 15px;
+}
+
+.pane-section-body {
+  padding: 21px 15px 14px 15px;
+  overflow: hidden;
+}
+
+.pane-custom .pane-content {
+  padding: 21px 0 20px;
+}
+
+.pane-add-image .pane-section-body {
+  padding: 0;
+}
+
+.pane-section-body .views-row {
+  margin-bottom: 10px;
+}
+
+/* @images */
+.pane-section-image {
+  padding: 0;
+}
+
+.pane-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.pane-section-top img,
+.pane-add-image img {
+  width: 100%;
+}
+
+.pane-section-top {
+  overflow: auto;
+}
+
+.pane-section-top .top-section-icon {
+  display: block;
+  float: left;
+  margin-right: 10px;
+}
+
+.pane-section-top .top-section-icon img {
+  max-height: 45px;
+  max-width: 45px;
+  width: auto;
+}
+
+.node-type-landing-page .panel-pane.pane-add-image:first-child {
+  padding: 0;
+}
+
+/* @captions */
+.pane-add-image figure {
+  position: relative;
+  color: $c-white;
+}
+
+.pane-add-image figcaption {
+  position: absolute;
+  z-index: 90;
+  font-weight: bold;
+  font-size: 1.3em;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+.pane-add-image .caption-text {
+  padding: 20px 18px 16px 18px;
+}
+
+figcaption.image-pane-caption:before {
+  opacity: 0.75;
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  z-index: -100;
+}
+
+/* responsive videos */
+/* See more at:http://avexdesigns.com/responsive-youtube-embed/ */
+.media_embed {
+  position: relative;
+  padding-bottom: 56.25%;
+  padding-top: 30px;
+  height: 0;
+  overflow: hidden;
+}
+
+.media_embed iframe,
+.media_embed object,
+.media_embed embed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* @links */
+.pane-section-bottom a:link,
+.pane-section-top a:link,
+.pane-add-image .pane-section-body a:link {
+  text-decoration: none;
+}
+
+.pane-section-bottom a {
+  text-align: right;
+  display: block;
+  font-style: italic;
+}
+
+.pane-section-bottom a i {
+  padding-left: 10px;
+  font-size: 0.8em;
+}
+
+.pane-add-menu-structure a:link,
+.pane-add-menu-structure a:visited,
+.pane-listing a:link,
+.pane-listing a:visited {
+  text-decoration: none;
+}
+
+.pane-section-bottom a:hover,
+.pane-section-body a:hover,
+.pane-add-menu-structure a:hover {
+  text-decoration: underline;
+}
+
+.pane-listing a:hover,
+.pane-listing a:active {
+  text-decoration: underline;
+}
+
+/* @lists */
+.pane-section-body .regular-list ul {
+  margin-left: 0;
+  padding: 0;
+  list-style-type: none;
+}
+
+.pane-section-body .regular-list .menu .menu,
+.pane-section-body .bullet-list .menu .menu {
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+.region-content .ul-menu-items.bullet-list > .menu > .expanded > .menu a {
+  font-size: 0.9em;
+}
+
+.pane-section-body .item-list ul li {
+  margin: 0;
+}
+
+.region-content .col-md-3 li a,
+.region-content .col-md-4 li a {
+  word-wrap: break-word;
+}
+
+/* @paragraphs */
+.region-content .panel-pane p:first-child {
+  margin-top: 0;
+}
+
+.region-content .landing-page-body p {
+  line-height: 1.2em;
+  margin-bottom: 25px;
+}
+
+/* @common */
+.region-content .pane-section-top,
+.region-content .pane-section-top h2,
+.region-content .pane-section-top a h2,
+.region-content .pane-section-top a {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.pane-section-top,
+.pane-section-top h2,
+.region-content .pane-section-top a,
+.region-content .pane-section-top a h2 {
+  color: $c-white;
+}
+
+#block-paddle-menu-display-current-level-plus-one .menu-item a,
+.breadcrumb-item a {
+  color: $c-black-olive;
+}
+
+/* @read more */
+.pane-section-body .read-more {
+  text-align: right;
+  padding: 0 15px 10px 0;
+}
+
+/* @mediaelement player */
+.region-content ul.mejs__captions-selector-list {
+  margin: 0;
+}
+
+.mejs__controls {
+  padding: 0;
+}
+
+// We need to remove the pane padding, since the media-element video
+// requires a min width of 250 pixels, and out of the box our smaller
+// regions provide 241'ish pixels if padding is applied on the pane-body.
+.pane-add-video {
+  .pane-content, .pane-section-body {
+    padding: 0;
+  }
+}
+
+// We have to override the parent padding on the free content pane.
+.pane-free-content {
+  .playable-video {
+    margin: 0 -15px;
+
+    .mejs__controls {
+      margin: 0 15px;
+    }
+
+    .mejs__mediaelement, .mejs__overlay-play {
+      left: 15px
+    }
+  }
+}
+
+/**
+ * Spotlight view on listing panes.
+ */
+/**
+* @file
+* Paddle News module styling for the VUB Theme.
+*/
+
+.pane-section-body.view-mode-spotlight .view-content {
+  display: flex;
+  flex-wrap: wrap;
+
+  .views-row {
+    margin: 0 2% 2% 0;
+
+    @media screen and (min-width: 45em) {
+      width: 47.75%;
+    }
+  }
+}
+
+.panel-pane .pane-content .pane-section-body.view-mode-spotlight a {
+  text-decoration: none;
+}
+
+.news-item-spotlight, .node-spotlight {
+  position: relative;
+  display: flex;
+  justify-content: flex-start;
+
+  .news-item-spotlight-image, .node-spotlight-image {
+    margin-right: 2em;
+    width: 30%;
+
+    img {
+      border-bottom: 5px solid transparent;
+    }
+  }
+
+  .news-item-content, .node-content {
+    width: 65%;
+  }
+
+  .news-item-header, .node-header {
+    padding: 0 0 1.5em;
+    margin-bottom: 1em;
+    position: relative;
+
+    h5 {
+      margin-bottom: .5em;
+    }
+
+    h4, h4 a {
+      font-size: 20px;
+    }
+
+    &:after {
+      content: "";
+      display: block;
+      height: 1px;
+      width: 100px;
+      position: absolute;
+      left: 0;
+      bottom: 0;
+    }
+  }
+
+  p {
+    color: $c-black;
+  }
+}
+
+// Show the list items in one column in small regions.
+.col-md-3, .col-md-4, .col-lg-3, .col-md-9 .col-lg-6, .col-md-9 .col-lg-4, .col-md-9 .col-lg-3, .col-md-8 .col-md-6, .col-md-6, .col-md-9 .col-lg-9, .col-md-9 .col-lg-7, .col-md-8 .col-md-12 {
+  .pane-section-body.view-mode-spotlight .view-content .views-row {
+    width: 100%;
+
+    .news-item-spotlight, .node-spotlight {
+      width: 100%;
+    }
+  }
+}
+
+@media screen and (max-width: $screen-xs-max) {
+  .news-item-spotlight, .node-spotlight {
+    width: 100%;
+    flex-direction: column;
+
+    .news-item-spotlight-image, .node-spotlight-image, .news-item-content, .node-content {
+      width: 100%;
+      text-align: center;
+
+      .news-item-header, .node-header {
+        &:after {
+          width: 75%;
+          margin-left: 12.5%;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,596 @@
+<?php
+/**
+ * @file
+ * Creates a tool to subscribe to and construct mailings on CultureFeed.
+ */
+
+require_once 'culturefeed_mailing.helpers.inc';
+
+/**
+ * Implements hook_permission().
+ */
+function culturefeed_mailing_permission() {
+  return array(
+    'subscribe to mailings' => array(
+      'title' => t('Subscribe to mailings'),
+      'description' => t('Allows the user to subscribe to mailings'),
+    ),
+    'manage mailing lists' => array(
+      'title' => t('Manage mailing lists'),
+      'description' => t('Allows the user to manage mailing lists & templates'),
+    ),
+    'delete mail template' => array(
+      'title' => t('Delete mail template'),
+      'description' => t('Allows the user to delete mailing lists & templates'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function culturefeed_mailing_menu() {
+
+  $items = array();
+
+  $items['culturefeed/toggle/newsletter-optin/%/%/%'] = array(
+    'title' => 'Newsletter opt-in',
+    'page callback' => 'culturefeed_mailing_toggle_optin',
+    'page arguments' => array(3, 4),
+    'access callback' => 'culturefeed_is_culturefeed_user',
+    'type' => MENU_CALLBACK,
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['subscribe'] = array(
+    'title' => 'Subscribe to our newsletter',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_mailing_subscribe_form'),
+    'access arguments' => array('subscribe to mailings'),
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['subscribe/subscribed'] = array(
+    'title' => 'Subscribed to our newsletter',
+    'page callback' => 'culturefeed_mailing_user_subscribed',
+    'access arguments' => array('subscribe to mailings'),
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['culturefeed/mailing'] = array(
+    'title' => 'Newsletters',
+    'page callback' => 'culturefeed_mailing_page_my_newsletters',
+    'access callback' => 'culturefeed_is_culturefeed_user',
+    'type' => MENU_CALLBACK,
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  // Configuration pages.
+  $items['admin/config/culturefeed/mailing'] = array(
+    'title' => 'CultureFeed Mailing',
+    'description' => 'CultureFeed Mailing settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_mailing_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'culturefeed_mailing.admin.inc',
+  );
+
+  // Content management pages.
+  $items['admin/content/mailing-lists'] = array(
+    'title' => 'Mailing lists',
+    'page callback' => 'culturefeed_mailing_lists_overview',
+    'access arguments' => array('manage mailing lists'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/mailing-lists/add'] = array(
+    'title' => 'Add mailing list',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_mailing_lists_form'),
+    'access arguments' => array('manage mailing lists'),
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/mailing-lists/edit/%culturefeed_mailing'] = array(
+    'title' => 'Edit mailing list',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_mailing_lists_form', 4),
+    'access arguments' => array('manage mailing lists'),
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/mailing-lists/test/%culturefeed_mailing'] = array(
+    'title' => 'Test mailing list',
+    'delivery callback' => 'ajax_deliver',
+    'page callback' => 'culturefeed_mailing_test_list',
+    'page arguments' => array(4),
+    'access arguments' => array('manage mailing lists'),
+    'file' => 'culturefeed_mailing.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content/mailing-lists/send/%culturefeed_mailing'] = array(
+    'title' => 'Activate mailing list',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_mailing_send_list_form', 4),
+    'access arguments' => array('manage mailing lists'),
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/mailing-lists/disable/%culturefeed_mailing'] = array(
+    'title' => 'Disable scheduled sending',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_mailing_disable_list_form', 4),
+    'access arguments' => array('manage mailing lists'),
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/mailing-lists/delete/%culturefeed_mailing'] = array(
+    'title' => 'Delete mailing',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_mailing_delete_form', 4),
+    'access arguments' => array('delete mail template'),
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/templates'] = array(
+    'title' => 'Templates',
+    'page callback' => 'culturefeed_template_list_overview',
+    'access arguments' => array('manage mailing lists'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/templates/add'] = array(
+    'title' => 'Add template',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_templates_form'),
+    'access arguments' => array('manage mailing lists'),
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/templates/edit/%culturefeed_template'] = array(
+    'title' => 'Edit template',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_templates_form', 4),
+    'access arguments' => array('manage mailing lists'),
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/templates/delete/%culturefeed_template'] = array(
+    'title' => 'Delete template',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('culturefeed_templates_delete_form', 4),
+    'access arguments' => array('delete mail template'),
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  $items['admin/content/mailing_content'] = array(
+    'title' => 'Mailing content',
+    'page callback' => 'culturefeed_mailing_page_mailing_content',
+    'access arguments' => array('manage mailing lists'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'culturefeed_mailing.pages.inc',
+  );
+
+  return $items;
+
+}
+
+/**
+ * Implements hook_theme().
+ */
+function culturefeed_mailing_theme() {
+
+  $path = drupal_get_path('module', 'culturefeed_mailing') . '/theme';
+
+  return array(
+    'culturefeed_mailing_optin' => array(
+      'variables' => array('mailing_id' => 0),
+      'path' => $path,
+      'file' => 'theme.inc',
+    ),
+    'culturefeed_mailing_user_profile_admin' => array(
+      'variables' => array('mailings' => array()),
+      'template' => 'culturefeed-mailing-user-profile-admin',
+      'path' => $path,
+      'file' => 'theme.inc',
+    ),
+    'culturefeed_mailing_user_profile_admin_item' => array(
+      'variables' => array('item' => NULL),
+      'template' => 'culturefeed-mailing-user-profile-admin-item',
+      'path' => $path,
+      'file' => 'theme.inc',
+    ),
+    'culturefeed_mailing_content_block_1' => array(
+      'variables' => array(
+        'url_title' => NULL,
+        'url_image' => NULL,
+        'url_readon' => NULL,
+        'image' => NULL,
+        'title' => NULL,
+        'intro' => NULL,
+        'link_title' => NULL,
+      ),
+      'template' => 'culturefeed-mailing-content-block-1',
+      'path' => $path,
+    ),
+    'culturefeed_mailing_content_block_2' => array(
+      'variables' => array(
+        'url_title' => NULL,
+        'url_image' => NULL,
+        'url_readon' => NULL,
+        'image' => NULL,
+        'title' => NULL,
+        'intro' => NULL,
+        'link_title' => NULL,
+      ),
+      'template' => 'culturefeed-mailing-content-block-2',
+      'path' => $path,
+    ),
+    'culturefeed_mailing_content_block_3' => array(
+      'variables' => array(
+        'url_title' => NULL,
+        'url_image' => NULL,
+        'url_readon' => NULL,
+        'image' => NULL,
+        'title' => NULL,
+        'intro' => NULL,
+        'link_title' => NULL,
+      ),
+      'template' => 'culturefeed-mailing-content-block-3',
+      'path' => $path,
+    ),
+    'culturefeed_mailing_content_block_4' => array(
+      'variables' => array(
+        'url_title' => NULL,
+        'url_image' => NULL,
+        'url_readon' => NULL,
+        'image' => NULL,
+        'title' => NULL,
+        'intro' => NULL,
+        'link_title' => NULL,
+      ),
+      'template' => 'culturefeed-mailing-content-block-4',
+      'path' => $path,
+    ),
+    'culturefeed_mailing_content_block_5' => array(
+      'variables' => array(
+        'url_title' => NULL,
+        'url_image' => NULL,
+        'url_readon' => NULL,
+        'image' => NULL,
+        'title' => NULL,
+        'intro' => NULL,
+        'link_title' => NULL,
+      ),
+      'template' => 'culturefeed-mailing-content-block-5',
+      'path' => $path,
+    ),
+    'culturefeed_mailing_content_block_6' => array(
+      'variables' => array(
+        'url_title' => NULL,
+        'url_image' => NULL,
+        'url_readon' => NULL,
+        'image' => NULL,
+        'title' => NULL,
+        'intro' => NULL,
+        'link_title' => NULL,
+      ),
+      'template' => 'culturefeed-mailing-content-block-6',
+      'path' => $path,
+    ),
+    'culturefeed_mailing_content_block_subscribed' => array(
+      'variables' => array('title' => NULL, 'message' => NULL),
+      'template' => 'culturefeed-mailing-content-block-subscribed',
+      'path' => $path,
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_block_info().
+ */
+function culturefeed_mailing_block_info() {
+
+  $blocks = array();
+  $blocks['newsletter_opt_in'] = array(
+    'info' => t('Culturefeed mailings: Newsletter opt-in'),
+    'cache' => DRUPAL_NO_CACHE,
+  );
+
+  $blocks['newsletter_form'] = array(
+    'info' => t('Culturefeed mailings: Newsletter form'),
+    'cache' => DRUPAL_NO_CACHE,
+  );
+
+  return $blocks;
+
+}
+
+
+/**
+ * Implements hook_block_view().
+ */
+function culturefeed_mailing_block_view($delta) {
+
+  module_load_include('inc', 'culturefeed_mailing', 'culturefeed_mailing.blocks');
+
+  if (function_exists('culturefeed_mailing_block_' . $delta . '_is_visible')) {
+    if (!call_user_func('culturefeed_mailing_block_' . $delta . '_is_visible')) {
+      return FALSE;
+    }
+  }
+
+  if (function_exists('culturefeed_mailing_block_' . $delta . '_view')) {
+    return call_user_func('culturefeed_mailing_block_' . $delta . '_view');
+  }
+
+}
+
+/**
+ * Implements hook_block_configure().
+ */
+function culturefeed_mailing_block_configure($delta) {
+
+  $form = array();
+
+  if ($delta == 'newsletter_form') {
+
+    $form['uitid_light'] = array(
+      '#title' => t('UiTiD Light settings.'),
+      '#type' => 'fieldset',
+      '#access' => CULTUREFEED_API_LIGHT_ID_ALLOWED,
+    );
+
+    $form['uitid_light']['show_zip_code'] = array(
+      '#title' => t('Show the zip code field'),
+      '#type' => 'checkbox',
+      '#default_value' => variable_get('culturefeed_mailing_block_show_zip', 0),
+      '#description' => t("Check this checkbox if you want to show the zip code field on the newsletter form.</br>'
+        Keep in mind that the field will only be shown if this checkbox is checked '
+        AND the admin setting for the UiTiD light permissions has been set on admin/config/culturefeed/api-settings.
+      "),
+    );
+
+  }
+
+  return $form;
+
+}
+
+/**
+ * Implements hook_block_save().
+ */
+function culturefeed_mailing_block_save($delta, $edit) {
+
+  if ($delta == 'newsletter_form') {
+    variable_set('culturefeed_mailing_block_show_zip', $edit['show_zip_code']);
+  }
+
+}
+
+/**
+ * Implements hook_culturefeed_ui_profile_menu().
+ */
+function culturefeed_mailing_culturefeed_ui_profile_menu() {
+
+  return array(
+    'emails' => array(
+      'title' => t('Newsletters'),
+      'url' => 'culturefeed/mailing',
+      'description' => t('Manage newsletters you can subscribe to'),
+      'weight' => -16,
+    ),
+  );
+
+}
+
+/**
+ * Subscribe a given user to a mailing.
+ */
+function culturefeed_mailing_subscribe_user($account, $mailing_id, $use_auth = TRUE) {
+  DrupalCultureFeed::subscribeToMailing($account->id, $mailing_id, $use_auth);
+  module_invoke_all('culturefeed_mailing_user_subscribed', $account);
+}
+
+/**
+ * Subscribe a given user to a mailing using the light id.
+ */
+function culturefeed_mailing_subscribe_user_light($email, $mailing_id, $zip = '') {
+  $account = new CultureFeed_User();
+  $account->id = DrupalCultureFeed::getUserLightId($email, $zip);
+  culturefeed_mailing_subscribe_user($account, $mailing_id, FALSE);
+}
+
+/**
+ * Form callback: Show the newsletter form as a block.
+ */
+function culturefeed_mailing_newsletter_block_form($form, &$form_state) {
+
+  $form = array();
+
+  if (isset($form_state['subscribed']) && $form_state['subscribed'] == TRUE) {
+
+    $form['subscribed'] = array(
+      '#theme' => 'culturefeed_mailing_content_block_subscribed',
+      '#title' => t('Thanks!'),
+      '#message' => t('You have successfully subscribed to our newsletter'),
+    );
+
+  }
+  else {
+
+    // Get the user account.
+    $account = culturefeed_load_logged_in_user();
+    $show_zip = variable_get('culturefeed_mailing_block_show_zip', 0);
+
+    // Set defaults for the email field.
+    if ($account) {
+      $email = $account->mbox;
+      $disabled = TRUE;
+      $description = '<span>' . t('Change your email address <a href="!url">here</a>.', array('!url' => url('culturefeed/account/edit'))) . '</span>';
+    }
+    else {
+      $email = '';
+      $disabled = FALSE;
+      $description = '';
+    }
+
+    $form['mail'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Email'),
+      '#description' => $description,
+      '#size' => 40,
+      '#maxlength' => 255,
+      '#default_value' => $email,
+      '#disabled' => $disabled,
+    );
+
+    if ($show_zip && CULTUREFEED_API_LIGHT_ID_ALLOWED) {
+
+      $zipcode = '';
+      if ($account) {
+        $zipcode = !empty($account->zip) ? $account->zip : '';
+      }
+
+      $form['zip'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Zipcode'),
+        '#required' => FALSE,
+        // '#description' => t('Zipcode'),
+        '#size' => 40,
+        '#default_value' => $zipcode,
+        '#attributes' => array(
+          'class' => array('zip-field'),
+        ),
+      );
+
+      // Set zipcode with cookie
+      // Attach jquery.cookie library.
+      if (empty($zipcode)) {
+        $form['#attached']['library'][] = array('system', 'jquery.cookie');
+
+        // Attach scripts.
+        $form['#attached']['js'][] = array(
+          'data' => drupal_get_path('module', 'culturefeed_mailing') . '/js/culturefeed_mailing.js',
+          'type' => 'file',
+          'weight' => 0,
+        );
+      }
+
+    }
+
+    $form['inschrijven'] = array(
+      '#type' => 'submit',
+      '#value' => t('Subscribe'),
+    );
+
+  }
+
+  return $form;
+
+}
+
+/**
+ * Submit the newsletter block form.
+ */
+function culturefeed_mailing_newsletter_block_form_submit($form, &$form_state) {
+
+  $query = array('email' => $form_state['values']['mail']);
+  if (!empty($form_state['values']['zip'])) {
+    $query['zip'] = $form_state['values']['zip'];
+    _culturefeed_mailing_set_postal_to_cookie($query['zip']);
+  }
+
+  if (CULTUREFEED_API_LIGHT_ID_ALLOWED) {
+
+    try {
+      culturefeed_mailing_subscribe_user_light($query['email'], variable_get('culturefeed_mailing_list', ''), !empty($query['zip']) ? $query['zip'] : '');
+    }
+    catch (CultureFeed_Exception $e) {
+
+      // If user was already subscribed, don't show a message.
+      if ($e->error_code != CultureFeed::CODE_MAILING_ALREADY_SUBSCRIBED) {
+        drupal_set_message(t('An error occurred while subscribing, please try again later.'), 'error');
+        return;
+      }
+
+    }
+    catch (Exception $e) {
+      drupal_set_message(t('An error occurred while subscribing, please try again later.'), 'error');
+      return;
+    }
+
+    $form_state['subscribed'] = TRUE;
+    $form_state['redirect'] = 'subscribe/subscribed';
+
+  }
+  elseif (DrupalCultureFeed::isCultureFeedUser()) {
+    $form_state['redirect'] = array('subscribe', array('query' => $query));
+  }
+  else {
+    $query['destination'] = 'subscribe';
+    $form_state['redirect'] = array(
+      'authenticated', array('query' => $query),
+    );
+  }
+}
+
+/**
+ * Load a culturefeed mailing.
+ *
+ * @param int $id
+ *   Mailing id.
+ *
+ * @return Culturefeed_Mailing
+ *   Returns a mailing if found, else FALSE.
+ */
+function culturefeed_mailing_load($id) {
+  try {
+    return DrupalCultureFeed_Mailing::getMailing($id);
+  }
+  catch (Exception $e) {
+    return FALSE;
+  }
+}
+
+/**
+ * Load a culturefeed template.
+ *
+ * @param int $id
+ *   Template id.
+ *
+ * @return CultureFeed_Template
+ *   Returns a template if found, else FALSE.
+ */
+function culturefeed_template_load($id) {
+  try {
+    return DrupalCultureFeed_Mailing::getTemplate($id);
+  }
+  catch (Exception $e) {
+    return FALSE;
+  }
+}
+
+/**
+ * Implements hook_node_info().
+ */
+function culturefeed_mailing_node_info() {
+  $items = array(
+    'mail_item' => array(
+      'name' => t('Mail item'),
+      'base' => 'node_content',
+      'description' => t('Mail items can be used to create content for culturefeed_mailing newsletters'),
+      'has_title' => '1',
+      'title_label' => t('Title'),
+      'help' => '',
+    ),
+  );
+  drupal_alter('node_info', $items);
+  return $items;
+}

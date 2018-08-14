@@ -1,0 +1,105 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleStylePluginTestCase.
+ */
+
+/**
+ * Base class for Paddle Style plugin tests.
+ */
+class PaddleStylePluginTestCase extends DrupalWebTestCase {
+
+  /**
+   * A list of test images.
+   *
+   * @var array $testImages
+   */
+  public $testImages = array();
+
+  /**
+   * Check to see if a file is marked as permanent.
+   *
+   * @param int $fid
+   *   The file id of the file to check.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertFilePermanent($fid, $message = '', $group = 'Other') {
+    // Load a fresh, uncached file object.
+    $files = entity_load('file', array($fid), array(), TRUE);
+    $file = reset($files);
+
+    return $this->assertEqual($file->status, FILE_STATUS_PERMANENT, $message ?: 'The uploaded file has been marked as permanent.', $group);
+  }
+
+  /**
+   * Check to see if a file is marked as used by a given module.
+   *
+   * @param int $fid
+   *   The file id of the file to check.
+   * @param string $module
+   *   The name of the module using the file.
+   * @param string $type
+   *   The type of the object that contains the referenced file.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertFileUsage($fid, $module, $type, $message = '', $group = 'Other') {
+    // Load a fresh, uncached file object.
+    $files = entity_load('file', array($fid), array(), TRUE);
+    $file = reset($files);
+
+    // Check the file usage.
+    $usage = file_usage_list($file);
+    return $this->assertTrue(!empty($usage[$module][$type]), $message ?: format_string('The uploaded file has been marked as used by the %module module as a %type type.', array(
+      '%module' => $module,
+      '%type' => $type,
+    )), $group);
+  }
+
+  /**
+   * Returns a random image file.
+   *
+   * @return object
+   *   The random image.
+   */
+  public function randomImage() {
+    $image = $this->getTestImage();
+    $image->filemime = file_get_mimetype($image->uri);
+    file_save($image);
+
+    return $image;
+  }
+
+  /**
+   * Retrieves a random image from the list of test images.
+   *
+   * @return object
+   *   The random image, or FALSE if we have run out of images.
+   */
+  protected function getTestImage() {
+    if (empty($this->testImages)) {
+      return FALSE;
+    }
+
+    // File uris should be unique. Retrieve one from the list of test image
+    // files and then remove it from the list.
+    $key = array_rand($this->testImages);
+    $file = $this->testImages[$key];
+    unset($this->testImages[$key]);
+
+    return $file;
+  }
+
+}

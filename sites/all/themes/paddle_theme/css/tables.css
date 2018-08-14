@@ -1,0 +1,121 @@
+/**
+* @file
+* Styling for tables.
+*/
+.region-content table {
+  border-collapse: collapse;
+  border-style: solid;
+  border-color: #dddddd;
+  table-layout: fixed;
+  width: 100%;
+  max-width: 100%;
+}
+.region-content table:not(.no-table-hover) > tbody > tr:hover {
+  background-color: #f5f5f5;
+}
+.region-content tbody {
+  border: none;
+}
+.region-content tr {
+  border-top: 1px solid;
+}
+.region-content tr:first-child {
+  border-top-width: 0;
+}
+.region-content th,
+.region-content td {
+  border: none;
+}
+.region-content .responsive-table {
+  overflow-x: auto;
+  min-height: 0.01%;
+}
+@media screen and (max-width: 888px) {
+  .region-content .responsive-table {
+    width: 100%;
+    overflow-y: hidden;
+    -ms-overflow-style: -ms-autohiding-scrollbar;
+  }
+  .region-content .responsive-table > table {
+    table-layout: auto;
+  }
+  .region-content .responsive-table > table > thead > tr > th,
+  .region-content .responsive-table > table > thead > tr > td,
+  .region-content .responsive-table > table > tbody > tr > th,
+  .region-content .responsive-table > table > tbody > tr > td,
+  .region-content .responsive-table > table > tfoot > tr > th,
+  .region-content .responsive-table > table > tfoot > tr > td {
+    white-space: nowrap;
+  }
+}
+.region-content .zebra-striping > tbody > tr,
+.region-content .zebra-striping > thead > tr,
+.region-content .zebra-striping > tfoot > tr {
+  border: none;
+}
+.region-content .zebra-striping > thead > tr {
+  border-bottom: 1px solid #D3D3D3;
+}
+.region-content .zebra-striping > tbody > tr:nth-child(even) {
+  background-color: #f2f2f2;
+}
+.region-content .zebra-striping:not(.no-table-hover) > tbody > tr:nth-child(even):hover {
+  background-color: #f5f5f5;
+}
+.region-content .panel-pane table.horizontal-border > thead > tr,
+.region-content .panel-pane table.horizontal-border > tbody > tr,
+.region-content .panel-pane table.horizontal-border > tfoot > tr, .region-content .panel-pane table.vertical-border > thead > tr,
+.region-content .panel-pane table.vertical-border > tbody > tr,
+.region-content .panel-pane table.vertical-border > tfoot > tr, .region-content .panel-pane table.full-border > thead > tr,
+.region-content .panel-pane table.full-border > tbody > tr,
+.region-content .panel-pane table.full-border > tfoot > tr {
+  border-top: 0;
+  border-color: #dddddd;
+}
+.region-content .horizontal-border > thead > tr,
+.region-content .horizontal-border > tbody > tr,
+.region-content .horizontal-border > tfoot > tr {
+  border-bottom: 1px solid #dddddd;
+}
+.region-content .horizontal-border > thead > tr:last-child,
+.region-content .horizontal-border > tbody > tr:last-child,
+.region-content .horizontal-border > tfoot > tr:last-child {
+  border-bottom: none;
+}
+.region-content .vertical-border > thead > tr > td,
+.region-content .vertical-border > thead > tr > th,
+.region-content .vertical-border > tbody > tr > td,
+.region-content .vertical-border > tbody > tr > th,
+.region-content .vertical-border > tfoot > tr > td,
+.region-content .vertical-border > tfoot > tr > th {
+  border-right: 1px solid #dddddd;
+}
+.region-content .vertical-border > thead > tr > td:last-child,
+.region-content .vertical-border > thead > tr > th:last-child,
+.region-content .vertical-border > tbody > tr > td:last-child,
+.region-content .vertical-border > tbody > tr > th:last-child,
+.region-content .vertical-border > tfoot > tr > td:last-child,
+.region-content .vertical-border > tfoot > tr > th:last-child {
+  border-right: none;
+}
+.region-content .full-border > thead > tr > td,
+.region-content .full-border > thead > tr > th,
+.region-content .full-border > tbody > tr > td,
+.region-content .full-border > tbody > tr > th,
+.region-content .full-border > tfoot > tr > td,
+.region-content .full-border > tfoot > tr > th {
+  border: 1px solid #dddddd;
+}
+.region-content .no-border {
+  border: none;
+}
+.region-content .no-border > thead > tr,
+.region-content .no-border > tbody > tr,
+.region-content .no-border > tfoot > tr {
+  border: none;
+}
+.region-content .no-border > thead > tr > td,
+.region-content .no-border > tbody > tr > td,
+.region-content .no-border > tfoot > tr > td {
+  border: none;
+}

@@ -1,0 +1,6 @@
+name = Paddle Scald Image
+description = Scald image integration module for paddle.
+core = 7.x
+package = Paddle
+dependencies[] = scald
+dependencies[] = image

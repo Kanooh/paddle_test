@@ -1,0 +1,53 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleEditorialNotesTest.
+ */
+
+/**
+ * Various tests for the paddle_editorial_notes module.
+ */
+class PaddleEditorialNotesTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Paddle Editorial Notes',
+      'description' => 'Tests the editorial notes.',
+      'group' => 'Paddle Editorial Notes',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($enable_modules = array()) {
+    $modules = array(
+      'paddle_editorial_notes',
+    );
+    parent::setUp($modules);
+  }
+
+  /**
+   * Tests the rendering of the editorial notes.
+   */
+  public function testRendering() {
+    $this->drupalLogin($this->chiefEditor);
+    // Create a new node and add a note to it.
+    $node = $this->createBasicPage();
+    $note = paddle_editorial_notes_note_add($node, $this->randomString() . "\n" . $this->randomString());
+
+    // Load the HTML markup of the note.
+    $markup = theme('paddle_editorial_notes_note', array('note' => $note));
+
+    // Test the date format.
+    $date = format_date($note->timestamp, 'medium');
+    $this->assertTrue(strpos($markup, $date), 'Date is shown in correct format.');
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertTrue('//div[@class="message-paddle-editorial-note-content"]//<br />', 'The <br /> tag is printed inside the content of the editorial note.');
+  }
+
+}

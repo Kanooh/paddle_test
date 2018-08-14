@@ -1,0 +1,101 @@
+<?php
+
+/**
+ * @file
+ * Base class for the Paddle Menu Manager automated tests.
+ */
+
+class PaddleMenuManagerTestCase extends DrupalWebTestCase {
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'minimal';
+
+  /**
+   * Creates a custom menu for testing.
+   *
+   * @param string $lang
+   *   The language parameter to save in the database for the created menu.
+   *   Defaults to 'en'.
+   *
+   * @return array
+   *   The generated menu.
+   */
+  protected function createMenu($lang = 'en') {
+    $menu = array(
+      'menu_name' => drupal_strtolower($this->randomName()),
+      'title' => $this->randomString(),
+      'description' => $this->randomString(),
+    );
+    if (module_exists('i18n_menu')) {
+      $menu += array(
+        'language' => $lang,
+        'i18n_mode' => I18N_MODE_LANGUAGE,
+      );
+    }
+    menu_save($menu);
+    return $menu;
+  }
+
+  /**
+   * Creates a custom menu for testing using the UI.
+   *
+   * @param string $lang
+   *   The language parameter to save in the database for the created menu.
+   *   Defaults to 'en'.
+   *
+   * @return array
+   *   The generated menu.
+   */
+  protected function createUIMenu($lang = 'en') {
+    global $language_content;
+    $language_content->language = $lang;
+    $edit = array(
+      'title' => $this->randomString(32),
+      'description' => $this->randomString(20),
+    );
+
+    $this->drupalPost('admin/structure/menu_manager/nojs/add', $edit, t('Save'));
+
+    // Test if the save was successful.
+    $result = db_select('menu_custom', 'mc')
+      ->fields('mc')
+      ->condition('mc.title', $edit['title'])
+      ->condition('mc.language', $language_content->language)
+      ->execute();
+
+    return $result->fetchAssoc();
+  }
+
+  /**
+   * Creates a custom menu link for testing.
+   *
+   * @param array $menu
+   *   The menu for which to create a menu link.
+   * @param array $item
+   *   An associative array containing optional settings for the menu link item.
+   *   These are identical to the elements supported by the $items argument of
+   *   menu_link_save().
+   *
+   * @return array
+   *   The generated menu link.
+   *
+   * @see menu_link_save()
+   */
+  protected function createMenuLink(array $menu, array $item = array()) {
+    // Provide some defaults.
+    $item = $item + array(
+      'link_path' => '<front>',
+      'link_title' => strtolower($this->randomName()),
+      'menu_name' => $menu['menu_name'],
+      'options' => array(
+        'attributes' => array(
+          'title' => $this->randomName(20),
+        ),
+      ),
+      'language' => !empty($menu['language']) ? $menu['language'] : LANGUAGE_NONE,
+    );
+    $item['mlid'] = menu_link_save($item);
+    return $item;
+  }
+}

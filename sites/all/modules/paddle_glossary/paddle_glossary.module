@@ -1,0 +1,414 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Glossary module.
+ */
+
+include_once 'paddle_glossary.features.inc';
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_glossary_entity_info() {
+  return array(
+    'paddle_glossary_definition' => array(
+      'label' => t('Glossary definition'),
+      'description' => t('An entity containing a glossary definition.'),
+      'plural label' => t('Glossary definitions'),
+      'entity class' => 'Entity',
+      'controller class' => 'EntityAPIControllerExportable',
+      'base table' => 'paddle_glossary_definition',
+      'fieldable' => TRUE,
+      'entity keys' => array(
+        'id' => 'gdid',
+        'label' => 'definition',
+      ),
+      'bundles' => array(
+        'paddle_glossary_definition' => array(
+          'label' => t('Paddle Glossary definition'),
+        ),
+      ),
+      'module' => 'paddle_glossary',
+      'access callback' => 'paddle_glossary_definition_access',
+      'views controller class' => 'EntityDefaultViewsController',
+    ),
+  );
+}
+
+/**
+ * Access callback for the glossary definition entity.
+ *
+ * If a user has access to Paddle Apps, we let them configure definitions.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ * @param object $definition
+ *   The definition entity to check for.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ *
+ * @return bool
+ *   Whether access is allowed or not. If the entity type does not specify any
+ *   access information, NULL is returned.
+ *
+ * @see entity_metadata_no_hook_node_access()
+ */
+function paddle_glossary_definition_access($op, $definition = NULL, $account = NULL) {
+  return user_access('administer paddle glossary definitions', $account);
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_glossary_permission() {
+  return array(
+    'administer paddle glossary definitions' => array(
+      'title' => t('Administer Paddle Glossary configuration'),
+    ),
+    'see frontend glossary views page' => array(
+      'title' => t('Allows users to watch the front end views glossary page.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_glossary_menu() {
+  $items = array();
+
+  $items['admin/content/paddle_glossary_definition/%ctools_js/add'] = array(
+    'title' => 'Add glossary definition',
+    'page callback' => 'paddle_glossary_definition_form_wrapper',
+    'page arguments' => array(3, NULL),
+    'access arguments' => array('administer paddle glossary definitions'),
+    'file' => 'paddle_glossary.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content/paddle_glossary_definition/%ctools_js/edit/%paddle_glossary_definition'] = array(
+    'title' => 'Edit glossary definition',
+    'page callback' => 'paddle_glossary_definition_form_wrapper',
+    'page arguments' => array(3, 5),
+    'access arguments' => array('administer paddle glossary definitions'),
+    'file' => 'paddle_glossary.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content/paddle_glossary_definition/%ctools_js/delete/%paddle_glossary_definition'] = array(
+    'title' => 'Delete glossary definition',
+    'page callback' => 'paddle_glossary_definition_delete',
+    'page arguments' => array(3, 5),
+    'access arguments' => array('administer paddle glossary definitions'),
+    'file' => 'paddle_glossary.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_glossary_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_glossary_configuration_form',
+  );
+}
+
+/**
+ * Paddlet configuration form.
+ */
+function paddle_glossary_configuration_form($form, &$form_state) {
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_glossary_configuration_form_add_contextual_actions';
+  }
+
+  $form['contains'] = array(
+    '#markup' => views_embed_view('paddle_glossary', 'paddle_glossary_block', paddle_glossary_get_first_definition_label()),
+  );
+
+  return $form;
+}
+
+/**
+ * After build function to set the contextual actions for the paddlet config.
+ */
+function paddle_glossary_configuration_form_add_contextual_actions($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add an add definition button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Add glossary definition'), 'admin/content/paddle_glossary_definition/nojs/add', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-plus', 'ctools-use-modal'),
+      ),
+    )),
+    'class' => array('add-glossary-definition'),
+    'weight' => 20,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Glossary definition wildcard loader.
+ *
+ * @param int $gdid
+ *   Glossary definition ID.
+ *
+ * @return object
+ *   Glossary definition entity.
+ */
+function paddle_glossary_definition_load($gdid) {
+  return entity_load_single('paddle_glossary_definition', $gdid);
+}
+
+/**
+ * Load a glossary definition by its word.
+ *
+ * @param string $definition
+ *   The word to load the definition for.
+ *
+ * @return mixed
+ *   Return the fully loaded entity or FALSE if none found.
+ */
+function paddle_glossary_load_by_definition($definition) {
+  $query = new EntityFieldQuery();
+  $query
+    ->entityCondition('entity_type', 'paddle_glossary_definition', '=')
+    ->propertyCondition('definition', $definition, '=');
+
+  $result = $query->execute();
+
+  if (empty($result)) {
+    return FALSE;
+  }
+
+  // Reset the internal entity cache for the paddle_glossary_definition type.
+  // Otherwise you get the old object back (from before editation.)
+  entity_get_controller('paddle_glossary_definition')->resetCache();
+
+  $definition = reset($result['paddle_glossary_definition']);
+  return entity_load_single('paddle_glossary_definition', $definition->gdid);
+}
+
+/**
+ * Get the description of a give definition.
+ *
+ * @param Entity $definition
+ *   The glossary definition entity.
+ *
+ * @return string
+ *   The full value if found, FALSE otherwise.
+ */
+function paddle_glossary_get_definition_description(Entity $definition) {
+  $description = field_get_items('paddle_glossary_definition', $definition, 'field_glossary_description');
+
+  if (empty($description[0])) {
+    return FALSE;
+  }
+
+  return isset($description[0]['safe_value']) ? $description[0]['safe_value'] : $description[0]['value'];
+}
+
+/**
+ * Find the first letter for which we have definitions.
+ *
+ * @return string
+ *   The first letters with definitions, 'a' if we have no definitions.
+ */
+function paddle_glossary_get_first_definition_label() {
+  $first_letter = 'a';
+  $query = new EntityFieldQuery();
+  $query
+    ->entityCondition('entity_type', 'paddle_glossary_definition', '=')
+    ->propertyOrderBy('definition', 'ASC')
+    ->range(0, 1);
+
+  $result = $query->execute();
+
+  if (!empty($result)) {
+    $entity = reset($result['paddle_glossary_definition']);
+    $entity = entity_load_single('paddle_glossary_definition', $entity->gdid);
+    $first_letter = substr($entity->definition, 0, 1);
+  }
+
+  return $first_letter;
+}
+
+/**
+ * Implements hook_paddle_core_additional_panes().
+ */
+function paddle_glossary_paddle_core_additional_panes($context, $region) {
+  $panes = array();
+
+  $object = menu_get_object('node');
+  if (!empty($object) && $object->nid == variable_get('paddle_glossary_overview_page_nid', 0) && $context == 'overview_page_view' && $region == 'main') {
+    $pane = panels_new_pane('views_panes', 'paddle_glossary-glossary_overview_pane', TRUE);
+
+    // Add a title to the pane.
+    $pane->configuration['override_title'] = TRUE;
+    $pane->configuration['override_title_text'] = '';
+    $panes[] = array(
+      'pane' => $pane,
+      'weight' => 2,
+    );
+  }
+
+  return $panes;
+}
+
+/**
+ * Implements hook_filter_info().
+ */
+function paddle_glossary_filter_info() {
+  return array(
+    'paddle_glossary_filter' => array(
+      'title' => t('Highlight glossary definitions in text.'),
+      'process callback' => '_paddle_glossary_glossary_definition_filter',
+      'weight' => -50,
+    ),
+  );
+}
+
+/**
+ * Provides a filter to update glossary definitions in html text.
+ *
+ * See paddle_glossary_filter_info().
+ */
+function _paddle_glossary_glossary_definition_filter($text, $filter, $format, $langcode, $cache, $cache_id) {
+  // Avoid useless parsing of empty strings.
+  if (!$text) {
+    return $text;
+  }
+
+  $data = array();
+  $components = array();
+  foreach (entity_load('paddle_glossary_definition') as $entity) {
+    /* @var \Entity $entity */
+    $label = drupal_strtolower($entity->label());
+    $data[$label] = paddle_glossary_get_definition_description($entity);
+    $components[] = preg_quote($label, '/');
+  }
+
+  // Stop processing if no definitions are found.
+  if (!count($data)) {
+    return $text;
+  }
+
+  // Sort values by reverse length, replacing first composed words
+  // and then singular ones.
+  uksort($data, '_paddle_glossary_reverse_length_sort');
+
+  // Match all the definitions not inside an HTML tag.
+  $match_pattern = '/\b(' . implode('|', $components) . ')\b(?!([^<]+)?>)/i';
+  preg_match_all($match_pattern, $text, $matches);
+
+  // If no matches found, quit processing.
+  if (empty($matches)) {
+    return $text;
+  }
+
+  // Split the string in parts, to avoid multiple replaces on definitions
+  // containing other definitions inside.
+  $parts = preg_split($match_pattern, $text);
+
+  $text = '';
+  $found = array();
+  foreach ($matches[0] as $key => $value) {
+    // Keep track of how many times a glossary definition has been resolved.
+    $lower = strtolower($value);
+    if (!array_key_exists($lower, $found)) {
+      $found[$lower] = 1;
+    }
+    elseif (array_key_exists($lower, $found)) {
+      $found[$lower] += 1;
+    }
+
+    $text .= $parts[$key];
+
+    if ($found[$lower] <= 2) {
+      $text .= '<span class="glossary-definition" data-toggle="tooltip" title="';
+      $text .= check_plain($data[drupal_strtolower($value)]) . '">';
+      $text .= $value . '</span>';
+    }
+    else {
+      $text .= $value;
+    }
+
+  }
+  // preg_split() will always return matches+1 elements.
+  $text .= end($parts);
+
+  // Add the js + css files.
+  $module_path = drupal_get_path('module', 'paddle_glossary');
+  drupal_add_js($module_path . '/js/tooltip.js', array(
+    'type' => 'file',
+    'scope' => 'footer',
+    'group' => JS_THEME,
+  ));
+
+  drupal_add_js($module_path . '/js/paddle_glossary.js', array(
+    'type' => 'file',
+    'scope' => 'footer',
+    'group' => JS_THEME,
+  ));
+
+  drupal_add_css($module_path . '/css/tooltip.css');
+
+  return $text;
+}
+
+/**
+ * Sort callback function to order strings by length and value.
+ */
+function _paddle_glossary_reverse_length_sort($a, $b) {
+  $length_diff = drupal_strlen($b) - drupal_strlen($a);
+  return ($length_diff === 0) ? strcasecmp($b, $a) : $length_diff;
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors().
+ */
+function paddle_glossary_paddle_color_palettes_color_selectors() {
+  return array(
+    array(
+      'background-color' => array(
+        '.paddle-glossary-pager .views-summary > a:hover',
+      ),
+    ),
+    array(
+      'background-color' => array(
+        '.paddle-glossary-pager .views-summary > a.active',
+      ),
+    ),
+    array(
+      'background-color' => array(
+        '.paddle-glossary-pager .views-summary > a',
+      ),
+      'color' => array(
+        '.paddle-glossary-pager .views-summary > a.active',
+        '.paddle-glossary-pager .views-summary > a:hover',
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_url_outbound_alter().
+ *
+ * This is a crude fix of an issue in Views - see
+ * https://www.drupal.org/node/1147302. The simpliest solution is to change the
+ * URLs of the attachment links and to remove the language prefix from them as
+ * the glossary entities are not language dependent.
+ */
+function paddle_glossary_url_outbound_alter(&$path, &$options, $original_path) {
+  $view_path = 'views-glossary';
+  if (strpos($path, $view_path) === 0 && (strlen($path) - 2 == strlen($view_path))) {
+    $options['prefix'] = '';
+  }
+}

@@ -1,0 +1,12 @@
+
+name = Active Tags
+description = Enhanced tag widget for free tagging vocabularies.
+dependencies[] = taxonomy
+dependencies[] = field
+package = User interface
+core = 7.x
+
+; Information added by drush on 2011-09-28
+version = "7.x-2.x-dev"
+project = "active_tags"
+datestamp = "1317233972"

@@ -1,0 +1,26 @@
+name = Paddle Editorial Notes
+description = Allows editors to add non-public, editorial comments on nodes.
+core = 7.x
+package = Paddle
+php = 5.2.4
+
+dependencies[] = entityreference
+dependencies[] = features
+dependencies[] = list
+dependencies[] = message
+dependencies[] = strongarm
+
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:1
+features[field][] = message-paddle_editorial_note-field_paddle_editorial_note
+features[field][] = message-paddle_editorial_note-field_paddle_editorial_note_ref
+features[field][] = message-paddle_editorial_note-field_paddle_editorial_note_vis
+features[message_type][] = paddle_editorial_note
+features[variable][] = field_bundle_settings_message__paddle_editorial_note
+
+files[] = tests/paddle_editorial_notes.test
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_editorial_notes"
+datestamp = "1455504776"

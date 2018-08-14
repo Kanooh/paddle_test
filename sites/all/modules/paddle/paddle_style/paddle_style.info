@@ -1,0 +1,21 @@
+name = Paddle style
+description = Extendable API for applying dynamic styling to themes.
+core = 7.x
+
+dependencies[] = "ctools"
+dependencies[] = "jquery_colorpicker"
+
+files[] = tests/paddle_style.test
+files[] = tests/plugins/paddle_style_plugin_background.test
+files[] = tests/plugins/paddle_style_plugin_boxmodel.test
+files[] = tests/plugins/paddle_style_plugin_checkbox.test
+files[] = tests/plugins/paddle_style_plugin_color.test
+files[] = tests/plugins/paddle_style_plugin_favicon.test
+files[] = tests/plugins/paddle_style_plugin_font.test
+files[] = tests/plugins/paddle_style_plugin_test_case.test
+files[] = tests/plugins/paddle_style_plugin_text_input.test
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_style"
+datestamp = "1455514401"

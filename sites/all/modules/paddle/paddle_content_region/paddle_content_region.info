@@ -1,0 +1,25 @@
+name = Paddle Content Regions
+description = Contains content regions that can be configured globally.
+core = 7.x
+package = Paddle
+dependencies[] = ctools
+dependencies[] = entity
+dependencies[] = features
+dependencies[] = paddle_panels_renderer
+dependencies[] = page_manager
+dependencies[] = panelizer
+dependencies[] = strongarm
+features[ctools][] = page_manager:pages_default:1
+features[ctools][] = panelizer:panelizer:1
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[page_manager_pages][] = paddle_content_region_panel
+features[panelizer_defaults][] = paddle_content_region:paddle_content_region:default
+features[variable][] = panelizer_defaults_paddle_content_region_paddle_content_region
+files[] = tests/crud.test
+files[] = tests/access_check.test
+
+; Information added by drush on 2015-03-25
+version = "7.x-1.x-dev"
+project = "paddle_content_region"
+datestamp = "1427297982"

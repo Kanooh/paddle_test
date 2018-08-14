@@ -1,0 +1,19 @@
+/**
+ * @file
+ * Custom Page Layout paddlet styling.
+ */
+
+// --------------------
+// Global page wide theme related.
+// --------------------
+body.page-wide {
+  #page-content {
+    div.page {
+      .region-content .panel-responsive {
+        padding: 0 20px;
+        box-sizing: border-box;
+        margin: 0 auto;
+      }
+    }
+  }
+}

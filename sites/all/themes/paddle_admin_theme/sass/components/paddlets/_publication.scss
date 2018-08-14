@@ -1,0 +1,19 @@
+/**
+ * @file
+ * Publication paddlet styling.
+ */
+
+#field-paddle-kce-url-add-more-wrapper {
+  .field-value-url {
+    margin-left: -10px;
+    .form-type-textfield{
+      margin: -15px 0px -10px 0px;
+    }
+  }
+}
+
+.form-item-conditions-plugins-node-taxonomy-values {
+  #edit-conditions-plugins-node-taxonomy-values {
+    height: 200px;
+  }
+}

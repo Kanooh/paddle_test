@@ -1,0 +1,42 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle VUB tags module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_vub_tags_install()
+{
+  entity_property_info_cache_clear();
+  paddle_taxonomy_manager_create_vocabularies(array(
+    'vub_tags' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'VUB tags',
+          'nl' => 'VUB trefwoorden',
+        ),
+        'description' => array(
+          'en' => 'List of tags to be added to news items on sites within the VUB hemisphere.',
+          'nl' => 'Lijst van trefwoorden die men kan toevoegen aan nieuwsartikelen binnen het VUB netwerk.',
+        ),
+      ),
+      'is_flat' => FALSE,
+    ),
+  ));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_vub_tags_uninstall() {
+  $vocabulary = taxonomy_vocabulary_machine_name_load('vub_tags');
+  foreach (taxonomy_get_tree($vocabulary->vid) as $term) {
+    taxonomy_term_delete($term->tid);
+  }
+
+  variable_del('taxonomy_vocabulary_' . $vocabulary->machine_name . '_type');
+  taxonomy_vocabulary_delete($vocabulary->vid);
+}

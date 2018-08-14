@@ -1,0 +1,98 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleStyleTextInputPluginTest.
+ */
+
+/**
+ * Test the generic text input plugin.
+ */
+class PaddleStyleTextInputPluginTest extends DrupalWebTestCase {
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'testing';
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Plugin: Text input'),
+      'description' => t('Test the functionality of the generic text input plugin.'),
+      'group' => t('Paddle Style'),
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(array('ctools', 'paddle_style'));
+
+    // Create Ctools context.
+    $this->context = new ctools_context();
+    $this->context->data = array(
+      'instance' => array(
+        'plugin' => 'text_input',
+        'label' => t('Test label for text input'),
+      ),
+      'machine_name' => 'text_input_machine_name',
+    );
+
+    // Instantiate the Input Text plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'text_input');
+    $this->instance = new $plugin['handler']['class']();
+  }
+
+  /**
+   * Test the functionality of the form method.
+   */
+  public function testGenericTextInputForm() {
+    // If no context is passed the form should throw an exception.
+    try {
+      $form_elements = $this->instance->form();
+      $this->fail('An exception is thrown when no context is passed to the form() method.');
+    }
+    catch (Exception $e) {
+      $this->pass('An exception is thrown when no context is passed to the form() method.');
+    }
+
+    // Use the context and add default values.
+    $text = $this->randomString();
+    $default_values = array('text_input_machine_name' => $text);
+    $form_elements = $this->instance->form(array(), $default_values, $this->context);
+
+    // Check that the context is used.
+    $machine_name = $this->context->data['machine_name'];
+    $this->assertTrue(isset($form_elements[$machine_name]), 'Element machine name set when passed by context');
+    $this->assertEqual($form_elements[$machine_name]['#title'], $this->context->data['instance']['label'], 'Element title set when passed by context');
+    // Check the default_values.
+    $this->assertEqual($form_elements[$machine_name]['#default_value'], $text, 'Element default value set correctly when passed by context');
+  }
+
+  /**
+   * Tests the execute() method.
+   */
+  public function testGenericTextInputExecute() {
+    // Try running it without context.
+    $values = array('generic_text_input' => TRUE);
+    try {
+      $this->instance->execute($values);
+      $this->fail('An exception is thrown when no context is passed to the execute() method.');
+    }
+    catch (Exception $e) {
+      $this->pass('An exception is thrown when no context is passed to the execute() method.');
+    }
+
+    // Now check with the context.
+    $text = $this->randomString();
+    $values = array($this->context->data['machine_name'] => $text);
+    $this->instance->execute($values, $this->context);
+    $variable = 'paddle_style_' . $this->context->data['machine_name'];
+    $this->assertEqual(variable_get($variable, FALSE), $text, 'Variable set correctly when context is given');
+  }
+
+}

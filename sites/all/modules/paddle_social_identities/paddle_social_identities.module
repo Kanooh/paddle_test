@@ -1,0 +1,380 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Social Identities.
+ */
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_social_identities_entity_info() {
+  $entity_info = array();
+
+  $entity_info['paddle_social_identity'] = array(
+    'label' => t('Paddle Social Identity'),
+    'plural label' => t('Paddle Social Identities'),
+    'description' => t('A configuration entity used by the Paddle Social Identities module.'),
+    'entity class' => 'Entity',
+    'controller class' => 'EntityAPIController',
+    'base table' => 'paddle_social_identity',
+    'fieldable' => TRUE,
+    'entity keys' => array(
+      'id' => 'psiid',
+      'label' => 'name',
+    ),
+    'bundles' => array(
+      'paddle_social_identity' => array(
+        'label' => t('Paddle Social Identity'),
+        'admin' => array(
+          'path' => 'admin/structure/paddle-social-identity',
+        ),
+      ),
+    ),
+    'access callback' => 'paddle_social_identities_access',
+    'admin ui' => array(
+      'path' => 'admin/structure/paddle-social-identity',
+      'controller class' => 'EntityDefaultUIController',
+    ),
+    'module' => 'paddle_social_identities',
+  );
+
+  return $entity_info;
+}
+
+/**
+ * Access callback for the social identity entity.
+ *
+ * If a user has access to Paddle Apps, we let them configure social identities.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ * @param object $social_identity
+ *   The social identity configuration entity to check for.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ *
+ * @return bool
+ *   Whether access is allowed or not. If the entity type does not specify any
+ *   access information, NULL is returned.
+ *
+ * @see entity_metadata_no_hook_node_access()
+ */
+function paddle_social_identities_access($op, $social_identity = NULL, $account = NULL) {
+  return user_access('manage paddle_apps', $account);
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_social_identities_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_social_identities_configuration_form',
+  );
+}
+
+/**
+ * Form callback displaying the paddle social identities configuration.
+ */
+function paddle_social_identities_configuration_form() {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  $form = array();
+
+  drupal_set_title(t('Social identities configuration'));
+
+  $identities = entity_load('paddle_social_identity');
+
+  $form['identities'] = array(
+    '#type' => 'container',
+    'table' => array(
+      '#theme' => 'paddle_social_identities_identity_list',
+      '#identities' => $identities,
+    ),
+  );
+
+  if (module_exists('paddle_contextual_toolbar')) {
+    paddle_contextual_toolbar_add_js('click_delegator');
+    $form['#after_build'][] = 'paddle_social_identities_add_contextual_actions_configuration_form';
+  }
+
+  return $form;
+}
+
+/**
+ * After-build function of the social identities settings form.
+ */
+function paddle_social_identities_add_contextual_actions_configuration_form($form, &$form_state) {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  $actions = paddle_contextual_toolbar_actions();
+
+  $actions[] = array(
+    'action' => ctools_modal_text_button(t('Create Identity'), 'admin/content/paddle_social_identities/nojs/add', t('Create a new identity.'), 'ctools-modal-overlay-persist ui-icon fa-plus'),
+    'class' => array('add'),
+    'weight' => 0,
+    'group' => 'content',
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_social_identities_theme() {
+  return array(
+    'paddle_social_identities_identity_list' => array(
+      'variables' => array(
+        'identities' => array(),
+      ),
+    ),
+    'paddle_social_identities_urls' => array(
+      'render element' => 'element',
+    ),
+  );
+}
+
+/**
+ * Theme function for the social identity list.
+ */
+function theme_paddle_social_identities_identity_list($variables) {
+  if (empty($variables['identities'])) {
+    return t('No identities have been created yet.');
+  }
+
+  $table = array(
+    'attributes' => array('id' => 'identity-list'),
+  );
+
+  $table['header'][] = array(
+    'data' => t('Name'),
+  );
+
+  $table['header'][] = array(
+    'data' => '',
+    'colspan' => 2,
+  );
+
+  $action_class = 'ui-icon ui-icon-hiddentext';
+  foreach ($variables['identities'] as $identity) {
+    $table['rows'][] = array(
+      'data' => array(
+        array(
+          'data' => check_plain($identity->name),
+          'class' => 'identity-name',
+        ),
+        array(
+          'data' => ctools_modal_text_button(t('Edit'), 'admin/content/paddle_social_identities/nojs/edit/' . $identity->psiid, t('Edit the identity'), $action_class . ' ui-icon-edit'),
+          'class' => 'identity-edit',
+        ),
+        array(
+          'data' => ctools_modal_text_button(t('Delete'), 'admin/content/paddle_social_identities/nojs/delete/' . $identity->psiid, t('Delete the identity'), $action_class . ' ui-icon-delete'),
+          'class' => 'identity-delete',
+        ),
+      ),
+      'data-identity-id' => $identity->psiid,
+    );
+  }
+
+  // We sort the table so that the oldest added social identity is first in the
+  // list.
+  usort($table['rows'], function ($a, $b) {
+    return $a['data-identity-id'] > $b['data-identity-id'];
+  });
+
+  return theme('table', $table);
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_social_identities_menu() {
+  return array(
+    'admin/content/paddle_social_identities/%ctools_js/add' => array(
+      'title' => 'Create identity',
+      'page callback' => 'paddle_social_identities_settings',
+      'page arguments' => array(3),
+      'access arguments' => array('manage paddle_apps'),
+      'type' => MENU_CALLBACK,
+      'file' => 'paddle_social_identities.admin.inc',
+    ),
+    'admin/content/paddle_social_identities/%ctools_js/edit/%paddle_social_identities' => array(
+      'title' => 'Edit identity',
+      'page callback' => 'paddle_social_identities_settings',
+      'page arguments' => array(3, 5),
+      'access arguments' => array('manage paddle_apps'),
+      'type' => MENU_CALLBACK,
+      'file' => 'paddle_social_identities.admin.inc',
+    ),
+    'admin/content/paddle_social_identities/%ctools_js/delete/%paddle_social_identities' => array(
+      'title' => 'Delete identity',
+      'page callback' => 'paddle_social_identities_identity_delete',
+      'page arguments' => array(3, 5),
+      'access arguments' => array('manage paddle_apps'),
+      'type' => MENU_CALLBACK,
+      'file' => 'paddle_social_identities.admin.inc',
+    ),
+  );
+}
+
+/**
+ * Provides an ajax command to refresh the list of identities.
+ */
+function paddle_social_identities_refresh_identities_list_command() {
+  // Reload the list of identities from the database.
+  $identities = entity_load('paddle_social_identity', FALSE, array(), TRUE);
+  $themed_list = theme(
+    'paddle_social_identities_identity_list',
+    array('identities' => $identities)
+  );
+  return ajax_command_html('#edit-identities', $themed_list);
+}
+
+/**
+ * Social identity wildcard loader.
+ *
+ * @param int $psiid
+ *   Social identity ID.
+ *
+ * @return object
+ *   Social identity entity.
+ */
+function paddle_social_identities_load($psiid) {
+  return entity_load_single('paddle_social_identity', $psiid);
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_social_identities_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Determines if the passed URL is to a supported identity.
+ *
+ * @param string $url
+ *   The url to an identity.
+ *
+ * @return string
+ *   The id of the identity. If it is not supported "unknown" will be returned.
+ */
+function paddle_social_identitites_identify_identity($url) {
+  $supported_identities = array(
+    'facebook',
+    'twitter',
+    'linkedin',
+    'plus.google',
+    'pinterest',
+    'flickr',
+    'youtube',
+    'vimeo',
+    'wordpress',
+    'tumblr',
+    'blogger',
+    'foursquare',
+    'instagram',
+  );
+
+  foreach ($supported_identities as $identity) {
+    if (strpos($url, $identity)) {
+      return $identity != 'plus.google' ? $identity : 'google-plus';
+    }
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Returns HTML for social identity urls field in the backend.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - element: A render element representing the form element.
+ *
+ * @ingroup themeable
+ */
+function theme_paddle_social_identities_urls($variables) {
+  $element = $variables['element'];
+  $output = '';
+
+  $table_id = drupal_html_id($element['#field_name'] . '_values');
+  $order_class = $element['#field_name'] . '-delta-order';
+  $required = !empty($element['#required']) ? theme('form_required_marker', $variables) : '';
+
+  $header = array(
+    array(
+      'data' => '<label>' . t('!title !required', array('!title' => $element['#title'], '!required' => $required)) . "</label>",
+      'colspan' => 1,
+      'class' => array('field-label'),
+    ),
+    t('Order'),
+  );
+  $rows = array();
+
+  // Sort items according to '_weight' (needed when the form comes back after
+  // preview or failed validation).
+  $items = array();
+  foreach (element_children($element) as $key) {
+    if ($key === 'add_more') {
+      $add_more_button = &$element[$key];
+    }
+    else {
+      $items[] = &$element[$key];
+    }
+  }
+  usort($items, '_field_sort_items_value_helper');
+
+  // Add the items as table rows.
+  foreach ($items as $key => $item) {
+    $item['_weight']['#attributes']['class'] = array($order_class);
+    $delta_element = drupal_render($item['_weight']);
+
+    $cells = array(
+      array('data' => drupal_render($item), 'class' => array('field-multiple-drag')),
+      array('data' => $delta_element, 'class' => array('delta-order')),
+    );
+
+    $rows[] = array(
+      'data' => $cells,
+      'class' => array('draggable'),
+    );
+  }
+
+  $output = '<div class="form-item">';
+  $variables = array(
+    'header' => $header,
+    'rows' => $rows,
+    'attributes' => array('id' => $table_id, 'class' => array('field-multiple-table')),
+  );
+  $output .= theme('table', $variables);
+  $output .= $element['#description'] ? '<div class="description">' . $element['#description'] . '</div>' : '';
+  $output .= '<div class="clearfix">' . drupal_render($add_more_button) . '</div>';
+  $output .= '</div>';
+
+  drupal_add_tabledrag($table_id, 'order', 'sibling', $order_class);
+
+  return $output;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function paddle_social_identities_menu_alter(&$items) {
+  // Remove access from default admin UI - we have a configuration form.
+  $items['admin/structure/paddle-social-identity']['access callback'] = FALSE;
+}

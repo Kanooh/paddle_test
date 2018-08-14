@@ -1,0 +1,398 @@
+<?php
+/**
+ * @file
+ * Drupal module file paddle_page_wide_theme
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_page_wide_theme_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'page_manager:styles',
+    'panels:styles',
+    'paddle_style:paddle_style',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Theme callback function for rendering a region.
+ *
+ * @param array $vars
+ *   The variables used to render the region.
+ *
+ * @return string
+ *   The rendered region as string.
+ */
+function theme_page_wide_render_region($vars) {
+  return _paddle_page_wide_theme_region_style_settings($vars, 'page_wide_theme_region');
+}
+
+/**
+ * Theme callback function for rendering the container region.
+ *
+ * @param array $vars
+ *   The variables used to render the region.
+ *
+ * @return string
+ *   The rendered region as string.
+ */
+function theme_container_render_region($vars) {
+  return _paddle_page_wide_theme_region_style_settings($vars, 'container_theme_region');
+}
+
+/**
+ * Theme callback function for rendering an image region.
+ *
+ * @param array $vars
+ *   The variables used to render the region.
+ *
+ * @return string
+ *   The rendered region as string.
+ */
+function theme_background_image_render_region($vars) {
+  return _paddle_page_wide_theme_region_style_settings($vars, 'background_image_theme_region');
+}
+
+/**
+ * Helper function which renders a region or pane.
+ *
+ * @param array $vars
+ *   The variables used to render the region.
+ * @param string $tpl
+ *   The name of the template of the region.
+ *
+ * @return string
+ *   The rendered region as string.
+ */
+function _paddle_page_wide_theme_region_style_settings($vars, $tpl) {
+  $image_url = NULL;
+  $style_attributes = array();
+
+  if (!empty($vars['settings']['image']['sid'])) {
+    $image_id = $vars['settings']['image']['sid'][0];
+    $image_style = $vars['settings']['image']['style'];
+    $image = scald_atom_load($image_id);
+
+    if (!empty($image_style) && $image_style != 'none') {
+      $styled_path = image_style_path($image_style, $image->thumbnail_source);
+      if (!file_exists($styled_path)) {
+        image_style_create_derivative(image_style_load($image_style), $image->thumbnail_source, $styled_path);
+      }
+      $image_url = file_create_url($styled_path);
+    }
+    else {
+      $image_url = file_create_url($image->thumbnail_source);
+    }
+
+    $style_attributes = array();
+    $style_attributes['style'] = 'background-image: url(' . $image_url . '); background-size: cover; background-repeat:no-repeat; -webkit-background-size:cover; -moz-background-size:cover; -o-background-size:cover; background-position:center;';
+  }
+
+  $padding = (!empty($vars['settings']['padding']) ? $vars['settings']['padding'] : NULL);
+  $padding_attributes = array();
+  if (empty($padding)) {
+    $padding_attributes['style'] = '';
+  }
+  else {
+    $padding_attributes['style'] = 'padding:' . $padding . 'px 0;';
+    $padding_extra_class = 'has-padding';
+  }
+
+  $transContent = !empty($vars['settings']['transparent_content']) ? 'is-transparent' : 'not-transparent';
+
+  $content = '';
+  foreach ($vars['panes'] as $pane_id => $pane_output) {
+    $content .= $pane_output;
+  }
+
+  if (empty($content)) {
+    return;
+  }
+  return theme($tpl, array(
+    'content' => $content,
+    'style_attributes' => $style_attributes,
+    'isTransparent' => $transContent,
+    'padding' => $padding_attributes,
+    'hasPaddingClass' => isset($padding_extra_class) ? $padding_extra_class : '',
+  ));
+}
+
+/**
+ * Implements hook_preprocess_html().
+ */
+function paddle_page_wide_theme_preprocess_html(&$vars) {
+  if (paddle_page_wide_theme_is_page_wide()) {
+    $vars['classes_array'][] = drupal_clean_css_identifier('page-wide');
+
+    if (variable_get('paddle_page_wide_theme_customized_header', FALSE)) {
+      $vars['classes_array'][] = drupal_clean_css_identifier('customized-header');
+      drupal_add_js(drupal_get_path('theme', 'kanooh_theme_v2_page_wide') . '/scripts/customized-header.js',
+          array(
+              'type' => 'file',
+              'scope' => 'header',
+              'group' => JS_THEME,
+              'every_page' => TRUE,
+          ));
+
+      if (variable_get('paddle_core_header_show_logo', FALSE)) {
+        $vars['classes_array'][] = drupal_clean_css_identifier('has-logo');
+      }
+    }
+    if (variable_get('paddle_page_wide_theme_sticky_header', FALSE)) {
+      $vars['classes_array'][] = drupal_clean_css_identifier('sticky-header');
+      drupal_add_js(drupal_get_path('theme', 'kanooh_theme_v2_page_wide') . '/scripts/sticky-header.js',
+        array(
+          'type' => 'file',
+          'scope' => 'header',
+          'group' => JS_THEME,
+          'every_page' => TRUE,
+        ));
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess().
+ */
+function paddle_page_wide_theme_preprocess(&$variables, $hook) {
+  if (paddle_page_wide_theme_is_page_wide() && strpos($hook, 'paddle_') !== FALSE && strpos($hook, '_col') !== FALSE) {
+
+    // Simplify classes for rendering.
+    if (isset($variables['content'])) {
+      foreach ($variables['content'] as $key => $content) {
+
+        if (empty($variables['display']->panel_settings[$key])) {
+          $variables['custom_styles'][$key] = 'page-wide-container';
+        }
+        else {
+          $variables['custom_styles'][$key] = $variables['display']->panel_settings[$key]['style'];
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements preprocess_page().
+ *
+ * @param array $vars
+ *   The variables used to process the page.
+ */
+function paddle_page_wide_theme_preprocess_page(&$vars) {
+  $not_allowed_node_types_to_have_container = _paddle_page_wide_theme_get_exception_entity_types();
+  // empty($vars['node'] is when the page is not a node,like uitdatabank pages.
+  if (paddle_page_wide_theme_is_page_wide()) {
+    if ((isset($vars['node']->type) && !in_array($vars['node']->type, $not_allowed_node_types_to_have_container) || empty($vars['node']))) {
+      $vars['classes_array'] = (array) 'container';
+    }
+
+    $vars['customized_header'] = variable_get('paddle_page_wide_theme_customized_header', FALSE);
+    $vars['sticky_header'] = variable_get('paddle_page_wide_theme_sticky_header', FALSE);
+
+  }
+
+  if (!empty($vars['page']['content'][0]['landing_page_body'])) {
+    $vars['page']['content'][0]['landing_page_body']['#prefix'] = '<div class="row"><div class="field-name-body landing-page-body page-wide-container">';
+  }
+}
+
+/**
+ * Get exception types.
+ */
+function _paddle_page_wide_theme_get_exception_entity_types() {
+  return array(
+    'paddle_advanced_search_page',
+    'landing_page',
+  );
+}
+
+/**
+ * Settings form callback.
+ */
+function background_image_settings_form($form, $form_state) {
+  $form['image'] = array(
+    '#type' => 'paddle_scald_image_atom',
+    '#title' => t('Image'),
+    '#required' => FALSE,
+    '#default_value' => isset($form['image']) ? $form['image'] : '',
+  );
+
+  $form['padding'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Space above and below the image (Default 50px)'),
+    '#required' => FALSE,
+    '#default_value' => isset($form['padding']) ? $form['padding'] : '50',
+  );
+
+  $form['transparent_content'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Transparent background for content'),
+    '#default_value' => isset($form['transparent_content']) ? $form['transparent_content'] : TRUE,
+  );
+
+  return $form;
+}
+
+/**
+ * Disable the standard panel styles.
+ *
+ * For the sake of time, it's hard coded :(
+ *
+ * Implements hook_form_ID_alter().
+ */
+function paddle_page_wide_theme_form_panels_edit_style_type_form_alter(&$form, $form_state) {
+  $allowed_style_types = array('background_image');
+  $context = $form_state['display']->context;
+  $restrictions = $context['panelizer']->restrictions;
+  $content_type = $restrictions['type'][0];
+
+  if (in_array($content_type, _paddle_page_wide_theme_get_exception_entity_types())) {
+    $allowed_style_types[] = 'container_page';
+    $allowed_style_types[] = 'page_wide';
+  }
+
+  foreach ($form['style']['#options'] as $key => $option) {
+    if (!in_array($key, $allowed_style_types)) {
+      unset($form['style']['#options'][$key]);
+    }
+  }
+}
+
+/**
+ * Implements hook_panels_ipe_pane_links_alter().
+ */
+function paddle_page_wide_theme_panels_ipe_pane_links_alter(&$links, $context) {
+  // Add the Paddle Style button if any modules add Paddle Style plugins.
+  if (module_exists('paddle_style') && module_invoke_all('paddle_panels_renderer_pane_styles', $context['pane'])) {
+    unset($links["style"]);
+  }
+}
+
+/**
+ * Implements hook_panels_ipe_region_links_alter().
+ */
+function paddle_page_wide_theme_panels_ipe_region_links_alter(&$links, $context) {
+  // Add the Paddle Style button if any modules add Paddle Style plugins.
+  if (module_exists('paddle_style')) {
+    if (paddle_page_wide_theme_is_page_wide()) {
+      // @TODO Refactor to a general method to select col-xs-12 regions.
+      switch ($context['display']->layout) {
+        case 'paddle_no_column':
+          break;
+
+        case 'paddle_3_col_b':
+          if ($context['region_id'] != 'top') {
+            unset($links["style"]);
+          }
+          break;
+
+        case 'paddle_2_cols_3_cols_d':
+          if ($context['region_id'] != 'bottom_row') {
+            unset($links["style"]);
+          }
+          break;
+
+        case 'paddle_3_col_c':
+          if ($context['region_id'] != 'top') {
+            unset($links["style"]);
+          }
+          break;
+
+        case 'paddle_4_col_multiline':
+          if ($context['region_id'] != 'full_bottom') {
+            unset($links["style"]);
+          }
+          break;
+
+        case 'paddle_1_col_3_cols':
+          $full_regions = array(
+            'row_1_full',
+            'row_3_full',
+            'row_5_full',
+            'row_7_full',
+          );
+          if (!in_array($context['region_id'], $full_regions)) {
+            unset($links["style"]);
+          }
+          break;
+
+        case 'paddle_1_col_2_cols':
+          $full_regions = array(
+            'row_2_full',
+            'row_4_full',
+            'row_6_full',
+            'row_8_full',
+          );
+          if (!in_array($context['region_id'], $full_regions)) {
+            unset($links["style"]);
+          }
+          break;
+
+        case 'paddle_chi':
+          $full_regions = array(
+            'full_a',
+            'full_b',
+            'full_l',
+            'full_v',
+            'full_af',
+          );
+          if (!in_array($context['region_id'], $full_regions)) {
+            unset($links["style"]);
+          }
+          break;
+
+        case 'paddle_phi':
+          $full_regions = array(
+              'full_s',
+          );
+          if (!in_array($context['region_id'], $full_regions)) {
+            unset($links["style"]);
+          }
+          break;
+
+        case 'paddle_ampharos':
+          $full_regions = array(
+              'full_a',
+              'full_b',
+              'full_l',
+              'full_s',
+              'full_z',
+              'full_ag',
+              'full_an',
+          );
+          if (!in_array($context['region_id'], $full_regions)) {
+            unset($links["style"]);
+          }
+          break;
+
+        default:
+          unset($links["style"]);
+      }
+    }
+    else {
+      unset($links["style"]);
+    }
+  }
+}
+
+/**
+ * Checks if the base theme of the current theme is page wide.
+ *
+ * @return bool
+ *   Whether the base theme is page wide.
+ */
+function paddle_page_wide_theme_is_page_wide() {
+  $is_base_theme = FALSE;
+  $paddle_base_theme = variable_get('paddle_base_theme', '');
+
+  if ($paddle_base_theme == 'kanooh_theme_v2_page_wide') {
+    $is_base_theme = TRUE;
+  }
+  drupal_alter('paddle_page_wide_theme_is_page_wide', $is_base_theme, $paddle_base_theme);
+
+  return $is_base_theme;
+}

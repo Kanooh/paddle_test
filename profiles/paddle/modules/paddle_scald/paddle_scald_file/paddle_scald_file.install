@@ -1,0 +1,150 @@
+<?php
+
+/**
+ * @file
+ * Scald Files Installation
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_scald_file_install() {
+  // Check if this type already exists.
+  $types = scald_types();
+  if (!empty($types['file'])) {
+    return FALSE;
+  }
+
+  // Create a new type.
+  $t = get_t();
+  db_insert('scald_types')
+    ->fields(array('type', 'title', 'description', 'provider'))
+    ->values(array('file',
+      'File',
+      $t('Add text files such as Word, Excel, PDF, ...'),
+      'scald',
+    ))
+    ->execute();
+
+  _paddle_scald_file_create_file_field();
+
+  // Flush our caches.
+  scald_contexts(TRUE);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function paddle_scald_file_uninstall() {
+  drupal_load('module', 'scald');
+  // If Scald is disabled, its classes are not autoloaded.
+  module_load_include('inc', 'scald', 'includes/ScaldAtomController');
+
+  ScaldAtomController::removeType('file');
+}
+
+/**
+ * Creates the file managed field for the File Scald type.
+ */
+function _paddle_scald_file_create_file_field() {
+  // Create file field.
+  if (!field_info_field('paddle_scald_file')) {
+    $field = array(
+      'field_name' => 'paddle_scald_file',
+      'type' => 'file',
+    );
+
+    field_create_field($field);
+
+    $instance = array(
+      'field_name' => 'paddle_scald_file',
+      'label' => t('File'),
+      'entity_type' => 'scald_atom',
+      'bundle' => 'file',
+      'required' => TRUE,
+      'settings' => array(
+        'file_extensions' => PADDLE_SCALD_FILE_ALLOWED_EXTENSIONS,
+        'file_directory' => 'atoms/files',
+      ),
+      'widget' => array(
+        'weight' => -4,
+      ),
+    );
+
+    if (!field_read_instance($instance['entity_type'], $instance['field_name'], $instance['bundle'])) {
+      field_create_instance($instance);
+    }
+  }
+}
+
+/**
+ * Updates the allowed file extensions of the file field.
+ *
+ * @param string $extensions
+ *   A string with a space separated list of allowed extensions.
+ */
+function _paddle_scald_file_update_file_field_extensions($extensions) {
+  $instance = field_info_instance('scald_atom', 'paddle_scald_file', 'file');
+  if ($instance) {
+    $instance['settings']['file_extensions'] = $extensions;
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Update the allowed file extensions of file atoms to include mdb and accdb.
+ */
+function paddle_scald_file_update_7000() {
+  // Don't use the constant here, as the constant will always contain the most
+  // up-to-date list of extensions but if extra extensions and update hooks are
+  // added later this update hook won't make any sense anymore.
+  $extensions = 'ppt pptx xls xlsx doc docx odt pdf txt csv odg sxw ods rtf zip rar gz 7z tar mdb accdb';
+  _paddle_scald_file_update_file_field_extensions($extensions);
+}
+
+/**
+ * Update the Paddle file atom type description.
+ */
+function paddle_scald_file_update_7001() {
+  db_update('scald_types')
+    ->fields(array(
+      'description' => t('Add text files such as Word, Excel, PDF, ...'),
+    ))
+    ->condition('type', 'file')
+    ->execute();
+}
+
+/**
+ * Add the following extensions: eot, svg, otf, ttf & woff.
+ */
+function paddle_scald_file_update_7002() {
+  _paddle_scald_file_update_file_field_extensions(PADDLE_SCALD_FILE_ALLOWED_EXTENSIONS);
+}
+
+/**
+ * Add the following extensions: dotx, pps and potx.
+ */
+function paddle_scald_file_update_7003() {
+  _paddle_scald_file_update_file_field_extensions(PADDLE_SCALD_FILE_ALLOWED_EXTENSIONS);
+}
+
+/**
+ * Add the EPS extension to the allowed file extensions.
+ */
+function paddle_scald_file_update_7004() {
+  _paddle_scald_file_update_file_field_extensions(PADDLE_SCALD_FILE_ALLOWED_EXTENSIONS);
+}
+
+/**
+ * Enable the Redirect module.
+ */
+function paddle_scald_file_update_7005() {
+  module_enable(array('redirect'));
+}
+
+/**
+ * Add the DOCM, XLSM and XLTX extensions to the allowed file extensions.
+ */
+function paddle_scald_file_update_7006() {
+  _paddle_scald_file_update_file_field_extensions(PADDLE_SCALD_FILE_ALLOWED_EXTENSIONS);
+}

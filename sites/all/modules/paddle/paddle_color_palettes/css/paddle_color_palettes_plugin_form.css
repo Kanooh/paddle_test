@@ -1,0 +1,11 @@
+/**
+ * @file
+ * Styling for the Paddle Color Palettes plugin forms.
+ */
+
+.paddle-style-plugin-color-palettes .paddle-color-palettes-color,
+.paddle-style-plugin-color-subpalettes .paddle-color-palettes-color {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+}

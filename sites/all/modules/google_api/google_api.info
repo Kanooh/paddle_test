@@ -1,0 +1,12 @@
+name = Google Api
+description = Provides support for Google APIs Client Library for PHP
+dependencies[] = libraries (2.x)
+core = 7.x
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "google_api"
+datestamp = "1473172567"
+

@@ -1,0 +1,327 @@
+<?php
+
+/**
+ * @file
+ * Tests the scheduling of content.
+ */
+
+/**
+ * Paddle content scheduling tests.
+ */
+class PaddleSchedulingTestCase extends PaddleWebTestCase {
+
+  /**
+   * Returns the test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Content scheduling',
+      'description' => 'Tests content scheduling in the Paddle workflow.',
+      'group' => 'Paddle - Scheduling',
+    );
+  }
+
+  /**
+   * Test the scheduling of content.
+   */
+  public function testScheduling() {
+    $this->drupalLogin($this->chiefEditor);
+
+    // Define some combinations of publishing / unpublishing dates with an
+    // initial publication state and expected publication status and moderation
+    // state after scheduling.
+    $testcases = array(
+      array(
+        'description' => 'A published node without scheduling options',
+        'expected_status' => TRUE,
+        'expected_state' => 'published',
+        'submit' => 'Publish',
+        'options' => array(
+          'publish_on' => 0,
+          'unpublish_on' => 0,
+        ),
+      ),
+      array(
+        'description' => 'A scheduled node with publication date in the future',
+        'expected_status' => FALSE,
+        'expected_state' => 'scheduled',
+        'submit' => 'Scheduled',
+        'options' => array(
+          'publish_on' => strtotime('+1 day'),
+          'unpublish_on' => 0,
+        ),
+      ),
+      array(
+        'description' => 'A published node with unpublication date in the future',
+        'expected_status' => TRUE,
+        'expected_state' => 'published',
+        'submit' => 'Publish',
+        'options' => array(
+          'publish_on' => 0,
+          'unpublish_on' => strtotime('+1 day'),
+        ),
+      ),
+      array(
+        'description' => 'A published node with unpublication date in the past',
+        'expected_status' => FALSE,
+        'expected_state' => 'offline',
+        'submit' => 'Publish',
+        'options' => array(
+          'publish_on' => 0,
+          'unpublish_on' => strtotime('-1 day'),
+        ),
+      ),
+      array(
+        'description' => 'A scheduled node with publication date in the past and unpublication date in the future',
+        'expected_status' => TRUE,
+        'expected_state' => 'published',
+        'submit' => 'Publish',
+        'options' => array(
+          'publish_on' => strtotime('-1 day'),
+          'unpublish_on' => strtotime('+1 day'),
+        ),
+      ),
+      array(
+        'description' => 'A draft with publication date in the past',
+        'expected_status' => FALSE,
+        'expected_state' => 'draft',
+        'options' => array(
+          'publish_on' => strtotime('-1 day'),
+          'unpublish_on' => 0,
+        ),
+      ),
+      array(
+        'description' => 'A scheduled node with both publication and unpublication dates in the future',
+        'expected_status' => FALSE,
+        'expected_state' => 'scheduled',
+        'submit' => 'Scheduled',
+        'options' => array(
+          'publish_on' => strtotime('+1 day'),
+          'unpublish_on' => strtotime('+2 day'),
+        ),
+      ),
+    );
+
+    // Test each test case.
+    foreach ($testcases as $key => $testcase) {
+      // Create a node with the settings as defined in the test case.
+      $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $testcase['options']);
+      if (isset($testcase['submit'])) {
+        $this->moderateNode($node, $testcase['submit']);
+      }
+
+      // Simulate a cron run. This is done through a separate request because
+      // Workbench Moderation does its magic in a shutdown function.
+      $this->drupalGet('scheduler/cron');
+
+      // Retrieve the current publication status of the node and check if it
+      // matches the expected result.
+      $current_status = $this->getPublicationStatus($node->nid);
+      $this->assertEqual($testcase['expected_status'], $current_status, format_string('@description has its publication state set to %status after scheduling.', array('@description' => $testcase['description'], '%status' => $testcase['expected_status'] ? 'TRUE' : 'FALSE')));
+
+      // Retrieve the current moderation state of the node and check if it
+      // matches the expected result.
+      $current_state = $this->getModerationState($node->nid);
+      $this->assertEqual($testcase['expected_state'], $current_state, format_string('@description has its moderation state set to %state after scheduling', array('@description' => $testcase['description'], '%state' => $testcase['expected_state'])));
+    }
+  }
+
+  /**
+   * Tests the typical workflow of scheduling a piece of content.
+   *
+   * An editor will create content, assign it to a chief editor for approval.
+   */
+  public function testSchedulingWorkflow() {
+    // Log in as editor.
+    $this->drupalLogin($this->editor);
+
+    // Go to the basic page node add form and check that the 'publish' and
+    // 'schedule' buttons are not available.
+    $node = $this->drupalCreateUiNode('basic_page');
+    $this->drupalGet('node/' . $node->nid . '/edit');
+    $this->assertNoField('edit-moderate-to-published', 'The "Publish" action is not available to editors.');
+    $this->assertNoField('edit-moderate-to-scheduled', 'The "Schedule" action is not available to editors.');
+
+    // Create a basic page with a scheduled publication and unpublication date
+    // and assign it to a chief editor.
+    $edit = array(
+      'title' => '><"\'&' . $this->randomString(),
+      'publish_on[date]' => format_date(strtotime('+1 day'), 'custom', variable_get('scheduler_date_only_format', 'Y-m-d')),
+      'unpublish_on[date]' => format_date(strtotime('+2 day'), 'custom', variable_get('scheduler_date_only_format', 'Y-m-d')),
+    );
+    $node = $this->drupalCreateUiNode('basic_page', $edit);
+    $this->moderateNode($node, 'To chief editor');
+
+    // Check that the node has status 'Needs review'.
+    $this->assertModerationState($node->nid, 'needs_review');
+
+    // Log in as Chief Editor.
+    $this->drupalLogin($this->chiefEditor);
+
+    // Publish (Schedule in this case) the node.
+    $this->moderateNode($node, 'Scheduled');
+
+    // Check that the node has status 'Scheduled'.
+    $this->assertModerationState($node->nid, 'scheduled');
+  }
+
+  /**
+   * Test if default values are used when the user omits to enter date or time.
+   */
+  public function testDefaultValues() {
+    // Log in as editor.
+    $this->drupalLogin($this->editor);
+
+    // Create a basic page which only has the publication and unpublication date
+    // filled in, leaving the time fields blank.
+    $edit = array(
+      'title' => '><"\'&' . $this->randomString(),
+      'publish_on[date]' => format_date(strtotime('+1 day'), 'custom', variable_get('scheduler_date_only_format', 'Y-m-d')),
+      'unpublish_on[date]' => format_date(strtotime('+2 day'), 'custom', variable_get('scheduler_date_only_format', 'Y-m-d')),
+    );
+    $node = $this->drupalCreateUiNode('basic_page', $edit);
+
+    // Check that the times default to midnight.
+    $start = format_date(strtotime('tomorrow'), 'short');
+    $end = format_date(strtotime('tomorrow +1 day'), 'short');
+    $this->assertNodeSummaryField(t('Publication date'), $start);
+    $this->assertNodeSummaryField(t('Depublication date'), $end);
+  }
+
+  /**
+   * Tests forced publication of scheduled nodes by chief editors.
+   */
+  public function testForcedPublishing() {
+    // Define some combinations of publishing / unpublishing dates with an
+    // initial publication state and expected publication status and moderation
+    // state after clicking on "Publish".
+    // If the publication date has passed, the node should be published
+    // immediately. If it is still in the future, the node should be scheduled.
+    $testcases = array(
+      array(
+        'description' => 'A node in "draft" status with a publication date that has passed',
+        'user' => $this->editor,
+        'initial state' => 'draft',
+        'expected state' => 'published',
+        'expected status' => TRUE,
+        'options' => array(
+          'publish_on' => strtotime('-1 day'),
+        ),
+      ),
+      array(
+        'description' => 'A node in "to check" status with a publication date that has passed',
+        'user' => $this->editor,
+        'initial state' => 'to_check',
+        'expected state' => 'published',
+        'expected status' => TRUE,
+        'submit' => 'To editor',
+        'options' => array(
+          'publish_on' => strtotime('-1 day'),
+        ),
+      ),
+      array(
+        'description' => 'A node in "needs review" status with a publication date that has passed',
+        'user' => $this->editor,
+        'initial state' => 'needs_review',
+        'expected state' => 'published',
+        'expected status' => TRUE,
+        'submit' => 'To chief editor',
+        'options' => array(
+          'publish_on' => strtotime('-1 day'),
+        ),
+      ),
+      array(
+        'description' => 'A node in "scheduled" status with a publication date that has passed',
+        'user' => $this->chiefEditor,
+        'initial state' => 'scheduled',
+        'expected state' => 'published',
+        'expected status' => TRUE,
+        'submit' => 'Publish',
+        'options' => array(
+          'publish_on' => strtotime('-1 day'),
+        ),
+      ),
+      array(
+        'description' => 'A node in "draft" status with a publication date in the future',
+        'user' => $this->editor,
+        'initial state' => 'draft',
+        'expected state' => 'scheduled',
+        'expected status' => FALSE,
+        'options' => array(
+          'publish_on' => strtotime('+1 day'),
+        ),
+      ),
+      array(
+        'description' => 'A node in "to check" status with a publication date in the future',
+        'user' => $this->editor,
+        'initial state' => 'to_check',
+        'expected state' => 'scheduled',
+        'expected status' => FALSE,
+        'submit' => 'To editor',
+        'options' => array(
+          'publish_on' => strtotime('+1 day'),
+        ),
+      ),
+      array(
+        'description' => 'A node in "needs review" status with a publication date in the future',
+        'user' => $this->editor,
+        'initial state' => 'needs_review',
+        'expected state' => 'scheduled',
+        'expected status' => FALSE,
+        'submit' => 'To chief editor',
+        'options' => array(
+          'publish_on' => strtotime('+1 day'),
+        ),
+      ),
+    );
+
+    foreach ($testcases as $testcase) {
+      // Create a node with the settings from the test case.
+      if (!$this->loggedInUser || $this->loggedInUser->uid != $testcase['user']->uid) {
+        $this->drupalLogin($testcase['user']);
+      }
+      $node = $this->drupalCreateScheduledUiNode('basic_page', array(), $testcase['options']);
+      if (!empty($testcase['submit'])) {
+        $this->moderateNode($node, $testcase['submit']);
+      }
+
+      // When a node is scheduled in the past, and the published button is
+      // clicked, the state should be published and not scheduled.
+      if ($testcase['initial state'] == 'scheduled' && $testcase['options']['publish_on'] < strtotime('now')) {
+        $this->assertModerationState($node->nid, 'published', format_string('A new node gets the moderation state %state when the %button button is clicked.', array(
+          '%state' => 'published',
+          '%button' => $testcase['submit'],
+        )));
+      }
+      else {
+        // Check that the initial moderation state is as expected.
+        $this->assertModerationState($node->nid, $testcase['initial state'], format_string('A new node gets the moderation state %state when the %button button is clicked.', array(
+          '%state' => $testcase['initial state'],
+          '%button' => !empty($testcase['submit']) ? $testcase['submit'] : 'draft',
+        )));
+      }
+
+      // Now log in as Chief editor, press the Publish button and verify that
+      // the node is actually published.
+      if ($this->loggedInUser->uid != $this->chiefEditor->uid) {
+        $this->drupalLogin($this->chiefEditor);
+      }
+      // If the state of the node is scheduled, there won't be a publish button.
+      if ($testcase['initial state'] != 'scheduled') {
+        if ($testcase['expected state'] == 'scheduled') {
+          $this->moderateNode($node, 'Scheduled');
+        }
+        else {
+          $this->moderateNode($node, 'Publish');
+        }
+        $this->assertModerationState($node->nid, $testcase['expected state'], format_string($testcase['description'] . ' has the moderation state %state after clicking on "Publish".', array(
+          '%state' => $testcase['expected state'],
+        )));
+        $this->assertPublicationStatus($node->nid, $testcase['expected status'], format_string($testcase['description'] . ' has the publication status %status after clicking on "Publish".', array(
+          '%status' => (int) $testcase['expected status'],
+        )));
+      }
+    }
+  }
+
+}

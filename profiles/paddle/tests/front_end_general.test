@@ -1,0 +1,95 @@
+<?php
+/**
+ * @file
+ * Contains PaddleFrontEndGeneralTestCase.
+ */
+
+/**
+ * Various tests for the front end.
+ */
+class PaddleFrontEndGeneralTestCase extends PaddleWebTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Front end general tests'),
+      'description' => t('Tests if various page elements render correctly in the front end.'),
+      'group' => t('Paddle'),
+    );
+  }
+
+  /**
+   * Tests if basic pages are displayed correctly in the front end.
+   */
+  public function testBasicPage() {
+    // Log in and create a new basic page with only a title.
+    $this->drupalLogin($this->chiefEditor);
+
+    $node = $this->drupalCreateUiNode('basic_page', array());
+    $this->moderateNode($node, 'Publish');
+
+    // Check that the page is displayed inside a Panels layout in the front end.
+    $this->drupalGet('node/' . $node->nid);
+    $elements = $this->xpath('//div[contains(@class, "panel-panel")]');
+    $this->assertTrue($elements, 'Basic pages are rendered inside a Panels layout.');
+
+    // Check that none of the fields except the title and body are visible.
+    $fields = array(
+      'tags' => 'field-name-field-paddle-tags',
+      'general tags' => 'field-name-field-paddle-general-tags',
+      'seo description' => 'field-name-field-paddle-seo-description',
+      // This is the class given to the Language pseudo-field. This does not
+      // uniquely identify the fields so if other form items are added to the
+      // basic page in the future this might need to be replaced with a
+      // different test.
+      'language pseudo field' => 'form-type-item',
+      'body' => 'field-name-body',
+    );
+    foreach ($fields as $name => $field) {
+      $elements = $this->xpath('//div[contains(@class, "' . $field . '")]');
+      $this->assertFalse($elements, format_string('The %name field is not visible.', array('%name' => $name)));
+    }
+
+    // Update the node, filling in all fields, and check that only the title,
+    // body and public author are shown. The other fields should not be shown.
+    $general_term = $this->drupalCreateTerm('paddle_general');
+    $tag_term = $this->drupalCreateTerm('paddle_tags');
+
+    $edit = array(
+      'body[und][0][value]' => $this->randomString(),
+      'field_paddle_seo_description[und][0][value]' => $this->randomString(),
+      'field_paddle_general_tags[und][0][1][1]' => TRUE,
+      'field_paddle_tags[und][term_entry]' => $tag_term->name,
+    );
+
+    $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+    $this->moderateNode($node, 'Publish');
+    $this->drupalGet('node/' . $node->nid);
+
+    $visible_fields = array(
+      'body' => 'field-name-body',
+    );
+    foreach ($visible_fields as $name => $field) {
+      $elements = $this->xpath('//div[contains(@class, "' . $field . '")]');
+      $this->assertTrue($elements, format_string('The %name field is visible.', array('%name' => $name)));
+    }
+
+    $invisible_fields = array(
+      'tags' => 'field-name-field-paddle-tags',
+      'general tags' => 'field-name-field-paddle-general-tags',
+      'seo description' => 'field-name-field-paddle-seo-description',
+      // This is the class given to the Language pseudo-field. This does not
+      // uniquely identify the fields so if other form items are added to the
+      // basic page in the future this might need to be replaced with a
+      // different test.
+      'language pseudo field' => 'form-type-item',
+    );
+    foreach ($invisible_fields as $name => $field) {
+      $elements = $this->xpath('//div[contains(@class, "' . $field . '")]');
+      $this->assertFalse($elements, format_string('The %name field is not visible.', array('%name' => $name)));
+    }
+  }
+
+}

@@ -1,0 +1,124 @@
+<?php
+
+/**
+ * @file
+ * Contains TrackEntityReferencesTest.
+ */
+
+/**
+ * Class TrackEntityReferencesTest.
+ */
+class TrackEntityReferencesTest extends DrupalWebTestCase {
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'testing';
+
+  /**
+   * A test user.
+   *
+   * @var object
+   */
+  protected $adminUser;
+
+  /**
+   * Test content type names.
+   *
+   * @var string[]
+   */
+  protected $types;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Track entity references',
+      'description' => 'Tests if entity references are being tracked.',
+      'group' => 'Reference Tracker',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($modules = array()) {
+    parent::setUp(array('reference_tracker', 'entityreference'));
+
+    // Create two content types.
+    $this->types = array();
+    for ($i = 0; $i < 2; $i++) {
+      $type_name = strtolower($this->randomName());
+      $type = $this->drupalCreateContentType(array('name' => $type_name, 'type' => $type_name));
+      $this->types[$i] = $type->type;
+    }
+
+    // Create an entity reference field that references the second content type.
+    $field = array(
+      'translatable' => FALSE,
+      'entity_types' => array('node'),
+      'settings' => array(
+        'handler' => 'base',
+        'target_type' => 'node',
+        'handler_settings' => array(
+          'target_bundles' => array($this->types[1]),
+        ),
+      ),
+      'field_name' => 'field_entityreference',
+      'type' => 'entityreference',
+      'cardinality' => '1',
+    );
+    field_create_field($field);
+
+    // Create a field instance with an entity reference on the first content
+    // type.
+    $instance = array(
+      'field_name' => 'field_entityreference',
+      'bundle' => $this->types[0],
+      'entity_type' => 'node',
+    );
+    field_create_instance($instance);
+
+    // Create a user and log in.
+    $this->adminUser = $this->drupalCreateUser(array(
+      'access content',
+      'administer content types',
+      'create ' . $this->types[0] . ' content',
+      'create ' . $this->types[1] . ' content',
+      'edit any ' . $this->types[0] . ' content',
+    ));
+    $this->drupalLogin($this->adminUser);
+  }
+
+  /**
+   * Tests if entity references are being tracked.
+   */
+  public function testEntityReferenceTracking() {
+    // Create a node to reference.
+    $referenced_node = $this->drupalCreateNode(array('type' => $this->types[1], 'status' => 1));
+
+    // Create a node which holds a reference to the previously created node.
+    $title = $this->randomName();
+    $language = LANGUAGE_NONE;
+    $edit = array(
+      'title' => $title,
+      "field_entityreference[$language][0][target_id]" => $referenced_node->title . ' (' . $referenced_node->nid . ')',
+    );
+    $this->drupalPost('node/add/' . $this->types[0], $edit, t('Save'));
+
+    $node = $this->drupalGetNodeByTitle($title);
+
+    // Get the references and verify that the correct reference is present.
+    $references = reference_tracker_get_inbound_references('node', $referenced_node->nid);
+    $this->assertEqual($references['node'][0], $node->nid, 'The node which holds the reference is returned correctly when getting the inbound references.');
+
+    // Now delete the reference and verify that there is no longer a reference
+    // kept.
+    $edit = array(
+      "field_entityreference[$language][0][target_id]" => '',
+    );
+    $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+    $references = reference_tracker_get_inbound_references('node', $referenced_node->nid);
+    $this->assertTrue(empty($references), 'There are no references kept anymore.');
+  }
+}

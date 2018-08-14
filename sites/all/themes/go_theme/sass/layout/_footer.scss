@@ -1,0 +1,27 @@
+//
+// @file
+// Footer region general styling.
+// ------------------------------
+
+.region-footer {
+  border-top: solid 3px #FFFFFF;
+}
+
+.footer-branding {
+  min-height: 98px;
+  margin-bottom: 20px;
+  padding: 10px 0;
+  background: transparent url('../images/footer_silhouettes.png') no-repeat bottom right;
+
+  @media (max-width: $screen-xs-max) {
+    padding: 0 0 60px;
+  }
+
+  @media (max-width: $screen-sm-max) {
+    background-image: url('../images/footer_silhouettes_md.png');
+  }
+
+  .main-go-link {
+    display: block;
+  }
+}

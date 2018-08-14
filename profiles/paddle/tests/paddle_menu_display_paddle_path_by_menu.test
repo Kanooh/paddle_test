@@ -1,0 +1,141 @@
+<?php
+/**
+ * @file
+ * Tests the integration between Paddle Path By Menu and Paddle Menu Display.
+ */
+
+/**
+ * Test class for Paddle Menu Display and Paddle Path By Menu integration.
+ * @see https://one-agency.atlassian.net/browse/KANWEBS-753, comments.
+ */
+class PaddleMenuDisplayPaddlePathByMenuIntegrationTest extends PaddleWebTestCase {
+
+  /**
+   * Provides test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Paddle Menu Display and Paddle Path By Menu Integration',
+      'description' => 'Tests the integration between Paddle Path By Menu and Paddle Menu Display.',
+      'group' => 'Paddle - Menu',
+    );
+  }
+
+  /**
+   * Tests that the Paddle Path By Menu can alter the menu link hrefs.
+   *
+   * Tests that the Paddle Path By Menu can alter the menu link hrefs when
+   * Paddle Menu Display is enabled.
+   */
+  public function testPaddlePathByMenuAltersHref() {
+    $this->drupalLogin($this->chiefEditor);
+    // Create some menu items.
+    $raw_menu_items = array();
+    // @todo This rand() will be re-evaluated on every iteration, which defeats
+    //   the original intention of generating between 9 and 25 items.
+    for ($index = 0; $index < rand(9, 25); $index++) {
+      // Create a node and publish it so it appears in the menus.
+      $edit = array(
+        'title' => $this->randomString() . '"&%\'"',
+      );
+      $node = $this->drupalCreateUiNode('basic_page', $edit);
+      $this->moderateNode($node, 'Publish');
+      $raw_menu_items[] = array(
+        'path' => 'node/' . $node->nid,
+        'title' => $edit['title'],
+      );
+    }
+
+    // Create the items.
+    $menu_items = $this->makeMenuItems('main_menu_nl', $raw_menu_items);
+
+    // Create a custom menu display that display all its menu items.
+    $record = array(
+      'title' => 'Sitemap',
+      'name' => 'sitemap',
+      'description' => 'Sitemap',
+      'menu_name' => 'main_menu_nl',
+      'root_path' => '',
+      'follow_active_trail' => 0,
+      'from_level' => '1',
+      'to_level' => '9',
+      'tag_classes' => serialize(array(
+        'div_class' => 'menu_wrapper',
+        'ul_class' => 'menu clearfix max-width',
+        'li_class' => '',
+        'a_class' => '',
+      )),
+      'path_roots' => serialize(array()),
+      '404_root_path' => '',
+    );
+    drupal_write_record('menu_displays', $record);
+    // Force the block module to create the block.
+    $default_theme = variable_get('theme_default', 'paddle_theme');
+    _block_rehash($default_theme);
+
+    // Add it to a region.
+    db_update('block')
+      ->fields(array(
+        'region' => 'content',
+        'status' => 1,
+        'weight' => -20,
+        'theme' => $default_theme,
+        'title' => '<none>',
+      ))
+      ->condition('module', 'paddle_menu_display')
+      ->condition('delta', 'sitemap')
+      ->condition('theme', $default_theme)
+      ->execute();
+
+    // Display the menu.
+    $this->drupalGet('<front>');
+
+    // Clear Paddle Path By Menu cache.
+    drupal_static_reset('paddle_path_by_menu_get_menu_path');
+
+    foreach ($menu_items as $menu_item) {
+      $item = menu_link_load($menu_item['mlid']);
+      $link_xpath = $this->xpath('//a[@href="' . url($item['href']) . '"]');
+      $this->assertTrue($link_xpath, 'Menu item "' . $item['link_title'] . '" is displayed on the page.');
+    }
+  }
+
+  /**
+   * Processes the raw menu items and add them in the passed menu.
+   *
+   * @param string $menu_name
+   *   The machine name of the menu to which the items should be added.
+   * @param array $raw_menu_items
+   *   The menu items to process.
+   *
+   * @return array
+   *   The processed menu items with the mlid added.
+   */
+  protected function makeMenuItems($menu_name, $raw_menu_items) {
+    shuffle($raw_menu_items);
+
+    $level = 1;
+    foreach ($raw_menu_items as $index => $item) {
+      $parent = 0;
+      if ($level > 1) {
+        $parent = $raw_menu_items[$index - 1]['mlid'];
+      }
+
+      $edit = array(
+        'link_title' => $item['title'],
+        'navigation' => $menu_name . ':' . $parent,
+        'content_button' => 'internal',
+        'internal_link' => $item['path'],
+      );
+      $menu_item = $this->createUiMenuItem($edit, $menu_name);
+      $raw_menu_items[$index]['mlid'] = $menu_item['mlid'];
+
+      $level++;
+      if ($level > 5) {
+        $level = 1;
+      }
+    }
+
+    return $raw_menu_items;
+  }
+}

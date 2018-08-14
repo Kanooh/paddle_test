@@ -1,0 +1,16 @@
+/**
+ * @file
+ * News Paddlet styling.
+ */
+
+// --------------------
+// NEWS PANE
+// --------------------
+
+.pane-paddle-news {
+    &.spotlight {
+        .pane-section-body {
+          padding: 0 0 14px 0;
+        }
+    }
+}

@@ -1,0 +1,15 @@
+name = Paddle VUB Client Scald
+description = Handles posting Scald atoms to the VUB Server
+core = 7.x
+package = Paddle
+version = 7.x-1.0
+dependencies[] = features
+dependencies[] = paddle_scald_atom_field
+dependencies[] = paddle_vub_client
+dependencies[] = text
+features[features_api][] = api:2
+features[field_base][] = field_published_image
+features[field_base][] = field_vub_server_sid
+features[field_instance][] = node-news_item-field_published_image
+features[field_instance][] = scald_atom-image-field_vub_server_sid
+project path = sites/all/modules/paddle_vub_client

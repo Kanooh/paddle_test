@@ -1,0 +1,613 @@
+<?php
+
+/**
+ * @file
+ * Paddle Scald Image is a Scald Atom Provider for images.
+ */
+
+/**
+ * Renders the HTML for scald images in the CKEditor.
+ *
+ * @param ScaldAtom $atom
+ *   Atom to render as HTML.
+ * @param array $attributes
+ *   Optional array of attributes to add to the element.
+ * @param bool $editor
+ *   Whether or not the HTML will be rendered in the CKEditor.
+ * @param bool $update
+ *   Whether or not we are updating an existing atom's HTML.
+ *
+ * @return string
+ *   Scald images HTML.
+ */
+function paddle_scald_image_ckeditor_html($atom, $attributes = array(), $editor = FALSE, $update = FALSE) {
+  if (empty($atom) || $atom->type != 'image') {
+    return '';
+  }
+
+  $alt = isset($atom->field_scald_alt_tag[LANGUAGE_NONE][0]['value']) ? $atom->field_scald_alt_tag[LANGUAGE_NONE][0]['value'] : '';
+
+  // Atom class needs to be appended to the class string (if not set already).
+  $class = isset($attributes['class']) ? $attributes['class'] : '';
+  $atom_class = 'atom-id-' . $atom->sid;
+  if (strpos($class, $atom_class) === FALSE) {
+    $class .= ((!empty($class)) ? ' ' : '') . $atom_class;
+  }
+  $attributes['class'] = $class;
+
+  // Title, src and alt should not be in the attributes array according to the
+  // theme_image documentation.
+  $title = isset($attributes['title']) ? $attributes['title'] : '';
+  unset($attributes['title']);
+  unset($attributes['src']);
+  unset($attributes['alt']);
+
+  // Retrieve the module path once.
+  $module_path = drupal_get_path('module', 'paddle_scald_image');
+
+  // Extract the image style if available. If we are rendering the atom
+  // on the frontend, it will be stripped out.
+  $image_style_name = !empty($attributes['data-image-style']) ? $attributes['data-image-style'] : FALSE;
+
+  if ($editor) {
+    // Add the file scheme as data attribute, to be able to update the image url
+    // from within CKEditor.
+    $attributes['data-file-scheme'] = file_uri_scheme($atom->file_source) ?: file_default_scheme();
+
+    // Add the javascript file responsible for allowing image style selection
+    // from CKEditor.
+    drupal_add_js($module_path . '/js/paddle_scald_image.image_styles.editor.js', 'file');
+
+    // Retrieve the manualcrop styles available.
+    $image_styles = array('' => t('No style'));
+    $image_styles += manualcrop_styles_with_crop(FALSE, NULL, TRUE);
+
+    // Retrieve all the stream wrappers available and calculate their absolute
+    // path.
+    $stream_wrappers = array();
+    foreach (file_get_stream_wrappers(STREAM_WRAPPERS_WRITE_VISIBLE) as $scheme => $wrapper) {
+      /* @var DrupalStreamWrapperInterface $instance */
+      $instance = file_stream_wrapper_get_instance_by_scheme($scheme);
+      if ($instance) {
+        $stream_wrappers[$scheme] = $instance->getExternalUrl();
+      }
+    }
+
+    // Make available to the frontend script:
+    // - the manualcrop styles retrieved;
+    // - the scheme urls, needed to calculate the image style path from the
+    //   frontend.
+    drupal_add_js(array(
+      'paddle_scald_image' => array(
+        'image_styles' => $image_styles,
+        'file_schemes' => $stream_wrappers,
+      ),
+    ), 'setting');
+  }
+  else {
+    // Remove the file scheme and image style data attribute when rendering
+    // the image on non-edit contexts.
+    unset($attributes['data-file-scheme']);
+    unset($attributes['data-image-style']);
+  }
+
+  $variables = array(
+    'path' => $atom->file_source,
+    'alt' => $alt,
+    'title' => $title,
+    'attributes' => $attributes,
+  );
+
+  // If an image style is specified, use it. Otherwise render the full image.
+  if ($image_style_name) {
+    $variables['style_name'] = $image_style_name;
+    $image = theme('image_style', $variables);
+  }
+  else {
+    // Pass all the attributes to the image theme function.
+    $image = theme('image', $variables);
+  }
+
+  // Add the JS which add a "Use Lightbox" checkbox to the Image Properties
+  // dialog if we are in the WYSIWYG or add the colorbox initiating code if
+  // we are previewing the content (admin node view, front-end, etc.).
+  $library = libraries_load('colorbox');
+  if ($library['installed']) {
+    if ($editor) {
+      $filename = 'paddle_scald_image_colorbox_editor';
+    }
+    else {
+      $filename = 'paddle_scald_image_colorbox';
+
+      // Place a link around images that are Colorbox enabled.
+      if (in_array('colorbox-image', explode(' ', $class))) {
+        $image = l(
+          $image,
+          file_create_url($atom->file_source),
+          array(
+            'attributes' => array(
+              'class' => 'colorbox-link',
+            ),
+            'html' => TRUE,
+          )
+        );
+      }
+    }
+    drupal_add_js($module_path . '/js/' . $filename . '.js', 'file');
+  }
+  return $image;
+}
+
+/**
+ * Implements hook_scald_atom_providers().
+ */
+function paddle_scald_image_scald_atom_providers() {
+  return array(
+    'image' => 'Image upload',
+  );
+}
+
+/**
+ * Implements hook_scald_add_form().
+ */
+function paddle_scald_image_scald_add_form(&$form, &$form_state) {
+  $defaults = scald_atom_defaults('image');
+  $form['file'] = array(
+    '#type' => $defaults->upload_type,
+    '#title' => t('Image'),
+    '#upload_location' => ScaldAtomController::getThumbnailPath('image'),
+    '#upload_validators' => array('file_validate_extensions' => array('jpg jpeg png gif')),
+  );
+  if ($defaults->upload_type == 'plupload') {
+    $form['scald_authors'] = array(
+      '#type' => 'textfield',
+      '#default_value' => NULL,
+      '#maxlength' => 100,
+      '#autocomplete_path' => 'taxonomy/autocomplete/scald_authors',
+      '#required' => FALSE,
+      '#title' => t('Authors'),
+      '#description' => t('Preset value for %field_name field. If left empty, the default field value will be used.', array('%field_name' => t('Authors'))),
+    );
+    $form['scald_tags'] = array(
+      '#type' => 'textfield',
+      '#default_value' => NULL,
+      '#maxlength' => 100,
+      '#autocomplete_path' => 'taxonomy/autocomplete/scald_tags',
+      '#required' => FALSE,
+      '#title' => t('Tags'),
+      '#description' => t('Preset value for %field_name field. If left empty, the default field value will be used.', array('%field_name' => t('Tags'))),
+    );
+  }
+}
+
+/**
+ * Implements hook_scald_add_atom_count().
+ */
+function paddle_scald_image_scald_add_atom_count(&$form, &$form_state) {
+  if (is_array($form_state['values']['file'])) {
+    return max(count($form_state['values']['file']), 1);
+  }
+  return 1;
+}
+
+/**
+ * Implements hook_scald_add_form_fill().
+ */
+function paddle_scald_image_scald_add_form_fill(&$atoms, $form, $form_state) {
+  foreach ($atoms as $delta => $atom) {
+    if (is_array($form_state['values']['file']) && module_exists('plupload')) {
+      module_load_include('inc', 'scald', 'includes/scald.plupload');
+      $destination = $form['file']['#upload_location'] . '/' . $form_state['values']['file'][$delta]['name'];
+      $file = scald_plupload_save_file($form_state['values']['file'][$delta]['tmppath'], $destination);
+    }
+    else {
+      $file = file_load($form_state['values']['file']);
+    }
+    $atom->title = $file->filename;
+    $atom->base_id = $file->fid;
+    foreach (array('scald_authors', 'scald_tags') as $field_name) {
+      $langcode = field_language('scald_atom', $atom, $field_name);
+      if (!empty($form_state['values'][$field_name])) {
+        $atom->{$field_name}[$langcode][0] = array(
+          'tid' => 0,
+          'taxonomy_term' => (object) (array('name' => $form_state['values'][$field_name])),
+        );
+      }
+    }
+    $langcode = field_language('scald_atom', $atom, 'scald_thumbnail');
+    $atom->scald_thumbnail[$langcode][0] = (array) $file;
+  }
+}
+
+/**
+ * Implements hook_scald_transcoders().
+ */
+function paddle_scald_image_scald_transcoders() {
+  $transcoders = array();
+  foreach (image_styles() as $name => $style) {
+    $label = isset($style['label']) ? $style['label'] : $style['name'];
+    $transcoders['style-' . $name] = array(
+      'title' => t('@style (Image style)', array('@style' => $label)),
+      'description' => t('Use the Image style @style to prepare the image', array('@style' => $label)),
+      'formats' => array(
+        'image' => 'passthrough',
+      ),
+    );
+  }
+  if (module_exists('picture')) {
+    foreach (picture_mapping_load_all() as $name => $style) {
+      $transcoders['group-' . $name] = array(
+        'title' => t('@group (Picture group)', array('@group' => $name)),
+        'description' => t('Use the Picture group @group to prepare the image', array('@group' => $name)),
+        'formats' => array(
+          'image' => 'passthrough',
+        ),
+      );
+    }
+  }
+  return $transcoders;
+}
+
+/**
+ * Implements hook_scald_player().
+ */
+function paddle_scald_image_scald_player() {
+  return array(
+    'image_figure' => array(
+      'name' => 'HTML5 Image player',
+      'description' => 'The HTML5 player using figure/figcaption for all image atoms.',
+      'type' => array('image'),
+      'settings' => array(
+        'classes' => '',
+        'caption' => '[atom:title], by [atom:author]',
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_scald_player_settings_form().
+ */
+function paddle_scald_image_scald_player_settings_form($form, &$form_state) {
+  $element = array();
+
+  $element['classes'] = array(
+    '#type' => 'textfield',
+    '#title' => t('CSS classes'),
+    '#size' => 40,
+    '#default_value' => $form['#scald']['player_settings']['classes'],
+  );
+  $element['caption'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Text pattern used for caption'),
+    '#size' => 40,
+    '#default_value' => $form['#scald']['player_settings']['caption'],
+  );
+
+  return $element;
+}
+
+/**
+ * Implements hook_scald_fetch().
+ */
+function paddle_scald_image_scald_fetch($atom, $type) {
+  if ($type == 'atom') {
+    $file = file_load($atom->base_id);
+    $atom->base_entity = $file;
+    $atom->file_source = $file->uri;
+    $atom->thumbnail_source = $file->uri;
+  }
+}
+
+/**
+ * Implements hook_scald_prerender().
+ */
+function paddle_scald_image_scald_prerender($atom, $context, $options, $mode) {
+  $config = scald_context_config_load($context);
+
+  // Find out which transcoder is in use, and checks if it's
+  // one of the transcoder provided by Scald Image.
+  $style_name = NULL;
+  if ($transcoder = $config->transcoder[$atom->type]['*']) {
+    // Image style support.
+    if (preg_match('/^style-(.*)$/', $transcoder, $match)) {
+      $style_name = $match[1];
+    }
+    // Picture support.
+    elseif (preg_match('/^group-(.*)$/', $transcoder, $match) && module_exists('picture')) {
+      $mappings = picture_mapping_load($match[1]);
+    }
+  }
+
+  if ($mode == 'transcoder') {
+    // Scald Image can only do 1:1 transcoding. For Picture integration, it is
+    // done in the Atom mode to avoid duplicate code from Picture module.
+    if (empty($style_name)) {
+      return;
+    }
+
+    $preset = image_style_load($style_name);
+
+    if (!empty($atom->file_source)) {
+      $atom->file_transcoded = image_style_path($preset['name'], $atom->file_source);
+      $atom->rendered->file_transcoded_url = image_style_url($preset['name'], $atom->file_source);
+    }
+  }
+  elseif ($mode == 'player') {
+    $settings = $config->player[$atom->type]['settings'];
+    $classes = array_merge(array('scald-atom', 'scald-atom-image'), explode(' ', check_plain($settings['classes'])));
+    $caption = token_replace($settings['caption'], array('atom' => $atom));
+    $atom->rendered->player = '
+      <figure class="' . implode(' ', $classes) . '">
+        ' . $atom->rendered->player . '
+        <figcaption>' . filter_xss_admin($caption) . '</figcaption>
+      </figure>
+    ';
+  }
+  elseif ($mode == 'atom') {
+    // Default attributes, which can be overridden by field settings.
+    $attributes = array(
+      'alt' => $atom->title,
+      'title' => $atom->title,
+    );
+    $langcode = field_language('scald_atom', $atom, 'scald_thumbnail');
+    foreach (array('alt', 'title', 'width', 'height') as $attribute_name) {
+      if (isset($atom->scald_thumbnail[$langcode][0][$attribute_name]) && $atom->scald_thumbnail[$langcode][0][$attribute_name]) {
+        $attributes[$attribute_name] = $atom->scald_thumbnail[$langcode][0][$attribute_name];
+      }
+    }
+
+    if (!empty($style_name)) {
+      $atom->rendered->player = theme('image_style', array('path' => $atom->file_source, 'style_name' => $style_name) + $attributes);
+    }
+    elseif (isset($mappings)) {
+      foreach ($mappings->mapping as $breakpoint_name => $multipliers) {
+        if (!empty($multipliers)) {
+          foreach ($multipliers as $multiplier => $image_style) {
+            if (!empty($image_style)) {
+              $fallback_image_style = $image_style;
+              break 2;
+            }
+          }
+        }
+      }
+      // The fallback_image_style is the first image style we find, and so if it
+      // is empty then we do not have any image style.
+      if (!empty($fallback_image_style)) {
+        $theme_vars = array(
+          'uri' => $atom->file_source,
+          'style_name' => $fallback_image_style,
+          'breakpoints' => $mappings->mapping,
+        ) + $attributes;
+        $atom->rendered->player = theme('picture', $theme_vars);
+      }
+    }
+    else {
+      $path = empty($atom->rendered->file_transcoded_url) ? $atom->file_source : $atom->rendered->file_transcoded_url;
+      $atom->rendered->player = theme('image', array('path' => $path) + $attributes);
+    }
+
+    if (!empty($options['link'])) {
+      $atom->rendered->player = l($atom->rendered->player, $options['link'], array('html' => TRUE));
+    }
+  }
+}
+
+/**
+ * Implements hook_scald_update_atom().
+ */
+function paddle_scald_image_scald_update_atom($atom, $mode) {
+  if ($mode == 'atom') {
+    _paddle_scald_image_sync_thumbnail($atom);
+  }
+}
+
+/**
+ * Implements hook_scald_register_atom().
+ */
+function paddle_scald_image_scald_register_atom($atom, $mode) {
+  if ($mode == 'atom') {
+    _paddle_scald_image_sync_thumbnail($atom);
+  }
+}
+
+/**
+ * Synchronisation of thumbnail with base_id.
+ *
+ * The thumbnail field is also the base entity. We keep them in synchronisation
+ * when user update that field.
+ */
+function _paddle_scald_image_sync_thumbnail($atom) {
+  if (!empty($atom->scald_thumbnail)) {
+    $items = field_get_items('scald_atom', $atom, 'scald_thumbnail');
+    $atom->base_id = $items[0]['fid'];
+  }
+}
+
+/**
+ * Implements hook_libraries_info().
+ */
+function paddle_scald_image_libraries_info() {
+  return array(
+    'colorbox' => array(
+      'name' => 'colorbox',
+      'vendor url' => 'http://www.jacklmoore.com/colorbox/',
+      'download url' => 'https://github.com/jackmoore/colorbox/archive/master.zip',
+      'version arguments' => array(
+        'file' => 'jquery.colorbox-min.js',
+        'pattern' => "/Colorbox ((\d+)\.(\d+)\.(\d+))/",
+      ),
+      'files' => array(
+        'js' => array(
+          'jquery.colorbox-min.js',
+        ),
+        'css' => array(
+          'example1/colorbox.css',
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_htmlpurifier_html_definition_alter().
+ *
+ * @param HTMLPurifier_HTMLDefinition $html_definition
+ *   The HTMLPurifier definition object to alter.
+ */
+function paddle_scald_image_htmlpurifier_html_definition_alter($html_definition) {
+  // Add the image style data attribute to the allowed list of attributes for
+  // the img element, in addition to have it added to the HTML.Allowed list.
+  $html_definition->addAttribute('img', 'data-image-style', 'Text');
+  $html_definition->addAttribute('img', 'data-file-scheme', 'Text');
+}
+
+/**
+ * Implements hook_element_info().
+ */
+function paddle_scald_image_element_info() {
+  return array(
+    'paddle_scald_image_atom' => array(
+      '#process' => array('paddle_scald_image_atom_element_process'),
+      '#theme_wrappers' => array('container'),
+      '#thumbnails' => TRUE,
+      '#attributes' => array('class' => array('form-type-paddle-scald-image-atom')),
+    ),
+  );
+}
+
+/**
+ * Process function for the scald atom image element.
+ */
+function paddle_scald_image_atom_element_process($element, &$form_state, $form) {
+  $element['#tree'] = TRUE;
+
+  // To avoid loading scald types during element_info() hook, we add the
+  // default button text here.
+  if (empty($element['#button_text'])) {
+    $type = scald_type_load('image');
+    if (is_object($type)) {
+      $type_name = scald_type_property_translate($type, 'title');
+    }
+    else {
+      $type_name = t('atom');
+    }
+    $element['#button_text'] = t('Choose @type...', array('@type' => $type_name));
+  }
+
+  // This element is not directly an input element, so it has no #value
+  // property. This is done to allow the paddle_scald_atom field to call its
+  // value callback and set the correct value to the form_state.
+  // If we set the #input property to TRUE for this element type, the
+  // paddle_scald_atom field will find the form_state already set and it
+  // won't be able to set the correct value.
+  // Because all of this, we need to use the #default_value properties for
+  // all the elements.
+  $defaults = !empty($element['#default_value']) ? $element['#default_value'] : array();
+  $defaults += array(
+    'sid' => 0,
+    'style' => '',
+  );
+
+  $element['sid'] = array(
+    '#type' => 'paddle_scald_atom',
+    '#allowed_types' => array('image'),
+    '#default_value' => $defaults['sid'],
+    // Make the file field image style aware.
+    '#default_image_style' => $defaults['style'],
+    '#attached' => array(
+      'js' => array(
+        drupal_get_path('module', 'paddle_scald_image') . '/js/paddle_scald_image_update_style_select.js',
+      ),
+    ),
+  );
+
+  // Ensure that the paddle_scald_atom field element properties are moved to
+  // that element.
+  // Unlike filter_process_format(), we whitelist a number of properties that
+  // we know we have to move. Some properties, like [#states][visible], must
+  // stay on the parent container.
+  // @see filter_process_format()
+  $image_keys = array(
+    '#required',
+    '#title',
+    '#title_display',
+    '#button_text',
+    '#thumbnails',
+    '#states][required',
+  );
+  foreach ($image_keys as $key) {
+    $parents = explode('][', $key);
+    if ($value = drupal_array_get_nested_value($element, $parents)) {
+      drupal_array_set_nested_value($element['sid'], $parents, $value);
+
+      $parent_key = array_pop($parents);
+      $parent_element = &drupal_array_get_nested_value($element, $parents);
+      unset($parent_element[$parent_key]);
+    }
+  }
+
+  $element['style'] = array(
+    '#type' => 'select',
+    '#options' => manualcrop_styles_with_crop(FALSE, NULL, TRUE),
+    '#default_value' => $defaults['style'],
+    '#empty_option' => t('None'),
+    '#ajax' => array(
+      'callback' => 'paddle_scald_image_render_style_callback',
+      'effect' => 'fade',
+    ),
+  );
+
+  return $element;
+}
+
+/**
+ * Returns the updated image when selecting an image style.
+ *
+ * @return array
+ *   The ajax array containing the commands to be executed.
+ */
+function paddle_scald_image_render_style_callback($form, $form_state) {
+  $commands = array();
+
+  $parents_both = $form_state['triggering_element']['#parents'];
+  // Go 1 level above the 'style' element to contain the 'sid' at once.
+  array_pop($parents_both);
+  $parent_css_selector = "#edit-" . drupal_html_class(implode('-', $parents_both));
+  $image_data = drupal_array_get_nested_value($form_state['values'], $parents_both);
+  $image_style_name = $image_data['style'];
+  $atom_id = $image_data['sid'][0];
+
+  // Load the atom for its settings.
+  if (!empty($atom_id)) {
+    $image_options = array();
+    if (!empty($image_style_name)) {
+      $image_options['image_style'] = $image_style_name;
+    }
+
+    // Replace the image.
+    $commands[] = ajax_command_replace("$parent_css_selector .atom-id-$atom_id .image", scald_render($atom_id, 'paddle_atom_field_preview', $image_options));
+    // Remove the printed image data, like image title.
+    $commands[] = ajax_command_remove("$parent_css_selector .atom-id-$atom_id .meta");
+  }
+
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Returns the default image cropping ratios, defined by this module.
+ *
+ * @return array
+ *   An array containing the image styles keyed by image style.
+ */
+function paddle_scald_image_retrieve_default_image_ratios() {
+  return array(
+    '2_3' => '2:3',
+    '3_1' => '3:1',
+    '3_2' => '3:2',
+    '3_4' => '3:4',
+    '4_3' => '4:3',
+    '16_9' => '16:9',
+    'square' => t('Square'),
+  );
+}

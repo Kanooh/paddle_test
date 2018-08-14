@@ -1,0 +1,121 @@
+<?php
+/**
+ * @file
+ * Definition of PaddleMailChimpHTMLParsingTest.
+ */
+
+/**
+ * Test the HTML parsing of the MailChimp module.
+ */
+class PaddleMailChimpHTMLParsingTest extends DrupalUnitTestCase {
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Test the HTML parsing of the MailChimp module',
+      'description' => 'Test the parsing of the HTML for a newsletter campaign.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * @inheritdoc.
+   */
+  public function setUp() {
+    parent::setUp();
+
+    module_load_include('module', 'paddle_mailchimp');
+  }
+
+  /**
+   * Test the parsing of the HTML for a newsletter campaign.
+   */
+  public function testHTMLParsing() {
+    $html = <<<HTML
+      <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+      <html xmlns="http://www.w3.org/1999/xhtml">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <meta name="viewport" content="width=device-width"/>
+        <title>*|MC:SUBJECT|*</title>
+      </head>
+      <body>
+
+        <table class="body">
+          <tr>
+            <td class="center" align="center" valign="top">
+              <center>
+
+                <table class="container content campaign-content">
+                  <tr>
+                    <td>
+
+                      <table class="newsletter-layout-paddle_table_no_column row">
+                        <tr>
+                          <td class="wrapper last">
+
+                            <table class="twelve columns" style="width: 580px; color: blue;">
+                              <tr>
+                                <td>
+
+                                  <div class="pane">
+                                    <img src="mytest.jpg" alt="my test" width="1100" height="500" style="border: none;" />
+                                  </div>
+
+                                </td>
+                                <td class="expander"></td>
+                              </tr>
+                            </table>
+
+                          </td>
+                        </tr>
+                      </table>
+
+                    </td>
+                  </tr>
+                </table>
+
+              </center>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+HTML;
+
+    $result = paddle_mailchimp_prepare_html_content($html);
+
+    $expected_html = <<<HTML
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta name="viewport" content="width=device-width"><title>*|MC:SUBJECT|*</title></head><body>
+
+        <table class="body"><tr><td class="center" align="center" valign="top">
+              <center>
+
+                <table class="container content campaign-content"><tr><td>
+
+                      <table class="newsletter-layout-paddle_table_no_column row"><tr><td class="wrapper last">
+
+                            <table class="twelve columns" style="width: 580px; color: blue;"><tr><td>
+
+                                  <div class="pane">
+                                    <img src="mytest.jpg" alt="my test" width="1100" style="border: none;"></div>
+
+                                </td>
+                                <td class="expander"></td>
+                              </tr></table></td>
+                        </tr></table></td>
+                  </tr></table></center>
+            </td>
+          </tr></table></body></html>
+HTML;
+
+    // We run the expected HTML through the function again to make sure that
+    // the layout is the same.
+    $expected_html = paddle_mailchimp_prepare_html_content($expected_html);
+
+    $this->assertEqual($result, $expected_html, 'The expected parsed HTML is different.');
+  }
+}

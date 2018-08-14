@@ -1,0 +1,70 @@
+/**
+* @file
+* Menu slider.
+*
+*/
+
+.menuslider-controls {
+  position: absolute;
+  right: 0;
+  top: 0;
+  padding-left: 33px;
+}
+.menuslider-slide,
+.menuslider-slide a {
+  float: left;
+  display: block;
+}
+.menu-slider,
+.menu-wrapper {
+  float: left;
+}
+.menuslider-viewport {
+  float: left;
+  overflow: hidden;
+}
+.menu-wrapper {
+  overflow: hidden;
+  position: relative;
+}
+.menuslider-button {
+  background: $c-mineshaft-second no-repeat center center;
+  border: none;
+  display: inline-block;
+  cursor: pointer;
+  outline: none;
+  color: $c-white;
+  font-size: 1.2em;
+  width: 32px;
+  height: 44px;
+}
+#menu-display-current-level-plus-one .menuslider-controls {
+  background: url(../images/menu-slider-fade.png);
+  padding-left: 60px;
+}
+#menu-display-current-level-plus-one .menuslider-button {
+  color: $c-dusty-gray;
+  height: 52px;
+}
+#menu-display-current-level-plus-one .menuslider-button:hover {
+  color: $c-white;
+}
+.menuslider-controls .disabled {
+  cursor: default;
+}
+#menu-display-current-level-plus-one .menuslider-controls .disabled {
+  background-color: $c-alabaster;
+}
+#menu-display-current-level-plus-one .menuslider-controls button {
+  background-color: $c-concrete;
+}
+#fake-menu-bg {
+  position: absolute;
+  width: 100%;
+  top: 0;
+  min-height: 44px;
+}
+#main-nav {
+  z-index: 1;
+  position: relative;
+}

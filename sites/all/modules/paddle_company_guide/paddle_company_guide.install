@@ -1,0 +1,91 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Company guide app.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_company_guide_enable() {
+  // Prepare our content type to add permissions.
+  paddle_apps_prepare_module_for_permissions('paddle_company_guide');
+
+  $permissions = [
+    'create company_page content',
+    'edit any company_page content',
+    'delete any company_page content',
+  ];
+
+  foreach (['Chief Editor', 'Editor'] as $role_name) {
+    $role = user_role_load_by_name($role_name);
+
+    if ($role) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+
+  paddle_content_region_panelize_node_type('company_page');
+  paddle_content_region_grant_node_type_permissions('company_page');
+
+  $default = array('company_page' => FALSE);
+  $contenttype_fields = serialize($default + unserialize(variable_get('paddle_maps_index_contenttype_fields', array())));
+  variable_set('paddle_maps_index_contenttype_fields', $contenttype_fields);
+
+  // Check for content-type and add the indexfields.
+  paddle_maps_add_index_fields();
+
+  gmap_regenerate_markers();
+  _drupal_flush_css_js();
+  registry_rebuild();
+  drupal_clear_css_cache();
+  drupal_clear_js_cache();
+}
+
+/**
+ * Saves all the company guides to transfer the geofield data.
+ *
+ * @param array $sandbox
+ *   An array holding data for the batch process.
+ */
+function paddle_company_guide_update_7001(&$sandbox) {
+  $limit = 5;
+  $entities = paddle_core_get_entity_revisions('node', array('company_page'));
+  $sandbox['entities'] = $entities;
+
+  // @codingStandardsIgnoreStart
+  paddle_update_batch_helper(
+    $sandbox,
+    $limit,
+    // Count callback.
+    function (&$sandbox) {
+      return count($sandbox['entities']);
+    },
+    // Range retrieval callback.
+    function ($limit, &$sandbox) {
+      $offset = $sandbox['progress'];
+      return array_slice($sandbox['entities'], $offset, $limit);
+    },
+    // Single item update callback.
+    function ($entity, &$sandbox) {
+      try {
+        time_nanosleep(0, 100);
+        node_save($entity);
+        return TRUE;
+      } catch (\Exception $e) {
+        // Nothing we can do.
+        return FALSE;
+      }
+    },
+    // Progress message callback.
+    function ($sandbox) {
+      $item = $sandbox['last_item'];
+      $updated = $sandbox['last_item_update_status'];
+
+      $id_string = "Company page {$item->nid} rev {$item->vid} lang {$item->language}";
+      $action = $updated ? "has been saved" : "could NOT be saved";
+      return $id_string . " " . $action . ".";
+    }
+  );
+}

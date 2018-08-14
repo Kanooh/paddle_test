@@ -1,0 +1,11 @@
+name = WebClient extension
+description = Extends the Drupal core with WebClient functionality.
+package = WebClient
+core = 7.x
+; Module dependencies
+dependencies[] = webclient
+
+; Information added by drush on 2014-04-12
+version = "7.x-1.6"
+project = "webclient"
+datestamp = "1397309472"

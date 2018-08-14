@@ -1,0 +1,132 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle VUB Client Scald feature.
+ */
+
+function paddle_vub_client_convert_file_to_base64($file_field) {
+  $type = pathinfo($file_field['uri'], PATHINFO_EXTENSION);
+  $data = file_get_contents($file_field['uri']);
+  return 'data:image/' . $type . ';base64,' . base64_encode($data);
+}
+
+/**
+ * Transfers the scald data to the server after publishing the linked node.
+ *
+ * @param string $json
+ *   The scald atom data wrapped in a JSON string.
+ * @param string $server_sid
+ *   The scald id of the existing scald atom on the server.
+ *
+ * @return string
+ *   The JSON string response.
+ *
+ * @see \paddle_vub_client_transfer_node_to_server()
+ */
+function paddle_vub_client_scald_transfer_scald_atom_to_server($json, $server_sid = '') {
+  $server_url = variable_get('paddle_vub_client_server_site', '');
+  $ch = curl_init();
+
+  // Retrieve the X-CSRF-token.
+  $http_x_csrf_token = paddle_vub_client_retrieve_http_x_crsf_token($ch, $server_url);
+
+  // Transfer the scald atom content to the server.
+  curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json', 'X-CSRF-Token: ' . $http_x_csrf_token));
+  curl_setopt($ch, CURLOPT_HTTPGET, FALSE);
+  curl_setopt($ch, CURLOPT_NOBODY, FALSE);
+  curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+
+  // If there is a Scald atom ID linked, we will do an update command. (PUT)
+  if (!empty($server_sid)) {
+    curl_setopt($ch, CURLOPT_URL, $server_url . '/scald_atom/' . $server_sid);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+  }
+  // Otherwise we have to do a create command. (POST)
+  else {
+    curl_setopt($ch, CURLOPT_URL, $server_url . '/scald_atom.json');
+    curl_setopt($ch, CURLOPT_POST, TRUE);
+  }
+  $response = curl_exec($ch);
+
+  if (paddle_vub_client_check_for_curl_errors($ch, 'cURL error (@code) @error for @url')) {
+    // Send an empty response so nothing will be triggered
+    // when the function is called.
+    $response = '';
+  }
+
+  curl_close($ch);
+  return $response;
+}
+
+/**
+ * Imports a scald atom locally from the VUB server using its scald ID.
+ *
+ * @param $server_sid
+ *   The scald ID stored on the server.
+ * @param $type
+ *   The type of scald atom.
+ *
+ * @return string
+ *   The Identifier of the locally created scald atom.
+ */
+function paddle_vub_client_scald_import_scald_atom($server_sid, $type) {
+  $sid = '';
+  $server_url = variable_get('paddle_vub_client_server_site', '');
+  $ch = curl_init();
+
+  // Retrieve the X-CSRF-token.
+  $http_x_csrf_token = paddle_vub_client_retrieve_http_x_crsf_token($ch, $server_url);
+  curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json', 'X-CSRF-Token: ' . $http_x_csrf_token));
+  curl_setopt($ch, CURLOPT_URL, $server_url . '/scald_atom.json?sid=' . $server_sid . '&type=' . $type);
+
+  $data = curl_exec($ch);
+
+  if (!paddle_vub_client_check_for_curl_errors($ch, 'cURL error (@code) @error for retrieving the user id from @url', TRUE, 'form_wrapper')) {
+    $data_array = drupal_json_decode($data);
+    // The scald atom is unique so we will only retrieve one result.
+    if (!empty($data_array['list'][0])) {
+      $scald_atom_data = $data_array['list'][0];
+
+      if (!empty($scald_atom_data['scald_thumbnail']['file']['url'])) {
+        $url = $scald_atom_data['scald_thumbnail']['file']['url'];
+        // Retrieve the external file.
+        $file = system_retrieve_file($url, NULL, TRUE, FILE_EXISTS_REPLACE);
+
+        if ($file) {
+          // Create a new atom and save it.
+          $atom = new ScaldAtom('image', 'paddle_scald_image', array(
+            'file_source' => $file->uri,
+            'title' => $file->filename,
+            'base_id' => $file->fid,
+          ));
+          scald_atom_save($atom);
+
+          $atom_wrapper = entity_metadata_wrapper('scald_atom', $atom);
+
+          // Insert the link to the local file.
+          if (!empty($atom_wrapper->scald_thumbnail)) {
+            $atom_wrapper->scald_thumbnail->set((array) $file);
+          }
+
+          // Insert the alt tag.
+          if (!empty($atom_wrapper->field_scald_alt_tag) && !empty($scald_atom_data['field_scald_alt_tag'])) {
+            $atom_wrapper->field_scald_alt_tag->set($scald_atom_data['field_scald_alt_tag']);
+          }
+
+          // Insert the sid from the scald atom stored in the server.
+          if (!empty($atom_wrapper->field_vub_server_sid)) {
+            $atom_wrapper->field_vub_server_sid->set($server_sid);
+          }
+          // Save the fields.
+          $atom_wrapper->save();
+
+          $sid = $atom->sid;
+        }
+      }
+    }
+  }
+
+  return $sid;
+}

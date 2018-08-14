@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<!-- PHP_CodeSniffer standard for Paddle Landing Page. -->
+<!-- See http://pear.php.net/manual/en/package.php.php-codesniffer.annotated-ruleset.php -->
+<ruleset name="Paddle-Content-Manager">
+    <description>Drupal coding standard</description>
+
+    <rule ref="Drupal">
+
+    </rule>
+
+    <!-- Avoid false positives on intentionally empty CSS files. -->
+    <rule ref="Squiz.WhiteSpace.SuperfluousWhitespace.StartFile">
+        <exclude-pattern>*/tests/plugins/layouts/*/*.css</exclude-pattern>
+    </rule>
+
+    <!-- Avoid false positives on intentionally empty CSS files. -->
+    <rule ref="Drupal.WhiteSpace.FileEnd.FileEnd">
+        <exclude-pattern>*/tests/plugins/layouts/*/*.css</exclude-pattern>
+    </rule>
+
+    <rule ref="Drupal.NamingConventions.ValidClassName">
+        <exclude-pattern>*/plugins/display_renderers/panels_renderer_paddle_landing_page.class.php</exclude-pattern>
+    </rule>
+
+    <rule ref="Drupal.NamingConventions.ValidFunctionName">
+        <exclude-pattern>*/plugins/display_renderers/panels_renderer_paddle_landing_page.class.php</exclude-pattern>
+    </rule>
+
+</ruleset>

@@ -1,0 +1,265 @@
+<?php
+/**
+ * @file
+ * Contains PaddleCoreBreadcrumbs.
+ */
+
+/**
+ * UI tests for the breadcrumbs.
+ */
+class PaddleCoreBreadcrumbs extends PaddleWebTestCase {
+
+  /**
+   * A menu link first hierarchy.
+   *
+   * @var array $complexHierarchy
+   */
+  protected $complexHierarchy = array(
+    1 => array(
+      'link_title' => 'Test 1',
+      'url' => 'test-1',
+      'children' => array(
+        2 => array(
+          'link_title' => 'Test 2',
+          'url' => 'test-1/test-2',
+        ),
+        3 => array(
+          'link_title' => 'Test 3',
+          'url' => 'test-1/test-3',
+          'children' => array(
+            4 => array(
+              'link_title' => 'Test 4',
+              'url' => 'test-1/test-3/test-4',
+            ),
+            5 => array(
+              'link_title' => 'Test 5',
+              'url' => 'test-1/test-3/test-5',
+              'children' => array(
+                6 => array(
+                  'link_title' => 'Test 6',
+                  'url' => 'test-1/test-3/test-5/test-6',
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+    7 => array(
+      'link_title' => 'Test 7',
+      'url' => 'test-7',
+      'children' => array(
+        8 => array(
+          'link_title' => 'Test 8',
+          'url' => 'test-7/test-8',
+        ),
+        9 => array(
+          'link_title' => 'Test 9',
+          'url' => 'test-7/test-9',
+          'children' => array(
+            10 => array(
+              'link_title' => 'Test 10',
+              'url' => 'test-7/test-9/test-10',
+              'children' => array(
+                11 => array(
+                  'link_title' => 'Test 11',
+                  'url' => 'test-7/test-9/test-10/test-11',
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  /**
+   * A second menu link hierarchy.
+   *
+   * @var array $simpleHierarchy
+   */
+  protected $simpleHierarchy = array(
+    2 => array(
+      'link_title' => 'Test 2',
+      'url' => 'test-2',
+      'children' => array(),
+    ),
+    11 => array(
+      'link_title' => 'Test 11',
+      'url' => 'test-11',
+      'children' => array(),
+    ),
+  );
+
+  /**
+   * XPath query to find the breadcrumbs.
+   */
+  const BREADCRUMBS_XPATH_QUERY = '//div[@id="breadcrumb"]/ul/li[contains(@class, "breadcrumb-item")]';
+
+  /**
+   * XPath query to find the home breadcrumb.
+   */
+  const BREADCRUMB_HOME_XPATH_QUERY = '//div[@id="breadcrumb"]/ul/li[contains(@class, "breadcrumb-item breadcrumb-item-0 breadcrumb-home")]';
+
+  /**
+   * XPath query to find the page title breadcrumb.
+   */
+  const BREADCRUMB_PAGE_TITLE_XPATH_QUERY = '//div[@id="breadcrumb"]/ul/li[contains(@class, "breadcrumb-item breadcrumb-active")]';
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Breadcrumbs'),
+      'description' => t('Test if the breadcrumbs are rendered correctly.'),
+      'group' => t('Paddle Core'),
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp($enable_modules);
+
+    $this->drupalLogin($this->chiefEditor);
+
+    // Create a complex menu, menu links, nodes.
+    $this->createNodesHierarchy($this->complexHierarchy);
+    $this->createLinkHierarchy($this->complexHierarchy, 'main_menu_nl');
+
+    // Create a simple menu, menu links.
+    $this->createLinkHierarchy($this->simpleHierarchy, 'footer_menu_nl');
+
+    // Add the two menus in the variable that Paddle Path By Menu uses to
+    // resolve paths.
+    variable_set('paddle_path_by_menu_menus', array('main_menu_nl', 'footer_menu_nl'));
+  }
+
+  /**
+   * General test for the breadcrumbs.
+   */
+  public function testBreadcrumbsExistance() {
+    $this->assertBreadcrumbsPresent($this->complexHierarchy);
+  }
+
+  /**
+   * Menu priority test for the breadcrumbs.
+   *
+   * We need to do the test with an menu items present in both menus that we
+   * create. Based on the number of breadcrumbs we can assert which menu has
+   * been prioritized.
+   */
+  public function testBreadcrumbsMenuPriority() {
+    // Assert for "Test 2" page which is present in both menus.
+    $this->drupalGet('test-1/test-2');
+    $crumbs = $this->xpath(self::BREADCRUMBS_XPATH_QUERY);
+    // We check for 2 breadcrumb items because one is "Home", one is the parent.
+    $this->assertEqual(count($crumbs), 3, 'The breadcrumbs for doubtful item respect the menu priority.');
+
+    // Assert for "Test 11" page which is present in both menus.
+    $this->drupalGet('test-7/test-9/test-10/test-11');
+    $crumbs = $this->xpath(self::BREADCRUMBS_XPATH_QUERY);
+    // We check for 5 breadcrumb items because one is "Home", three are parents.
+    $this->assertEqual(count($crumbs), 5, 'The breadcrumbs for doubtful item respect the menu priority.');
+  }
+
+  /**
+   * Check that the right classes are provided on the breadcrumbs.
+   */
+  public function testClasses() {
+    // Load a page with 5 breadcrumbs.
+    $this->drupalGet('test-7/test-9/test-10/test-11');
+    $crumbs = $this->xpath(self::BREADCRUMBS_XPATH_QUERY);
+
+    $i = 0;
+    foreach ($crumbs as $crumb) {
+      $attributes = $crumb->attributes();
+      foreach ($attributes as $name => $value) {
+        if ($name == 'class') {
+          $classes = explode(' ', $value);
+          // Check that each breadcrumb has the class 'breadcrumb-item'.
+          $this->assertTrue(in_array('breadcrumb-item', $classes), format_string('Breadcrumb @count has the class "breadcrumb-item".', array('@count' => $i)));
+          // Check that each breadcrumb has the correct numbered class
+          // 'breadcrumb-item-N'.
+          $this->assertTrue(in_array('breadcrumb-item-' . $i, $classes), format_string('Breadcrumb @count has the class "breadcrumb-item-@count".', array('@count' => $i)));
+          // Only the first item should have the class 'breadcrumb-home'.
+          $this->assertEqual(!$i, in_array('breadcrumb-home', $classes), format_string('Breadcrumb @count @assert the class "breadcrumb-home".', array('@count' => $i, '@assert' => $i ? 'does not have' : 'has')));
+          // Only the 4th item should have the class 'breadcrumb-item-last'.
+          $this->assertEqual($i == 4, in_array('breadcrumb-item-last', $classes), format_string('Breadcrumb @count @assert the class "breadcrumb-item-last".', array('@count' => $i, '@assert' => $i == 3 ? 'has' : 'does not have')));
+          break;
+        }
+      }
+      $i++;
+    }
+  }
+
+  /**
+   * Asserts if breadcrumbs are present on the URL.
+   *
+   * @param array $hierarchy
+   *   The hierarchy for which we do the assertion.
+   */
+  protected function assertBreadcrumbsPresent($hierarchy) {
+    while ($node_title = array_shift($hierarchy)) {
+      $this->drupalGet($node_title['url']);
+      $crumbs = $this->xpath(self::BREADCRUMBS_XPATH_QUERY);
+      $this->assertTrue(count($crumbs) > 0, 'The breadcrumbs exists and it has items.');
+
+      $home_crumb = $this->xpath(self::BREADCRUMB_HOME_XPATH_QUERY);
+      $this->assertEqual(count($home_crumb), 1, 'The home breadcrumb exists and it is first.');
+
+      if (isset($node_title['children']) && count($node_title['children'])) {
+        $this->assertBreadcrumbsPresent($node_title['children']);
+      }
+    }
+  }
+
+  /**
+   * Create nodes recursively.
+   *
+   * @param array $hierarchy
+   *   Array of nested node titles used to create the nodes
+   */
+  protected function createNodesHierarchy($hierarchy) {
+    while ($node_title = array_shift($hierarchy)) {
+      $edit = array('title' => $node_title['link_title']);
+      $node = $this->drupalCreateUiNode('basic_page', $edit);
+      $this->moderateNode($node, 'Publish');
+
+      if (isset($node_title['children']) && count($node_title['children'])) {
+        $this->createNodesHierarchy($node_title['children']);
+      }
+    }
+  }
+
+  /**
+   * Recursively creates a hierarchy of menu links.
+   *
+   * @param array $hierarchy
+   *   An associative array of menu link arrays, keyed by path, with each array
+   *   containing the following keys:
+   *   - link_title: The title to use for the menu link.
+   *   - children: An associative array of menu link arrays, keyed by path.
+   * @param int $menu_name
+   *   The name of the menu in which we create the links.
+   * @param int $plid
+   *   An optional parent link id for the menu link.
+   */
+  protected function createLinkHierarchy($hierarchy, $menu_name, $plid = NULL) {
+    foreach ($hierarchy as $nid => $item) {
+      $item += array(
+        'link_path' => 'node/' . $nid,
+        'plid' => $plid,
+        'menu_name' => $menu_name,
+        'module' => 'paddle_menu_display',
+      );
+      $mlid = menu_link_save($item);
+      if (isset($item['children'])) {
+        $this->createLinkHierarchy($item['children'], $menu_name, $mlid);
+      }
+    }
+  }
+
+}

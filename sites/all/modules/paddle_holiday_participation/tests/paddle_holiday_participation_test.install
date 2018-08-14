@@ -1,0 +1,16 @@
+<?php
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Holiday
+ * Participation Test.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_holiday_participation_test_enable() {
+  features_revert_module('paddle_holiday_participation');
+  node_type_cache_reset();
+
+  paddle_holiday_participation_geo_field_instance('offer');
+}

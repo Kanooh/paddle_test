@@ -1,0 +1,239 @@
+<?php
+
+/**
+ * @file
+ * Contains TUnit.
+ */
+
+/**
+ * Enhanced test case for Drupal unit tests.
+ *
+ * These tests can not access the database nor files. Calling any Drupal
+ * function that needs the database will throw exceptions. These include
+ * watchdog(), module_implements(), module_invoke_all(), etc.
+ */
+abstract class TUnit extends DrupalUnitTestCase {
+
+  /**
+   * Original variable values.
+   *
+   * @var array
+   */
+  protected $originalVariables = array();
+
+  /**
+   * Sets up this test!
+   */
+  public function setUp() {
+    parent::setUp();
+    global $conf;
+    $this->originalVariables = $conf;
+
+    // Since the database isn't configured, Drupal's autoloader can never work.
+    spl_autoload_unregister('drupal_autoload_class');
+    spl_autoload_unregister('drupal_autoload_interface');
+  }
+
+  /**
+   * Tears down this test!
+   */
+  public function tearDown() {
+    $this->variableRestore();
+
+    // Restore Drupal's autoloader.
+    spl_autoload_register('drupal_autoload_class');
+    spl_autoload_register('drupal_autoload_interface');
+    parent::tearDown();
+  }
+
+  /**
+   * Creates a class without calling its constructor.
+   *
+   * @param string $class
+   *   The class instance to create.
+   *
+   * @return object
+   *   An instance of the class.
+   */
+  protected function newInstanceWithoutConstructor($class) {
+    $reflector = new ReflectionClass($class);
+    $properties = $reflector->getProperties();
+    $defaults = $reflector->getDefaultProperties();
+
+    $serialized = 'O:' . strlen($class) . ":\"$class\":" . count($properties) . ':{';
+    foreach ($properties as $property) {
+      $name = $property->getName();
+      if ($property->isProtected()) {
+        $name = chr(0) . '*' . chr(0) . $name;
+      }
+      elseif ($property->isPrivate()) {
+        $name = chr(0)  . $class .  chr(0) . $name;
+      }
+
+      $serialized .= serialize($name);
+
+      if (array_key_exists($property->getName(), $defaults)) {
+        $serialized .= serialize($defaults[$property->getName()]);
+      }
+      else {
+        $serialized .= serialize(NULL);
+      }
+    }
+    $serialized .= '}';
+
+    return unserialize($serialized);
+  }
+
+  /**
+   * Gets a protected or private property of an object.
+   *
+   * @param object $object
+   *   The object to set the property.
+   * @param string $property
+   *   The name of the property.
+   *
+   * @return mixed
+   *   Whatever the property value is.
+   */
+  protected function getProperty($object, $property) {
+    $reflector = new ReflectionProperty($object, $property);
+    $reflector->setAccessible(TRUE);
+    return $reflector->getValue($object);
+  }
+
+  /**
+   * Sets a protected or private property of an object.
+   *
+   * @param object $object
+   *   The object to set the property.
+   * @param string $property
+   *   The name of the property.
+   * @param mixed $value
+   *   The value of the property.
+   */
+  protected function setProperty($object, $property, $value) {
+    $reflector = new ReflectionObject($object);
+    $property = $reflector->getProperty($property);
+    $property->setAccessible(TRUE);
+    $property->setValue($object, $value);
+  }
+
+  /**
+   * Calls a private or protected method on an object.
+   *
+   * @param object $object
+   *   The object to invoke a method on.
+   * @param string $method
+   *   The name of the method.
+   * @param array $arguments
+   *   (optioanl) The arguments to provide to the method. Defaults to an empty
+   *   array.
+   *
+   * @return mixed
+   *   Whatever the method returns.
+   */
+  protected function invokeMethod($object, $method, array $arguments = array()) {
+    $reflector = new ReflectionMethod($object, $method);
+    $reflector->setAccessible(TRUE);
+    return $reflector->invokeArgs($object, $arguments);
+  }
+
+  /**
+   * Returns a temporary variable.
+   *
+   * @param string $name
+   *   The name of the variable to return.
+   * @param mixed $default
+   *   The default value to use if this variable has never been set.
+   *
+   * @return mixed
+   *   The value of the variable.
+   *
+   * @see variable_get()
+   * @see TUnit::variableDel()
+   * @see TUnit::variableSet()
+   */
+  protected function variableGet($name, $default = NULL) {
+    return variable_get($name, $default);
+  }
+
+  /**
+   * Sets a temporary variable.
+   *
+   * @param string $name
+   *   The name of the variable to set.
+   * @param mixed $value
+   *   The value to set. This can be any PHP data type.
+   *
+   * @see variable_set()
+   * @see TUnit::variableDel()
+   * @see TUnit::variableGet()
+   */
+  protected function variableSet($name, $value) {
+    global $conf;
+    $conf[$name] = $value;
+  }
+
+  /**
+   * Unsets a temporary variable.
+   *
+   * @param string $name
+   *   The name of the variable to undefine.
+   *
+   * @see variable_del()
+   * @see TUnit::variableGel()
+   * @see TUnit::variableSet()
+   */
+  protected function variableDel($name) {
+    global $conf;
+    unset($conf[$name]);
+  }
+
+  /**
+   * Restores original variable values.
+   */
+  protected function variableRestore() {
+    if (!isset($this->originalVariables)) {
+      return;
+    }
+
+    global $conf;
+    $conf = $this->originalVariables;
+    unset($this->originalVariables);
+  }
+
+  /**
+   * Asserts that a function call will result in an exception.
+   *
+   * @param callable $callable
+   *   The function or method to call.
+   * @param array $args
+   *   The arguments to provide to the callable.
+   * @param string $exception_class
+   *   (optional) The expected exception class. Defaults to "Exception".
+   * @param string $message
+   *   (optional) The error message expected from the exception. Defaults to
+   *   null.
+   */
+  protected function assertException($callable, array $args, $exception_class = 'Exception', $message = NULL) {
+    try {
+      call_user_func_array($callable, $args);
+    }
+    catch (Exception $e) {
+      // Bypass the catch so that assertions are in the correct order.
+    }
+
+    $this->assertTrue(isset($e), 'Callable threw an exception.');
+
+    if (!isset($e)) {
+      return;
+    }
+
+    $this->assertEqual(get_class($e), $exception_class, format_string('@e exception thrown.', array('@e' => get_class($e))));
+
+    if ($message !== NULL) {
+      $this->assertEqual($message, $e->getMessage(), 'Correct error message from exception.');
+    }
+  }
+
+}

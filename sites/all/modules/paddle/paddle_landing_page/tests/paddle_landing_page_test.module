@@ -1,0 +1,16 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations of Paddle Landing Page Test.
+ */
+
+include_once 'paddle_landing_page_test.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_landing_page_test_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'panels') {
+    return 'plugins/' . $plugin;
+  }
+}

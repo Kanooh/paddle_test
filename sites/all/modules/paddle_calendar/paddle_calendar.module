@@ -1,0 +1,715 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Calendar module.
+ */
+
+include_once 'paddle_calendar.features.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_calendar_menu() {
+  $items = array();
+
+  $items['paddle_calendar/events/%ctools_js/%/%'] = array(
+    'title' => 'Calendar item list',
+    'page callback' => 'paddle_calendar_item_list',
+    'page arguments' => array(2, 3, 4),
+    'access callback' => TRUE,
+    'file' => 'paddle_calendar.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_calendar_paddle_content_region_content_type_info() {
+  return 'calendar_item';
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_calendar_paddle_content_manager_additional_fields() {
+  return array(
+    'field_paddle_calendar_date',
+    'field_paddle_calendar_location',
+  );
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ */
+function paddle_calendar_field_extra_fields() {
+  // ROFL indentation.
+  return array(
+    'node' => array(
+      'calendar_item' => array(
+        'display' => array(
+          'ical' => array(
+            'label' => t('Add to your calendar'),
+            'description' => t('A link to the iCal feed for this item.'),
+            'weight' => 5,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function paddle_calendar_preprocess_node(&$vars) {
+  if ($vars['type'] == 'calendar_item' && $vars['view_mode'] == 'full') {
+    $date_objects = paddle_calendar_get_node_date_objects($vars['node']);
+    /* @var DateObject $start_date */
+    $start_date = $date_objects['start'];
+    /* @var DateObject $end_date */
+    $end_date = $date_objects['end'];
+
+    $date_times = array(
+      'start_date' => date_format_date($start_date, 'full_month_no_time'),
+      'start_time' => date_format_date($start_date, 'time_only') . t('h', array(), array('context' => 'paddle-calendar-date-field')),
+    );
+
+    if (!is_null($end_date)) {
+      $date_times['end_date'] = date_format_date($end_date, 'full_month_no_time');
+      $date_times['end_time'] = date_format_date($end_date, 'time_only') . t('h', array(), array('context' => 'paddle-calendar-date-field'));
+    }
+
+    // Set the main wrapper for the specific event fields.
+    $vars['content']['wrapper'] = array(
+      '#prefix' => '<div class="event-details">',
+      '#suffix' => '</div>',
+    );
+
+    // Render the fields if they have been set.
+    $date_lines = array();
+    if (isset($date_times['end_date']) && $date_times['start_date'] != $date_times['end_date']) {
+      $date_lines[0] = t('from') . ' ' . $date_times['start_date'] . ' - ' . $date_times['start_time'];
+      $date_lines[1] = t('to') . ' ' . $date_times['end_date'];
+      if (isset($date_times['end_time'])) {
+        $date_lines[1] .= ' - ' . $date_times['end_time'];
+      }
+    }
+    else {
+      $date_lines[0] = $date_times['start_date'];
+      $date_lines[1] = $date_times['start_time'];
+      if (!empty($date_times['end_time']) && $date_times['end_time'] != $date_times['start_time']) {
+        $date_lines[1] .= ' - ' . $date_times['end_time'];
+      }
+    }
+    $date_string = '<div class="event-date-line event-field">' . $date_lines[0] . '</div>';
+    $date_string .= '<div class="event-date-line event-field">' . $date_lines[1] . '</div>';
+    $vars['content']['wrapper'][] = array(
+      '#markup' => '<div class="event-date event-field">' . t('Date') . ': ' . $date_string . '</div>',
+    );
+
+    if (!empty($vars['field_paddle_calendar_location'][0]['safe_value'])) {
+      $vars['content']['wrapper'][] = array(
+        '#markup' => '<div class="event-location event-field">' . t('Location') . ': ' . $vars['field_paddle_calendar_location'][0]['safe_value'] . '</div>',
+      );
+    }
+
+    // Show the iCal link if available.
+    if (!empty($vars['content']['ical'])) {
+      $vars['content']['wrapper'][] = $vars['content']['ical'];
+      hide($vars['content']['ical']);
+    }
+
+    // Remove the event fields if they are direct children in the content array.
+    // Otherwise they will be rendered twice.
+    unset($vars['content']['field_paddle_calendar_date']);
+    unset($vars['content']['field_paddle_calendar_location']);
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_calendar_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && $plugin_type == 'content_types') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors_alter().
+ */
+function paddle_calendar_paddle_color_palettes_color_selectors_alter(&$data, $theme) {
+  $data[0]['background-color'][] = '.pane-calendar{} table.mini td.has-events > .month';
+  $data[0]['border-color'][] = '.pane-calendar{} table.mini td.mini.today > .month';
+  $data[0]['border-color'][] = '.pane-calendar{} table.mini td.mini.has-events > .month';
+  $data[0]['color'][] = '.pane-calendar{} .view-display-id-day_view .views-field-title a';
+
+  $data[1]['background-color'][] = '.event-details';
+
+  $data[2]['color'][] = '.pane-calendar{} table.mini td.has-events a';
+  $data[2]['color'][] = '.event-details';
+  $data[2]['color'][] = '.event-details .ical-event';
+  $data[2]['color'][] = '.event-details .ical-event:hover';
+
+  $data[4]['color'][] = '.panel-pane .pane-section-body .view-display-id-month_list_view_image .month-list-view-image-day .views-field-title a';
+
+  $data[7]['background-color'][] = '.pane-calendar{} table.mini thead';
+  $data[7]['background-color'][] = '.pane-calendar{} .month-list-view-day .day-name';
+  $data[7]['border-color'][] = '.pane-calendar{} table.mini td.mini > .month';
+  $data[7]['border-top-color'][] = '.pane-calendar{} .week-list-view-day';
+}
+
+/**
+ * Finds all the tags with which calendar items are tagged.
+ *
+ * @param string $language
+ *   The language for the wanted tags.
+ *
+ * @return array
+ *   Flat array of term IDs.
+ */
+function paddle_calendar_get_calendar_tags($language = '') {
+  $terms = array();
+
+  // Build a EntityFieldQuery.
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'calendar_item')
+    ->fieldCondition('field_paddle_tags', 'tid', 'NULL', '!=');
+
+  if (!empty($language)) {
+    $query->propertyCondition('language', $language, '=');
+  }
+
+  $results = $query->execute();
+
+  // Harvest the tids.
+  if (!empty($results['node'])) {
+    $nodes = node_load_multiple(array_keys($results['node']));
+    foreach ($nodes as $node) {
+      $field_values = field_get_items('node', $node, 'field_paddle_tags');
+      if (!empty($field_values)) {
+        foreach ($field_values as $field_value) {
+          $terms[] = $field_value['tid'];
+        }
+      }
+    }
+  }
+
+  return array_unique($terms);
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function paddle_calendar_node_view($node, $view_mode, $langcode) {
+  if ($node->type != 'calendar_item') {
+    return;
+  }
+
+  // Render the link provided by the Calendar item iCal view.
+  $icon = theme('paddle_core_icon', array('type' => 'fa', 'name' => 'download'));
+  $text = t('Add to personal calendar', array(), array('context' => 'paddle-calendar'));
+  $span = theme('html_tag', array(
+    'element' => array(
+      '#tag' => 'span',
+      '#value' => $text,
+      '#attributes' => array('class' => array('element-invisible')),
+    ),
+  ));
+  $url = "node/{$node->nid}/paddle-calendar/event.ics";
+
+  $node->content['ical'] = array(
+    '#markup' => l($icon . $span, $url, array(
+      'html' => TRUE,
+      'absolute' => TRUE,
+      'attributes' => array(
+        'class' => 'ical-event',
+        'title' => $text,
+      ),
+    )),
+  );
+}
+
+/**
+ * Implements hook_preprocess_calendar_datebox().
+ */
+function paddle_calendar_preprocess_calendar_datebox(&$variables) {
+  $view = $variables['view'];
+
+  // Change rendering only for the month calendar display.
+  if ($view->name != 'calendar_pane' || $view->current_display != 'month_calendar_view') {
+    return;
+  }
+
+  ctools_include('ajax');
+
+  // Craft the url for the ajax request.
+  $url = "paddle_calendar/events/nojs/{$view->dom_id}/{$variables['date']}";
+  // If the second argument is there, we have tags.
+  if (!empty($view->args[1])) {
+    $url .= '/' . $view->args[1];
+  }
+
+  $link = ctools_ajax_text_button($variables['day'], $url, '');
+  $variables['link'] = $link;
+}
+
+/**
+ * Preprocess function for Date pager template.
+ */
+function paddle_calendar_preprocess_date_views_pager(&$vars) {
+  $view = $vars['plugin']->view;
+
+  // Change rendering only for the calendar pane view.
+  if ($view->name != 'calendar_pane') {
+    return;
+  }
+
+  if (empty($view->date_info) || empty($view->date_info->min_date)) {
+    return;
+  }
+  $date_info = $view->date_info;
+
+  // Make sure we have some sort of granularity.
+  $granularity = !empty($date_info->granularity) ? $date_info->granularity : 'month';
+
+  $params = array(
+    'granularity' => $granularity,
+    'view' => $view,
+    'link' => FALSE,
+    'format' => variable_get('date_views_month_format_with_year'),
+  );
+  $nav_title = theme('date_nav_title', $params);
+  if ($nav_title) {
+    $vars['nav_title'] = $nav_title;
+  }
+}
+
+/**
+ * Get the DateObject start and end date of the Paddle Calendar date field.
+ *
+ * @param object $node
+ *   The node to get the formatted date from.
+ *
+ * @return DateObject[]
+ *   An array that holds the start and end dates. End date equals NULL if
+ *   there's none.
+ */
+function paddle_calendar_get_node_date_objects($node) {
+  $instance = field_info_instance('node', 'field_paddle_calendar_date', 'calendar_item');
+  $formatted_date = date_formatter_process(
+    'date_default',
+    'node',
+    $node,
+    field_info_field('field_paddle_calendar_date'),
+    $instance,
+    LANGUAGE_NONE,
+    $node->field_paddle_calendar_date[LANGUAGE_NONE][0],
+    $instance['display']['default']
+  );
+
+  $start_date = $formatted_date['value']['local']['object'];
+  $end_date = NULL;
+  if (isset($formatted_date['value2']) && is_object($formatted_date['value2']['local']['object'])) {
+    $end_date = $formatted_date['value2']['local']['object'];
+  }
+
+  return array('start' => $start_date, 'end' => $end_date);
+}
+
+/**
+ * Process the results for the month list view.
+ *
+ * @param object $view
+ *   The view to process the results for.
+ *
+ * @return array
+ *   The processed view results.
+ */
+function paddle_calendar_process_month_list_view_results($view) {
+  // Get the month we want to display the events for - it is an argument.
+  $arg = explode('-', $view->argument['date_argument']->argument);
+  $current = array(
+    'month' => (int) $arg[1],
+    'year' => (int) $arg[0],
+  );
+  $current['timestamp'] = mktime(0, 0, 0, $current['month'], 1, $current['year']);
+
+  foreach ($view->result as $index => $row) {
+    // If the event spans over multiple days we want to display each day as
+    // a separate entry.
+    $date_objects = paddle_calendar_get_node_date_objects($row->_field_data['nid']['entity']);
+    /* @var DateObject $start_date_object */
+    $start_date_object = $date_objects['start'];
+    /* @var DateObject $end_date_object */
+    $end_date_object = $date_objects['end'];
+
+    $start_particles = $start_date_object->toArray();
+    $end_particles = $end_date_object->toArray();
+
+    // Check if the event ends another day. If so we will have to clone the
+    // $row until the end date.
+    if ($start_date_object->difference($end_date_object, 'days') >= 1) {
+      // Remove the row - it will be added below. If the event starts the
+      // previous month the view will show the event with the starting date
+      // and we don't want that.
+      unset($view->result[$index]);
+
+      $start_day = $start_particles['day'];
+      $end_day = $end_particles['day'];
+      if ($current['month'] != $end_particles['month'] || $current['year'] != $end_particles['year']) {
+        $end_day = (int) date('t', $current['timestamp']);
+      }
+      if ($current['month'] != $start_particles['month'] || $current['year'] != $start_particles['year']) {
+        $start_day = 1;
+      }
+      for ($i = $start_day; $i <= $end_day; $i++) {
+        $timestamp = mktime(0, 0, 0, $current['month'], $i, $current['year']);
+        $day = format_date($timestamp, 'custom', variable_get('date_format_full_month_no_time'));
+        $new_row = clone $row;
+        $new_row->field_field_paddle_calendar_date[0]['rendered']['#markup'] = '<span class="date-display-single">' . $day . '</span>';
+        $new_row->field_field_paddle_calendar_date_1[0]['rendered']['#access'] = FALSE;
+        $view->result[] = $new_row;
+      }
+    }
+    else {
+      // Change the date format of the day title.
+      $timestamp = mktime(0, 0, 0, $current['month'], $start_particles['day'], $current['year']);
+      $day = format_date($timestamp, 'custom', variable_get('date_format_full_month_no_time'));
+      $view->result[$index]->field_field_paddle_calendar_date[0]['rendered']['#markup'] = '<span class="date-display-single">' . $day . '</span>';
+      if ($start_date_object == $end_date_object) {
+        $view->result[$index]->field_field_paddle_calendar_date_1[0]['rendered']['#access'] = FALSE;
+      }
+    }
+  }
+
+  // Make sure the rows are ordered correctly.
+  $results = array();
+  foreach ($view->result as $event) {
+    $identifier = strip_tags($event->field_field_paddle_calendar_date[0]['rendered']['#markup']) .
+      $event->field_field_paddle_calendar_date_1[0]['rendered']['#markup'] .
+      $event->nid;
+    $results[$identifier] = $event;
+  }
+  ksort($results);
+
+  return $results;
+}
+
+/**
+ * Process the results for the month list view with image.
+ *
+ * @param object $view
+ *   The view to process the results for.
+ *
+ * @return array
+ *   The processed view results.
+ */
+function paddle_calendar_process_month_list_view_image_results($view) {
+  // Get the month we want to display the events for - it is an argument.
+  $arg = explode('-', $view->argument['date_argument']->argument);
+  $current = array(
+    'month' => (int) $arg[1],
+    'year' => (int) $arg[0],
+  );
+  $current['timestamp'] = mktime(0, 0, 0, $current['month'], 1, $current['year']);
+
+  foreach ($view->result as $index => $row) {
+    // If the event spans over multiple days we want to display each day as
+    // a separate entry.
+    $date_objects = paddle_calendar_get_node_date_objects($row->_field_data['nid']['entity']);
+    /* @var DateObject $start_date_object */
+    $start_date_object = $date_objects['start'];
+    /* @var DateObject $end_date_object */
+    $end_date_object = $date_objects['end'];
+
+    $start_particles = $start_date_object->toArray();
+    $end_particles = $end_date_object->toArray();
+
+    // Check if the event ends another day. If so we will have to clone the
+    // $row until the end date.
+    if ($start_date_object->difference($end_date_object, 'days') >= 1) {
+      // Remove the row - it will be added below. If the event starts the
+      // previous month the view will show the event with the starting date
+      // and we don't want that.
+      unset($view->result[$index]);
+
+      $start_day = $start_particles['day'];
+      $end_day = $end_particles['day'];
+      if ($current['month'] != $end_particles['month'] || $current['year'] != $end_particles['year']) {
+        $end_day = (int) date('t', $current['timestamp']);
+      }
+      if ($current['month'] != $start_particles['month'] || $current['year'] != $start_particles['year']) {
+        $start_day = 1;
+      }
+      for ($i = $start_day; $i <= $end_day; $i++) {
+        $timestamp = mktime(0, 0, 0, $current['month'], $i, $current['year']);
+        $day = format_date($timestamp, 'custom', variable_get('date_format_full_month_no_time'));
+        $new_row = clone $row;
+        $new_row->field_field_paddle_calendar_date[0]['rendered']['#markup'] = '<span class="date-display-single">' . $day . '</span>';
+        $new_row->field_field_paddle_calendar_date_1[0]['rendered']['#access'] = FALSE;
+        $view->result[] = $new_row;
+      }
+    }
+    else {
+      // Change the date format of the day title.
+      $timestamp = mktime(0, 0, 0, $current['month'], $start_particles['day'], $current['year']);
+      $day = format_date($timestamp, 'custom', variable_get('date_format_full_month_no_time'));
+      $view->result[$index]->field_field_paddle_calendar_date[0]['rendered']['#markup'] = '<span class="date-display-single">' . $day . '</span>';
+      if ($start_date_object == $end_date_object) {
+        $view->result[$index]->field_field_paddle_calendar_date_1[0]['rendered']['#access'] = FALSE;
+      }
+    }
+  }
+
+  // Make sure the rows are ordered correctly and add the featured image if
+  // needed.
+  $results = array();
+  foreach ($view->result as $event) {
+    if (!empty($event->field_field_paddle_featured_image)) {
+      $atom = scald_atom_load($event->field_field_paddle_featured_image[0]['raw']['sid']);
+      $alt = field_get_items('scald_atom', $atom, 'field_scald_alt_tag');
+      $alt = !empty($alt) ? $alt[0]['value'] : '';
+
+      $image = theme('image_style', array(
+        'style_name' => 'paddle_calendar_thumbnail',
+        'path' => $atom->file_source,
+        'alt' => $alt,
+      ));
+
+      $event->field_field_paddle_featured_image[0]['rendered']['#markup'] = render($image);
+    }
+
+    $identifier = strip_tags($event->field_field_paddle_calendar_date[0]['rendered']['#markup']) .
+        $event->field_field_paddle_calendar_date[0]['rendered']['#markup'] .
+        $event->nid;
+    $results[$identifier] = $event;
+  }
+  ksort($results);
+
+  return $results;
+}
+
+/**
+ * Process the results for the week list view.
+ *
+ * @param object $view
+ *   The view to process the results for.
+ *
+ * @return array
+ *   The processed view results.
+ */
+function paddle_calendar_process_week_list_view_results($view) {
+  $first_day_of_week = clone $view->argument['date_argument']->min_date;
+
+  // Construct an array with all weekdays.
+  for ($i = 0; $i < 7; $i++) {
+    $clone = clone $first_day_of_week;
+    $clone->modify('+' . $i . ' day');
+    $day_of_week = $clone->format('N');
+    $weekdays[$day_of_week] = $clone;
+
+    if ($i == 6) {
+      $last_day_of_week = $clone;
+    }
+  }
+
+  $results = array();
+  foreach ($view->result as $index => $row) {
+    // If the event spans over multiple days we want to display each day as
+    // a separate entry.
+    $date_objects = paddle_calendar_get_node_date_objects($row->_field_data['nid']['entity']);
+    /* @var DateObject $start_date_object */
+    $start_date_object = $date_objects['start'];
+    /* @var DateObject $end_date_object */
+    $end_date_object = $date_objects['end'];
+
+    // Check if the event ends another day. If so we will have to clone the
+    // $row until the end date.
+    if ($start_date_object->difference($end_date_object, 'days') >= 1) {
+      if ($start_date_object->difference($first_day_of_week, 'days', FALSE) > 0) {
+        // Start from the first day of the week if the event starts before this
+        // week.
+        $start_day = $first_day_of_week->format('N');
+      }
+      else {
+        // Otherwise, just take the day of the week of the start date.
+        $start_day = $start_date_object->format('N');
+      }
+
+      if ($end_date_object->difference($last_day_of_week, 'days', FALSE) < 0) {
+        // Show until the last day of the week if the event ends after the end
+        // of this week.
+        $end_day = $last_day_of_week->format('N');
+      }
+      else {
+        // Otherwise, just take the day of the week of the end date.
+        $end_day = $end_date_object->format('N');
+      }
+
+      for ($i = $start_day; $i <= $end_day; $i++) {
+        $day = date_format_date($weekdays[$i], 'day_only');
+        $new_row = clone $row;
+        $new_row->field_field_paddle_calendar_date[0]['rendered']['#markup'] = '<span class="date-display-single">' . $day . '</span>';
+        $new_row->field_field_paddle_calendar_date_1[0]['rendered']['#access'] = FALSE;
+
+        if (!in_array($new_row, $results)) {
+          $results[$day][] = $new_row;
+        }
+      }
+    }
+    else {
+      $day = date_format_date($start_date_object, 'day_only');
+      $new_row = clone $row;
+      $new_row->field_field_paddle_calendar_date[0]['rendered']['#markup'] = '<span class="date-display-single">' . $day . '</span>';
+
+      // Remove the time if the event starts and ends at the same time.
+      if ($start_date_object == $end_date_object) {
+        $new_row->field_field_paddle_calendar_date_1[0]['rendered']['#access'] = FALSE;
+      }
+
+      $results[$day][] = $new_row;
+    }
+  }
+
+  // We want the days for which there are no events to nevertheless be
+  // displayed. Thus we add empty fake rows for which weekday without event.
+  $ordered_results = array();
+  foreach ($weekdays as $weekday) {
+    $day = date_format_date($weekday, 'day_only');
+
+    if (!isset($results[$day])) {
+      $fake_row = (object) array(
+        'field_field_paddle_calendar_date' => array(
+          array(
+            'rendered' => '<span class="date-display-single">' . $day . '</span>',
+            '#access' => TRUE,
+          ),
+        ),
+        'field_field_paddle_calendar_date_1' => array(
+          array('rendered' => '', '#access' => TRUE),
+        ),
+      );
+      $ordered_results[$day][] = $fake_row;
+    }
+    else {
+      $ordered_results[$day] = $results[$day];
+    }
+  }
+
+  $results = array();
+  foreach ($ordered_results as $events) {
+    $results = array_merge($results, $events);
+  }
+
+  return $results;
+}
+
+/**
+ * Implements hook_views_pre_render().
+ */
+function paddle_calendar_views_pre_render(&$view) {
+  if ($view->name != 'calendar_pane') {
+    return;
+  }
+
+  // The view can't display the events that span over a few days in each day
+  // that they appear, so we do it manually.
+  if (!empty($view->result) && $view->current_display == 'month_list_view') {
+    $results = paddle_calendar_process_month_list_view_results($view);
+    $view->result = array_values($results);
+  }
+  elseif (!empty($view->result) && $view->current_display == 'month_list_view_image') {
+    $results = paddle_calendar_process_month_list_view_image_results($view);
+    $view->result = array_values($results);
+  }
+  elseif ($view->current_display == 'week_list_view') {
+    $results = paddle_calendar_process_week_list_view_results($view);
+    $view->result = array_values($results);
+  }
+}
+
+/**
+ * Implements hook_date_formats().
+ */
+function paddle_calendar_date_formats() {
+  return array(
+    array(
+      'type' => 'day_only',
+      'format' => 'D',
+      'locales' => array(),
+    ),
+    array(
+      'type' => 'full_month_no_time',
+      'format' => 'd F Y',
+      'locales' => array(),
+    ),
+    array(
+      'type' => 'time_only',
+      'format' => 'H:i',
+      'locales' => array(),
+    ),
+  );
+}
+
+/**
+ * Implements hook_date_format_types().
+ */
+function paddle_calendar_date_format_types() {
+  return array(
+    'day_only' => t('Day only'),
+    'full_month_no_time' => t('Full month no time'),
+    'time_only' => t('Time only'),
+  );
+}
+
+/**
+ * Implements hook_panels_pane_content_alter().
+ */
+function paddle_calendar_panels_pane_content_alter($content, $pane, $args, $contexts) {
+  // Alter only additional fields panes.
+  if ($pane->type != 'additional_fields') {
+    return;
+  }
+
+  // Retrieve the context used for this pane.
+  $plugin = ctools_get_content_type($pane->type);
+  $pane_context = ctools_content_select_context($plugin, $pane->subtype, $pane->configuration, $contexts);
+
+  // Quit if no context, or the context is not a node of the calendar item
+  // note.
+  if (
+    empty($pane_context->type) ||
+    !in_array('node', $pane_context->type) ||
+    empty($pane_context->data) ||
+    $pane_context->data->type != 'calendar_item'
+  ) {
+    return;
+  }
+
+  // Add an hint text for the user.
+  $content->content[] = array(
+    '#theme' => 'html_tag',
+    '#tag' => 'div',
+    '#attributes' => array('class' => array('calendar-item-tags-hint')),
+    '#value' => t('Need more calendars? Use tags to categorize them.'),
+    '#weight' => 9,
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_calendar_theme($existing, $type, $theme, $path) {
+  return array(
+    'views_view_field__calendar_pane__day_view__field_paddle_calendar_date' => array(
+      'variables' => array('view' => NULL, 'field' => NULL, 'row' => NULL),
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+  );
+}

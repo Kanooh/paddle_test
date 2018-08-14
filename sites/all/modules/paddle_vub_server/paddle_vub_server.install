@@ -1,0 +1,89 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle VUB Server.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_vub_server_enable() {
+  // We do not want to set a dependency.
+  module_enable(array('paddle_vub_tags'));
+
+  // Create the VUB Client roles.
+  $client_reader_role = new stdClass();
+  $client_reader_role->name = 'VUB Client Reader';
+  user_role_save($client_reader_role);
+
+  $client_writer_role = new stdClass();
+  $client_writer_role->name = 'VUB Client Writer';
+  user_role_save($client_writer_role);
+
+  $client_permissions = array(
+    'access resource node',
+    'access resource scald_atom',
+    'access resource taxonomy_term',
+    'access resource taxonomy_vocabulary',
+    'access resource user',
+    'access user profiles',
+  );
+
+  user_role_grant_permissions($client_reader_role->rid, $client_permissions);
+
+  $client_permissions[] = 'bypass node access';
+  $client_permissions[] = 'administer nodes';
+  $client_permissions[] = 'use text format full_html';
+  $client_permissions[] = 'administer scald atoms';
+  $client_permissions[] = 'create atom of any type';
+  user_role_grant_permissions($client_writer_role->rid, $client_permissions);
+
+  $tagging_permissions = array(
+    'manage vub tags',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $tagging_permissions);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ */
+function paddle_vub_server_disable() {
+  paddle_user_remove_role_from_users('VUB Client Reader');
+  user_role_delete('VUB Client Reader');
+
+  paddle_user_remove_role_from_users('VUB Client Writer');
+  user_role_delete('VUB Client Writer');
+}
+
+/**
+ * Add more permissions to the VUB Client users.
+ */
+function paddle_vub_server_update_7001() {
+  $client_reader_role = user_role_load_by_name('VUB Client Reader');
+  $client_writer_role = user_role_load_by_name('VUB Client Writer');
+
+  $permissions = array(
+    'access resource scald_atom',
+    'access resource taxonomy_term',
+    'access resource taxonomy_vocabulary',
+    'access resource user',
+  );
+
+  user_role_grant_permissions($client_reader_role->rid, $permissions);
+
+  $permissions[] = 'administer scald atoms';
+  $permissions[] = 'create atom of any type';
+  user_role_grant_permissions($client_writer_role->rid, $permissions);
+}
+
+/**
+ * Enable the restws_i18n module.
+ */
+function paddle_vub_server_update_7002() {
+  module_enable(array('restws_i18n'));
+}

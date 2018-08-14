@@ -1,0 +1,76 @@
+// -------------------------------------------------------------------
+// :: FONT-FACE
+// -------------------------------------------------------------------
+// Note: promote the use of system-fonts where possible
+//
+// - http://css-tricks.com/forums/topic/do-we-really-need-ttf-svg-in-font-face-now
+// - http://www.fontsquirrel.com/tools/webfont-generator
+// - http://practicaltypography.com/system-fonts.html
+// - http://www.google.com/fonts
+//
+// - Adding .woff2 support (note: for now this is a manual process)
+// - https://gist.github.com/sergejmueller/cf6b4f2133bcb3e2f64a
+// - https://everythingfonts.com/ttf-to-woff2/
+//
+// - UPDATE 05/2015
+// - https://css-tricks.com/snippets/css/using-font-face/
+
+@mixin FLOW-get-font($_name, $_url, $_weight: normal, $_style: normal) {
+
+  @font-face {
+    font-family: $_name;
+    //src: url($_url +".eot"); // enable .eot support for <IE9
+    src: url($_url +".eot?#iefix") format("embedded-opentype"),
+      //url($_url +".woff2") format("woff2"),
+    url($_url +".woff") format("woff"),
+    url($_url +".ttf") format("truetype"),
+    url($_url +".svg#icon") format("svg");
+    font-weight: $_weight;
+    font-style: $_style;
+  }
+
+}
+// -------------------------------------------------------------------
+// :: CONVERT PX TO REM
+// -------------------------------------------------------------------
+// Important: rem-units are not supported on <IE9
+// and we don't provide a fallback
+//
+// - http://caniuse.com/#search=rem
+
+@function rem($_value) {
+  @return #{$_value / 16px}rem;
+}
+// -------------------------------------------------------------------
+// :: MEDIA QUERIES
+// -------------------------------------------------------------------
+// 1) Using 'gulp-combine-media-queries' to combine and export
+// media queries into a separate file (main.responsive.css)
+// So use media queries wherever you need them (inline)
+//
+// Note: currently 'gulp-combine-media-queries' has no option
+// to exclude breakpoints (eg. breakpoints for mobile-landscape)
+// and will export everything to a single file (main.responsive.css)
+// It would be nice to have this kind of functionality in there
+// so we can serve tablet and desktop styles async when needed
+// Note: this is possible now if we give up on breakpoints
+// for mobile-landscape
+//
+// - http://github.com/konitter/gulp-combine-media-queries/issues/6
+// - http://bitbucket.org/gwenvanhee/flow-gulp/issue/1/load-additional-css-async
+//
+// 2) When using 'respond.js' to enable media queries on <IE9
+// you can only use min-width and max-width media queries
+//
+// - https://github.com/scottjehl/Respond
+
+@mixin FLOW-at($_min-width) {
+  @media screen and (min-width: $_min-width) {
+    @content;
+  }
+}
+@mixin FLOW-to($_max-width) {
+  @media screen and (max-width: $_max-width) {
+    @content;
+  }
+}

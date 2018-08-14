@@ -1,0 +1,55 @@
+<?php
+
+/**
+ * @file
+ * Install and update hook for Calendar paddlet.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_calendar_enable() {
+  // We need to clear the node types cache which is used by
+  // user_role_grant_permissions. Otherwise our new content type is not yet
+  // known.
+  drupal_load('module', 'paddle_calendar');
+  features_include_defaults(NULL, TRUE);
+  features_revert_module('paddle_calendar');
+  node_type_cache_reset();
+  drupal_static_reset();
+
+  // We need to clear the ctools plugin cache so our new content type plugin
+  // gets picked up before we try to assign the permissions related to it.
+  ctools_modules_enabled(array('paddle_calendar'));
+
+  // Give permissions to work with the calendar content type and create calendar
+  // panes.
+  $permissions = array(
+    'create calendar_item content',
+    'edit any calendar_item content',
+    'delete any calendar_item content',
+    'edit calendar content in landing pages',
+    'administer panelizer node calendar_item layout',
+    'administer panelizer node calendar_item content',
+  );
+
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+}
+
+/**
+ * Grant permissions to edit the panels for the advanced search content type.
+ */
+function paddle_calendar_update_7101() {
+    $permissions = array(
+        'administer panelizer node calendar_item layout',
+        'administer panelizer node calendar_item content',
+    );
+
+    foreach (array('Chief Editor', 'Editor') as $role_name) {
+        $role = user_role_load_by_name($role_name);
+        user_role_grant_permissions($role->rid, $permissions);
+    }
+}

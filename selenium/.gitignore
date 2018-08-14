@@ -1,0 +1,5 @@
+vendor
+browsers.yml
+phpunit.xml
+# ignore screenshots folder
+screenshots/

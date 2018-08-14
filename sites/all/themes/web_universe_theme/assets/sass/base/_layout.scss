@@ -1,0 +1,28 @@
+/**
+* @file
+* Layout.
+*/
+
+// Remove the padding top from the first pane.
+.content {
+  .region:first-child {
+    padding-top: 0;
+  }
+}
+
+// Remove the padding top from the body if the header has a margin bottom.
+header.u-spacer--large + .page {
+  #main {
+    &> .region:first-child {
+      padding-top: 0;
+    }
+  }
+}
+
+.content-header__context.content-header__context--has-link {
+  margin-right: -3.2rem;
+}
+
+h1.content-header__title {
+  padding-top: 0.5rem;
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Social Media",
+  "description": "Share your content on the social media wesites",
+  "machine_name": "paddle_social_media",
+  "version": "1.0",
+  "author":"Kanooh",
+  "author_url":"http:\/\/www.kanooh.be",
+  "screenshots": [],
+  "logo": "",
+  "rating": {
+    "count": 0,
+    "average": 0
+  }
+}

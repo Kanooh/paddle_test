@@ -1,0 +1,566 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Embed module.
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_embed_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && $plugin_type == 'content_types') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_embed_permission() {
+  $return = array();
+
+  $return['manage paddle embed widgets'] = array(
+    'title' => t('Manage widgets'),
+  );
+
+  return $return;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_embed_entity_info() {
+  return array(
+    'paddle_embed_widget' => array(
+      'label' => t('Embed Widget'),
+      'base table' => 'paddle_embed_widget',
+      'controller class' => 'EntityAPIController',
+      'entity keys' => array(
+        'id' => 'wid',
+      ),
+      'bundles' => array(
+        'paddle_embed_widget' => array(
+          'label' => t('Embed Widget'),
+        ),
+      ),
+      'access callback' => 'paddle_embed_widget_access',
+    ),
+  );
+}
+
+/**
+ * Provides an access callback for the embed widget entity type.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ * @param object $embed_widget
+ *   The embed widget entity.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ * @param string $entity_type
+ *   The entity type of the entity to check for.
+ *
+ * @return bool
+ *   Whether access is allowed or not.
+ */
+function paddle_embed_widget_access($op, $embed_widget, $account = NULL, $entity_type = NULL) {
+  if (empty($account)) {
+    global $user;
+    $account = $user;
+  }
+
+  $access = FALSE;
+  switch ($op) {
+    case 'view':
+      $access = TRUE;
+      break;
+
+    case 'create':
+    case 'edit':
+    case 'delete':
+      $access = user_access('manage paddle embed widgets', $account);
+      break;
+  }
+
+  return $access;
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_embed_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_embed_configuration_form',
+  );
+}
+
+/**
+ * Form callback displaying paddle embed configuration.
+ */
+function paddle_embed_configuration_form() {
+  ctools_include('ajax');
+  ctools_include('modal');
+  ctools_modal_add_js();
+
+  drupal_add_css(drupal_get_path('module', 'paddle_embed') . '/css/admin.css');
+
+  $form = array();
+
+  $form['title'] = array(
+    '#type' => 'item',
+    '#markup' => t('Manage widgets'),
+    '#prefix' => '<h2>',
+    '#suffix' => '</h2>',
+  );
+
+  if (user_access('manage paddle embed widgets')) {
+    $widgets = entity_load('paddle_embed_widget');
+    $form['widgets'] = array(
+      '#type' => 'item',
+      '#markup' => paddle_embed_widget_list($widgets),
+    );
+
+    drupal_add_library('system', 'drupal.ajax');
+    $text = t('Create widget');
+    $path = 'admin/content/paddle_embed/nojs/add';
+    $form['create'] = array(
+      '#type' => 'item',
+      '#markup' => l($text, $path, array(
+        'attributes' => array(
+          'class' => array('ctools-use-modal', 'hidden'),
+          'title' => t('Create a new embed code widget.'),
+          'id' => 'create-embed',
+        ),
+      )),
+    );
+  }
+  else {
+    // Don't return status 403 but show a message instead, as we might add extra
+    // settings later that other users than the site manager can change.
+    $form['widgets'] = array(
+      '#type' => 'item',
+      '#markup' => t('You have insufficient access to manage widgets.'),
+    );
+  }
+
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_embed_add_contextual_actions_configuration_form';
+  }
+
+  return system_settings_form($form);
+}
+
+/**
+ * After-build function of the embed settings form.
+ */
+function paddle_embed_add_contextual_actions_configuration_form($form, &$form_state) {
+  paddle_contextual_toolbar_add_js('click_delegator');
+
+  // The save button is not needed for now on the embed configuration form.
+  unset($form['actions']['submit']);
+
+  // Add a contextual toolbar button to create a new widget.
+  $actions = paddle_contextual_toolbar_actions();
+  $actions[] = array(
+    'action' => l(t('Create widget'), '', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-plus'),
+        'data-paddle-contextual-toolbar-click' => 'create-embed',
+        'data-repeatable-clicks' => TRUE,
+      ),
+      'html' => TRUE,
+      'external' => TRUE,
+    )),
+    'class' => array('add'),
+    'weight' => 5,
+  );
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Provides the markup for the widget list, or a placeholder text.
+ *
+ * @param array $widgets
+ *   List of widgets to display.
+ */
+function paddle_embed_widget_list($widgets = array()) {
+  if (empty($widgets)) {
+    return t('No widgets have been created yet.');
+  }
+  return theme('paddle_embed_widget_list', array('widgets' => $widgets));
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_embed_theme() {
+  return array(
+    'paddle_embed_widget_list' => array(
+      'variables' => array(
+        'widgets' => array(),
+      ),
+    ),
+    'paddle_embed_widget_preview' => array(
+      'variables' => array(
+        'embed_code' => '',
+      ),
+    ),
+  );
+}
+
+/**
+ * Theme function for the widget list.
+ */
+function theme_paddle_embed_widget_list($variables) {
+  $table = array(
+    'attributes' => array('id' => 'widget-list'),
+  );
+
+  $table['header'][] = array(
+    'data' => t('Title'),
+  );
+  $table['header'][] = array(
+    'data' => '',
+    'colspan' => 3,
+  );
+
+  $action_class = 'ui-icon ui-icon-hiddentext';
+
+  foreach ($variables['widgets'] as $widget) {
+    $table['rows'][] = array(
+      'data' => array(
+        array(
+          'data' => $widget->title,
+          'class' => 'widget-title',
+        ),
+        array(
+          'data' => ctools_modal_text_button(t('Preview'), 'admin/content/paddle_embed/nojs/preview/' . $widget->wid, t('Preview of the widget'), $action_class . ' ui-icon-visit'),
+          'class' => 'widget-preview',
+        ),
+        array(
+          'data' => ctools_modal_text_button(t('Edit'), 'admin/content/paddle_embed/nojs/edit/' . $widget->wid, t('Edit the widget'), $action_class . ' ui-icon-edit'),
+          'class' => 'widget-edit',
+        ),
+        array(
+          'data' => ctools_modal_text_button(t('Delete'), 'admin/content/paddle_embed/nojs/delete/' . $widget->wid, t('Delete the widget'), $action_class . ' ui-icon-delete'),
+          'class' => 'widget-delete',
+        ),
+      ),
+      'data-widget-id' => $widget->wid,
+    );
+  }
+
+  return theme('table', $table);
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_embed_menu() {
+  return array(
+    'admin/content/paddle_embed/%ctools_js/add' => array(
+      'title' => 'Create embed widget',
+      'page callback' => 'paddle_embed_widget_settings',
+      'page arguments' => array(3),
+      'access arguments' => array('manage paddle embed widgets'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/content/paddle_embed/%ctools_js/edit/%paddle_embed_widget' => array(
+      'title' => 'Preview widget',
+      'page callback' => 'paddle_embed_widget_settings',
+      'page arguments' => array(3, 5),
+      'access arguments' => array('manage paddle embed widgets'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/content/paddle_embed/%ctools_js/delete/%paddle_embed_widget' => array(
+      'title' => 'Delete widget',
+      'page callback' => 'paddle_embed_widget_delete',
+      'page arguments' => array(3, 5),
+      'access arguments' => array('manage paddle embed widgets'),
+      'type' => MENU_CALLBACK,
+    ),
+    'admin/content/paddle_embed/%ctools_js/preview/%paddle_embed_widget' => array(
+      'title' => 'Preview widget',
+      'page callback' => 'paddle_embed_widget_preview',
+      'page arguments' => array(3, 5),
+      'access arguments' => array('manage paddle embed widgets'),
+      'type' => MENU_CALLBACK,
+    ),
+  );
+}
+
+/**
+ * Widget wildcard loader.
+ *
+ * @param int $wid
+ *   Widget ID.
+ *
+ * @return object
+ *   Widget entity.
+ */
+function paddle_embed_widget_load($wid) {
+  return entity_load_single('paddle_embed_widget', $wid);
+}
+
+/**
+ * Page callback for the "create widget" form.
+ */
+function paddle_embed_widget_settings($js, $widget = NULL) {
+  $wid = empty($widget) ? 0 : $widget->wid;
+  $form_state = array('ajax' => $js, 'wid' => $wid);
+
+  if ($js) {
+    ctools_include('ajax');
+    ctools_include('modal');
+
+    // Open the settings form in a modal.
+    $commands = ctools_modal_form_wrapper('paddle_embed_widget_settings_form', $form_state);
+
+    // If the settings form has been saved, refresh the list of widgets.
+    if ($form_state['widget_saved'] == TRUE) {
+      // Flush the status messages so they don't appear when we open a new page
+      // or modal.
+      drupal_get_messages(NULL, TRUE);
+
+      $commands = array();
+      $commands[] = paddle_embed_refresh_widget_list_command();
+      $commands[] = paddle_embed_widget_preview_commands($form_state['wid']);
+    }
+
+    // Render all the commands and exit.
+    print ajax_render($commands);
+    ajax_footer();
+    drupal_exit();
+  }
+  else {
+    return drupal_build_form('paddle_embed_widget_settings_form', $form_state);
+  }
+}
+
+/**
+ * Form callback to add/edit a widget.
+ */
+function paddle_embed_widget_settings_form($form, &$form_state) {
+  // Prepare some variables for the default values.
+  $wid = isset($form_state['wid']) ? $form_state['wid'] : 0;
+  $title = '';
+  $embed_code = '';
+  if (!empty($wid) && $widget = entity_load_single('paddle_embed_widget', $wid)) {
+    $title = $widget->title;
+    $embed_code = $widget->embed_code;
+  }
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+
+  $form['body']['title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Widget title'),
+    '#default_value' => $title,
+    '#required' => TRUE,
+  );
+
+  $form['body']['embed_code'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Paste code'),
+    '#default_value' => $embed_code,
+    '#required' => TRUE,
+    '#field_prefix' => '<span class="info">' . t('Warning! This code will not be filtered, so make sure you only add code from trusted sources.') . '</span>',
+  );
+
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+  $form['buttons']['save'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit callback for the widget form.
+ */
+function paddle_embed_widget_settings_form_submit($form, &$form_state) {
+  $wid = isset($form_state['wid']) ? $form_state['wid'] : 0;
+
+  $title = $form_state['values']['title'];
+  $embed_code = $form_state['values']['embed_code'];
+
+  if (!empty($wid)) {
+    $widget = entity_load_single('paddle_embed_widget', $wid);
+    $widget->title = $title;
+    $widget->embed_code = $embed_code;
+  }
+  else {
+    $widget = entity_create('paddle_embed_widget', array(
+      'title' => $title,
+      'embed_code' => $embed_code,
+    ));
+  }
+
+  entity_save('paddle_embed_widget', $widget);
+
+  $form_state['wid'] = $widget->wid;
+  $form_state['widget_saved'] = TRUE;
+
+  drupal_set_message(t('Widget saved.'));
+}
+
+/**
+ * Provides an ajax command to refresh the list of widgets.
+ */
+function paddle_embed_refresh_widget_list_command() {
+  // Reload the list of widgets from the database.
+  $widgets = entity_load('paddle_embed_widget', FALSE, array(), TRUE);
+  return ajax_command_html('#edit-widgets', paddle_embed_widget_list($widgets));
+}
+
+/**
+ * Page callback for the "delete widget" form.
+ */
+function paddle_embed_widget_delete($js, $widget) {
+  $form_state = array('ajax' => $js, 'wid' => $widget->wid);
+
+  if ($js) {
+    ctools_include('ajax');
+    ctools_include('modal');
+
+    // Open the settings form in a modal.
+    $commands = ctools_modal_form_wrapper('paddle_embed_widget_delete_form', $form_state);
+
+    // If the settings form has been saved, refresh the list of widgets.
+    if ($form_state['completed'] == TRUE) {
+      // Flush the status messages so they don't appear when we open a new page
+      // or modal.
+      drupal_get_messages(NULL, TRUE);
+
+      $commands = array();
+      $commands[] = ctools_modal_command_dismiss();
+
+      if ($form_state['refresh'] == TRUE) {
+        $commands[] = paddle_embed_refresh_widget_list_command();
+      }
+    }
+
+    print ajax_render($commands);
+    ajax_footer();
+    drupal_exit();
+  }
+  else {
+    return drupal_build_form('paddle_embed_widget_delete_form', $form_state);
+  }
+}
+
+/**
+ * Form callback for the "delete widget" form.
+ */
+function paddle_embed_widget_delete_form($form, &$form_state) {
+  $widget = entity_load_single('paddle_embed_widget', $form_state['wid']);
+
+  $form['body'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-body')),
+  );
+  $form['body']['message'] = array(
+    '#type' => 'item',
+    '#markup' => t('Are you sure you want to delete the widget %title?', array('%title' => $widget->title)),
+  );
+
+  $form['buttons'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-buttons')),
+  );
+  $form['buttons']['confirm'] = array(
+    '#type' => 'submit',
+    '#value' => t('Delete'),
+  );
+
+  // Can't use "cancel" as a key here, as that would cause the button to be
+  // hidden by CSS...
+  $form['buttons']['cancelling'] = array(
+    '#type' => 'submit',
+    '#value' => t('Cancel'),
+  );
+
+  return $form;
+}
+
+/**
+ * Form submit for the "delete widget" form.
+ */
+function paddle_embed_widget_delete_form_submit($form, &$form_state) {
+  $form_state['completed'] = TRUE;
+  $form_state['refresh'] = FALSE;
+
+  if ($form_state['clicked_button']['#value'] == t('Delete')) {
+    entity_delete('paddle_embed_widget', $form_state['wid']);
+    $form_state['refresh'] = TRUE;
+    drupal_set_message(t('Widget deleted.'));
+  }
+}
+
+/**
+ * Page callback for the widget preview.
+ */
+function paddle_embed_widget_preview($js, $widget) {
+  if ($js) {
+    ctools_include('ajax');
+    ctools_include('modal');
+
+    // Render all the commands and exit.
+    $commands = array();
+    $commands[] = paddle_embed_widget_preview_commands($widget->wid);
+
+    print ajax_render($commands);
+    ajax_footer();
+    drupal_exit();
+  }
+  else {
+    drupal_add_css(drupal_get_path('module', 'paddle_embed') . '/css/admin.css');
+    return theme('paddle_embed_widget_preview', array('embed_code' => $widget->embed_code));
+  }
+}
+
+/**
+ * Provides the necessary ajax commands to open a widget preview modal.
+ *
+ * @param int $wid
+ *   Widget ID.
+ *
+ * @return array
+ *   Array of ajax commands.
+ */
+function paddle_embed_widget_preview_commands($wid) {
+  $widget = entity_load_single('paddle_embed_widget', $wid);
+  return array(
+    'command' => 'modal_display',
+    'title' => t('Preview widget'),
+    'output' => theme('paddle_embed_widget_preview', array('embed_code' => $widget->embed_code)),
+  );
+}
+
+/**
+ * Theme function for the preview.
+ */
+function theme_paddle_embed_widget_preview($variables) {
+  $html = '<div class="form-body widget-preview-modal">';
+
+  $html .= '<p>' . t('This is what the widget will look like when added to a page.') . '</p>';
+
+  $html .= '<div id="widget-preview-container">';
+  $html .= '<div id="widget-preview">' . $variables['embed_code'] . '</div>';
+  $html .= '</div>';
+
+  $html .= '</div>';
+
+  return $html;
+}

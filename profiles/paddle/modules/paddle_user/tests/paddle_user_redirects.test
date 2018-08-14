@@ -1,0 +1,37 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleCoreRedirectsTest.
+ */
+
+/**
+ * Tests the redirects that need to happen.
+ *
+ * @todo refactor to drupalwebtestcase.
+ */
+class PaddleUserRedirectsTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Redirect tests',
+      'description' => 'Test the redirection of users.',
+      'group' => 'Paddle User',
+    );
+  }
+
+  /**
+   * Tests if the user is redirected to the correct page.
+   */
+  public function testRedirect() {
+    $this->drupalLogin($this->editor);
+
+    // Test if the user is redirected to the dashboard when visiting /user.
+    $this->drupalGet('user');
+    $this->assertResponse(200, 'The final response code when visiting user as an admin is 200.');
+    $this->assertUrl('admin/dashboard', array(), 'User is redirected to "admin/dashboard" when visiting "/user".');
+  }
+}

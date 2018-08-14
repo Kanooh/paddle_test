@@ -1,0 +1,18 @@
+.item-list .pager {
+  padding: 1em;
+  width: 60%;
+  margin: 0 auto;
+}
+.item-list .pager li {
+  padding: 0;
+  display: inline-block;
+}
+.item-list .pager li a {
+  padding: 0.5em;
+  color: $dark-grey;
+}
+.item-list .pager li.pager-current {
+  background: $orange-detail;
+  padding: 0.5em;
+  color: $c-white;;
+}

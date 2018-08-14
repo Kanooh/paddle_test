@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- PHP_CodeSniffer standard for Paddle. -->
+<!-- See http://pear.php.net/manual/en/package.php.php-codesniffer.annotated-ruleset.php -->
+<ruleset name="PaddleQuiz">
+    <description>Paddle Quiz coding standard</description>
+
+    <rule ref="Drupal">
+
+    </rule>
+
+    <!-- Feature files do not follow Drupal's coding standards strictly. -->
+    <rule ref="Drupal.Files.LineLength.TooLong">
+        <exclude-pattern>*/*.features.*.inc</exclude-pattern>
+    </rule>
+    <rule ref="Drupal.Semantics.FunctionCall.BackslashSingleQuote">
+        <exclude-pattern>*/*.features.*.inc</exclude-pattern>
+    </rule>
+    <rule ref="Drupal.Classes.ClassCreateInstance">
+        <exclude-pattern>*/*.default_elysia_cron_rules.inc</exclude-pattern>
+    </rule>
+
+</ruleset>

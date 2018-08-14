@@ -1,0 +1,478 @@
+<?php
+/**
+ * @file
+ * Code for the paddle_simple_contact_field module.
+ */
+
+/**
+ * Implements hook_field_info().
+ */
+function paddle_simple_contact_field_field_info() {
+  return array(
+    'simple_contact_form' => array(
+      'label' => t('Simple contact form'),
+      'description' => t('Simple contact form.'),
+      'default_widget' => 'simple_contact_form_default',
+      'default_formatter' => 'simple_contact_form_default',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function paddle_simple_contact_field_field_widget_info() {
+  return array(
+    'simple_contact_form_default' => array(
+      'label' => t('Default'),
+      'field types' => array('simple_contact_form'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function paddle_simple_contact_field_field_formatter_info() {
+  return array(
+    'simple_contact_form_default' => array(
+      'label' => t('Default'),
+      'field types' => array('simple_contact_form'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function paddle_simple_contact_field_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $item = isset($items[$delta]) ? $items[$delta] : array();
+  $item += paddle_simple_contact_field_defaults();
+
+  $element += array(
+    '#type' => 'fieldset',
+    '#tree' => TRUE,
+    '#after_build' => array('paddle_simple_contact_field_widget_form_set_states'),
+  );
+
+  $element['recipients'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Recipients'),
+    '#default_value' => $item['recipients'],
+    '#element_validate' => array('paddle_simple_contact_field_validate_email_addresses'),
+  );
+
+  $element['thank_you'] = array(
+    '#type' => 'text_format',
+    '#title' => t('Thank you message'),
+    '#default_value' => $item['thank_you']['value'],
+    '#format' => $item['thank_you']['format'],
+    '#after_build' => array('paddle_simple_contact_field_hide_text_format'),
+  );
+
+  $element['label_options'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Label options'),
+    '#weight' => 5,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $element['label_options']['#description'] = t('If you want to change the default settings of this contact form only, you can do this here.');
+
+  $element['label_options']['label_email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for e-mail'),
+    '#default_value' => $item['label_email'],
+  );
+
+  $element['label_options']['show_name'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Show name'),
+    '#default_value' => $item['show_name'],
+  );
+
+  $element['label_options']['label_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for name'),
+    '#default_value' => $item['label_name'],
+  );
+
+  $element['label_options']['show_subject'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Show subject'),
+    '#default_value' => $item['show_subject'],
+  );
+
+  $element['label_options']['label_subject'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for subject'),
+    '#default_value' => $item['label_subject'],
+  );
+
+  $element['label_options']['show_body'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Show body'),
+    '#default_value' => $item['show_body'],
+  );
+
+  $element['label_options']['label_body'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for body'),
+    '#default_value' => $item['label_body'],
+  );
+
+  $element['label_options']['label_submit'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label for submit button'),
+    '#default_value' => $item['label_submit'],
+  );
+
+  return $element;
+}
+
+/**
+ * After-build function to configure form element states.
+ *
+ * We configure the states inn an after-build function because the exact form
+ * element IDs are not yet known in the form callback.
+ */
+function paddle_simple_contact_field_widget_form_set_states($form, $form_state) {
+  foreach (array('name', 'subject', 'body') as $field) {
+    $form['label_options']['label_' . $field]['#states'] = array(
+      'disabled' => array(
+        '#' . $form['label_options']['show_' . $field]['#id'] => array('checked' => FALSE),
+      ),
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * After-build function to hide the format selection of a text_format element.
+ */
+function paddle_simple_contact_field_hide_text_format($element, $form_state) {
+  $element['format']['#access'] = FALSE;
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function paddle_simple_contact_field_field_is_empty($item, $field) {
+  return FALSE;
+}
+
+/**
+ * Returns default values for a simple contact field.
+ *
+ * @return array
+ *   The default values.
+ */
+function paddle_simple_contact_field_defaults() {
+  return array(
+    'thank_you' => array(
+      'value' => '',
+      'format' => 'full_html',
+    ),
+    'recipients' => '',
+    'show_name' => '1',
+    'show_subject' => '1',
+    'show_body' => '1',
+    'label_submit' => paddle_simple_contact_field_variable_default_get('label_submit'),
+    'label_name' => paddle_simple_contact_field_variable_default_get('label_name'),
+    'label_email' => paddle_simple_contact_field_variable_default_get('label_email'),
+    'label_body' => paddle_simple_contact_field_variable_default_get('label_body'),
+    'label_subject' => paddle_simple_contact_field_variable_default_get('label_subject'),
+  );
+}
+
+/**
+ * Implements hook_field_load().
+ */
+function paddle_simple_contact_field_field_load($entity_type, $entities, $field, $instances, $langcode, &$items, $age) {
+  foreach ($items as &$entity_items) {
+    foreach ($entity_items as &$item) {
+      $item += paddle_simple_contact_field_defaults();
+
+      if (is_string($item['thank_you'])) {
+        $item['thank_you'] = unserialize($item['thank_you']);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_field_presave().
+ */
+function paddle_simple_contact_field_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  foreach ($items as &$item) {
+    if (is_array($item['thank_you'])) {
+      $item['thank_you'] = serialize($item['thank_you']);
+    }
+    // Move the label options elements out of their fieldset so they can be
+    // saved correctly - Field API doesn't find them wrapped.
+    if (!empty($item['label_options'])) {
+      foreach ($item['label_options'] as $label => $value) {
+        $item[$label] = $value;
+        unset($item['label_options'][$label]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function paddle_simple_contact_field_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $elements = array();
+
+  foreach ($items as $delta => $item) {
+    $item['nid'] = $entity->nid;
+    $elements[$delta] = drupal_get_form('paddle_simple_contact_field_contact_form', $item);
+  }
+
+  return $elements;
+}
+
+/**
+ * Merges the default configuration values into the current configuration.
+ *
+ * @param array $config
+ *   Current config values.
+ */
+function paddle_simple_contact_field_merge_config_defaults(&$config) {
+  foreach ($config as $key => &$value) {
+    switch ($key) {
+      case 'thank_you':
+        $empty = $value['value'] == '';
+        break;
+
+      default:
+        $empty = trim($value) == '';
+    }
+
+    if ($empty) {
+      $default_value = paddle_simple_contact_field_variable_default_get($key);
+      $value = $default_value;
+    }
+  }
+}
+
+/**
+ * Gets the value of a default configuration variable.
+ *
+ * @param string $name
+ *   The name of the default configuration variable.
+ *
+ * @return mixed
+ *   The value of the variable.
+ */
+function paddle_simple_contact_field_variable_default_get($name) {
+  return variable_get('paddle_simple_contact_field_default_' . $name, paddle_simple_contact_field_variable_default_value($name));
+}
+
+/**
+ * Gets the default value of a default configuration variable.
+ *
+ * @param string $name
+ *   The name of the default configuration variable.
+ *
+ * @return mixed
+ *   The default value of the variable.
+ */
+function paddle_simple_contact_field_variable_default_value($name) {
+  $default_values =& drupal_static(__FUNCTION__);
+
+  if (!$default_values) {
+    $default_values = array(
+      'label_name' => t('Name'),
+      'label_subject' => t('Subject'),
+      'label_email' => t('E-mail'),
+      'label_body' => t('Body'),
+      'label_submit' => t('Submit'),
+      'thank_you' => array(
+        'format' => 'full_html',
+        'value' => t('Thank you for your submission.'),
+      ),
+      'recipients' => variable_get('site_mail'),
+    );
+  }
+
+  $value = isset($default_values[$name]) ? $default_values[$name] : '';
+
+  return $value;
+}
+
+/**
+ * Contact form which will be shown to the user.
+ */
+function paddle_simple_contact_field_contact_form($form, &$form_state, $config) {
+  paddle_simple_contact_field_merge_config_defaults($config);
+
+  $form_state['config'] = $config;
+
+  if ($config['show_name']) {
+    $form['name'] = array(
+      '#type' => 'textfield',
+      '#title' => $config['label_name'],
+      '#required' => TRUE,
+    );
+  }
+
+  $form['email'] = array(
+    '#type' => 'textfield',
+    '#title' => $config['label_email'],
+    '#required' => TRUE,
+    '#element_validate' => array('paddle_simple_contact_field_validate_email_address'),
+  );
+
+  if ($config['show_subject']) {
+    $form['subject'] = array(
+      '#type' => 'textfield',
+      '#title' => $config['label_subject'],
+      '#required' => TRUE,
+    );
+  }
+
+  if ($config['show_body']) {
+    $form['body'] = array(
+      '#type' => 'textarea',
+      '#rows' => 10,
+      '#title' => $config['label_body'],
+      '#required' => TRUE,
+    );
+  }
+
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => $config['label_submit'],
+  );
+
+  return $form;
+}
+
+/**
+ * Validate function for a e-mail text field.
+ */
+function paddle_simple_contact_field_validate_email_address($element, $form_state) {
+  if ($element['#value'] && !valid_email_address($element['#value'])) {
+    form_error($element, 'Please provide a valid e-mail address.');
+  }
+}
+
+/**
+ * Submit handler for the paddle contact form.
+ */
+function paddle_simple_contact_field_contact_form_submit($form, $form_state) {
+  global $language;
+
+  $config = $form_state['config'];
+
+  $params = array(
+    'values' => array(),
+    'config' => $config,
+  );
+
+  foreach ($form_state['values'] as $key => $value) {
+    if (in_array($key, array('name', 'email', 'subject', 'body'))) {
+      $params['values'][$key] = $value;
+    }
+  }
+
+  drupal_mail('paddle_simple_contact_field', 'contact_form_submitted', $config['recipients'], $language, $params);
+
+  drupal_set_message(check_markup($config['thank_you']['value'], $config['thank_you']['format']));
+}
+
+/**
+ * Constructs a mail body for the contact form submission mail.
+ *
+ * @param array $config
+ *   Configuration for labels and nid.
+ * @param array $values
+ *   Submitted values.
+ *
+ * @return array
+ *   The mail body parts.
+ */
+function paddle_simple_contact_field_mail_body($config, $values) {
+  $body = array();
+
+  $body[] = t('Someone has submitted the contact form at !url.', array('!url' => url('node/' . $config['nid'], array('absolute' => TRUE))));
+  $body[] = t('Submitted data:');
+
+  foreach ($values as $name => $value) {
+    $label = $config['label_' . $name];
+
+    $body[] = t('!label: !value', array('!label' => $label, '!value' => $value));
+  }
+
+  return $body;
+}
+
+/**
+ * Implements hook_mail().
+ */
+function paddle_simple_contact_field_mail($key, &$message, $params) {
+  $message['subject'] = t('New message sent from the !website_name website', array('!website_name' => variable_get('site_name', '')));
+  $message['body'] = paddle_simple_contact_field_mail_body($params['config'], $params['values']);
+  $message['headers']['Reply-To'] = $params['values']['email'];
+}
+
+/**
+ * Validate function for a text field containing multiple e-mail addresses.
+ */
+function paddle_simple_contact_field_validate_email_addresses($element, $form_state) {
+  if (trim($element['#value']) === '') {
+    return;
+  }
+
+  $addresses = paddle_simple_contact_field_get_addresses($element['#value']);
+  $invalid_addresses = paddle_simple_contact_field_invalid_addresses($addresses);
+
+  if (!empty($invalid_addresses)) {
+    $args = array(
+      ':title' => $element['#title'],
+      '@addresses' => implode(', ', $invalid_addresses),
+    );
+    form_error($element, t(':title contains the following invalid e-mail addresses: @addresses', $args));
+  }
+}
+
+/**
+ * Constructs an array of e-mail addresses based on a given string.
+ *
+ * @param string $address_string
+ *   A string with e-mail addresses, delimited by a comma.
+ *
+ * @return array
+ *   The e-mail addresses.
+ */
+function paddle_simple_contact_field_get_addresses($address_string) {
+  $addresses = explode(',', $address_string);
+  array_walk($addresses, function(&$address) {
+    return trim($address);
+  });
+
+  return $addresses;
+}
+
+/**
+ * Finds entries in an array that do not validate as a e-mail address.
+ *
+ * @param array $addresses
+ *   List of potentially valid e-mail addresses.
+ *
+ * @return array
+ *   Items that do not validate as a e-mail address.
+ */
+function paddle_simple_contact_field_invalid_addresses($addresses) {
+  $invalid = array_filter($addresses, function($address) {
+    return !valid_email_address($address);
+  });
+
+  return $invalid;
+}

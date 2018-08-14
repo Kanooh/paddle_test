@@ -1,0 +1,15 @@
+name = "Authcache Test HookStub"
+description = "HookStub class"
+package = Testing
+core = 7.x
+hidden = TRUE
+php = 5.3
+files[] = HookStub.inc
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-2.0-beta7+29-dev"
+core = "7.x"
+project = "authcache"
+datestamp = "1473170445"
+

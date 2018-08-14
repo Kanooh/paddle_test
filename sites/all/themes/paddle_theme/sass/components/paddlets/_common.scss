@@ -1,0 +1,69 @@
+/**
+ * @file
+ * Style for paddlets.
+ */
+
+// --------------------
+// Pane frontend styling
+// --------------------
+.pane-section-body {
+  h2, h3, h4, h5 {
+    a {
+      font-size: inherit !important;
+    }
+  }
+
+  ul,
+  ol {
+    &:first-child {
+      margin-top: 0;
+    }
+
+    ul,
+    ol {
+      // We need to specify also first-child as pseudo selectors have more
+      // specificity than element selectors.
+      // @todo remove when proper base styling of typography and forms in place
+      &:first-child,
+      & {
+        margin-top: 4px;
+      }
+    }
+  }
+}
+
+// --------------------
+// Style placeholders
+// --------------------
+// Paddlet pane forms styling placeholder.
+%paddlet-pane-forms {
+  .form-text,
+  select {
+    box-sizing: border-box;
+    width: 100%;
+    height: 40px;
+  }
+
+  select {
+    padding: 8px 11px;
+    border: 1px solid #e1e1e1;
+    font-family: inherit;
+    line-height: 24px;
+    color: #999999;
+    background: #fff;
+    box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  select[multiple],
+  select[size] {
+    height: auto;
+  }
+}
+
+// Placeholder to easily revert form elements from 100% to auto width.
+// @see bootstrap v3
+%inline-form-element {
+  display: inline-block;
+  width: auto;
+  vertical-align: middle;
+}

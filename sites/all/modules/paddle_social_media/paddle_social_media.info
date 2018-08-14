@@ -1,0 +1,24 @@
+name = Social media sharing
+description = This Paddlet makes it easier for visitors to share a page of your website on their social media channel, to email a page or to print it.
+core = 7.x
+package = Paddle
+
+apps[logo] = apps/logo.png
+
+stylesheets[all][] = css/paddle_social_media.css
+
+apps[paddle][level] = free
+apps[paddle][vendor] = kañooh
+
+; Information added by drush on 2016-05-17
+version = "7.x-1.x-dev"
+project = "paddle_social_media"
+datestamp = "1463473900"
+
+
+; Information added by drush on 2016-09-06
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "paddle_social_media"
+datestamp = "1473170451"
+

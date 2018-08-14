@@ -1,0 +1,376 @@
+<?php
+
+/**
+ * @file
+ * Main functions and hook implementations of the Paddle Path by Menu module.
+ */
+
+/**
+ * Implements hook_init().
+ *
+ * If the core menu router cannot resolve the requested path we try to resolve
+ * it, and set the active menu item if we found a match by menu.
+ */
+function paddle_path_by_menu_init() {
+  $menu_item = menu_get_item();
+
+  // We need to check if the incoming url is registered in the menu router, as
+  // we wouldn't want to take over existing system paths. An exception is made
+  // if the registered path is an url alias. In that case we will resolve the
+  // url alias as if it were a menu-based path. This ensures that the active
+  // trail matches what is displayed in the url.
+  if ((empty($menu_item) && $path_info = paddle_path_by_menu_resolve()) || (!empty($menu_item) && drupal_lookup_path('source', request_path()) && $path_info = paddle_path_by_menu_resolve(request_path()))) {
+    // We need to check if the resolved path equals the menu item's path.
+    // Otherwise URL aliases which accidentally equal a menu-based resolved path
+    // will point to the menu-based resolved path.
+    if ($path_info['link_path'] == $menu_item['href'] || empty($menu_item)) {
+      paddle_path_by_menu_set_original_path($_GET['q']);
+      menu_set_item(current_path(), menu_get_item($path_info['link_path']));
+      paddle_path_by_menu_adjust_menu_link_get_preferred_cache($path_info);
+
+      menu_set_active_item($path_info['link_path']);
+    }
+  }
+}
+
+/**
+ * Implements hook_menu_tree_page_data_page_cache_id_alter().
+ */
+function paddle_path_by_menu_menu_tree_page_data_page_cache_id_alter(&$href) {
+  $menu_item = menu_get_item();
+  $original_path = paddle_path_by_menu_get_original_path();
+  if ($original_path && $href == $menu_item['href']) {
+    $href = paddle_path_by_menu_get_original_path();
+  }
+}
+
+/**
+ * Returns the menu router path given a menu link based path.
+ *
+ * @param string $path
+ *   A path representing a branch of a menu tree (eg. books/genres/fantasy).
+ *
+ * @return string
+ *   The resolved drupal router path (eg. node/16), or FALSE if the path could
+ *   not be resolved.
+ */
+function paddle_path_by_menu_resolve($path = NULL) {
+  $paths = &drupal_static(__FUNCTION__, array());
+
+  if (!$path) {
+    $path = current_path();
+  }
+
+  if (!isset($paths[$path])) {
+    $menu_link_titles = explode('/', $path);
+
+    $paths[$path] = paddle_path_by_menu_walk($menu_link_titles);
+  }
+
+  return $paths[$path];
+}
+
+/**
+ * Recursively looks up the router path of a given menu tree branch.
+ *
+ * @param array $menu_link_titles
+ *   An array containing a menu tree branch, represented by sanitized titles of
+ *   the menu links that make up the branch, ordered by depth.
+ * @param array $plids
+ *   An array of menu link ids that are potential parents of the menu link we're
+ *   looking for.
+ * @param int $depth
+ *   The current depth of the menu tree.
+ *
+ * @return string
+ *   The resolved drupal router path of the last node in the menu tree branch
+ *   (eg. node/16), or FALSE if the branch could not be resolved.
+ */
+function paddle_path_by_menu_walk($menu_link_titles, $plids = array(0), $depth = 1) {
+  global $language;
+
+  // @todo Provide an interface to configure these options.
+  $menu_names = variable_get('paddle_path_by_menu_menus', paddle_path_by_menu_get_menu_names());
+  $filter_language = drupal_multilingual() && variable_get('paddle_path_by_menu_filter_language', TRUE) && module_exists('i18n_menu');
+
+  // Shift off the deepest menu item of the given branch and look it up.
+  if ($current = array_shift($menu_link_titles)) {
+    $query = db_select('menu_links', 'ml')
+      ->fields('ml', array('mlid', 'link_title'))
+      ->condition('ml.menu_name', $menu_names, 'IN')
+      ->condition('depth', $depth)
+      ->condition('plid', $plids, 'IN')
+      ->condition('hidden', 0)
+      ->condition('external', 0);
+
+    // Optionally retrieve results in the current language only.
+    if ($filter_language) {
+      $query->condition('ml.language', array(LANGUAGE_NONE, $language->language), 'IN');
+      $query->addJoin('inner', 'menu_custom', 'mc', 'ml.menu_name = mc.menu_name');
+      $query->condition('mc.language', array(LANGUAGE_NONE, $language->language), 'IN');
+    }
+
+    // Make sure the menu item has children if we are not at the deepest level.
+    if (count($menu_link_titles)) {
+      $query->condition('has_children', 1);
+    }
+    // If we are at the leaf node of the branch our search has ended. Retrieve
+    // the link path we're looking for.
+    else {
+      $query->addField('ml', 'link_path');
+    }
+
+    $result = $query->execute()->fetchAllAssoc('mlid', PDO::FETCH_ASSOC);
+
+    // Find matches.
+    $result = array_filter($result, function($menu_link) use ($current) {
+      return $current == paddle_path_by_menu_sanitize($menu_link['link_title']);
+    });
+
+    if (!empty($result)) {
+      // Keep walking if any links remain, or return the path if we are at the
+      // end of the road.
+      if (count($menu_link_titles)) {
+        return paddle_path_by_menu_walk($menu_link_titles, array_keys($result), ++$depth);
+      }
+      else {
+        // If we end up with multiple results, return the first match.
+        // @see http://drupal.org/node/1999900
+        $result = reset($result);
+        return $result;
+      }
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Sanitizes a given string to use as a menu path segment.
+ *
+ * @param string $string
+ *   The string to sanitize.
+ *
+ * @return string
+ *   The sanitized string.
+ */
+function paddle_path_by_menu_sanitize($string) {
+  // Use the nice sanitizing function from Pathauto if it is available.
+  if (module_exists('pathauto')) {
+    module_load_include('inc', 'pathauto');
+    $sanitized = pathauto_cleanstring($string);
+  }
+  // Default to the standard path encoding from Drupal core.
+  else {
+    $sanitized = drupal_encode_path($string);
+  }
+
+  // Allow other modules to implement their own sanitizing strategy.
+  drupal_alter('paddle_path_by_menu_sanitize', $sanitized, $string);
+
+  return $sanitized;
+}
+
+/**
+ * Implements hook_menu_link_alter().
+ *
+ * Enables rewriting of menu links by setting the alter option flag.
+ */
+function paddle_path_by_menu_menu_link_alter(&$item) {
+  // Retrieve the supported menus.
+  $menu_names = variable_get('paddle_path_by_menu_menus', paddle_path_by_menu_get_menu_names());
+
+  // Set the alter option flag if a menu link is saved in one of our supported
+  // menus. Note that this flag is not unset when a menu link is moved to an
+  // unsupported menu. This is done on purpose to not break other modules that
+  // might rely on this flag to function.
+  if (in_array($item['menu_name'], $menu_names)) {
+    $item['options']['alter'] = TRUE;
+  }
+}
+
+/**
+ * Implements hook_translated_menu_link_alter().
+ */
+function paddle_path_by_menu_translated_menu_link_alter(&$item, $map) {
+  // Only rewrite internal links in supported menus.
+  $menu_names = variable_get('paddle_path_by_menu_menus', paddle_path_by_menu_get_menu_names());
+  if (in_array($item['menu_name'], $menu_names) && !$item['external']) {
+    // Do not rewrite the path if a router item exists for it.
+    $menu_path = paddle_path_by_menu_get_menu_path($item);
+    if (!drupal_lookup_path('source', $menu_path) && !variable_get('paddle_path_by_menu_rewrite_disabled', FALSE)) {
+      $item['href'] = $menu_path;
+    }
+  }
+}
+
+/**
+ * Returns a sanitized menu path that points to the given menu link item.
+ *
+ * @param array $item
+ *   The menu link item for which the menu path should be generated.
+ *
+ * @return string
+ *   The sanitized menu path, or the original path if the menu path would
+ *   conflict with an existing menu router path.
+ */
+function paddle_path_by_menu_get_menu_path($item) {
+  $paths = &drupal_static(__FUNCTION__, array());
+  if (!isset($paths[$item['mlid']])) {
+    // Build an array of sanitized menu link names by iterating over the
+    // parents.
+    $menu_link_names = array();
+    for ($i = 1; $i < 10; $i++) {
+      $plid = $item['p' . $i];
+      if (!empty($plid)) {
+        $link_title = $plid == $item['mlid'] ? $item['link_title'] : paddle_path_by_menu_get_menu_link_title($plid);
+        $menu_link_names[] = paddle_path_by_menu_sanitize($link_title);
+      }
+    }
+
+    // The core menu router should take precedence over our generated paths. If
+    // the path is registered by the core menu router, return the original
+    // value.
+    $menu_path = implode('/', $menu_link_names);
+    $paths[$item['mlid']] = paddle_path_by_menu_is_router_path($menu_path) ? $item['href'] : $menu_path;
+  }
+
+  return $paths[$item['mlid']];
+}
+
+/**
+ * Returns the title of a menu link.
+ *
+ * @param int $mlid
+ *   A menu link id.
+ *
+ * @return string
+ *   The title of the menu link, or FALSE if the menu link does not exist.
+ */
+function paddle_path_by_menu_get_menu_link_title($mlid) {
+  $titles = &drupal_static(__FUNCTION__);
+  if (!$titles) {
+    // Load all menu link titles in one query. This takes a sizeable amount of
+    // memory, but since this function may be called thousands of times per page
+    // load this is critical for performance.
+    $titles = db_select('menu_links', 'ml')
+      ->fields('ml', array('mlid', 'link_title'))
+      ->execute()
+      ->fetchAllKeyed();
+  }
+  return isset($titles[$mlid]) ? $titles[$mlid] : FALSE;
+}
+
+/**
+ * Checks if a given path is a registered by the core menu router.
+ *
+ * @param string $path
+ *   The path to check.
+ *
+ * @return bool
+ *   TRUE if the path has been registered, FALSE otherwise.
+ */
+function paddle_path_by_menu_is_router_path($path) {
+  // The 'original path' is only set if the menu router does not handle the
+  // path. If this is empty check the menu router.
+  if ($path != paddle_path_by_menu_get_original_path()) {
+    $router_paths = &drupal_static(__FUNCTION__);
+    // Load all router paths from the database. Since this function can be
+    // called thousands of times per page load we opt to retrieve all paths in a
+    // single query and cache it statically.
+    if (!$router_paths) {
+      $router_paths = db_select('menu_router', 'm')
+        ->fields('m', array('path'))
+        ->execute()
+        ->fetchAllAssoc('path');
+    }
+
+    // Retrieve all menu masks from the path and its ancestors (eg. 'node/%').
+    $original_map = arg(NULL, $path);
+    $parts = array_slice($original_map, 0, MENU_MAX_PARTS);
+    $ancestors = menu_get_ancestors($parts);
+
+    // If we have a potential match with a menu item we delegate the resolution
+    // of the path to menu_get_item(). This will generate an additional query
+    // and will invoke some hooks, but since this is a relatively rare case this
+    // is an acceptable performance hit.
+    return (bool) array_intersect_key($router_paths, array_flip($ancestors)) && (bool) menu_get_item($path);
+  }
+  return FALSE;
+}
+
+/**
+ * Stores the original menu path that was requested by the user.
+ *
+ * @param string $original_path
+ *   The original menu path that was requested by the user.
+ *
+ * @return string
+ *   The original menu path that was requested by the user, or FALSE if no menu
+ *   path was requested.
+ */
+function paddle_path_by_menu_set_original_path($original_path = NULL) {
+  $path = &drupal_static(__FUNCTION__, FALSE);
+  if (isset($original_path)) {
+    $path = $original_path;
+  }
+  return $path;
+}
+
+/**
+ * Returns the original menu path that was requested by the user.
+ *
+ * @return string
+ *   The original menu path that was requested by the user, or FALSE if no menu
+ *   path was requested.
+ */
+function paddle_path_by_menu_get_original_path() {
+  return paddle_path_by_menu_set_original_path();
+}
+
+/**
+ * Returns a list of menu names.
+ *
+ * This is similar to menu_get_names() but also returns the names of menus that
+ * do not have any menu links assigned to it.
+ *
+ * @see menu_get_names()
+ * @see https://drupal.org/node/784856
+ *
+ * @return array
+ *   An array of menu names.
+ */
+function paddle_path_by_menu_get_menu_names() {
+  return array_keys(menu_get_menus(TRUE));
+}
+
+/**
+ * Clears the Paddle Path By Menu static cache.
+ */
+function paddle_path_by_menu_reset_static_cache() {
+  $caches = array(
+    'paddle_path_by_menu_get_menu_link_title',
+    'paddle_path_by_menu_get_menu_path',
+    'paddle_path_by_menu_is_router_path',
+    'paddle_path_by_menu_set_original_path',
+  );
+  foreach ($caches as $cache) {
+    drupal_static_reset($cache);
+  }
+}
+
+/**
+ * Updates the menu_link_get_preferred cache.
+ *
+ * @param array $path_info
+ *   An associative array containing the info of the menu link.
+ */
+function paddle_path_by_menu_adjust_menu_link_get_preferred_cache($path_info) {
+  $menu_link = menu_link_load($path_info['mlid']);
+
+  $map = explode('/', $path_info['link_path']);
+  _menu_translate($menu_link, $map);
+
+  $preferred = &drupal_static('menu_link_get_preferred');
+  $preferred[$path_info['link_path']][$menu_link['menu_name']] = $menu_link;
+  $preferred[$path_info['link_path']][MENU_PREFERRED_LINK] = $menu_link;
+}

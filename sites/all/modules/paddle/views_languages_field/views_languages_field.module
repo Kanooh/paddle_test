@@ -1,0 +1,64 @@
+<?php
+
+/**
+ * @file
+ * views_languages_field.module
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function views_languages_field_views_api() {
+  return array(
+    'api' => 2,
+    'path' => drupal_get_path('module', 'views_languages_field'),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function views_languages_field_theme($existing, $type, $theme, $path) {
+  $hooks = array();
+
+  $hooks['views_languages_field_link'] = array(
+    'variables' => array(
+      'item' => NULL,
+    ),
+    'file' => 'views_languages_field.theme.inc',
+  );
+
+  return $hooks;
+}
+
+/**
+ * Link helpers for correct modification context.
+ *
+ * @param string $text
+ *   A string containing the text.
+ * @param string $path
+ *   A string containing the path.
+ * @param string $langcode
+ *   A string containing the langcode.
+ * @param array $options
+ *   An array containing additional options.
+ *
+ * @return string
+ *   The translated string.
+ */
+function views_languages_field_i18n_node_translation_link($text, $path, $langcode, $options = array()) {
+  if (variable_get('i18n_node_translation_switch', FALSE)) {
+    $type = variable_get('translation_language_type', LANGUAGE_TYPE_INTERFACE);
+    $links = language_negotiation_get_switch_links($type, $path);
+    if (!empty($links->links[$langcode]) && !empty($links->links[$langcode]['href'])) {
+      $options = array_merge_recursive($links->links[$langcode], $options);
+      $path = $links->links[$langcode]['href'];
+    }
+  }
+
+  if (drupal_valid_path($path)) {
+    return l($text, $path, $options);
+  }
+
+  return $text;
+}

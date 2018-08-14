@@ -1,0 +1,429 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations for the Paddle Reference Tracker.
+ */
+
+include_once 'paddle_reference_tracker.features.inc';
+
+/**
+ * The regex used to parse atoms in HTML.
+ */
+const PADDLE_REFERENCE_TRACKER_ATOM_DISCOVERY_REGEX = '/<([A-Z][-:A-Z0-9]*) [^>]* class \s* = \s* (?:"|\') [^"\']* atom-id-((?:\d)+) [^"\']* (?:"|\') [^>]* (?: \/>|.*?<\/\1>|>)/ix';
+
+/**
+ * Implements hook_admin_paths().
+ */
+function paddle_reference_tracker_admin_paths() {
+  return array(
+    'node/*/references' => TRUE,
+  );
+}
+
+/**
+ * Implements hook_reference_tracker_value_types_parse_info().
+ */
+function paddle_reference_tracker_reference_tracker_value_types_parse_info() {
+  $info = array();
+
+  $info['node_autocomplete'] = array(
+    'parser_callback' => array('paddle_reference_tracker_node_autocomplete_value_parser'),
+  );
+
+  $info['conditional_node_autocomplete'] = array(
+    'parser_callback' => array('paddle_reference_tracker_conditional_node_autocomplete_value_parser'),
+  );
+
+  $info['paddle_scald_atom'] = array(
+    'parser_callback' => array('paddle_reference_tracker_paddle_scald_atom_value_parser'),
+  );
+
+  $info['conditional_atom_field'] = array(
+    'parser_callback' => array('paddle_reference_tracker_conditional_atom_field_value_parser'),
+  );
+
+  $info['manual_download_list'] = array(
+    'parser_callback' => array('paddle_reference_tracker_manual_download_list_value_parser'),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_reference_tracker_field_types_parse_info().
+ */
+function paddle_reference_tracker_reference_tracker_field_types_parse_info() {
+  $field_type_parse_info = array();
+
+  $field_type_parse_info['paddle_scald_atom'] = array(
+    'sid' => array(
+      'value_type' => 'entity_id',
+      'reference_entity_type' => 'scald_atom',
+    ),
+  );
+
+  return $field_type_parse_info;
+}
+
+/**
+ * Implements hook_reference_tracker_value_types_parse_info_alter().
+ */
+function paddle_reference_tracker_reference_tracker_value_types_parse_info_alter(&$value_types_parse_info) {
+  if (isset($value_types_parse_info['text'])) {
+    $value_types_parse_info['text']['parser_callback'][] = 'paddle_reference_tracker_atoms_parse';
+  }
+}
+
+/**
+ * Value parser for text values to parse reference_tracker atoms.
+ *
+ * @param string $value
+ *   Text value to parse.
+ * @param array $context
+ *   Associative array with various information (entity_type, entity,
+ *   field_name, etc.)
+ *
+ * @return array
+ *   Associative array in the following structure:
+ *   array(
+ *     entity_type (eg. node) => array(
+ *       reference entity id,
+ *       reference entity id,
+ *       ...
+ *     ),
+ *     ...
+ *   ),
+ *   An empty array is returned when no references could be found.
+ */
+function paddle_reference_tracker_atoms_parse($value, $context) {
+  $references = array();
+  $atom_ids = array();
+
+  // Get the atom references.
+  $atoms = paddle_reference_tracker_find_atoms_in_html($value);
+  $atom_ids = array_merge($atom_ids, $atoms);
+
+  $atom_ids = array_unique($atom_ids);
+
+  // For now we only support body fields.
+  if (!empty($atom_ids)) {
+    $references['scald_atom'] = $atom_ids;
+  }
+
+  return $references;
+}
+
+/**
+ * Finds all the atoms in the passed HTML and returns them.
+ *
+ * @param string $html
+ *   The HTML to be checked for presence of atoms.
+ *
+ * @return array
+ *   Array containing the IDs of the atoms found.
+ */
+function paddle_reference_tracker_find_atoms_in_html($html) {
+  $atoms = array();
+  $matches = array();
+
+  preg_match_all(PADDLE_REFERENCE_TRACKER_ATOM_DISCOVERY_REGEX, $html, $matches);
+  if (!empty($matches[2])) {
+    $atoms = $matches[2];
+  }
+
+  return $atoms;
+}
+
+/**
+ * Reference tracker value parser for node autocomplete values.
+ */
+function paddle_reference_tracker_node_autocomplete_value_parser($value, $context) {
+  $references = array();
+
+  if (!empty($value) && preg_match('/node\/(\d+)/', $value, $matches)) {
+    $nid = $matches[1];
+    $node = node_load($nid);
+
+    if (!empty($node)) {
+      $references['node'][] = $nid;
+    }
+  }
+
+  return $references;
+}
+
+/**
+ * Reference tracker value parser for conditional node autocomplete values.
+ */
+function paddle_reference_tracker_conditional_node_autocomplete_value_parser($value, $context) {
+  $condition = _paddle_reference_tracker_evaluate_condition($value, $context);
+
+  // If the condition is matched, fetch the references.
+  return $condition ? paddle_reference_tracker_node_autocomplete_value_parser($value, $context) : array();
+}
+
+/**
+ * Reference tracker value parser for paddle_scald_atom element.
+ */
+function paddle_reference_tracker_paddle_scald_atom_value_parser($value, $context) {
+  // When the 'sid' key is present, we have an element with a 'new'
+  // configuration saved. Old configurations have directly the atom id/ids
+  // saved.
+  if (isset($value['sid'])) {
+    $value = $value['sid'];
+  }
+
+  // Always normalize to an array.
+  $atom_ids = is_array($value) ? $value : array($value);
+
+  return paddle_reference_tracker_get_real_atoms($atom_ids);
+}
+
+/**
+ * Get the existing atoms from and array containing atom IDs.
+ *
+ * @param array $atom_ids
+ *   Array containing the atom IDs to fetch.
+ *
+ * @return array
+ *   Returns the "real" atoms, empty otherwise.
+ */
+function paddle_reference_tracker_get_real_atoms($atom_ids) {
+  // Load atoms to get rid of non-existing ones.
+  $atoms = scald_fetch_multiple($atom_ids);
+
+  // scald_fetch_multiple() returns FALSE when no atoms are there. Weirdo.
+  if (!$atoms) {
+    return array();
+  }
+
+  return array('scald_atom' => array_keys($atoms));
+}
+
+/**
+ * Reference tracker value parser for conditional atom field values.
+ */
+function paddle_reference_tracker_conditional_atom_field_value_parser($value, $context) {
+  // Parse the field only if conditions are met.
+  if (_paddle_reference_tracker_evaluate_condition($value, $context)) {
+    return paddle_reference_tracker_paddle_scald_atom_value_parser($value, $context);
+  }
+
+  return array();
+}
+
+/**
+ * Helper function to evaluate conditional data for references.
+ *
+ * Conditional means that there is a reference only if another field has a
+ * specific value or a callback returns TRUE.
+ * By default, the expected element value is TRUE.
+ *
+ * @param mixed $value
+ *   The value of the field being parsed.
+ * @param array $context
+ *   Context data about the field being parsed.
+ *
+ * @return bool
+ *   If the field has to be parsed for the references.
+ */
+function _paddle_reference_tracker_evaluate_condition($value, $context) {
+  $condition = FALSE;
+
+  // Conditional element have precedence on the callback.
+  if (!empty($context['conditional element'])) {
+    // Retrieve the expected value, or fallback to TRUE.
+    $conditional_value = array_key_exists('conditional value', $context) ? $context['conditional value'] : TRUE;
+    // Retrieve the value of the element from the pane configuration.
+    $element_value = drupal_array_get_nested_value($context['pane']->configuration, explode('][', $context['conditional element']));
+
+    // Evaluate the condition.
+    $condition = ($element_value === $conditional_value);
+  }
+  elseif (!empty($context['conditional callback']) && function_exists($context['conditional callback'])) {
+    // Invoke the callback that will return if the condition is matched.
+    $condition = $context['conditional callback']($value, $context);
+  }
+
+  // If the condition is matched, fetch the references.
+  return $condition;
+}
+
+/**
+ * Reference tracker value parser for download list panes on manual mode.
+ */
+function paddle_reference_tracker_manual_download_list_value_parser($value, $context) {
+  // This parser gets the value of the configuration mode switcher.
+  // We track atoms only if it's manual.
+  if ($value != 'manual') {
+    return array();
+  }
+
+  // The download list pane holds different (old) configurations. Normalize it.
+  $atom_ids = paddle_scald_download_list_content_type_get_atoms_manual($context['pane']->configuration);
+
+  return paddle_reference_tracker_get_real_atoms($atom_ids);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_reference_tracker_form_paddle_content_manager_archive_node_confirm_form_alter(&$form, &$form_state, $form_id) {
+  // If any entity references this node, show a warning message.
+  if ($references = reference_tracker_get_inbound_references('node', $form_state['nid'])) {
+    // Count only the leaves in the references array which are the real
+    // references.
+    $count = count($references, COUNT_RECURSIVE) - count($references);
+    $form['body']['reference_tracker'] = array(
+      '#type' => 'item',
+      '#markup' => format_plural(
+        $count,
+        'This page is used by one page. See the <a href="@url">usage overview</a>. Are you sure you want to break the links on that page?',
+        'This page is used by @count pages. See the <a href="@url">usage overview</a>. Are you sure you want to break the links on those pages?',
+        array(
+          '@url' => url("node/{$form_state['nid']}/references"),
+        )
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_reference_tracker_entity_reference_table_row_alter().
+ */
+function paddle_reference_tracker_reference_tracker_entity_reference_table_row_alter(&$row, $entity_type, $entity) {
+  // We need to change the link to point it to the admin node view.
+  if ($entity_type == 'node') {
+    $row['data'][1]['data'] = l($entity->title, 'admin/content_manager/node/' . $entity->nid . '/view');
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_reference_tracker_form_paddle_scald_atom_delete_confirm_alter(&$form, &$form_state, $form_id) {
+  // If this atom is used anywhere, show a warning message.
+  $sid = $form['sid']['#value'];
+  $atom = scald_atom_load($sid);
+  if ($references = reference_tracker_get_inbound_references('scald_atom', $sid)) {
+    // Count only the leaves in the references array which are the real
+    // references.
+    $count = count($references, COUNT_RECURSIVE) - count($references);
+    $form['body']['reference_tracker'] = array(
+      '#type' => 'item',
+      '#markup' => format_plural(
+        $count,
+        'This @scald_type is used by one page. See the <a href="@url">usage overview</a>. Are you sure you want to break the links on that page?',
+        'This @scald_type is used by @count pages. See the <a href="@url">usage overview</a>. Are you sure you want to break the links on those pages?',
+        array(
+          '@url' => url("admin/paddle_scald/{$sid}/references"),
+          '@scald_type' => strtolower(scald_type_property_translate(scald_type_load($atom->type))),
+        )
+      ),
+    );
+  }
+}
+
+
+/**
+ * Implements hook_views_bulk_operations_form_alter().
+ */
+function paddle_reference_tracker_views_bulk_operations_form_alter(&$form, &$form_state) {
+  // If the operation is archiving check if the nodes are being referenced to
+  // add links to their Node References page.
+  if (!empty($form_state['values']) && !empty($form_state['values']['operation']) && $form_state['values']['operation'] == 'action::paddle_content_manager_set_workbench_moderation_state' &&
+    $form_state['values']['bulk_state'] == 'archived') {
+    $reference_links = array();
+    foreach ($form_state['selection'] as $nid) {
+      $referenced = reference_tracker_get_inbound_references('node', $nid, NULL, NULL, 'node');
+      if (!empty($referenced)) {
+        if ($node = node_load($nid)) {
+          $reference_links[] = l($node->title, 'node/' . $nid . '/references');
+        }
+      }
+    }
+    // Warn the user if there are nodes being referenced.
+    if (!empty($reference_links)) {
+      $form['referenced_nodes'] = array(
+        '#title' => t('The following pages are used by other pages. See the usage overview below. Are you sure you want to break the links on those pages?'),
+        '#theme' => 'item_list',
+        '#items' => $reference_links,
+        '#attributes' => array('class' => 'referenced-nodes-warning'),
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_post_alter().
+ */
+function paddle_reference_tracker_ctools_plugin_post_alter(&$plugin, &$info) {
+  if ($info['type'] != 'content_types') {
+    return;
+  }
+
+  // If the plugin type has support for the paddle_panes sections, add
+  // the appropriate reference tracking data.
+  if (!empty($plugin['paddle_panes sections'])) {
+    module_load_include('inc', 'paddle_panes', 'paddle_panes_pane_sections');
+    foreach (array_keys(paddle_panes_pane_sections_additional_sections()) as $section) {
+      $plugin['reference tracker']["$section][section_internal_url"] = array(
+        'value_type' => 'conditional_node_autocomplete',
+        'conditional callback' => 'paddle_reference_tracker_conditional_pane_section_internal_url_callback',
+        'section name' => $section,
+      );
+    }
+
+    // Only the top section allows selecting an image.
+    $plugin['reference tracker']['top][section_image'] = array(
+      'value_type' => 'conditional_atom_field',
+      'conditional callback' => 'paddle_reference_tracker_condition_top_section_atom_callback',
+    );
+  }
+}
+
+/**
+ * Callback to determine if a pane section has to be parsed for internal links.
+ */
+function paddle_reference_tracker_conditional_pane_section_internal_url_callback($value, $context) {
+  $section_conf = $context['pane']->configuration[$context['section name']];
+
+  return !empty($section_conf['enable_section']) && ($section_conf['section_url_type'] == 'internal');
+}
+
+/**
+ * Callback to determine if a top pane section has to be parsed for atoms.
+ */
+function paddle_reference_tracker_condition_top_section_atom_callback($value, $context) {
+  $section_conf = $context['pane']->configuration['top'];
+
+  return !empty($section_conf['enable_section']) && ($section_conf['section_content_type'] == 'image');
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function paddle_reference_tracker_form_scald_atom_add_form_options_alter(&$form, &$form_state) {
+  // Add reference message if the atom is being referenced.
+  foreach (array_keys($form_state['scald']['atoms']) as $delta) {
+    if (!empty($form_state['atom'])) {
+      $atom = $form_state['atom'];
+      if (isset($atom->sid) && $references = reference_tracker_get_inbound_references('scald_atom', $atom->sid)) {
+        $count = count($references, COUNT_RECURSIVE) - count($references);
+        $form["atom$delta"]['reference_tracker'] = array(
+          '#type' => 'item',
+          '#markup' => format_plural(
+            $count,
+            'This @scald_type is used by one page. See the <a href="@url">usage overview</a>.',
+            'This @scald_type is used by @count pages. See the <a href="@url">usage overview</a>.',
+            array(
+              '@url' => url("admin/paddle_scald/{$atom->sid}/references"),
+              '@scald_type' => strtolower(scald_type_property_translate(scald_type_load($atom->type))),
+            )
+          ),
+          '#weight' => 50,
+        );
+      }
+    }
+  }
+}

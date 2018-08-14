@@ -1,0 +1,301 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Codex Flanders module.
+ */
+
+/**
+ * A bit flag used to let us know if connection with the API is possible.
+ */
+define('CODEX_NO_API_CONNECTION', 0x1);
+
+/**
+ * A bit flag used to let us know if an active article version is found.
+ */
+define('CODEX_NO_ACTIVE_VERSION', 0x2);
+
+include_once 'paddle_codex_flanders.features.inc';
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_codex_flanders_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_codex_flanders_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_codex_flanders_codex' => array(
+      'variables' => array(
+        'codex' => array(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Theme function for a codex.
+ */
+function theme_paddle_codex_flanders_codex($variables) {
+  $render_array = array(
+    'codex_wrapper' => array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'class' => array('paddle-flanders-codex'),
+      ),
+      'source_container' => array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'class' => array('codex-source-container'),
+        ),
+        '#weight' => 1,
+        'label' => array(
+          '#type' => 'markup',
+          '#prefix' => '<span>',
+          '#suffix' => '</span>',
+        ),
+        'source_link' => array(
+          '#type' => 'markup',
+          '#markup' => t('Article @article_number of the @document_type from @date @caption', array(
+            '@article_number' => $variables['codex']['article_number'],
+            '@document_type' => $variables['codex']['document_type'],
+            '@caption' => $variables['codex']['caption'],
+            '@date' => date('d/m/Y', strtotime($variables['codex']['date'])),
+          )),
+          '#prefix' => '<a href="' . $variables['codex']['url'] . '" target="_blank">',
+          '#suffix' => '</a>',
+        ),
+      ),
+      'text' => array(
+        '#type' => 'markup',
+        '#markup' => $variables['codex']['text'],
+        '#prefix' => '<div class="codex-text">',
+        '#suffix' => '</div>',
+        '#weight' => 2,
+      ),
+    ),
+  );
+
+  if (!empty($variables['codex']['name'])) {
+    $render_array['codex_wrapper']['name'] = array(
+      '#type' => 'markup',
+      '#markup' => $variables['codex']['name'],
+      '#prefix' => '<div class="codex-name">',
+      '#suffix' => '</div>',
+      '#weight' => 0,
+    );
+  }
+
+  return render($render_array);
+}
+
+/**
+ * A wrapper to retrieve the given article data.
+ *
+ * @param string $aid
+ *    The article id for the data to retrieve.
+ * @param bool $refresh
+ *    Optional; if TRUE, then we'll force a new load of the data. Otherwise,
+ *    a cached version will be retrieved if possible.
+ *
+ * @return array|mixed
+ *    A fully populated object.
+ */
+function paddle_codex_flanders_get_article_data($aid, $refresh = FALSE) {
+  $data = &drupal_static(__FUNCTION__, array());
+
+  // Return our cached article if allowed, and it exists.
+  if (!$refresh && isset($data[$aid])) {
+    return $data[$aid];
+  }
+  elseif (!$refresh && $cache = cache_get('flanders:codex:article:' . $aid, 'cache_flanders_codices')) {
+    $data[$aid] = $cache->data;
+    return $data[$aid];
+  }
+
+  $set = paddle_codex_flanders_cache_set_new_active_version($aid);
+  if (is_array($set)) {
+    $data[$aid] = $set;
+  }
+  else {
+    return $set;
+  }
+
+  return $data[$aid];
+}
+
+/**
+ * Set a new cache record when an active version for an article is found.
+ *
+ * @param int $aid
+ *   The article ID to get the data for.
+ *
+ * @return mixed
+ *   Returns the active version data for a codex entry or a status code when no
+ *   active version found or when an API error occurs.
+ */
+function paddle_codex_flanders_cache_set_new_active_version($aid) {
+  $cache = cache_get('flanders:codex:article:' . $aid, 'cache_flanders_codices');
+
+  // Do the requests to the webservice, cache the retrieved data and return that
+  // data.
+  $url = 'http://codex.opendata.api.vlaanderen.be/api/WetgevingArtikel/' . $aid . '/Versies';
+  drupal_alter('paddle_codex_flanders_request_url', $url, $aid);
+
+  // Do the actual request to the webservice.
+  $request = drupal_http_request($url);
+
+  // If no 200 returned, it means there is something wrong. Return a status code
+  // to notify the user.
+  if ($request->code != 200) {
+    return CODEX_NO_API_CONNECTION;
+  }
+
+  // Decode the JSON response.
+  $versions = drupal_json_decode($request->data);
+
+  // Iterate over the results to find the active version.
+  if (!empty($versions['ResultatenLijst'])) {
+
+    foreach ($versions['ResultatenLijst'] as $version) {
+      // The active version only needs to be updated when it does not correspond
+      // with an active version in the cache table.
+      if (
+        (empty($version['StartDatum']) || strtotime($version['StartDatum']) <= time()) &&
+        (empty($version['EindDatum']) || strtotime($version['EindDatum']) > time()) &&
+        (empty($cache) || empty($cache->data['vid']) || $version['Id'] != $cache->data['vid'])
+      ) {
+        $codex = array();
+        $codex['aid'] = $aid;
+        $codex['vid'] = $version['Id'];
+        $codex['active_version_link'] = $version['Link']['Href'] . '/VolledigeArtikelVersie';
+
+        // Now get the all the info of the active version of the given
+        // article.
+        $version_request = drupal_http_request($codex['active_version_link']);
+        $version_data = drupal_json_decode($version_request->data);
+
+        $codex['text'] = $version_data['Inhoud']['ArtikelVersies'][0]['ArtikelVersie']['Tekst'];
+        $codex['article_number'] = $version_data['Inhoud']['ArtikelVersies'][0]['ArtikelVersie']['ArtikelNummer'];
+        $codex['caption'] = $version_data['Document']['Opschrift'];
+        $codex['date'] = $version_data['Document']['Datum'];
+        $codex['document_type'] = $version_data['Document']['WetgevingDocumentType'];
+
+        // Update the cache table.
+        cache_set('flanders:codex:article:' . $aid, $codex, 'cache_flanders_codices');
+
+        if (!empty($cache->data) && $version['Id'] != $cache->data['vid']) {
+          $codex['updated_active_version'] = TRUE;
+        }
+
+        return $codex;
+      }
+    }
+  }
+
+  if (!empty($cache)) {
+    $codex['updated_active_version'] = TRUE;
+    cache_clear_all('flanders:codex:article:' . $aid, 'cache_flanders_codices', TRUE);
+  }
+
+  return CODEX_NO_ACTIVE_VERSION;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function paddle_codex_flanders_cron() {
+  // Normally all articles which were once saved are in our codex cache. So we
+  // don't actually need to load our panes but just get the article ID's from
+  // the cache and check their active version.
+  // This is because we use CACHE_PERMANENT. So the cache can only be cleared
+  // by calling cache_clear_all() with the specific CID. Also when panes are
+  // saved, the cache is being populated with the new articles because after
+  // saving, you instantly land on a view page where the requests are being
+  // made.
+  // If there is, in some weird way, no entry for a certain article ID, we do
+  // not need to update the cache through cron because the next page request
+  // with the pane holding the article, will update the cache anyway.
+  if (!cache_is_empty('cache_flanders_codices')) {
+    $results = db_select('cache_flanders_codices', 'cfc')
+      ->fields('cfc', array('cid'))
+      ->execute()
+      ->fetchAll();
+
+    // Keep the article ID's for purging page cache where needed.
+    $aids = array();
+
+    // Update the cache corresponding the active version.
+    foreach ($results as $result) {
+      $array = explode(':', $result->cid);
+      $aid = end($array);
+
+      $codex = paddle_codex_flanders_cache_set_new_active_version($aid);
+
+      if (!empty($codex['updated_active_version'])) {
+        $aids[] = $aid;
+      }
+    }
+
+    // If caches were updated, clear the corresponding page caches.
+    if (!empty($aids)) {
+      paddle_codex_flanders_clear_page_cache($aids);
+    }
+  }
+}
+
+/**
+ * Clear the page caches holding updated articles.
+ *
+ * @param array $aids
+ *   An array containing the article id's which have an updated version.
+ */
+function paddle_codex_flanders_clear_page_cache($aids) {
+  $results = db_select('panels_pane', 'pp')
+    ->fields('pp')
+    ->condition('type', 'codex_flanders', '=')
+    ->execute()
+    ->fetchAllAssoc('pid');
+
+  if (!empty($results)) {
+    $dids = array();
+    foreach ($results as $pid => $pane) {
+      $conf = unserialize($pane->configuration);
+
+      if (!empty(array_intersect($aids, $conf['aids'])) && !in_array($pane->did, $dids)) {
+        $dids[] = $pane->did;
+      }
+    }
+
+    if (!empty($dids)) {
+      $entities = db_select('panelizer_entity', 'pe')
+        ->fields('pe')
+        ->condition('did', $dids, 'IN')
+        ->execute()
+        ->fetchAllAssoc('entity_id');
+
+      if (!empty($entities)) {
+        foreach (array_keys($entities) as $key) {
+          $cids[] = 'node/' . $key;
+          $cids[] = drupal_get_path_alias('node/' . $key);
+
+          if (module_exists('paddle_varnish')) {
+            paddle_varnish_expire_cache($cids);
+          }
+          else {
+            global $base_url;
+
+            foreach ($cids as $cid) {
+              cache_clear_all($base_url . '/' . $cid, 'cache_page');
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,313 @@
+<?php
+
+/**
+ * Implementation of hook_schema().
+ */
+function culturefeed_schema() {
+  $schema['cache_culturefeed'] = drupal_get_schema_unprocessed('system', 'cache');
+
+  $schema['culturefeed_user'] = array(
+    'description' => t('Tokens and secrets from users.'),
+    'fields' => array(
+      'uid' => array(
+        'description' => t('User ID from {user}.uid.'),
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE
+      ),
+      'cf_uid' => array(
+        'description' => t('CultureFeed ID.'),
+        'type'        => 'varchar',
+        'length'      => 64,
+        'not null'    => TRUE
+      ),
+    ),
+    'primary key' => array('uid'),
+    'unique keys' => array(
+      'uid' => array('uid'),
+      'cf_uid' => array('cf_uid'),
+    ),
+  );
+  $schema['culturefeed_token'] = array(
+    'description' => t('Tokens and secrets from users.'),
+    'fields' => array(
+      'cf_uid' => array(
+        'description' => t('CultureFeed ID.'),
+        'type'        => 'varchar',
+        'length'      => 64,
+        'not null'    => TRUE
+      ),
+      'application_key' => array(
+        'description' => t('Application key.'),
+        'type'        => 'varchar',
+        'length'      => 64,
+        'not null'    => TRUE
+      ),
+      'token' => array(
+        'description' => t('CultureFeed OAuth token.'),
+        'type'        => 'varchar',
+        'length'      => 32,
+        'not null'    => TRUE
+      ),
+      'secret' => array(
+        'description' => t('CultureFeed OAuth secret.'),
+        'type'        => 'varchar',
+        'length'      => 32,
+        'not null'    => TRUE
+      ),
+    ),
+    'primary key' => array('cf_uid', 'application_key'),
+    'indexes' => array(
+      'cf_uid' => array('cf_uid'),
+      'application_key' => array('application_key'),
+    ),
+    'foreign keys' => array(
+      'culturefeed_user' => array(
+        'table' => 'culturefeed_user',
+        'columns' => array('cf_uid' => 'cf_uid'),
+      ),
+    ),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function culturefeed_install() {
+  variable_set('culturefeed_entry_api_path', 'entry/test.rest.uitdatabank.be/api/v3/');
+  variable_set('culturefeed_cdb_version', '3.3');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function culturefeed_uninstall() {
+  $variables = array(
+    'culturefeed_api_location',
+    'culturefeed_api_application_key',
+    'culturefeed_api_shared_secret',
+    'culturefeed_proxy_enabled',
+    'culturefeed_proxy_server',
+    'culturefeed_proxy_port',
+    'culturefeed_proxy_username',
+    'culturefeed_proxy_password',
+  );
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function culturefeed_requirements($phase) {
+  $requirements = array();
+
+  $t = get_t();
+
+  // Verify curl is installed
+  $has_curl = function_exists('curl_init');
+  $requirements['curl'] = array(
+    'title' => $t('cURL'),
+    'value' => $has_curl ? $t('Enabled') : $t('Not found'),
+  );
+  if (!$has_curl) {
+    $requirements['curl']['severity'] = REQUIREMENT_ERROR;
+    $requirements['curl']['description'] = $t('CultureFeed could not be installed because the PHP <a href="@curl_url">cURL</a> library is not available.', array('@curl_url' => 'http://php.net/manual/en/curl.setup.php'));
+  }
+
+  if ($phase == 'runtime') {
+    // Raise warning if CultureFeed key has not been set yet.
+    $requirements['culturefeed_api_application_key']['title'] = $t('CultureFeed Application Key');
+    if (trim(variable_get('culturefeed_api_application_key', '')) == '') {
+      $requirements['culturefeed_api_application_key']['description'] = $t('Your CultureFeed Application key has not been set yet. Please configure its settings from the <a href="@url">CultureFeed settings page</a>.', array('@url' => url('admin/config/culturefeed/culturefeed')));
+      $requirements['culturefeed_api_application_key']['severity'] = REQUIREMENT_ERROR;
+      $requirements['culturefeed_api_application_key']['value'] = $t('Not configured');
+    }
+    else {
+      $requirements['culturefeed_api_application_key']['value'] = variable_get('culturefeed_api_application_key', '');
+    }
+
+    // Raise warning if CultureFeed shared secret has not been set yet.
+    $requirements['culturefeed_api_shared_secret']['title'] = $t('CultureFeed Shared Secret');
+    if (trim(variable_get('culturefeed_api_shared_secret', '')) == '') {
+      $requirements['culturefeed_api_shared_secret']['description'] = $t('Your CultureFeed Shared Secret has not been set yet. Please configure its settings from the <a href="@url">CultureFeed settings page</a>.', array('@url' => url('admin/config/culturefeed/culturefeed')));
+      $requirements['culturefeed_api_shared_secret']['severity'] = REQUIREMENT_ERROR;
+      $requirements['culturefeed_api_shared_secret']['value'] = $t('Not configured');
+    }
+    else {
+      $requirements['culturefeed_api_shared_secret']['value'] = variable_get('culturefeed_api_shared_secret', '');
+    }
+
+    // Raise warning if CultureFeed location has not been set yet.
+    $requirements['culturefeed_api_location']['title'] = $t('CultureFeed location');
+    if (trim(variable_get('culturefeed_api_location')) == '') {
+      $requirements['culturefeed_api_location']['description'] = $t('The location of the CultureFeed has not been set yet. Please configure its settings from the <a href="@url">CultureFeed settings page</a>.', array('@url' => url('admin/config/culturefeed/culturefeed')));
+      $requirements['culturefeed_api_location']['severity'] = REQUIREMENT_ERROR;
+      $requirements['culturefeed_api_location']['value'] = $t('Not configured');
+    }
+    else {
+      $requirements['culturefeed_api_location']['value'] = variable_get('culturefeed_api_location');
+    }
+
+    // Raise warning if CultureFeed library versions do not match the required
+    // versions defined by the module.
+    $requirements = array_merge($requirements, culturefeed_libraries_requirements());
+  }
+
+  return $requirements;
+}
+
+/**
+ * Returns the minimum required versions for the culturefeed libraries.
+ *
+ * @return array
+ */
+function culturefeed_libraries_required_versions() {
+  return array(
+    "cultuurnet/search" => "1.2",
+    "cultuurnet/cdb" => "2.1",
+    "cultuurnet/culturefeed-php" => "1.5",
+    "cultuurnet/calendar-summary" => "1.0",
+    "cultuurnet/sitemap-xml" => "1.0.1",
+  );
+}
+
+/**
+ * Verifies that the required versions of the CultureFeed libraries are present.
+ *
+ * @return array
+ *   List of requirements.
+ */
+function culturefeed_libraries_requirements() {
+  $t = get_t();
+  $requirements = array();
+
+  // Get the path to the composer lock file, and remove any trailing slashes.
+  $composer_lock_path = variable_get('culturefeed_composer_lock_path', CULTUREFEED_DEFAULT_COMPOSER_LOCK_PATH);
+  $composer_lock_path = rtrim($composer_lock_path, '/');
+
+  // Set the complete file path.
+  $composer_lock_file = $composer_lock_path . '/composer.json';
+
+  // Check that the composer.lock file can be found.
+  if (!file_exists($composer_lock_file)) {
+    $requirements[] = array(
+      'title' => $t('Composer.lock'),
+      'description' => $t('The location of the composer.lock file is not set or incorrect. Please configure its location on the <a href="@url">CultureFeed settings page</a>.', array('@url' => url('admin/config/culturefeed/culturefeed'))),
+      'severity' => REQUIREMENT_ERROR,
+      'value' => $t('Not configured'),
+    );
+    return $requirements;
+  }
+
+  // Check that the Composer library has been installed. If this is not the
+  // case, the libraries are out of date anyway.
+  if (!class_exists('\\Composer\\Factory')) {
+    $requirements[] = array(
+      'title' => $t('PHP library :library', array(':library' => 'composer/composer')),
+      'severity' => REQUIREMENT_ERROR,
+      'value' => 'Missing',
+      'description' => $t('Install the composer/composer PHP library')
+    );
+    return $requirements;
+  }
+
+  // Verify that all versions match the required versions of the module.
+  putenv('COMPOSER_HOME=' . $composer_lock_path);
+  $io = new \Composer\IO\NullIO();
+  $composer = \Composer\Factory::create($io);
+
+  $packages = array();
+  $repository = $composer->getRepositoryManager()->getLocalRepository();
+
+  /* @var Composer\Package\CompletePackage $package */
+  foreach ($repository->getPackages() as $package) {
+    $packages[$package->getName()] = $package;
+  }
+
+  $dependencies = culturefeed_libraries_required_versions();
+
+  foreach ($dependencies as $dependency => $minimum) {
+    $title = $t('CultureFeed dependency :library', array(':library' => $dependency));
+
+    if (!isset($packages[$dependency])) {
+      $requirements[] = array(
+        'title' => $title,
+        'severity' => REQUIREMENT_ERROR,
+        'description' => $t(
+          'According to composer.lock the :package-name PHP library is missing, while at least version :minimum is required. Please install the library.',
+          array(
+            ':minimum' => $minimum,
+            ':package-name' => $dependency
+          )
+        ),
+        'value' => 'Missing',
+      );
+    }
+    else {
+      $package = $packages[$dependency];
+
+      $version = $package->getVersion();
+      $stability = $package->getStability();
+
+      if (version_compare($version, $minimum) < 0) {
+        $requirements[] = array(
+          'title' => $title,
+          'severity' => REQUIREMENT_ERROR,
+          'description' => $t(
+            'According to composer.lock version :version of the :package-name PHP library is in use, while at least version :minimum is required. Please upgrade the library to a compatible version.',
+            array(
+              ':version' => $version,
+              ':minimum' => $minimum,
+              ':package-name' => $dependency
+            )
+          ),
+          'value' => $t('Incompatible version detected (@version)', array('@version' => $version)),
+        );
+      }
+      elseif ($stability != 'stable') {
+        $requirements[] = array(
+          'title' => $title,
+          'severity' => REQUIREMENT_WARNING,
+          'description' => $t(
+            'According to composer.lock an unstable (:stability) version of the :package-name PHP library is in use. It is advisable to upgrade to a stable release.',
+            array(
+              ':stability' => $stability,
+              ':package-name' => $dependency
+            )
+          ),
+          'value' => $t('Unstable version detected (@version)', array('@version' => $version)),
+        );
+      }
+      else {
+        $requirements[] = array(
+          'title' => $title,
+          'severity' => REQUIREMENT_OK,
+          'value' => $t('Compatible version detected (@version)', array('@version' => $version)),
+        );
+      }
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Install the cache schema.
+ */
+function culturefeed_update_7001() {
+  if (!db_table_exists('cache_culturefeed')) {
+    $schema = culturefeed_schema();
+    db_create_table('cache_culturefeed', $schema['cache_culturefeed']);
+  }
+}
+
+/**
+ * Add value to new variable for entry api location.
+ */
+function cuturefeed_update_7002() {
+  $api_location = variable_get('culturefeed_api_location', CULTUREFEED_API_LOCATION);
+  variable_set('culturefeed_entry_api_location', $api_location);
+}

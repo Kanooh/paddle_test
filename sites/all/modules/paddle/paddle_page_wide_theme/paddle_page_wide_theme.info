@@ -1,0 +1,6 @@
+name = Paddle Page Wide Theme
+description = Paddle Page Wide theme module
+core = 7.x
+package = Paddle
+dependencies[] = panels
+plugins[panels][styles] = plugins/styles

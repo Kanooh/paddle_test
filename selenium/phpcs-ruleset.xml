@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!-- PHP_CodeSniffer standard for Paddle Selenium tests. -->
+<!-- See http://pear.php.net/manual/en/package.php.php-codesniffer.annotated-ruleset.php -->
+<ruleset name="Paddle-Selenium">
+    <description>Drupal coding standard for Paddle Selenium tests</description>
+
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    
+    <rule ref="PSR2" />
+
+    <rule ref="Generic.Files.LineLength.TooLong">
+        <severity>0</severity>
+    </rule>
+
+</ruleset>

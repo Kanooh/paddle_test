@@ -1,0 +1,62 @@
+<?php
+/**
+ * @file
+ * Main functions and hook implementations of Paddle Menu Display Test.
+ */
+
+/**
+ * Implements hook_paddle_menu_display_block_display_alter().
+ */
+function paddle_menu_display_test_paddle_menu_display_block_display_alter(&$menu_display) {
+  // This will change the name of the menu displayed by the menu display
+  // according to the variable specific for this test module -
+  // paddle_menu_display_test_perform_drupal_alter.
+  if (variable_get('paddle_menu_display_test_perform_drupal_alter', '')) {
+    $menu_display->menu_name = variable_get('paddle_menu_display_test_perform_drupal_alter', '');
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_menu_display_test_menu() {
+  $items = array();
+
+  $items['some_path'] = array(
+    'title callback' => 'paddle_menu_display_test_title_callback',
+    'page callback' => 'paddle_menu_display_test_page_callback',
+    'access callback' => 'paddle_menu_display_test_access_callback',
+  );
+
+  return $items;
+}
+
+/**
+ * Title callback for a menu item.
+ *
+ * @return string
+ *   The title for the page.
+ */
+function paddle_menu_display_test_title_callback() {
+  return 'Page title';
+}
+
+/**
+ * Page callback for a menu item.
+ *
+ * @return string
+ *   The main content of the page.
+ */
+function paddle_menu_display_test_page_callback() {
+  return 'Main content';
+}
+
+/**
+ * Access callback for a menu item.
+ *
+ * @return bool
+ *   We return FALSE always so we can check the optimization options.
+ */
+function paddle_menu_display_test_access_callback() {
+  return FALSE;
+}

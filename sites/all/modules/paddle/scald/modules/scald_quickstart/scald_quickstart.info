@@ -1,0 +1,12 @@
+name=Scald Quickstart
+description=Help quickstarting a project using Scald
+core=7.x
+
+dependencies[] = scald
+dependencies[] = scald_image
+dependencies[] = scald_dnd_library
+
+; Information added by drush on 2015-05-21
+version = "7.x-1.6"
+project = "scald"
+datestamp = "1432199322"

@@ -1,0 +1,336 @@
+<?php
+/**
+ * @file
+ * Code for Paddle Incoming RSS module.
+ */
+
+include_once 'paddle_incoming_rss.features.inc';
+
+/**
+ * Implements hook_entity_info().
+ */
+function paddle_incoming_rss_entity_info() {
+  return array(
+    'paddle_incoming_rss_feed' => array(
+      'label' => t('RSS feed'),
+      'plural label' => t('RSS feeds'),
+      'entity class' => 'PaddleIncomingRSSFeed',
+      'controller class' => 'EntityAPIController',
+      'base table' => 'paddle_incoming_rss_feed',
+      'fieldable' => FALSE,
+      'entity keys' => array(
+        'id' => 'feed_id',
+        'label' => 'title',
+      ),
+      'bundles' => array(
+        'paddle_incoming_rss_feed' => array(
+          'label' => t('RSS feed'),
+        ),
+      ),
+      'access arguments' => array('administer paddle incoming rss'),
+      'uri callback' => FALSE,
+      'module' => 'paddle_incoming_rss',
+    ),
+    'paddle_incoming_rss_feed_item' => array(
+      'label' => t('RSS feed item'),
+      'plural label' => t('RSS feed items'),
+      'entity class' => 'PaddleIncomingRSSFeedItem',
+      'controller class' => 'PaddleIncomingRSSFeedItemEntityController',
+      'metadata controller class' => 'PaddleIncomingRSSFeedItemMetadataController',
+      'extra fields controller class' => 'PaddleIncomingRSSFeedItemExtraFieldsController',
+      'base table' => 'paddle_incoming_rss_feed_item',
+      'fieldable' => TRUE,
+      'entity keys' => array(
+        'id' => 'feed_item_id',
+        'label' => 'title',
+      ),
+      'bundles' => array(
+        'paddle_incoming_rss_feed_item' => array(
+          'label' => t('RSS feed item'),
+        ),
+      ),
+      'view modes' => array(
+        'title' => array(
+          'label' => t('Titles only'),
+          'custom settings' => TRUE,
+        ),
+        'magazine' => array(
+          'label' => t('Magazine mode'),
+          'custom settings' => TRUE,
+        ),
+      ),
+      'uri callback' => 'entity_class_uri',
+      'module' => 'paddle_incoming_rss',
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paddle_incoming_rss_permission() {
+  return array(
+    'administer paddle incoming rss' => array(
+      'title' => t('Administer Paddle Incoming RSS configuration'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_incoming_rss_menu() {
+  $items = array();
+
+  $items['admin/content/paddle_incoming_rss/%ctools_js/add'] = array(
+    'title' => 'Add RSS feed',
+    'page callback' => 'paddle_incoming_rss_feed_form_wrapper',
+    'page arguments' => array(3, NULL),
+    'access arguments' => array('administer paddle incoming rss'),
+    'file' => 'paddle_incoming_rss.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/content/paddle_incoming_rss/%ctools_js/delete/%paddle_incoming_rss_feed'] = array(
+    'title' => 'Delete Incoming RSS feed',
+    'page callback' => 'paddle_incoming_rss_feed_delete',
+    'page arguments' => array(3, 5),
+    'access arguments' => array('administer paddle incoming rss'),
+    'file' => 'paddle_incoming_rss.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_incoming_rss_theme($existing, $type, $theme, $path) {
+  return array(
+    'paddle_incoming_rss_feed_list' => array(
+      'variables' => array('feeds' => array()),
+      'path' => $path . '/theme',
+      'file' => 'theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_incoming_rss_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'ctools' && $plugin_type == 'content_types') {
+    return 'plugins/' . $plugin_type;
+  }
+}
+
+/**
+ * Implements hook_apps_app_info().
+ */
+function paddle_incoming_rss_apps_app_info() {
+  return array(
+    'configure form' => 'paddle_incoming_rss_configuration_form',
+  );
+}
+
+/**
+ * Paddlet configuration form.
+ */
+function paddle_incoming_rss_configuration_form($form, &$form_state) {
+  if (module_exists('paddle_contextual_toolbar')) {
+    $form['#after_build'][] = 'paddle_incoming_rss_configuration_form_add_contextual_actions';
+  }
+
+  $form['admin'] = array(
+    '#theme' => 'paddle_incoming_rss_feed_list',
+    '#feeds' => entity_load('paddle_incoming_rss_feed'),
+  );
+
+  return $form;
+}
+
+/**
+ * After-build callback for paddlet configuration form.
+ */
+function paddle_incoming_rss_configuration_form_add_contextual_actions($form, &$form_state) {
+  $actions = paddle_contextual_toolbar_actions();
+
+  // Add a save button to the contextual toolbar.
+  $actions[] = array(
+    'action' => l(t('Add RSS feed'), 'admin/content/paddle_incoming_rss/nojs/add', array(
+      'attributes' => array(
+        'class' => array('ui-icon', 'fa-plus', 'ctools-use-modal'),
+      ),
+    )),
+    'class' => array('add-incoming-rss'),
+    'weight' => 20,
+  );
+
+  paddle_contextual_toolbar_actions($actions);
+
+  return $form;
+}
+
+/**
+ * Incoming RSS feed wildcard loader.
+ *
+ * @param int $feed_id
+ *   Incoming RSS feed ID.
+ *
+ * @return object
+ *   Incoming RSS feed entity.
+ */
+function paddle_incoming_rss_feed_load($feed_id) {
+  return entity_load_single('paddle_incoming_rss_feed', $feed_id);
+}
+
+/**
+ * Implements hook_feeds_plugins().
+ */
+function paddle_incoming_rss_feeds_plugins() {
+  $plugins = array();
+
+  $plugins['PaddleIncomingRssFeedItemProcessor'] = array(
+    'name' => 'Incoming RSS Feed item processor',
+    'description' => 'Create and update feed items',
+    'handler' => array(
+      'parent' => 'FeedsEntityProcessor',
+      'class' => 'PaddleIncomingRssFeedItemProcessor',
+      'file' => 'feed_item_processor.inc',
+      'path' => drupal_get_path('module', 'paddle_incoming_rss') . '/plugins/feeds',
+    ),
+    'type' => 'paddle_incoming_rss_feed_item',
+  );
+
+  return $plugins;
+}
+
+/**
+ * Implements hook_feeds_parser_sources_alter().
+ */
+function paddle_incoming_rss_feeds_parser_sources_alter(&$sources, $content_type) {
+  $sources = array_merge($sources, array(
+    'media_thumbnail_url' => array(
+      'name' => t('Media Thumbnail (URL)'),
+    ),
+    'media_content_url' => array(
+      'name' => t('Media Content: URL'),
+    ),
+  ));
+}
+
+/**
+ * Implements hook_common_syndication_parser_item_alter().
+ */
+function paddle_incoming_rss_common_syndication_parser_item_alter(array &$item, SimpleXMLElement $item_xml, SimpleXMLElement $feed) {
+  // Provide defaults for the additional mapping values.
+  $item += array(
+    'media_thumbnail_url' => NULL,
+    'media_content_url' => NULL,
+  );
+
+  // Detect the type of feed.
+  // @see common_syndication_parser_parse()
+  $feed_type = _parser_common_syndication_feed_format_detect($feed);
+
+  // Extract the media info.
+  $media = $item_xml->children('http://search.yahoo.com/mrss/')
+    ? $item_xml->children('http://search.yahoo.com/mrss/')
+    : $item_xml->children('http://search.yahoo.com/mrss');
+
+  if ($feed_type == 'atom1.0') {
+    // Try to retrieve the thumbnail.
+    if (@count($media->group->thumbnail)) {
+      $attrs = $media->group->thumbnail[0]->attributes();
+
+      $item['media_thumbnail_url'] = !empty($attrs['url']) ? (string) $attrs['url'] : NULL;
+    }
+  }
+  elseif ($feed_type == "RSS2.0" || $feed_type == "RSS0.91" || $feed_type == "RSS0.92") {
+    // Check to see if player and thumbnail are inside of content
+    // not sure if that follows the mrss spec, but Vimeo does it.
+    // @see feeds_mediarss module.
+    if (isset($media->content->thumbnail)) {
+      $thumbnail = $media->content->thumbnail->attributes();
+    }
+    elseif (@count($media->thumbnail)) {
+      $thumbnail = $media->thumbnail[0]->attributes();
+    }
+    else {
+      $thumbnail = NULL;
+    }
+
+    // Get media:content elements from media:group.
+    // @see feeds_mediarss module.
+    if (isset($media->content->group)) {
+      $group = $media->content->group;
+    }
+    elseif (@count($media->group)) {
+      $group = $media->group;
+    }
+    else {
+      $group = $media;
+    }
+
+    $content_attrs = $group->attributes();
+
+    $item['media_thumbnail_url'] = !empty($thumbnail['url']) ? (string) $thumbnail['url'] : NULL;
+    $item['media_content_url'] = !empty($content_attrs['url']) ? (string) $content_attrs['url'] : NULL;
+  }
+
+  return $item;
+}
+
+/**
+ * Implements hook_preprocess_views_view_unformatted().
+ *
+ * This hook is called in the magazine view of Incoming RSS feeds.
+ */
+function paddle_incoming_rss_preprocess_views_view_unformatted(&$vars) {
+  $vars = _paddle_incoming_rss_format_row_classes($vars);
+}
+
+/**
+ * Implements hook_preprocess_views_view_list().
+ *
+ * This hook is called in the title view of Incoming RSS feeds.
+ */
+function paddle_incoming_rss_preprocess_views_view_list(&$vars) {
+  $vars = _paddle_incoming_rss_format_row_classes($vars);
+}
+
+/**
+ * This functions adds classes to the rows based on the feed source.
+ *
+ * @param array $vars
+ *   The variables retrieved from the view hooks.
+ *
+ * @return mixed
+ *   The variables which have the classes added to the rows.
+ */
+function _paddle_incoming_rss_format_row_classes($vars) {
+  $view = $vars['view'];
+  $rows = $vars['rows'];
+
+  if ($view->name == "paddle_incoming_rss_feed_items_list") {
+    foreach ($rows as $id => $row) {
+      $feed_nid = $view->result[$id]->feed_item_id;
+      $feed_item = entity_load_single('paddle_incoming_rss_feed_item', $feed_nid);
+      $source = $feed_item->source;
+
+      if (strpos($source, '.') !== FALSE) {
+        // Replace the dots in the domain by dashes because classes
+        // do not accept dots.
+        $source_class = str_replace('.', '-', $source);
+      }
+      else {
+        $source_class = $source;
+      }
+
+      $vars['classes'][$id][] = $source_class;
+      $vars['classes_array'][$id] .= " " . $source_class;
+    }
+  }
+  return $vars;
+}

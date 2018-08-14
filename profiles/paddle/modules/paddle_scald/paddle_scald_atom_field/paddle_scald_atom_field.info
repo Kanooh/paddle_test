@@ -1,0 +1,6 @@
+name = Paddle Scald Atom Field
+description = Provides a field type usable on entities to select atoms.
+package = Paddle
+core = 7.x
+
+dependencies[] = paddle_scald

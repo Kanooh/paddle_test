@@ -1,0 +1,6 @@
+name = RESTful web services support for Internationalization (i18n)
+description = Support for adding/specifying a translation source of a node.
+core = "7.x"
+
+dependencies[] = restws
+dependencies[] = i18n_node

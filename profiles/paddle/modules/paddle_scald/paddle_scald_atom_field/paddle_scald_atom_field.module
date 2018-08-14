@@ -1,0 +1,201 @@
+<?php
+
+/**
+ * @file
+ * Paddle Scald Atom Field provides a field type to select atoms on entities.
+ */
+
+/**
+ * Implements hook_field_info().
+ *
+ * Defines the paddle_scald_atom field type.
+ */
+function paddle_scald_atom_field_field_info() {
+  return array(
+    'paddle_scald_atom' => array(
+      'label' => t('Paddle Scald Atom'),
+      'description' => t('Atom selection field.'),
+      'default_widget' => 'paddle_scald_atom_default',
+      'default_formatter' => 'paddle_scald_atom_default',
+      'property_type' => 'paddle_scald_atom',
+      'property_callbacks' => array('paddle_scald_atom_entity_metadata_property_callback'),
+    ),
+  );
+}
+
+/**
+ * Additional property callback for the atom field definition.
+ */
+function paddle_scald_atom_entity_metadata_property_callback(&$info, $entity_type, $field, $instance, $field_type) {
+  $property = &$info[$entity_type]['bundles'][$instance['bundle']]['properties'][$field['field_name']];
+
+  $property['getter callback'] = 'entity_metadata_field_verbatim_get';
+  $property['setter callback'] = 'entity_metadata_field_verbatim_set';
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function paddle_scald_atom_field_field_widget_info() {
+  $info = array(
+    'paddle_scald_atom_default' => array(
+      'label' => t('Default atom picker'),
+      'description' => t('Uses the default "choose an atom" button.'),
+      'field types' => array('paddle_scald_atom'),
+      'settings' => array(
+        'allowed_types' => array(),
+      ),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+        'default value' => FIELD_BEHAVIOR_NONE,
+      ),
+    ),
+  );
+
+  if (module_exists('paddle_scald_image')) {
+    $info['paddle_scald_atom_image'] = array(
+      'label' => t('Default atom picker with image style'),
+      'description' => t('Adds a drop-down with image styles for an image field.'),
+      'field types' => array('paddle_scald_atom'),
+      'settings' => array(
+        'allowed_types' => array('image'),
+      ),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+        'default value' => FIELD_BEHAVIOR_NONE,
+      ),
+    );
+  }
+
+  return $info;
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function paddle_scald_atom_field_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $item = isset($items[$delta]) ? $items[$delta] : array();
+  $sid = isset($item['sid']) ? $item['sid'] : 0;
+
+  switch ($instance['widget']['type']) {
+    case 'paddle_scald_atom_default':
+      $allowed_types = isset($instance['widget']['settings']['allowed_types']) ? $instance['widget']['settings']['allowed_types'] : array();
+      $allowed_types = array_values(array_filter($allowed_types));
+
+      $widget = $element + array(
+        '#type' => 'paddle_scald_atom',
+        '#allowed_types' => $allowed_types,
+        '#default_value' => $sid,
+      );
+
+      // If there's exactly one allowed type, change the button text to
+      // include the type's human readable name.
+      if (count($allowed_types) == 1) {
+        $type = scald_type_load($allowed_types[0]);
+        if (is_object($type)) {
+          $type_name = scald_type_property_translate($type, 'title');
+        }
+        else {
+          $type_name = t('atom');
+        }
+
+        $widget['#button_text'] = t('Choose @type...', array('@type' => $type_name));
+      }
+
+      $element['sid'] = $widget;
+      break;
+
+    case 'paddle_scald_atom_image':
+      $element += array(
+        '#type' => 'paddle_scald_image_atom',
+        '#default_value' => $item,
+      );
+
+      break;
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_widget_settings_form().
+ */
+function paddle_scald_atom_field_field_widget_settings_form($field, $instance) {
+  $form = array();
+  $widget = $instance['widget'];
+  $settings = $widget['settings'];
+
+  switch ($widget['type']) {
+    case 'paddle_scald_atom_default':
+      // Get all possible atom types and put them in a keyed array with their
+      // names and human-readable titles.
+      $types = scald_types();
+      $type_options = array();
+      foreach ($types as $type_name => $type) {
+        $type_options[$type_name] = $type->title;
+      }
+
+      $form['allowed_types'] = array(
+        '#type' => 'checkboxes',
+        '#title' => t('Allowed atom types'),
+        '#suffix' => t('Leave all options disabled to enable all atom types.'),
+        '#options' => $type_options,
+        '#default_value' => $settings['allowed_types'],
+      );
+      break;
+
+    case 'paddle_scald_atom_image':
+      // There are no allowed types, only image is allowed.
+      break;
+  }
+
+  return $form;
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function paddle_scald_atom_field_field_is_empty($item, $field) {
+  return empty($item['sid']);
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function paddle_scald_atom_field_field_formatter_info() {
+  return array(
+    'paddle_scald_atom_default' => array(
+      'label' => t('Rendered atom'),
+      'field types' => array('paddle_scald_atom'),
+    ),
+    'paddle_scald_atom_path' => array(
+      'label' => t('Path to atom'),
+      'field types' => array('paddle_scald_atom'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function paddle_scald_atom_field_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  switch ($display['type']) {
+    case 'paddle_scald_atom_default':
+      foreach ($items as $count => $item) {
+        $element[$count]['#markup'] = scald_render($item['sid'], 'full');
+      }
+      break;
+    case 'paddle_scald_atom_path':
+      foreach ($items as $count => $item) {
+        $path = '';
+        $atom = scald_atom_load($item['sid']);
+        if ($atom && $atom->provider != 'paddle_scald_youtube') {
+          $path = file_create_url($atom->file_source);
+        }
+        $element[$count]['#markup'] = $path;
+      }
+      break;
+  }
+  return $element;
+}

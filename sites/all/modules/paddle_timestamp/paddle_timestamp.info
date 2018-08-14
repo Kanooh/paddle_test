@@ -1,0 +1,15 @@
+name = Timestamp
+description = Place a last modified date on your page.
+core = 7.x
+package = Paddle
+
+dependencies[] = date
+dependencies[] = features
+dependencies[] = list
+dependencies[] = paddle_apps
+features[features_api][] = api:2
+features[field_base][] = field_paddle_overwrite_timestamp
+features[field_base][] = field_paddle_timestamp
+apps[logo] = apps/logo.png
+apps[paddle][level] = extra
+apps[paddle][vendor] = Paddle

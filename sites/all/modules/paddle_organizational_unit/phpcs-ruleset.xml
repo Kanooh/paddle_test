@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- PHP_CodeSniffer standard for Paddle. -->
+<!-- See http://pear.php.net/manual/en/package.php.php-codesniffer.annotated-ruleset.php -->
+<ruleset name="PaddleOrganizationalUnit">
+    <description>Paddle Organizational Unit coding standard</description>
+
+    <rule ref="Drupal">
+
+    </rule>
+
+    <!-- Features exports don't strictly follow Drupal line length conventions. -->
+    <rule ref="Drupal.Files.LineLength.TooLong">
+        <exclude-pattern>*/*.features.*.inc</exclude-pattern>
+    </rule>
+    <rule ref="Drupal.WhiteSpace.ScopeIndent">
+        <exclude-pattern>*/paddle_organizational_unit.panelizer.inc</exclude-pattern>
+    </rule>
+
+
+</ruleset>

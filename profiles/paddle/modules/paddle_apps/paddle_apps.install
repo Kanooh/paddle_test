@@ -1,0 +1,66 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for Paddle Apps.
+ */
+
+/**
+ * Enable newly required modules.
+ */
+function paddle_apps_update_7000() {
+  module_enable(
+    array(
+      'ctools',
+      'entity',
+      'entitycache',
+      'facetapi',
+      'search_api',
+      'search_api_db',
+      'search_api_facetapi',
+      'xautoload',
+    )
+  );
+}
+
+/**
+ * Enable the Paddle Apps search index.
+ */
+function paddle_apps_update_7001() {
+  // Clear entity info caches so all entity types get discovered, including the
+  // new entity type: 'paddle_app'. Which gets indexed in the 'paddle_apps'
+  // search index.
+  entity_property_info_cache_clear();
+  entity_info_cache_clear();
+  drupal_static_reset('search_api_get_item_type_info');
+
+  // Act as if this module was just enabled.
+  // Creates the search server, index and facets configuration entities.
+  entity_modules_enabled(array('paddle_apps'));
+
+  // Populate the index.
+  search_api_index_items(search_api_index_load('paddle_apps'));
+}
+
+/**
+ * Disable the update module.
+ */
+function paddle_apps_update_7002() {
+  module_disable(array('update'));
+}
+
+/**
+ * Disable the core cache if AuthCache has been enabled.
+ */
+function paddle_apps_update_7003() {
+  if (module_exists('authcache')) {
+    variable_set('cache', 0);
+  }
+}
+
+/**
+ * Disable the core cache if AuthCache has been enabled.
+ */
+function paddle_apps_update_7004() {
+  paddle_apps_update_7003();
+}

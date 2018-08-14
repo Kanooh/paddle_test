@@ -1,0 +1,129 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle Rich Footer.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paddle_rich_footer_schema() {
+  $schema = array();
+
+  $schema['paddle_rich_footer'] = array(
+    'description' => 'Stores rich footers.',
+    'fields' => array(
+      'prfid' => array(
+        'description' => 'The primary identifier for a rich footer.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'The title of the opening hours set.',
+      ),
+    ),
+    'primary key' => array('prfid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function paddle_rich_footer_install() {
+  paddle_rich_footer_setup();
+
+  if (empty(variable_get('paddle_rich_footer_id', NULL))) {
+    $rich_footer = entity_create('paddle_rich_footer', array('type' => 'paddle_rich_footer'));
+
+    ctools_include('export');
+    $rich_footer->panelizer['page_manager'] = ctools_export_crud_load('panelizer_defaults', 'paddle_rich_footer:paddle_rich_footer:paddle_4_col_full');
+    // Make sure a new Panels display is created. This prevents the user from
+    // accidentally overwriting the default presets.
+    // @see PanelizerEntityDefault::hook_entity_insert()
+    $rich_footer->panelizer['page_manager']->name = NULL;
+    $rich_footer->title = 'Paddle rich footer';
+
+    // Save it to the database.
+    $rich_footer->save();
+    variable_set('paddle_rich_footer_id', $rich_footer->identifier());
+  }
+}
+
+/**
+ * Implements hook_enable().
+ *
+ * Runs at the end of the enabling process.
+ * - Show language switcher block on admin overview page.
+ * - Revert features.
+ * - Allow editors and chief editors to edit Mega Dropdown panels content.
+ * - Show the admin menu on all our admin pages.
+ */
+function paddle_rich_footer_enable() {
+  paddle_rich_footer_setup();
+
+  // Set permissions.
+  $permissions = array(
+    'administer panelizer paddle_rich_footer paddle_rich_footer content',
+  );
+  foreach (array('Chief Editor', 'Editor') as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    user_role_grant_permissions($role->rid, $permissions);
+  }
+
+  // Add the Rich Footer entity edit page to the management menu display path
+  // root items.
+  if ('paddle' == variable_get('install_profile')) {
+    $path_roots = array(
+      array(
+        'path' => 'admin/paddle-rich-footer/%',
+        'root_item' => 'admin',
+      ),
+    );
+    module_load_include('install', 'paddle');
+    _paddle_add_menu_display_path_roots('management_level_2', $path_roots);
+  }
+}
+
+/**
+ * Make sure that the paddlet is installed/enabled correctly.
+ */
+function paddle_rich_footer_setup() {
+  // This requires drupal_static_reset() and
+  // files[] = plugins/entity/PanelizerEntityPaddleRichFooter.class.php
+  // to be explicitly in paddle_rich_footer.install for the registry to find
+  // the Rich Footer ctools entity plugin class even though this module isn't
+  // fully enabled yet. And thus also find the related panelizer permissions,
+  // so we can enable one of them.
+  // Already tried to be more specific, but it didn't suffice;
+  // drupal_static_reset('checkPermissions');
+  // drupal_static_reset('user_access');
+  // Maybe https://drupal.org/node/1265168 will fix this at the core of the
+  // problem.
+  module_load_all();
+  entity_info_cache_clear();
+
+  // We need to reset the ctools plugin caches, to be sure all required
+  // data of the rich footer entity will be loaded in the panelizer entity
+  // plugin.
+  drupal_static_reset();
+
+  features_include_defaults(NULL, TRUE);
+  // Revert the features of this module to their original state, just in case
+  // they were altered meanwhile.
+  features_revert_module('paddle_rich_footer');
+
+  // Specifically revert the panelizer static cache as it seems it's not
+  // reverted with drupal_static_reset() or it is rebuilt meanwhile. In any case
+  // the Simpletests need this.
+  drupal_static_reset('panelizer_entity_plugin_get_handler');
+
+  // Clear the CTools plugin cache so our new Panelizer permission gets known.
+  ctools_modules_enabled(array('paddle_rich_footer'));
+}

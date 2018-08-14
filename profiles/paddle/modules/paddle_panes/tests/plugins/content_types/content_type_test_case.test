@@ -1,0 +1,279 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddlePanesContentTypeTestCase.
+ */
+
+/**
+ * Base class for testing content type plugins.
+ */
+class PaddlePanesContentTypeTestCase extends DrupalWebTestCase {
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = 'testing';
+
+  /**
+   * The content type plugin definition.
+   *
+   * @var array
+   */
+  public $contentType;
+
+  /**
+   * The subtype.
+   *
+   * @var array
+   */
+  public $subtype;
+
+  /**
+   * The pane that serves as a host for our plugin.
+   *
+   * @var object
+   */
+  public $pane;
+
+  /**
+   * The display that serves as a host for our plugin's pane.
+   *
+   * @var object
+   */
+  public $display;
+
+  /**
+   * The CTools context that will be passed to the plugin.
+   *
+   * @var ctools_context
+   */
+  public $context;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp($modules = array()) {
+    $modules[] = 'paddle_panes';
+    parent::setUp($modules);
+
+    ctools_include('content');
+    ctools_include('plugins');
+  }
+
+  /**
+   * Check that the form does not throw validation errors with the given input.
+   *
+   * @param array $form
+   *   The form to be tested.
+   * @param array $form_state
+   *   The form state to be tested.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertNoFormValidationErrors(array $form, array $form_state, $message = '', $group = 'Other') {
+    // Provide a default message.
+    $message = $message ?: 'There were no form validation errors.';
+
+    return $this->assertFalse($this->getValidationErrors($form, $form_state), $message, $group);
+  }
+
+  /**
+   * Check that the form throws certain validation errors with the given input.
+   *
+   * @param array $form
+   *   The form to be tested.
+   * @param array $form_state
+   *   The form state to be tested.
+   * @param array $errors
+   *   An associative array of expected error messages, keyed by element name.
+   * @param string $message
+   *   The message to display along with the assertion.
+   * @param string $group
+   *   The type of assertion - examples are "Browser", "PHP".
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  public function assertFormValidationErrors(array $form, array $form_state, array $errors, $message = '', $group = 'Other') {
+    // Provide a default message.
+    $message = $message ?: 'All expected form validation errors were present.';
+
+    $form_errors = $this->getValidationErrors($form, $form_state);
+
+    // Loop over the expected error messages and check that each of them appear.
+    $success = TRUE;
+    foreach ($errors as $key => $error) {
+      $success &= $this->assertEqual($form_errors[$key], $error, format_string('The %error form validation error is shown for the form element %element.', array(
+        '%error' => $error,
+        '%element' => $key,
+      )));
+      unset($form_errors[$key]);
+    }
+
+    // Check that there are no validation errors in addition to those we
+    // expected.
+    $success &= $this->assertFalse($form_errors, 'There are no unexpected form validation errors.');
+
+    return $this->assertTrue($success, $message, $group);
+  }
+
+  /**
+   * Run all validate handlers on the given form, and return validation errors.
+   *
+   * @param array $form
+   *   The form to be validated.
+   * @param array $form_state
+   *   The form state to be validated.
+   *
+   * @return array
+   *   An array of form validation errors, keyed on form element.
+   */
+  protected function getValidationErrors($form, $form_state) {
+    // Start from a clean slate.
+    form_clear_error();
+    drupal_static_reset('drupal_validate_form');
+
+    // Validate the form and return the validation errors.
+    drupal_validate_form($form['#form_id'], $form, $form_state);
+
+    return form_get_errors();
+  }
+
+  /**
+   * Returns the plugin's rendered content using the given configuration.
+   *
+   * The context will be taken from $this->context, the plugin name and subtype
+   * from $this->pane.
+   *
+   * @param array $configuration
+   *   An array containing configuration options for the content type plugin.
+   *
+   * @return array
+   *   The content as rendered by the plugin. This content should be an array
+   *   with the following possible keys:
+   *   - title: The safe to render title of the content.
+   *   - content: The safe to render HTML content.
+   *   - links: An array of links associated with the content suitable for
+   *     theme('links').
+   *   - more: An optional 'more' link (destination only)
+   *   - admin_links: Administrative links associated with the content, suitable
+   *     for theme('links').
+   *   - feeds: An array of feed icons or links associated with the content.
+   *     Each member of the array is rendered HTML.
+   *   - type: The content type.
+   *   - subtype: The content subtype. These two may be used together as
+   *     module-delta for block style rendering.
+   *   - elements: The HTML content as a SimpleXMLElement object.
+   */
+  public function render($configuration) {
+    $output = ctools_content_render($this->pane->type, $this->pane->subtype, $configuration, array(), array(), $this->context);
+
+    // CTools helpfully renders the output as HTML. Let's convert it to XML so
+    // we can probe it with XPath. This is based on DrupalWebTestCase::parse().
+    $dom_html = new DOMDocument();
+    @$dom_html->loadHTML('<html><body>' . $output->content . '</body></html>');
+    if ($dom_html) {
+      $output->elements = simplexml_import_dom($dom_html);
+    }
+
+    return $output;
+  }
+
+  /**
+   * Returns a new vocabulary with random properties.
+   *
+   * Taken from TaxonomyWebTestCase.
+   * @see TaxonomyWebTestCase::createVocabulary()
+   *
+   * @return object
+   *   A taxonomy vocabulary object with random properties.
+   */
+  public function createVocabulary() {
+    // Create a vocabulary.
+    $vocabulary = new stdClass();
+    $vocabulary->name = $this->randomName();
+    $vocabulary->description = $this->randomName();
+    $vocabulary->machine_name = drupal_strtolower($this->randomName());
+    $vocabulary->help = '';
+    $vocabulary->nodes = array('article' => 'article');
+    $vocabulary->weight = mt_rand(0, 10);
+    taxonomy_vocabulary_save($vocabulary);
+    return $vocabulary;
+  }
+
+  /**
+   * Returns a new term with random properties in vocabulary $vid.
+   *
+   * Taken from TaxonomyWebTestCase.
+   * @see TaxonomyWebTestCase::createTerm()
+   *
+   * @param int $vid
+   *   The vocabulary id of the vocabulary the new term will belong to.
+   *
+   * @return object
+   *   A taxonomy term object with random properties.
+   */
+  public function createTerm($vid) {
+    $term = new stdClass();
+    $term->name = $this->randomName();
+    $term->description = $this->randomName();
+    // Use the first available text format.
+    $term->format = db_query_range('SELECT format FROM {filter_format}', 0, 1)->fetchField();
+    $term->vid = $vid;
+    taxonomy_term_save($term);
+    return $term;
+  }
+
+  /**
+   * Returns a mock form state for a Pane in a Panels display.
+   *
+   * This is intended to be passed to the edit form of a CTools content type so
+   * it has all expected data for testing.
+   *
+   * @param array $form_state
+   *   Optional form state values. Missing values will be filled in with
+   *   defaults.
+   */
+  public function getMockPaneFormState(array $form_state = array()) {
+    return $form_state + array(
+      'display' => $this->display,
+      'contexts' => NULL,
+      'pane' => $this->pane,
+      'cache_key' => NULL,
+      'display cache' => NULL,
+      'ajax' => FALSE,
+      'modal' => FALSE,
+      'modal return' => TRUE,
+      'commands' => array(),
+    );
+  }
+
+  /**
+   * Generates a random string of ASCII characters of codes 32 to 126.
+   *
+   * Like DrupalWebTestCase::randomString(), but inserts some special characters
+   * to help in discovering potential security issues and malformed HTML.
+   *
+   * @param int $length
+   *   Length of random string to generate.
+   *
+   * @return string
+   *   Randomly generated string.
+   *
+   * @see DrupalWebTestCase::randomString()
+   */
+  public static function randomString($length = 12) {
+    $str = ' ><"\'&';
+    for ($i = 0; $i < $length - 5; $i++) {
+      $str .= chr(mt_rand(32, 126));
+    }
+    return $str;
+  }
+
+}

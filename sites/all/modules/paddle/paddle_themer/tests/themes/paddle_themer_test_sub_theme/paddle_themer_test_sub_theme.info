@@ -1,0 +1,10 @@
+name = Paddle Themer Test Sub Theme
+description = Paddle Themer Sub Theme for Testing Purposes
+core = 7.x
+base theme = paddle_themer_test_theme
+hidden = TRUE
+
+; Information added by drush on 2016-02-15
+version = "7.x-1.x-dev"
+project = "paddle_themer"
+datestamp = "1455518250"

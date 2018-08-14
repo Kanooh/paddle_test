@@ -1,0 +1,14 @@
+.panel-pane.pane-maps-search-form #paddle-maps-form .form-item-search input {
+  box-sizing: border-box;
+  padding: 10px 11px;
+  width: 100%;
+  height: auto;
+}
+
+.view-display-id-block_maps_text .views-row {
+  padding: 15px;
+}
+
+.pane-map-vocabulary-term-filter ul.facetapi-facetapi-extended-checkbox-links li {
+  list-style: none;
+}

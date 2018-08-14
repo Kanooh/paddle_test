@@ -1,0 +1,180 @@
+/**
+* @file
+* Header specific layout.
+*
+*/
+@import "../base/variables";
+
+// Layout changes when a customized header has been chosen.
+@media (min-width: $screen-sm-min) {
+  body.customized-header {
+    #fake-menu-bg {
+      display: none;
+    }
+
+    .header-wrapper {
+      @include flexbox();
+      @include flex-direction(column);
+      height: 100%;
+    }
+
+    .header-row {
+      @include align-self(flex-start);
+      margin-top: auto;
+      margin-bottom: 15px;
+      @include flexbox();
+    }
+
+    .navigation {
+      height: 44px;
+      @include align-self(flex-start);
+      margin-top: auto;
+    }
+
+    #menu-display-first-level {
+      width: 100%;
+    }
+
+    #logo img {
+      margin-top: 0;
+    }
+  }
+
+  body.smaller-header {
+    .vo-global-header {
+      display: none;
+    }
+  }
+}
+
+@media (min-width: $screen-md-min) {
+  #block-search-api-page-search {
+    float: right;
+    width: 75%;
+  }
+  #block-paddle-menu-display-top-menu .content {
+    max-width: 92%;
+  }
+
+  body.customized-header {
+    header .header-background-canvas {
+      &.show-search:not(.pop-up-search) {
+        height: 200px;
+      }
+      height: 128px;
+    }
+
+    .content-wrapper {
+      padding-top: 128px;
+    }
+
+    &.sticky-header {
+      header {
+        position: fixed;
+        width: 100%;
+        z-index: 9000;
+      }
+
+      #logo img {
+        max-height: 120px;
+      }
+
+      header.smaller-header {
+        .logo, .navigation {
+          bottom: 0px;
+        }
+        #block-paddle-menu-display-top-menu, #block-search-api-page-search, #block-locale-language, .search-pop-up {
+          display: none;
+        }
+        .block-locale {
+          padding-top: 2px;
+        }
+        .header-background-canvas {
+          height: 50px;
+          .page-wide-container {
+            .row {
+              .logo {
+                a {
+                  img {
+                    max-height: 38px !important;
+                    margin-bottom: 2px;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) {
+  body.customized-header {
+    #block-search-api-page-search {
+      width: 100%;
+      padding-top: 5px;
+    }
+
+    .header-background-canvas, .logo-wrapper {
+      height: 100%;
+    }
+
+    #block-paddle-menu-display-top-menu {
+      padding-bottom: 10px;
+    }
+
+    .header-wrapper {
+      width: 100%;
+      display: block;
+    }
+
+    .header-row {
+      margin-bottom: 0;
+      display: block;
+    }
+
+    .logo {
+      padding-top: 10px;
+      position: relative;
+      padding-bottom: 5px;
+    }
+
+    .navigation {
+      max-width: calc(100% - 30px);
+      position: absolute;
+      bottom: 10px;
+    }
+  }
+}
+
+// Keep the mobile header display as it is on all themes.
+@media (max-width: $screen-xs-max) {
+  body.customized-header {
+    .service-links-row {
+      float: right;
+    }
+
+    .logo, .navigation {
+      left: initial;
+      transform: initial;
+    }
+
+    .navigation {
+      #main-nav {
+        background-color: transparent;
+      }
+    }
+  }
+}
+
+// Search.
+@media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) {
+  #search-box-holder, .search-pop-up {
+    padding-bottom: 25px;
+  }
+
+  #search-box-holder {
+    padding-top: 0;
+  }
+}

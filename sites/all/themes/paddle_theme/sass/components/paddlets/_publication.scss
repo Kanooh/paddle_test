@@ -1,0 +1,41 @@
+/**
+ * @file
+ * Publication Paddlet styling.
+ */
+
+.pane-related-documents {
+  .pane-section-body {
+    padding: 0;
+  }
+
+  ul {
+    list-style-type: none;
+  }
+}
+
+.pane-related-links {
+  .pane-section-body {
+    padding: 0;
+  }
+
+  ul {
+    list-style-type: none;
+  }
+}
+
+.pane-related-info {
+  .publication-info-label {
+    font-weight: bold;
+  }
+}
+
+#facetapi-facet-search-apinode-index-block-paddle-publication-authors-filter,
+#facetapi-facet-search-apinode-index-block-paddle-publication-publication-year-filter {
+  list-style-type: none;
+
+  .leaf {
+    a {
+      text-decoration: none;
+    }
+  }
+}

@@ -1,0 +1,787 @@
+<?php
+
+/**
+ * @file
+ * Code for the Paddle Holiday Participation app.
+ */
+
+include_once 'paddle_holiday_participation.features.inc';
+
+/**
+ * Implements hook_paddle_content_region_content_type_info().
+ */
+function paddle_holiday_participation_paddle_content_region_content_type_info() {
+  return 'offer';
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_holiday_participation_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'offer') {
+      return array(
+        'field_hp_category',
+        'field_hp_facebook',
+        'field_hp_twitter',
+        'field_hp_website',
+        'field_hp_youtube',
+        'field_hp_svp_contract_id',
+        'field_hp_facilities',
+        'field_hp_labels',
+        'field_hp_surroundings_desc',
+        'field_hp_residence_desc',
+        'field_hp_on_the_spot_desc',
+        'field_hp_private_transport_desc',
+        'field_hp_public_transport_desc',
+        'field_hp_validity_period',
+        'field_hp_validity_period_desc',
+        'field_hp_opening_hours',
+        'field_hp_main_image_url',
+        'field_hp_address',
+        'field_hp_geofield',
+        'field_hp_province',
+        'field_hp_resv_period_individual',
+        'field_hp_resv_period_group',
+        'field_hp_resv_comments',
+        'field_hp_contract_type',
+        'field_hp_base_contract_id',
+        'field_hp_room_and_board',
+        'field_hp_formula_oh',
+        'field_hp_max_capacity',
+        'field_hp_min_capacity',
+        'field_hp_contract_start_year',
+        'field_hp_contract_end_year',
+        'field_hp_places',
+      );
+    }
+  }
+
+  return array();
+}
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields_groups().
+ */
+function paddle_holiday_participation_paddle_content_manager_additional_fields_groups() {
+  $menu_object = menu_get_object();
+
+  if ($menu_object->type == 'offer') {
+    return array(
+      'offer_fields' => array(
+        'label' => t('Offer fields'),
+        'weight' => 1,
+        'fields' => array(
+          'field_hp_category',
+          'field_hp_facebook',
+          'field_hp_twitter',
+          'field_hp_website',
+          'field_hp_youtube',
+          'field_hp_svp_contract_id',
+          'field_hp_facilities',
+          'field_hp_labels',
+          'field_hp_main_image_url',
+          'field_hp_surroundings_desc',
+          'field_hp_residence_desc',
+          'field_hp_on_the_spot_desc',
+          'field_hp_private_transport_desc',
+          'field_hp_public_transport_desc',
+          'field_hp_validity_period',
+          'field_hp_validity_period_desc',
+          'field_hp_opening_hours',
+          'field_hp_address',
+          'field_hp_geofield',
+          'field_hp_province',
+          'field_hp_resv_period_individual',
+          'field_hp_resv_period_group',
+          'field_hp_resv_comments',
+          'field_hp_contract_type',
+          'field_hp_images',
+          'field_hp_base_contract_id',
+          'field_hp_room_and_board',
+          'field_hp_formula_oh',
+          'field_hp_max_capacity',
+          'field_hp_min_capacity',
+          'field_hp_contract_start_year',
+          'field_hp_contract_end_year',
+        ),
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function paddle_holiday_participation_cron() {
+  $importers = array(
+    'padvak_holiday_accomodations',
+    'padvak_group_accomodations',
+    'padvak_day_trips',
+    'padvak_organised_holidays',
+  );
+
+  foreach ($importers as $importer) {
+    paddle_holiday_participation_import_feed($importer);
+  }
+}
+
+/**
+ * Imports a feed.
+ *
+ * @param string $importer
+ *   The machine name of the feeds importer.
+ *
+ * @return bool
+ *   Return FALSE when the import did not succeed.
+ */
+function paddle_holiday_participation_import_feed($importer) {
+  $src = feeds_source($importer);
+
+  if (empty($src->getConfig()['FeedsHTTPFetcher']['source'])) {
+    $src->addConfig(array('FeedsHTTPFetcher' => array('source' => $src->importer()->fetcher->config['auto_scheme'])));
+    $src->save();
+  }
+
+  try {
+    $src->import();
+  } catch (Exception $e) {
+    return FALSE;
+  }
+  // Prevent notices from being thrown.
+  $src->state(FEEDS_FETCH);
+  $src->state(FEEDS_PROCESS);
+  $src->state(FEEDS_PROCESS_CLEAR);
+}
+
+/**
+ * Implements hook_feeds_presave().
+ */
+function paddle_holiday_participation_feeds_presave(FeedsSource $source, $entity, $item, $entity_id) {
+  if (in_array($source->id, array(
+    'padvak_day_trips',
+    'padvak_organised_holidays',
+    'padvak_group_accomodations',
+    'padvak_holiday_accomodations',
+  ))) {
+    $wrapper = entity_metadata_wrapper('node', $entity);
+
+    // If item is deleted, then do not import it.
+    if ($item['hp_is_deleted'] == TRUE) {
+      $entity->feeds_item->skip = TRUE;
+    }
+
+    switch ($source->id) {
+      case 'padvak_day_trips':
+        $wrapper->field_hp_category->set('day trips');
+        break;
+
+      case 'padvak_organised_holidays':
+        $wrapper->field_hp_category->set('organised holidays');
+        break;
+
+      case 'padvak_group_accomodations':
+        $wrapper->field_hp_category->set('group accommodations');
+        break;
+
+      case 'padvak_holiday_accomodations':
+        $wrapper->field_hp_category->set('holiday accommodations');
+        break;
+    }
+
+    // Set the Province for the address field.
+    if (!empty($item['hp_province'])) {
+      switch ($item['hp_province']) {
+        case 'Antwerp':
+        case 'Antwerpen':
+          $wrapper->field_hp_province->set('antwerpen');
+          break;
+
+        case 'Limburg':
+          $wrapper->field_hp_province->set('limburg');
+          break;
+
+        case 'WestFlanders':
+        case 'West-Vlaanderen':
+          $wrapper->field_hp_province->set('west-vlaanderen');
+          break;
+
+        case 'EastFlanders':
+        case 'Oost-Vlaanderen':
+          $wrapper->field_hp_province->set('oost-vlaanderen');
+          break;
+
+        case 'FlemishBrabant':
+        case 'Vlaams-Brabant':
+          $wrapper->field_hp_province->set('vlaams-brabant');
+          break;
+
+        case 'WalloonBrabant':
+        case 'Waals-Brabant':
+          $wrapper->field_hp_province->set('waals-brabant');
+          break;
+
+        case 'Brussels':
+        case 'Brussel':
+          $wrapper->field_hp_province->set('brussel');
+          break;
+
+        case 'Liège':
+        case 'Luik':
+          $wrapper->field_hp_province->set('luik');
+          break;
+
+        case 'Namur':
+        case 'Namen':
+          $wrapper->field_hp_province->set('Namen');
+          break;
+
+        case 'Hainaut':
+        case 'Henegouwen':
+          $wrapper->field_hp_province->set('henegouwen');
+          break;
+
+        case 'Luxembourg':
+        case 'Luxemburg':
+          $wrapper->field_hp_province->set('luxemburg');
+          break;
+
+        default:
+          $wrapper->field_hp_province->set('_none');
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_feeds_after_save().
+ */
+function paddle_holiday_participation_feeds_after_save(FeedsSource $source, $entity, $item, $entity_id) {
+  if ($entity->type == 'offer') {
+    workbench_moderation_moderate($entity, 'published');
+  }
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function paddle_holiday_participation_field_formatter_info() {
+  return array(
+    'paddle_holiday_participation_featured_image' => array(
+      'label' => t('Paddle holiday participation featured image'),
+      'field types' => array('paddle_scald_atom'),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function paddle_holiday_participation_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  foreach ($items as $count => $item) {
+    $atom = scald_atom_load($item['sid']);
+    $attributes = array('class' => array('paddle_holiday_participation_featured_image'));
+
+    if ($display['type'] == 'paddle_holiday_participation_featured_image') {
+      // Determine the image style, if any.
+      $image_style = !empty($item['style']) ? $item['style'] : 'square';
+      // Render the image markup.
+      $element[$count]['#markup'] = theme('paddle_scald_render_atom', array(
+        'atom' => $atom,
+        'image_style' => $image_style,
+        'attributes' => $attributes,
+      ));
+    }
+  }
+
+  return $element;
+}
+
+/**
+ * Creates the geofield field instance for a content type.
+ *
+ * @param string $type
+ *   The bundle.
+ */
+function paddle_holiday_participation_geo_field_instance($type) {
+  if (!field_read_instance('node', 'field_paddle_geofield', $type)) {
+    $field_instances = array(
+      'bundle' => 'offer',
+      'deleted' => 0,
+      'description' => '',
+      'display' => array(
+        'default' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 12,
+        ),
+        'diff_standard' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'listing_title' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_full' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'node_content_pane_summary' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'settings' => array(),
+          'type' => 'hidden',
+          'weight' => 0,
+        ),
+      ),
+      'entity_type' => 'node',
+      'field_name' => 'field_paddle_geofield',
+      'label' => 'Geofield',
+      'required' => 0,
+      'settings' => array(
+        'field_instance_sync' => 0,
+        'user_register_form' => FALSE,
+      ),
+      'widget' => array(
+        'active' => 1,
+        'module' => 'geocoder',
+        'settings' => array(
+          'delta_handling' => 'default',
+          'geocoder_field' => 'field_hp_address',
+          'geocoder_handler' => 'google',
+          'handler_settings' => array(
+            'google' => array(
+              'all_results' => 0,
+              'biasing' => array(
+                'bounds' => '',
+                'components' => '',
+                'region' => '',
+              ),
+              'geometry_type' => 'point',
+              'reject_results' => array(
+                'APPROXIMATE' => 0,
+                'GEOMETRIC_CENTER' => 0,
+                'RANGE_INTERPOLATED' => 0,
+                'ROOFTOP' => 0,
+              ),
+            ),
+          ),
+        ),
+        'type' => 'geocoder',
+        'weight' => 17,
+      ),
+    );
+
+    field_create_instance($field_instances);
+  }
+}
+
+/**
+ * Gets HTML output of the switcher between map|list displays of a view.
+ *
+ * @param array $display
+ *   The array holding the view details.
+ *
+ * @return string
+ *   The switcher.
+ */
+function paddle_holiday_participation_get_views_display_switch($display) {
+  $switch = l(t('List'), $display['url'], array(
+    'query' => drupal_get_query_parameters(),
+    'attributes' => array(
+      'class' => array('hp-list-switcher'),
+    ),
+  ));
+
+  $switch .= l(t('Map'), $display['map-url'], array(
+    'query' => drupal_get_query_parameters(),
+    'attributes' => array(
+      'class' => array('hp-map-switcher'),
+    ),
+  ));
+
+  // Adding CSS class for whole switch.
+  $switch = "<div class='hp-offer-display-switcher'>" . $switch . "</div>";
+
+  return $switch;
+}
+
+/**
+ * Gets HTML output of each listing display link.
+ *
+ * @param string $title
+ *   The title of the view.
+ * @param string $url
+ *   The url of the view.
+ * @param string $machine_name
+ *   The machine name of the view.
+ *
+ * @return string
+ *   The link to the listing view page.
+ */
+function paddle_holiday_participation_get_views_display_link($title, $url, $machine_name) {
+  return l($title, $url, array(
+    'query' => drupal_get_query_parameters(),
+    // This ensures the view will keep filter settings after switching.
+    'attributes' => array(
+      'class' => array('hp-category-links col-md-3'),
+      'id' => array('hp-' . $machine_name . '-link'),
+      // Adding a css class for this link.
+    ),
+  ));
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_holiday_participation_form_views_exposed_form_alter(&$form, &$form_state) {
+  if (!empty($form['field_hp_contract_type_value']) && $form['field_hp_contract_type_value']['#type'] == 'select') {
+    $form['field_hp_contract_type_value']['#type'] = 'checkboxes';
+  }
+}
+
+/**
+ * Implements hook_feeds_processor_targets_alter().
+ */
+function paddle_holiday_participation_feeds_processor_targets_alter(&$targets, $entity_type, $bundle_name) {
+  if ($bundle_name == 'offer') {
+    $targets['imagesurl']['name'] = t('Import images urls');
+    $targets['imagesurl']['callback'] = 'paddle_holiday_participation_imagesurl_set_target';
+
+    $targets['validity_period']['name'] = t('Validity period');
+    $targets['validity_period']['callback'] = 'paddle_holiday_participation_validity_period_set_target';
+  }
+}
+
+/**
+ * Imports the validity period and adds them to the date multivalue field.
+ */
+function paddle_holiday_participation_validity_period_set_target($source, $entity, $target, $value, $mapping) {
+  if ($target == 'validity_period' && !empty($value[0])) {
+    $dates = explode(',', $value[0]);
+    $start_ends = array();
+
+    foreach ($dates as $date) {
+      $date_set = FALSE;
+      foreach ($start_ends as $key => $start_end) {
+        if (!$date_set) {
+          $start = str_replace('/', '-', $start_end['start']);
+          $end = str_replace('/', '-', $start_end['end']);
+
+          if (date('j/n/Y', strtotime($end . ' +1 days')) == $date) {
+            $start_ends[$key]['end'] = $date;
+            $date_set = TRUE;
+          }
+          elseif (date('j/n/Y', strtotime($start . ' -1 days')) == $date) {
+            $start_ends[$key]['start'] = $date;
+            $date_set = TRUE;
+          }
+          elseif (
+            strtotime(str_replace('/', '-', $date)) > strtotime($start) &&
+            strtotime(str_replace('/', '-', $date)) < strtotime($end)
+          ) {
+            $date_set = TRUE;
+          }
+          elseif ($start_end['start'] == $date || $start_end['end'] == $date) {
+            $date_set = TRUE;
+          }
+        }
+        else {
+          break;
+        }
+      }
+
+      if (!$date_set) {
+        $start_ends[] = array(
+          'start' => $date,
+          'end' => $date,
+        );
+      }
+    }
+
+    if (!empty($start_ends)) {
+      $wrapper = entity_metadata_wrapper('node', $entity);
+      $dates = array();
+
+      foreach ($start_ends as $start_end) {
+        $start = date(DATE_ATOM, strtotime(str_replace('/', '-', $start_end['start'])));
+        $end = date(DATE_ATOM, strtotime(str_replace('/', '-', $start_end['end'])));
+
+        $dates[] = array(
+          'value' => substr($start, 0, -6),
+          'value2' => substr($end, 0, -6),
+        );
+      }
+
+      $wrapper->field_hp_validity_period->set($dates);
+    }
+  }
+}
+
+/**
+ * Imports the images and adds them to the image multivalue field.
+ */
+function paddle_holiday_participation_imagesurl_set_target($source, $entity, $target, $value, $mapping) {
+  if ($target == 'imagesurl' && !empty($value[0])) {
+    $wrapper = entity_metadata_wrapper('node', $entity);
+    $imageurls = explode(',', $value[0]);
+    $images = array();
+
+    foreach ($imageurls as $url) {
+      $file = system_retrieve_file($url, NULL, TRUE, FILE_EXISTS_REPLACE);
+
+      if ($file) {
+        // Create a new atom and save it.
+        $atom = new ScaldAtom('image', 'paddle_scald_image', array(
+          'file_source' => $file->uri,
+          'title' => $file->filename,
+          'base_id' => $file->fid,
+        ));
+        scald_atom_save($atom);
+
+        $atom_wrapper = entity_metadata_wrapper('scald_atom', $atom);
+        $atom_wrapper->scald_thumbnail->set((array) $file);
+        $atom_wrapper->save();
+
+        $images[] = array('sid' => $atom->sid);
+      }
+    }
+
+    $wrapper->field_hp_images->set($images);
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function paddle_holiday_participation_form_offer_node_form_alter(&$form, &$form_state, $form_id) {
+  $form['field_hp_formula_oh']['#states']['visible'] = array(
+    'select[name="field_hp_category[und]"]' => array('value' => 'organised holidays'),
+  );
+
+  $form['field_hp_room_and_board']['#states']['visible'] = array(
+    array('select[name="field_hp_category[und]"]' => array('value' => 'group accommodations')),
+    array('select[name="field_hp_category[und]"]' => array('value' => 'holiday accommodations')),
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function paddle_holiday_participation_ctools_plugin_directory($module, $plugin) {
+  $types = array(
+    'ctools:content_types',
+  );
+  if (in_array("$module:$plugin", $types)) {
+    return "plugins/$plugin";
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paddle_holiday_participation_theme($existing, $type, $theme, $path) {
+  $template_path = $path . '/templates';
+
+  return array(
+    'paddle_holiday_participation_offer_left_pane' => array(
+      'path' => $template_path,
+      'template' => 'paddle-holiday-participation-offer-left-pane',
+    ),
+    'paddle_holiday_participation_offer_right_pane' => array(
+      'path' => $template_path,
+      'template' => 'paddle-holiday-participation-offer-right-pane',
+    ),
+    'paddle_holiday_participation_offer_center_pane' => array(
+      'path' => $template_path,
+      'template' => 'paddle-holiday-participation-offer-center-pane',
+    ),
+    'paddle_holiday_participation_offer_bottom_pane' => array(
+      'path' => $template_path,
+      'template' => 'paddle-holiday-participation-offer-bottom-pane',
+    ),
+    'paddle_holiday_participation_offer_image_pane' => array(
+      'path' => $template_path,
+      'template' => 'paddle-holiday-participation-offer-image-pane',
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paddle_holiday_participation_menu() {
+  $items['paddle_holiday_participation_autocomplete'] = array(
+    'page callback' => 'paddle_holiday_participation_autocomplete',
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content'),
+  );
+
+  return $items;
+}
+
+/**
+ * Autocomplete callback for zipcodes.
+ *
+ * @param string $string
+ *   The string that will be searched.
+ *
+ * The returned $matches array has
+ * - key: The zipcode.
+ * - value: the zipcode with town.
+ */
+function paddle_holiday_participation_autocomplete($string = "") {
+  $results = array();
+
+  if ($string) {
+    $query = db_select('zipcodes', 'zc');
+    $query->fields('zc', array('zip', 'city'));
+
+    if (is_numeric($string)) {
+      // The search string is a zip code.
+      $query->condition('zc.zip', $string . '%', 'LIKE');
+    }
+    else {
+      // The search string is a title or something else.
+      $query->condition('zc.city', $string . '%', 'LIKE');
+    }
+    // If neither is true we basically show the first 10 nodes we can find.
+    $query->range(0, 10);
+    $result = $query->execute();
+    foreach ($result as $code) {
+      $results[check_plain($code->city)] = check_plain($code->zip) . ' ' . check_plain($code->city);
+    }
+  }
+
+  drupal_json_output($results);
+}
+
+/**
+ * Retrieves the label of a value within a multi value field.
+ *
+ * @param $value
+ *   The value of the multi value field.
+ * @param $field_name
+ *   The name of the multi value field.
+ *
+ * @return string
+ *   The label accompanying the multi value field value.
+ */
+function paddle_holiday_participation_get_multivalue_label($value, $field_name) {
+  $label = '';
+  $info = field_info_field($field_name);
+  $allowed_values = $info['settings']['allowed_values'];
+
+  if (array_key_exists($value, $allowed_values)) {
+    $label = $info['settings']['allowed_values'][$value];
+  }
+
+  return $label;
+}
+
+/**
+ * Implements hook_element_info_alter().
+ */
+function paddle_holiday_participation_element_info_alter(&$type) {
+  if (isset($type['geofield_proximity'])) {
+    $type['geofield_proximity']['#process'][0] = 'paddle_holiday_participation_geofield_proximity_element_process';
+  }
+}
+
+/**
+ * Process function for the proximity form element.
+ *
+ * @see geofield_proximity_element_process()
+ */
+function paddle_holiday_participation_geofield_proximity_element_process($element, &$form_state, $form) {
+  $element['#attributes'] = array('class' => array('clearfix'));
+  $element['#tree'] = TRUE;
+  $element['#attached']['css'] = array(drupal_get_path('module', 'geofield') . '/css/proximity-element.css');
+
+  // Create the textfield for distance.
+  $element['distance'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Distance'),
+    '#default_value' => !empty($element['#default_value']['distance']) ? $element['#default_value']['distance'] : '',
+    '#title_display' => 'invisible',
+    // Allow decimal numbers as distances
+    '#element_validate' => array('element_validate_number'),
+    '#access' => FALSE,
+  );
+
+  // If #geofield_range is TRUE, create second option for range.
+  if (!empty($element['#geofield_range']) && $element['#geofield_range'] == TRUE) {
+    $element['distance2'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Distance End'),
+      '#default_value' => !empty($element['#default_value']['distance2']) ? $element['#default_value']['distance2'] : '',
+      '#title_display' => 'invisible',
+      '#element_validate' => array('element_validate_number'),
+    );
+  }
+
+  // Create dropdown for units.
+  $element['unit'] = array(
+    '#type' => 'select',
+    '#options' => geofield_radius_options(),
+    '#title' => t('Unit'),
+    '#default_value' => !empty($element['#default_value']['unit']) ? $element['#default_value']['unit'] : GEOFIELD_KILOMETERS,
+    '#title_display' => 'invisible',
+    '#access' => FALSE,
+  );
+
+  // Create textfield for geocoded input.
+  $element['origin'] = array(
+    '#type' => (!empty($element['#origin_element'])) ? $element['#origin_element'] : 'textfield',
+    '#title' => t('Origin'),
+    '#title_display' => 'invisible',
+    '#required' => !empty($element['#required']) ? $element['#required'] : FALSE,
+    '#default_value' => !empty($element['#default_value']['origin']) ? $element['#default_value']['origin'] : FALSE,
+    '#autocomplete_path' => 'paddle_holiday_participation_autocomplete',
+  );
+
+  if (!empty($element['#origin_options'])) {
+    $element['origin'] = array_merge($element['origin'], $element['#origin_options']);
+  }
+
+  if (isset($element['#element_validate'])) {
+    array_push($element['#element_validate'], 'goefield_proximity_search_validate');
+  }
+  else {
+    $element['#element_validate'] = array('geofield_proximity_search_validate');
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_paddle_color_palettes_color_selectors_alter().
+ */
+function paddle_holiday_participation_paddle_color_palettes_color_selectors_alter(&$data, $theme) {
+  $data[1]['background-color'][] = '.offer-section .offer-section-label';
+  $data[2]['color'][] = '.offer-section .offer-section-label h3';
+  $data[2]['background-color'][] = '.offer-section .offer-section-body';
+  $data[1]['border-color'][] = '.offer-section .offer-section-body';
+}

@@ -1,0 +1,666 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleStylePluginBackgroundTest.
+ */
+
+/**
+ * Tests the background plugin.
+ */
+class PaddleStylePluginBackgroundTest extends PaddleStylePluginTestCase {
+
+  /**
+   * Stores default values.
+   *
+   * @var array $defaultValues
+   */
+  public $defaultValues = array();
+
+  /**
+   * Stores allowed values.
+   *
+   * @var array $allowedValues
+   */
+  public $allowedValues = array();
+
+  /**
+   * Stores an instance of the Background plugin.
+   *
+   * @var object PaddleStyleBackgroundPlugin
+   */
+  public $instance;
+
+  /**
+   * The profile to install as a basis for testing.
+   *
+   * @var string $profile
+   */
+  protected $profile = 'testing';
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Plugin: Background',
+      'description' => 'Tests the background style plugin.',
+      'group' => 'Paddle Style',
+    );
+  }
+
+  /**
+   * Overrides DrupalWebTestCase::setUp().
+   */
+  public function setUp() {
+    // Additionally enable ctools module.
+    parent::setUp(array('ctools', 'paddle_style'));
+
+    // Populate the array of test images.
+    $this->testImages = $this->drupalGetTestFiles('image');
+
+    // Define supported properties and assign test values.
+    $this->defaultValues = array(
+      'background_attachment' => $this->randomAttachment(),
+      'background_color' => $this->randomColor(),
+      'background_image' => $this->randomImage()->fid,
+      'background_position' => $this->randomPosition(),
+      'background_repeat' => $this->randomRepeat(),
+      'color_enabled' => TRUE,
+    );
+
+    // Define a default set of allowed values.
+    $this->allowedValues = array(
+      'background_attachment' => TRUE,
+      'background_color' => TRUE,
+      'background_image' => $this->randomImageValidators(),
+      'background_pattern' => $this->randomPatterns(),
+      'background_position' => TRUE,
+      'background_repeat' => TRUE,
+    );
+
+    // Create an instance of the Background plugin.
+    ctools_include('plugins');
+    $plugin = ctools_get_plugins('paddle_style', 'paddle_style', 'background');
+    $this->instance = new $plugin['handler']['class']();
+  }
+
+  /**
+   * Tests the form() function of the background plugin without parameters.
+   */
+  public function testNoParameters() {
+    // Test if the default elements are being returned.
+    $form_elements = $this->instance->form();
+    foreach (array_keys($this->defaultValues) as $property) {
+      $this->assertTrue($form_elements[$property], format_string('The %property property is present when the form is built using default settings.', array('%property' => $property)));
+    }
+  }
+
+  /**
+   * Tests the form() function of the background plugin with a $values array.
+   */
+  public function testDefaultValues() {
+    // Check if the default values are set correctly.
+    $form_elements = $this->instance->form(array(), $this->defaultValues);
+    foreach ($this->defaultValues as $name => $value) {
+      $this->assertEqual($form_elements[$name]['#default_value'], $value, format_string('The default value for the element %element is set correctly.', array('%element' => $name)));
+    }
+  }
+
+  /**
+   * Tests passing of allowed values to the form.
+   */
+  public function testAllowedValues() {
+    // Test that if only the secondary properties are passed nothing is shown.
+    $this->assertFalse($this->instance->form($this->getSecondaryAllowedValues()), 'Secondary allowed values cannot be shown on their own.');
+
+    // Check if the correct form fields are shown when passing in allowed
+    // values.
+    $test_cases = array(
+      array(
+        'description' => 'When only the background_color property is passed as an allowed value, the form contains a checkbox and colorpicker.',
+        'properties' => array('background_color'),
+        'expected' => array('color_enabled', 'background_color'),
+      ),
+
+      array(
+        'description' => 'When only the background_image property is passed as an allowed value, the form contains a pattern selector and file upload field.',
+        'properties' => array('background_image'),
+        'expected' => array('background_pattern', 'background_image'),
+      ),
+
+      array(
+        'description' => 'When only the background_pattern property is passed as an allowed value, the form contains a pattern selector.',
+        'properties' => array('background_pattern'),
+        'expected' => array('background_pattern'),
+      ),
+
+      array(
+        'description' => 'The background_position property is shown when it is passed in combination with the background_image property.',
+        'properties' => array('background_image', 'background_position'),
+        'expected' => array(
+          'background_pattern',
+          'background_image',
+          'background_position',
+        ),
+      ),
+
+      array(
+        'description' => 'The background_position property is not shown when it is passed in combination with the background_color property.',
+        'properties' => array('background_color', 'background_position'),
+        'expected' => array('color_enabled', 'background_color'),
+      ),
+
+      array(
+        'description' => 'The background_repeat property is shown when it is passed in combination with the background_pattern property.',
+        'properties' => array('background_pattern', 'background_repeat'),
+        'expected' => array('background_pattern', 'background_repeat'),
+      ),
+
+      array(
+        'description' => 'The background_repeat property is not shown when it is passed in combination with the background_color property.',
+        'properties' => array('background_color', 'background_repeat'),
+        'expected' => array('color_enabled', 'background_color'),
+      ),
+
+      array(
+        'description' => 'The background_attachment property is shown when it is passed in combination with the background_pattern property.',
+        'properties' => array('background_pattern', 'background_attachment'),
+        'expected' => array('background_pattern', 'background_attachment'),
+      ),
+
+      array(
+        'description' => 'The background_attachment property is not shown when it is passed in combination with the background_color property.',
+        'properties' => array('background_color', 'background_attachment'),
+        'expected' => array('color_enabled', 'background_color'),
+      ),
+
+    );
+
+    foreach ($test_cases as $test_case) {
+      // Check if the allowed form elements are shown.
+      $allowed_values = array_intersect_key($this->allowedValues, array_flip($test_case['properties']));
+      $form_elements = $this->instance->form($allowed_values);
+      $this->assertEqual(array_keys($form_elements), $test_case['expected'], $test_case['description']);
+    }
+  }
+
+  /**
+   * Tests the handling of image uploads.
+   */
+  public function testImageFile() {
+    // Test maximum and minimum resolution file validators.
+    $properties = array(
+      'background_image' => array(
+        'min_resolution' => rand(0, 1000) . 'x' . rand(0, 1000),
+        'max_resolution' => rand(0, 1000) . 'x' . rand(0, 1000),
+      ),
+    );
+    $this->assertResolutionValidators($this->instance->form($properties), $properties, 'The maximum and minimum resolution validators are correct.');
+
+    // Test maximum and minimum resolution file validators switched around.
+    $properties = array(
+      'background_image' => array(
+        'max_resolution' => rand(0, 1000) . 'x' . rand(0, 1000),
+        'min_resolution' => rand(0, 1000) . 'x' . rand(0, 1000),
+      ),
+    );
+    $this->assertResolutionValidators($this->instance->form($properties), $properties, 'The maximum and minimum resolution validators are correct when they are supplied in reverse order.');
+
+    // Test file validators when only supplying the minimum resolution.
+    $properties = array(
+      'background_image' => array(
+        'min_resolution' => rand(0, 1000) . 'x' . rand(0, 1000),
+      ),
+    );
+    $this->assertResolutionValidators($this->instance->form($properties), $properties, 'The resolution validators are correct when only the minimum resolution is given.');
+
+    // Test file validators when only supplying the maximum resolution.
+    $properties = array(
+      'background_image' => array(
+        'max_resolution' => rand(0, 1000) . 'x' . rand(0, 1000),
+      ),
+    );
+    $this->assertResolutionValidators($this->instance->form($properties), $properties, 'The resolution validators are correct when only the maximum resolution is given.');
+
+    // Test maximum file size validator.
+    $properties = array(
+      'background_image' => array(
+        'max_file_size' => rand(0, 1024000),
+      ),
+    );
+    $form_elements = $this->instance->form($properties);
+    $this->assertEqual($form_elements['background_image']['#upload_validators']['file_validate_size'][0], $properties['background_image']['max_file_size'], 'The maximum file size validator has been correctly configured.');
+
+    // Test patterns. The first one should be 'no_image', followed by the
+    // available patterns, and finally the 'upload_image' one.
+    $properties = array(
+      'background_pattern' => $this->randomPatterns(),
+      'background_image' => TRUE,
+    );
+    $form_elements = $this->instance->form($properties);
+
+    reset($form_elements['background_pattern']['#options']);
+    $this->assertEqual(key($form_elements['background_pattern']['#options']), 'no_image', 'The first background pattern option is the "No image" option.');
+    foreach ($properties['background_pattern'] as $machine_name => $pattern) {
+      $value = next($form_elements['background_pattern']['#options']);
+      $key = key($form_elements['background_pattern']['#options']);
+      $this->assertEqual($key, $machine_name, 'The next option in the pattern form elements is found matches the allowed values.');
+      $this->assertTrue(strpos($value, $pattern['title']) !== FALSE, 'The human readable name of the pattern is found.');
+    }
+
+    next($form_elements['background_pattern']['#options']);
+    $this->assertEqual(key($form_elements['background_pattern']['#options']), 'upload_image', 'The option following the last pattern is the "Upload an image" option.');
+    $this->assertFalse(next($form_elements['background_pattern']['#options']), 'The "Upload image" field is the last option.');
+  }
+
+  /**
+   * Tests that an uploaded file is marked as permanent and owned by the plugin.
+   */
+  public function testFileUpload() {
+    $image = $this->randomImage();
+    $values = array('values' => array('background_image' => $image->fid));
+    $this->instance->submit($values);
+
+    $this->assertFilePermanent($image->fid);
+    $this->assertFileUsage($image->fid, 'paddle_style', 'background_image');
+  }
+
+  /**
+   * Tests the getProperties() function of the background plugin.
+   */
+  public function testGetProperties() {
+    // Prepare the arguments to pass to the method.
+    $arguments = array(
+      'background_pattern' => 'upload_image',
+      'background_image' => $this->randomImage()->fid,
+      'color_enabled' => 1,
+      'background_color' => $this->randomColor(),
+      'background_position' => $this->randomPosition(),
+      'background_repeat' => $this->randomRepeat(),
+      'background_attachment' => $this->randomAttachment(),
+    );
+
+    // Prepare the expected return values.
+    $file = file_load($arguments['background_image']);
+    $expected_values = array(
+      'background-image' => 'url(' . file_create_url($file->uri) . ')',
+      'background-color' => $this->convertHexToRGBA($arguments['background_color'], 1),
+      'background-position' => $arguments['background_position'],
+      'background-repeat' => $arguments['background_repeat'],
+      'background-attachment' => $arguments['background_attachment'],
+    );
+
+    // Check if the properties are correct.
+    $this->assertProperties($arguments, $expected_values);
+    // Disable the color.
+    $arguments['color_enabled'] = 0;
+    unset($expected_values['background-color']);
+    $this->assertProperties($arguments, $expected_values);
+
+    // Replace the user uploaded image with a 'theme supplied' pattern. For this
+    // the plugin needs a context containing the pattern definition.
+    $pattern = $this->randomName();
+    $context = new ctools_context();
+    $context->data['instance']['allowed_values']['background_pattern'][$pattern] = $this->randomPattern();
+    $arguments['background_pattern'] = $pattern;
+    $expected_values['background-image'] = 'url(' . $context->data['instance']['allowed_values']['background_pattern'][$pattern]['file'] . ')';
+    $this->assertProperties($arguments, $expected_values, $context);
+
+    // Disable the pattern. The image and related properties should be removed.
+    $arguments['background_pattern'] = 'no_image';
+    unset($expected_values['background-image']);
+    unset($expected_values['background-repeat']);
+    unset($expected_values['background-position']);
+    unset($expected_values['background-attachment']);
+    $this->assertProperties($arguments, $expected_values);
+  }
+
+  /**
+   * Returns a random RGB color in hex triplet format.
+   *
+   * @return string
+   *   A random RGB color in hex triplet format (eg. '9B6525').
+   */
+  public function randomColor() {
+    return sprintf('%06X', mt_rand(0, 0xFFFFFF));
+  }
+
+  /**
+   * Returns a random set of image validators.
+   *
+   * @return array
+   *   An associative array, keyed by validator, with corresponding value.
+   */
+  public function randomImageValidators() {
+    // Create an array with all supported validators, and random values.
+    $validators = array(
+      'max_resolution' => rand(0, 1000) . 'x' . rand(0, 1000),
+      'min_resolution' => rand(0, 1000) . 'x' . rand(0, 1000),
+      'max_file_size' => rand(0, 10240000),
+    );
+    // Randomly keep one or more of the validators.
+    $i = rand(0, 2);
+    while ($i--) {
+      unset($validators[array_rand($validators)]);
+    }
+    return $validators;
+  }
+
+  /**
+   * Returns a random background position.
+   *
+   * @return string
+   *   A random background position.
+   */
+  public function randomPosition() {
+    $positions = array(
+      'left top',
+      'left center',
+      'left bottom',
+      'right top',
+      'right center',
+      'right bottom',
+      'center top',
+      'center center',
+      'center bottom',
+    );
+    return $this->randomArrayValue($positions);
+  }
+
+  /**
+   * Returns a random background attachment.
+   *
+   * @return string
+   *   A random background attachment.
+   */
+  public function randomAttachment() {
+    $attachment = array(
+      'fixed',
+      'scroll',
+    );
+    return $this->randomArrayValue($attachment);
+  }
+
+  /**
+   * Returns a random background repeat.
+   *
+   * @return string
+   *   A random background repeat.
+   */
+  public function randomRepeat() {
+    $repeat = array(
+      'no-repeat',
+      'repeat-x',
+      'repeat-y',
+      'repeat',
+    );
+    return $this->randomArrayValue($repeat);
+  }
+
+  /**
+   * Returns a random pattern.
+   *
+   * @return array
+   *   An associative array representing a pattern, with the following keys:
+   *   - 'title': The human readable name of the pattern.
+   *   - 'file': The URL of the background image representing the pattern.
+   */
+  public function randomPattern() {
+    return array(
+      'title' => $this->randomString(),
+      'file' => file_create_url($this->randomImage()->uri),
+    );
+  }
+
+  /**
+   * Returns a random pattern configuration array.
+   *
+   * @return array
+   *   An associative array of random patterns, keyed by random machine name.
+   */
+  public function randomPatterns() {
+    $patterns = array();
+    $total = rand(1, 3);
+    for ($i = 0; $i < $total; $i++) {
+      $patterns[$this->randomName()] = $this->randomPattern();
+    }
+
+    return $patterns;
+  }
+
+  /**
+   * Returns a random value from the given array.
+   *
+   * @param array $array
+   *   The array from which to return a random value.
+   *
+   * @return mixed
+   *   The random value.
+   */
+  public function randomArrayValue($array) {
+    $key = array_rand($array);
+    return $array[$key];
+  }
+
+  /**
+   * Converts a color in hexadecimal format to RGBA format.
+   *
+   * @param string $color
+   *   A color in hexadecimal format (e.g. 'CEFF1D').
+   * @param float $alpha
+   *   The opacity value (e.g.'0.3').
+   *
+   * @return string
+   *   The color in RGBA format.
+   */
+  public function convertHexToRGBA($color, $alpha) {
+    $rgb = array();
+    for ($i = 0; $i < 6; $i = $i + 2) {
+      $rgb[] = hexdec(substr($color, $i, 2));
+    }
+    return 'rgba(' . implode(', ', $rgb) . ', ' . (string) $alpha . ')';
+  }
+
+  /**
+   * Informs whether or not a property is a primary property.
+   *
+   * Primary properties are properties that can be displayed on their own: the
+   * background color, pattern or image.
+   *
+   * This supports both allowed values and default values.
+   *
+   * @param string $property
+   *   The name of the property to verify.
+   *
+   * @return bool
+   *   TRUE if the property is a primary property, FALSE otherwise.
+   */
+  public function isPrimary($property) {
+    return in_array($property, array(
+      'background_color',
+      'background_pattern',
+      'background_image',
+    ));
+  }
+
+  /**
+   * Informs whether or not a property is a secondary property.
+   *
+   * Secondary properties are properties that can not be displayed on their own:
+   * the background repeat, attachment and position properties.
+   *
+   * This supports both allowed values and default values.
+   *
+   * @param string $property
+   *   The name of the property to verify.
+   *
+   * @return bool
+   *   TRUE if the property is a secondary property, FALSE otherwise.
+   */
+  public function isSecondary($property) {
+    return !$this->isPrimary($property);
+  }
+
+  /**
+   * Returns the primary default values.
+   *
+   * @return array
+   *   An array of primary default values.
+   */
+  public function getPrimaryDefaultValues() {
+    $properties = array_filter(array_keys($this->defaultValues), array($this, 'isPrimary'));
+    return array_intersect_key($this->defaultValues, array_flip($properties));
+  }
+
+  /**
+   * Returns the secondary default values.
+   *
+   * @return array
+   *   An array of secondary default values.
+   */
+  public function getSecondaryDefaultValues() {
+    $properties = array_filter(array_keys($this->defaultValues), array($this, 'isSecondary'));
+    return array_intersect_key($this->defaultValues, array_flip($properties));
+  }
+
+  /**
+   * Returns the primary allowed values.
+   *
+   * @return array
+   *   An array of primary allowed values.
+   */
+  public function getPrimaryAllowedValues() {
+    $properties = array_filter(array_keys($this->allowedValues), array($this, 'isPrimary'));
+    return array_intersect_key($this->allowedValues, array_flip($properties));
+  }
+
+  /**
+   * Returns the secondary allowed values.
+   *
+   * @return array
+   *   An array of secondary allowed values.
+   */
+  public function getSecondaryAllowedValues() {
+    $properties = array_filter(array_keys($this->allowedValues), array($this, 'isSecondary'));
+    return array_intersect_key($this->allowedValues, array_flip($properties));
+  }
+
+  /**
+   * Compares a list of properties with expected values.
+   *
+   * @param array $values
+   *   An associative array, keyed by property name, with corresponding values,
+   *   as used by PaddleStyleBackgroundPlugin::getProperties().
+   * @param array $expected_values
+   *   The values we should get from
+   *   PaddleStyleStylesPluginInterface::getProperties().
+   * @param ctools_context $context
+   *   Optional CTools context used by the plugin.
+   */
+  protected function assertProperties(array $values, array $expected_values, ctools_context $context = NULL) {
+    $properties = $this->instance->getProperties($values, $context);
+    $this->assertEqual(count($properties), count($expected_values), 'The correct number of properties are returned.');
+    foreach ($expected_values as $property => $value) {
+      // Check that the properties have the right values.
+      $this->assertEqual($value, $properties[$property], format_string('The %property property has the right value.', array('%property' => $property)));
+    }
+  }
+
+  /**
+   * Checks if the file_validate_image_resolution validator is correct.
+   *
+   * @param array $elements
+   *   Form elements as returned by the form() method.
+   * @param array $properties
+   *   The allowed values that were passed in to the form() method.
+   * @param string $message
+   *   The assert message to output.
+   *
+   * @return bool
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   */
+  protected function assertResolutionValidators($elements, $properties, $message) {
+    // Check the maximum resolution.
+    if (!empty($properties['background_image']['max_resolution'])) {
+      $error = $this->assertEqual($elements['background_image']['#upload_validators']['file_validate_image_resolution'][0], $properties['background_image']['max_resolution'], 'The maximum resolution has been correctly configured.');
+    }
+    else {
+      $error = $this->assertTrue(empty($elements['background_image']['#upload_validators']['file_validate_image_resolution'][0]), 'The maximum resolution is empty.');
+    }
+
+    // Check the minimum resolution.
+    if (!empty($properties['background_image']['min_resolution'])) {
+      $error = $error & $this->assertEqual($elements['background_image']['#upload_validators']['file_validate_image_resolution'][1], $properties['background_image']['min_resolution'], 'The minimum resolution has been correctly configured.');
+    }
+    else {
+      $error = $error & $this->assertTrue(empty($elements['background_image']['#upload_validators']['file_validate_image_resolution'][1]), 'The minimum resolution is empty.');
+    }
+
+    return $this->assertTrue($error, $message);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function getTestImage() {
+    // Just return random images, there is no need to ensure they are unique
+    // like the parent method is doing. This prevents us from running out of
+    // test images.
+    $key = array_rand($this->testImages);
+    return $this->testImages[$key];
+  }
+
+  /**
+   * Tests the clone and delete functions for the background image.
+   */
+  public function testCloneAndDelete() {
+    $image = $this->randomImage();
+    $values = array(
+      'values' => array(
+        'background_pattern' => 'upload_image',
+        'background_image' => $image->fid,
+      ),
+    );
+    $this->instance->submit($values);
+
+    // Check if the file exists.
+    $this->assertFilePermanent($image->fid);
+    $this->assertFileUsage($image->fid, 'paddle_style', 'background_image');
+
+    // Check the correct usage of the file.
+    $references = file_usage_list($image);
+    $this->assertEqual(1, $references['paddle_style']['background_image'][$image->fid]);
+
+    // Clone the settings and check that the usage has been updated.
+    $this->instance->onClone(array(
+      'background_pattern' => 'upload_image',
+      'background_image' => $image->fid,
+    ));
+    $references = file_usage_list($image);
+    $this->assertEqual(2, $references['paddle_style']['background_image'][$image->fid]);
+
+    // Delete one setting and check that the usage has been updated.
+    $this->instance->onDelete(array(
+      'background_pattern' => 'upload_image',
+      'background_image' => $image->fid,
+    ));
+    $references = file_usage_list($image);
+    $this->assertEqual(1, $references['paddle_style']['background_image'][$image->fid]);
+
+    // Check if the file still exists.
+    $this->assertFilePermanent($image->fid);
+    $this->assertFileUsage($image->fid, 'paddle_style', 'background_image');
+
+    // Remove the last usage of the file and check that the file does not exist
+    // anymore.
+    $this->instance->onDelete(array(
+      'background_pattern' => 'upload_image',
+      'background_image' => $image->fid,
+    ));
+    $references = file_usage_list($image);
+    $this->assertTrue(empty($references));
+    $this->assertFalse(file_load($image->fid));
+  }
+
+}

@@ -1,0 +1,397 @@
+/**
+ * @file
+ * Styles for the modal.
+ */
+.modalContent {
+  position: absolute;
+  top: 25px;
+  left: 25px;
+  bottom: 25px;
+  right: 25px;
+}
+.modalBackdrop {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(0,0,0,.75);
+  z-index: 1001;
+}
+.modal {
+  display: inline-block;
+  vertical-align: middle;
+  text-align: left;
+  width: 570px;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  background: #fff;
+  /* Fallback for older browsers that don't support rem, like IE8 */
+  font-size: 0.9em;
+  font-size: 0.9rem;
+  overflow: auto;
+}
+.wide-modal {
+  width: 870px;
+}
+.medium-modal {
+  width: 820px;
+}
+.modal .messages,
+.modal #edit-actions {
+  margin: 0;
+}
+.modal-content .form-body {
+  position: relative;
+  overflow: auto;
+  padding: 0 10px;
+  vertical-align: bottom;
+}
+.modalContent .form-buttons {
+  padding: 10px;
+  border-top: 1px solid #ccc;
+  margin: 0;
+  background: #f0f0f0;
+}
+.modal-content textarea,
+.modal-content input[type="text"] {
+  width: 99%;
+}
+.modal-content select {
+  width: 99%;
+}
+.modal-wrapper-inner {
+  display: block;
+  text-align: center;
+  width: 100%;
+  /* Set font-size to 0 to remove a space between the :before element and the modal */
+  font-size: 0;
+  height: 100%;
+}
+.lt-ie8 .modal-wrapper-inner {
+  font-size: 13px;
+}
+/* See http://css-tricks.com/centering-in-the-unknown/ */
+.modal-wrapper-inner:before {
+  content: "";
+  display: inline-block;
+  height: 100%;
+  vertical-align: middle;
+  /* Make sure the pseudo-element has no width whatsoever. */
+  font-size: 0;
+  width: 0;
+}
+div.ctools-modal-content .modal-title {
+  font-size: 120%;
+  color: #fff;
+  overflow: hidden;
+  white-space: nowrap;
+}
+div.ctools-modal-content .modal-header {
+  background-color: #005384;
+  padding: 8px 12px;
+  border-top: 1px solid #80a9c2;
+  border-left: 1px solid #80a9c2;
+  border-right: 1px solid #80a9c2;
+  border-bottom: 1px solid #115e8c;
+}
+div.ctools-modal-content .modal-header a {
+  color: #fff;
+}
+ul.paddle-add-pane-list {
+  padding: 20px;
+}
+div.ctools-modal-content a.close {
+  color: #fff;
+  float: right;
+  border: 1px solid #80a9c2;
+  display: block;
+}
+div.ctools-modal-content a.close:hover {
+  text-decoration: none;
+}
+div.ctools-modal-content a.close img {
+  position: relative;
+  top: 1px;
+  margin: 5px;
+  display: block;
+}
+div.ctools-modal-content .modal-content .modal-throbber-wrapper {
+  text-align: center;
+}
+div.ctools-modal-content .modal-content .modal-throbber-wrapper img {
+  margin-top: 160px;
+}
+.ctools-modal-content .form-radios .form-item {
+  margin: 20px 0;
+}
+div.ctools-modal-content .form-item label {
+  width: 15em;
+  float: none;
+}
+div.ctools-modal-content .form-item label.option {
+  width: auto;
+  float: none;
+}
+div.ctools-modal-content .form-item .description {
+  clear: left;
+}
+div.ctools-modal-content .form-item .description .tips {
+  margin-left: 2em;
+}
+div.ctools-modal-content .no-float .form-item * {
+  float: none;
+}
+div.ctools-modal-content .modal-form .no-float label {
+  width: auto;
+}
+div.ctools-modal-content fieldset,
+div.ctools-modal-content .form-radios,
+div.ctools-modal-content .form-checkboxes {
+  clear: left;
+  padding-left: 0;
+  margin-left: 0;
+}
+div.ctools-modal-content .container-inline .form-item {
+  margin-right: 2em;
+}
+#views-exposed-pane-wrapper .form-item {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+div.ctools-modal-content label.hidden-options {
+  background: transparent url(../images/arrow-active.png) no-repeat right;
+  height: 12px;
+  padding-right: 12px;
+}
+div.ctools-modal-content label.expanded-options {
+  background: transparent url(../images/expanded-options.png) no-repeat right;
+  height: 12px;
+  padding-right: 16px;
+}
+div.ctools-modal-content .option-text-aligner label.expanded-options,
+div.ctools-modal-content .option-text-aligner label.hidden-options {
+  background: none;
+}
+div.ctools-modal-content .dependent-options {
+  padding: 30px;
+}
+div.modal-content input.form-submit {
+  margin-right: 4px;
+}
+.wide-modal .content-types {
+  padding: 0;
+}
+.wide-modal .content-types li {
+  background: #c4ebf7;
+  border-top: 1px solid #b5b6b7;
+  box-shadow: inset 0 -1px 0 white;
+}
+.wide-modal .content-types li a {
+  padding: 8px 11px;
+  display: inline-block;
+}
+.wide-modal .content-types li.active {
+  background: #fff;
+  border-right: 1px solid #fff;
+  box-shadow: none;
+  position: relative;
+  z-index: 10;
+  width: 214px;
+}
+.wide-modal .content-types li.active:first-child {
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
+}
+.wide-modal .ajax-progress .throbber {
+  float: none;
+  display: inline-block;
+  margin: 0 4px;
+}
+.wide-modal .cke_reset {
+  min-height: auto;
+}
+.wide-modal .fieldset-wrapper {
+  margin-top: 0;
+}
+#edit-story-field-paddle-general-tags {
+  max-height: 100% !important;
+}
+#modal-content input.form-autocomplete {
+  width: 76%;
+}
+.wide-modal .item-list {
+  position: relative;
+}
+.panels-ipe div.ctools-modal-content {
+  position: relative;
+}
+.wide-modal .panels-ipe div.ctools-modal-content:before {
+  background: none repeat scroll 0 0 #fff;
+  border-right: 1px solid #b5b6b7;
+  content: " ";
+  height: 100%;
+  left: -5px;
+  position: absolute;
+  top: 2px;
+  width: 25%;
+}
+.panels-ipe div.ctools-modal-content .modal-header {
+  position: relative;
+  z-index: 2;
+}
+.form-item-top-section-wrapper-section-content-type {
+  display: inline-block;
+  padding-right: 10px;
+  margin: 0;
+}
+/* @ Add pane modal */
+
+.modal-content .maps-search a {
+  background-image: url('../images/add-map.png');
+}
+.modal-content .node-content a {
+  background-image: url('../images/add_page_content.png');
+}
+.modal-content .content-region a {
+  background-image: url('../images/add_region_content.png');
+}
+.modal-content .listing a {
+  background-image: url('../images/add_listing.png');
+}
+.modal-content .add-menu-structure a {
+  background-image: url('../images/add_menu_structure.png');
+}
+.modal-content .add-image a {
+  background-image: url('../images/add_image.png');
+}
+.modal-content .photo-album a {
+  background-image: url('../images/add_photo_album.png');
+}
+.modal-content .free-content a {
+  background-image: url('../images/add_custom_content.png');
+}
+.modal-content .simple-contact-form a {
+  background-image: url('../images/add_contact_form.png');
+}
+.modal-content .organizational-unit a {
+  background-image: url('../images/add_organizational_unit_pane.png');
+}
+.modal-content .google-custom-search a {
+  background-image: url('../images/google-search.png');
+}
+.modal-content .contact-person a {
+  background-image: url('../images/add_contact_person.png');
+}
+.modal-content .embed-widget a {
+  background-image: url('../images/embed.png');
+}
+.modal-content .add-video a {
+  background-image: url('../images/add_video.png');
+}
+.modal-content .download-list a {
+  background-image: url('../images/add_download.png');
+}
+.modal-content .carousel a {
+  background-image: url('../images/add_carousel.png');
+}
+.modal-content .social-media-identity a {
+  background-image: url('../images/add_paddle_social_identities.png');
+}
+.modal-content .signup-form a {
+  background-image: url('../images/add_signup_form.png');
+}
+.modal-content .outgoing-rss-feeds-list a {
+  background-image: url('../images/add_outgoing_rss_feeds_list.png');
+}
+.modal-content .incoming-rss a {
+    background-image: url('../images/add_incoming_rss_pane.png');
+}
+.modal-content .calendar a {
+  background-image: url('../images/add_calendar.png');
+}
+.modal-content .codex-flanders a {
+  background-image: url('../images/add_codex.png');
+}
+.modal-content .paddle-news a {
+  background-image: url('../images/add_news.png');
+}
+.modal-content .who-is-who a {
+  background-image: url('../images/add_wie-is-wie.png');
+}
+.modal-content .uitdatabank-pane a {
+  background-image: url('../images/add_uit.png');
+}
+li.paddle-content-type-list-item.poll {
+  overflow: visible;
+}
+.modal-content .poll a {
+  background-image: url('../images/add_poll.png');
+}
+.modal-content .advanced-search a {
+  background-image: url('../images/add_advanced_search.png');
+}
+.modal-content .paddle-pane-collection a {
+  background-image: url('../images/add_pane_collection.png');
+}
+
+.modal-content .vub-address-block a {
+  background-image: url('../images/add_vub_address_block.png');
+}
+.modal-content .paddle-add-pane-list li.paddle-content-type-list-item {
+  display: inline-block;
+  width: 48%;
+}
+li.paddle-content-type-list-item.create-scald-atom a {
+  text-indent: 0;
+}
+li.create-scald-atom a .fa {
+  float: left;
+  font-size: 5em;
+  margin: 0;
+  color: #7F7F7F;
+}
+li.create-scald-atom a div {
+  margin: 0 10px 0 80px;
+}
+li.create-scald-atom .paddle-pane-type-title {
+  margin-top: 15px;
+}
+li.paddle-content-type-list-item a {
+  margin-bottom: 10px;
+  text-indent: 90px;
+  background-repeat: no-repeat;
+  background-position: 10px 10px;
+  padding: 10px;
+  border: 1px solid #fff;
+}
+.paddle-pane-type-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.paddle-content-type-list-item a {
+  min-height: 89px;
+  display: block;
+  opacity: 0.8;
+}
+li.paddle-content-type-list-item a:hover {
+  background-color: #f1efef;
+  border: 1px solid #ccc;
+  opacity: 1;
+}
+li.paddle-content-type-list-item .ajax-progress-throbber {
+  display: none;
+}
+/* hiding all cancel buttons in modal dialogs */
+.modal-content #edit-cancel {
+  display: none;
+}
+/* exception for the activate paddlet modal */
+#paddle-apps-confirm-activation #edit-cancel {
+  display: inline-block;
+}
+#choose-layout {
+  padding: 20px;
+}

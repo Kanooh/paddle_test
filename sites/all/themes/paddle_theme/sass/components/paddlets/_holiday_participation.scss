@@ -1,0 +1,356 @@
+/**
+ * @file
+ * Holiday Participation Paddlet styling.
+ */
+@import "../variables/*";
+
+// --------------------
+// DETAIL PAGE
+// --------------------
+.node-type-offer {
+  .pane-offer-image-pane {
+    .main-image img {
+      width: 100%;
+    }
+    .offer-section-body, .offer-section {
+      padding: 0 0 10px 0;
+    }
+  }
+
+  .pane-content {
+    border: none;
+    box-shadow: none;
+    background-color: inherit;
+    margin-bottom: 0;
+  }
+
+  .pane-node-body {
+    margin-bottom: 15px;
+
+    .pane-content {
+      padding: 0 0 0 15px;
+    }
+
+    .pane-offer-image-pane {
+      .pane-content {
+        padding: 0;
+      }
+    }
+  }
+}
+
+@media (max-width: $screen-xs-max) {
+  .node-type-offer {
+    .pane-node-body {
+      .pane-content {
+        padding: 0;
+      }
+    }
+  }
+}
+
+.offer-section {
+  padding-top: 5px;
+
+  .offer-section-label {
+    padding: 5px 0 8px 10px;
+  }
+
+  .offer-section-body {
+    padding: 10px;
+    //border: 1px solid;
+    margin-bottom: 15px;
+
+    ul {
+      padding-left: 15px;
+
+      &:not(.transport) {
+        margin-top: 0;
+      }
+    }
+
+    .offer-section-text.arrow:before {
+      content: "\f178";
+      font-family: FontAwesome;
+      padding-right: 5px;
+    }
+
+    details {
+      display: block;
+      padding-bottom: 15px;
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      & > summary {
+        &:first-of-type {
+          list-style-type: none;
+          font-weight: bold;
+        }
+
+        &:before {
+          content: "\f0dd";
+          font-family: FontAwesome;
+          color: #000;
+          float: right;
+          padding-right: 15px;
+        }
+      }
+    }
+
+    details[open] summary:before {
+      content: "\f0de";
+    }
+  }
+}
+
+.offer-section-right {
+  padding-bottom: 20px;
+
+  .offer-section-label h3 {
+    border-bottom: 1px solid black;
+  }
+}
+
+p.bold {
+  font-weight: bold;
+}
+
+// --------------------
+// FILTER PAGES
+// --------------------
+
+.view-display-id-group_accommodations {
+  .view-content {
+    .views-row {
+      .views-field-field-hp-province {
+        background-color: $hp-group_accommodations;
+      }
+      .views-field-title {
+        .field-content {
+          a {
+            text-decoration: none;
+            color: $hp-group_accommodations;
+            font-weight: bold;
+          }
+        }
+      }
+    }
+  }
+}
+
+.view-display-id-organised_holidays {
+  .view-content {
+    .views-row {
+      .views-field-field-hp-province {
+        background-color: $hp-organised_holidays;
+      }
+      .views-field-title {
+        .field-content {
+          a {
+            text-decoration: none;
+            color: $hp-organised_holidays;
+            font-weight: bold;
+          }
+        }
+      }
+    }
+  }
+}
+
+.view-display-id-day_trips {
+  .view-content {
+    .views-row {
+      .views-field-field-hp-province {
+        background-color: $hp-day_trips;
+      }
+      .views-field-title {
+        .field-content {
+          a {
+            text-decoration: none;
+            color: $hp-day_trips;
+            font-weight: bold;
+          }
+        }
+      }
+    }
+  }
+}
+
+.view-display-id-holiday_accommodations {
+  .view-content {
+    .views-row {
+      .views-field-field-hp-province {
+        background-color: $hp-holiday_accommodations;
+      }
+      .views-field-title {
+        .field-content {
+          a {
+            text-decoration: none;
+            color: $hp-holiday_accommodations;
+            font-weight: bold;
+          }
+        }
+      }
+    }
+  }
+}
+
+.view-id-holiday_participation_filter_pages {
+
+  .hp-categories-links {
+    #hp-day_trips-link {
+      border: 1px solid $hp-day_trips;
+      color: $hp-day_trips;
+      background-color: $c-white;
+    }
+    #hp-day_trips-link.active {
+      background-color: $hp-day_trips;
+      color: $c-white;
+    }
+    #hp-day_trips-link.active:after {
+      color: $hp-day_trips;
+    }
+
+    #hp-organised_holidays-link {
+      border: 1px solid $hp-organised_holidays;
+      color: $hp-organised_holidays;
+      background-color: $c-white;
+    }
+    #hp-organised_holidays-link.active {
+      background-color: $hp-organised_holidays;
+      color: $c-white;
+    }
+    #hp-organised_holidays-link.active:after {
+      color: $hp-organised_holidays;
+    }
+
+    #hp-holiday_accommodations-link {
+      border: 1px solid $hp-holiday_accommodations;
+      color: $hp-holiday_accommodations;
+      background-color: $c-white;
+    }
+    #hp-holiday_accommodations-link.active {
+      background-color: $hp-holiday_accommodations;
+      color: $c-white;
+    }
+    #hp-holiday_accommodations-link.active:after {
+      color: $hp-holiday_accommodations;
+    }
+
+    #hp-group_accommodations-link {
+      border: 1px solid $hp-group_accommodations;
+      color: $hp-group_accommodations;
+      background-color: $c-white;
+    }
+    #hp-group_accommodations-link.active {
+      background-color: $hp-group_accommodations;
+      color: $c-white;
+    }
+    #hp-group_accommodations-link.active:after {
+      color: $hp-group_accommodations;
+    }
+
+    a.active:after {
+      content: "\f0d7";
+      font-family: FontAwesome;
+      position: absolute;
+      bottom: -22px;
+      right: 46%;
+      font-size: 25px;
+    }
+  }
+
+  .view-filters {
+    select {
+      background: $c-white;
+    }
+    .col-md-12 {
+      .search-button {
+        .form-submit {
+          background-color: $c-white;
+          color: $c-black;
+        }
+      }
+      .search-button-daytrips {
+        .form-submit {
+          background-color: $c-white;
+          color: $c-black;
+        }
+      }
+    }
+  }
+  .hp-offer-display-switcher {
+    a {
+      border: 1px solid $c-black;
+      color: $c-black;
+      background-color: $c-white;
+    }
+    a:hover, a.active {
+      border: 1px solid $c-black;
+      background-color: $c-black;
+      color: $c-white;
+    }
+  }
+  .view-content {
+    .views-row {
+      background: $c-white;
+
+      .views-field-field-hp-province {
+        .province-name {
+          color: $c-white;
+        }
+      }
+    }
+  }
+}
+
+.hp-filters-label.by-title{
+  padding-bottom: 10px;
+}
+
+.col-md-7.views-field-item-wrapper {
+  background: $c-white;
+  margin-left: 0;
+  padding-left: 5%;
+  height: 210px;
+}
+
+@media (min-width: $screen-md-min) and (max-width: $screen-md-max), (max-width: $screen-xs-max) {
+  .view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .view-field-hp-right-wrapper {
+    .field-content img {
+      width: 180px;
+      position: absolute;
+      right: 0;
+      bottom: 0;
+    }
+  }
+}
+
+@media (max-width: 360px) {
+  .view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province .view-field-hp-right-wrapper {
+    .field-content img {
+      width: 145px;
+    }
+  }
+}
+
+@media (max-width: $screen-sm-max) {
+  .view-id-holiday_participation_filter_pages .form-item-capacity-range {
+    width: 95%;
+  }
+
+  .form-item-field-geofield-distance-origin, .form-type-geofield-proximity {
+    width: 98%;
+  }
+
+  .col-md-7.views-field-item-wrapper {
+    height: 100%;
+    padding: 10px;
+  }
+
+  .view-id-holiday_participation_filter_pages .view-content .views-row .views-field-field-hp-province {
+    height: 180px;
+  }
+}

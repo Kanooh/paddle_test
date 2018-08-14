@@ -1,0 +1,729 @@
+<?php
+
+/**
+ * @file
+ * Contains PaddleContentManagerDiscoverySearchTabTest.
+ */
+
+/**
+ * Tests the exposed filters of the "Search" discovery tab.
+ *
+ * @todo This depends on the PaddleWebTestCase base class for the Paddle
+ *   distribution. This module will become part of the Paddle distribution
+ *   and will cease to exist as a separate contributed module.
+ * @see https://one-agency.atlassian.net/browse/KANWEBS-1224
+ */
+class PaddleContentManagerDiscoverySearchTabTest extends PaddleWebTestCase {
+
+  /**
+   * A second user with the role editor.
+   *
+   * @var object $colleagueEditor
+   */
+  protected $colleagueEditor;
+
+  /**
+   * Provides the necessary test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Discovery Tab: Search',
+      'description' => 'Tests the functionality of the Search tab.',
+      'group' => 'Paddle Content Manager',
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp($enable_modules);
+
+    // Create a second user with the role 'Editor', a colleague of
+    // $this->editor.
+    $this->colleagueEditor = $this->drupalCreateUser();
+    $editor_role = user_role_load_by_name('Editor');
+    $this->colleagueEditor->roles[$editor_role->rid] = $editor_role->rid;
+    user_save($this->colleagueEditor);
+  }
+
+  /**
+   * Tests the exposed filters of the "Search" discovery tab.
+   */
+  public function testExposedFilters() {
+    // Create some nodes to test with.
+    for ($i = 0; $i < 3; $i++) {
+
+      // Create 3 test taxonomy terms in each voc to use in the taxonomy
+      // filters.
+      $tag_terms = array();
+      $general_terms = array();
+      for ($t = 0; $t < 3; $t++) {
+        $tag_terms[] = $this->drupalCreateTerm('paddle_tags');
+        $general_terms[] = $this->drupalCreateTerm('paddle_general');
+      }
+
+      // Login as an editor so we can create new nodes via the ui.
+      $this->drupalLogin($this->editor);
+
+      // Create a random title and body manually,
+      // so we can search on a chunk of their content.
+      $search_part_title = preg_replace('/\s+/', ' ', $this->randomString(8));
+      $title = preg_replace('/\s+/', ' ', $search_part_title . self::POTENTIAL_HTML_UNSAFE_SEQUENCE . $this->randomString());
+
+      // Ensure the random body value is different from the title.
+      do {
+        $search_part_body = preg_replace('/\s+/', ' ', $this->randomString(8));
+      } while ($search_part_title == $search_part_body);
+      $body = preg_replace('/\s+/', ' ', $search_part_body . self::POTENTIAL_HTML_UNSAFE_SEQUENCE . $this->randomString());
+
+      // Node is saved via the UI so we don't have to
+      // simulate all of the workbench integration.
+      $node = $this->drupalCreateUiNode('basic_page', array(
+        'title' => $title,
+        'body[und][0][value]' => $body,
+      ));
+
+      // Add the tags separately, because the term_reference_tree module
+      // used in the ui requires javascript.
+      $attached_tag = $tag_terms[0];
+      $attached_tag_2 = $tag_terms[1];
+      $unattached_tag = $tag_terms[2];
+
+      $attached_general_tag = $general_terms[0];
+      $attached_general_tag_2 = $general_terms[1];
+      $unattached_general_tag = $general_terms[2];
+
+      $node->field_paddle_tags['und'][0]['tid'] = $attached_tag->tid;
+      $node->field_paddle_tags['und'][1]['tid'] = $attached_tag_2->tid;
+
+      $node->field_paddle_general_tags['und'][0]['tid'] = $attached_general_tag->tid;
+      $node->field_paddle_general_tags['und'][1]['tid'] = $attached_general_tag_2->tid;
+
+      $node->field_page_responsible_author[LANGUAGE_NONE][0]['target_id'] = $this->colleagueEditor->uid;
+
+      node_save($node);
+
+      // Assert presence on the tab without using the filters.
+      $this->assertNodePresentInContentManager($node);
+
+      // Verify that the when we enter part of the title in the "Search in
+      // titles" filter only nodes with title which contain the
+      // $search_part_title are displayed.
+      $search_part_title = explode(self::POTENTIAL_HTML_UNSAFE_SEQUENCE, $node->title);
+      $search_part_title = $search_part_title[0];
+
+      $this->drupalGet('admin/content_manager/list/search', array(
+        'query' => array(
+          'search_title' => $search_part_title,
+        ),
+      ));
+      $all_rows_found = $this->xpath('//div[contains(@class, "view-content-manager")]//td[contains(@class, "views-field-title")]');
+      $rows_with_title_found = $this->xpathNodeInContentManager($node);
+      $this->assertEqual(count($rows_with_title_found), count($all_rows_found), 'Only nodes containing "' . $search_part_title . '" in the title found on the "Search" discovery tab');
+
+      // Test the "Search in body text" the same way.
+      $search_part_body = explode(
+        self::POTENTIAL_HTML_UNSAFE_SEQUENCE, $node->body['und'][0]['value']);
+      $search_part_body = $search_part_body[0];
+
+      $this->drupalGet('admin/content_manager/list/search', array(
+        'query' => array(
+          'search_body' => $search_part_body,
+        ),
+      ));
+      $all_rows_found = $this->xpath('//div[contains(@class, "view-content-manager")]//td[contains(@class, "views-field-title")]');
+      $rows_with_body_found = $this->xpathNodeInContentManager($node);
+      $this->assertEqual(count($rows_with_body_found), count($all_rows_found), 'Only nodes containing "' . $search_part_body . '" in the body found on the "Search" discovery tab');
+
+      // Test the content type filter.
+      // First make sure that the created node is displayed
+      // when the content type filter is set to basic page.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('type' => 'basic_page'),
+        'Created node present with content type filter set to basic page.'
+      );
+
+      // Test that the action link to edit the node is visible.
+      $this->assertRaw(t('admin view'), 'The "admin view" action link is shown if an editor can view the node in the backend.');
+
+      // Make sure the created node is NOT displayed
+      // when the content type filter is set to landing page.
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array('type' => 'landing_page'),
+        'Created node not present with content type filter set to landing page.'
+      );
+
+      // Test the creation, modification, validation and assigned
+      // author filters, the same ways as the content type filter.
+      // Also verify that their options are in alphabetical order.
+      // Creation author.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('creation_uid' => $this->editor->uid),
+        'Created node present with creation author set to the original author.'
+      );
+
+      $allowed_creation_authors = paddle_content_manager_creation_user_options();
+      $this->assertArrayIsSortedAlphabetically($allowed_creation_authors, 'Creation authors are sorted alphabetically.');
+
+      // Last modified author.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('last_modified_uid' => $this->editor->uid),
+        'Created node present with last modification author set to the original author.'
+      );
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array('last_modified_uid' => $this->siteManager->uid),
+        'Created node not present with last modification author set to a different author.'
+      );
+
+      $allowed_modified_authors = paddle_content_manager_last_modified_user_options();
+      $this->assertArrayIsSortedAlphabetically($allowed_modified_authors, 'Last modified authors are sorted alphabetically.');
+
+      // Assigned author.
+      $this->moderateNode($node, 'To chief editor', $this->chiefEditor->uid);
+
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('uid_1' => $this->chiefEditor->uid),
+        'Created node present with assigned author set to the chief editor.'
+      );
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array('uid_1' => $this->siteManager->uid),
+        'Created node not present with assigned author set to a different editor.'
+      );
+
+      $allowed_assignee_authors = paddle_content_manager_assignee_options();
+      $this->assertArrayIsSortedAlphabetically($allowed_assignee_authors, 'Assigned authors are sorted alphabetically.');
+
+      // To test the validation author we need to log out,
+      // and log back in as a chief editor. Then, when
+      // we publish the node, the chief editor will
+      // become the validation author.
+      $this->drupalLogout();
+      $this->drupalLogin($this->chiefEditor);
+      $this->moderateNode($node, 'Publish');
+
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('uid' => $this->chiefEditor->uid),
+        'Created node present with validation author set to the chief editor.'
+      );
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array('uid' => $this->siteManager->uid),
+        'Created node not present with validation author set to a different editor.'
+      );
+
+      $allowed_validation_authors = paddle_content_manager_validate_user_options();
+      $this->assertArrayIsSortedAlphabetically($allowed_validation_authors, 'Validation authors are sorted alphabetically.');
+
+      // Test the status filter by verifying that our node
+      // is present when the filter is set to the "published" status,
+      // and that it's not present when the filter is set
+      // to any other status.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('state' => 'published'),
+        'Created node present with status filter set to published.'
+      );
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array('state' => 'draft'),
+        'Created node not present with status filter set to draft.'
+      );
+
+      // Schedule the node for depublication to test the filter.
+      $edit = array(
+        'unpublish_on[date]' => format_date(strtotime('+2 day'), 'custom', variable_get('scheduler_date_only_format', 'Y-m-d')),
+      );
+      $this->drupalPost("node/{$node->nid}/edit", $edit, t('Save'));
+      $this->moderateNode($node, 'Publish');
+
+      // Check that it appears using the depublication filter.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('state' => 'scheduled_depublication'),
+        'Created node present with status filter set to scheduled for depublished.'
+      );
+
+      // Test the responsible author filter, by verifying that our node is only
+      // present when the filter is set to its responsible author.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('field_page_responsible_author_target_id' => $this->colleagueEditor->uid),
+        'Created node present with responsible author filter set to its responsible author'
+      );
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array('field_page_responsible_author_target_id' => $this->editor->uid),
+        'Created node not present with responsible author filter set to another responsible author'
+      );
+
+      // Test the node id filter, by verifying that our node is only present
+      // when the filter is set to its node id.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('nid' => $node->nid),
+        'Created node present with node id filter set to its node id'
+      );
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array('nid' => 666),
+        'Created node not present with node id filter set to another node id'
+      );
+
+      // Test the creation and modification date filter,
+      // by verifying that our node is only present when the filter is
+      // set to include the creation or modification date
+      // (depending on the filter).
+      $format = 'd-m-Y';
+
+      $today = date($format);
+      $tomorrow = date($format, strtotime('+1 day'));
+      $today_next_week = date($format, strtotime('+7 days'));
+      $tomorrow_next_week = date($format, strtotime('+8 days'));
+
+      // Creation date.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array(
+          'created' => array(
+            'min' => $today,
+            'max' => $tomorrow,
+          ),
+        ),
+        'Created node present with filter set to include the creation date.'
+      );
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array(
+          'created' => array(
+            'min' => $today_next_week,
+            'max' => $tomorrow_next_week,
+          ),
+        ),
+        'Created node not present with filter set to exclude the creation date.'
+      );
+
+      // Modification date.
+      // Update the node to change the modification date
+      // to a future date (today next week).
+      // Note that we can't use node_save(), because that would
+      // override the new modification date to the current date.
+      // If we wouldn't change the modification date, we wouldn't
+      // be sure if the filter checked the creation date or
+      // the modification date.
+      db_update('node')
+        ->condition('nid', $node->nid)
+        ->fields(array(
+          'changed' => REQUEST_TIME + (7 * 24 * 60 * 60),
+        ))
+        ->execute();
+
+      $this->assertNodePresentInContentManager(
+        $node,
+        array(
+          'changed' => array(
+            'min' => $today_next_week,
+            'max' => $tomorrow_next_week,
+          ),
+        ),
+        'Created node present with filter set to include the modification date.'
+      );
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array(
+          'changed' => array(
+            'min' => $today,
+            'max' => $tomorrow,
+          ),
+        ),
+        'Created node not present with filter set to exclude the modification date.'
+      );
+
+      // Test the tag filter, by verifying that our node is
+      // present ONCE when we have selected two tags attached to it, and
+      // that it's not present when we select a tag not attached to it.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('field_paddle_tags_tid' => $attached_tag->name . ', ' . $attached_tag_2->name),
+        'Created node present with tag filter set to two attached tags.'
+      );
+
+      $rows_found = $this->xpath('//div[contains(@class, "view-content-manager")]//td[contains(@class, "views-field-title")]');
+      $this->assertTrue(count($rows_found) == 1, 'Created node shown exactly once when filtering on multiple tags.');
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array('field_paddle_tags_tid' => $unattached_tag->name),
+        'Created node not present with tag filter set to an unattached tag.'
+      );
+
+      // Test the general vocabulary filter,
+      // same as the tag filter above.
+      $this->assertNodePresentInContentManager(
+        $node,
+        array('field_paddle_general_tags_tid' => $attached_general_tag->name . ', ' . $attached_general_tag_2->name),
+        'Created node present with general vocabulary filter set to an attached tag.'
+      );
+
+      $rows_found = $this->xpath('//div[contains(@class, "view-content-manager")]//td[contains(@class, "views-field-title")]');
+      $this->assertTrue(count($rows_found) == 1, 'Created node shown exactly once when filtering on multiple general vocabulary tags.');
+
+      $this->assertNodeNotPresentInContentManager(
+        $node,
+        array('field_paddle_general_tags_tid' => $unattached_general_tag->name),
+        'Created node not present with general vocabulary filter set to an unattached tag.'
+      );
+
+      // Logout so we can log back in at the start of the loop.
+      $this->drupalLogout();
+    }
+  }
+
+  /**
+   * Verifies that an array is sorted alphabetically.
+   *
+   * @param array $array
+   *   The array that should be sorted alphabetically.
+   * @param string $message
+   *   The message that should be displayed.
+   */
+  public function assertArrayIsSortedAlphabetically($array, $message) {
+    // We need to use array_diff_assoc() because
+    // array_diff() doesn't take the keys into
+    // account.
+    $sorted = $array;
+    asort($sorted);
+    $diff = array_diff_assoc($array, $sorted);
+    $this->assertTrue(empty($diff), $message);
+  }
+
+  /**
+   * Tests the CSV and XLS export in the "Search" discovery tab.
+   */
+  public function testExport() {
+    // Login so we have access to the content manager search tab.
+    $this->drupalLogin($this->editor);
+
+    // Verify that the export links are present on the search content page.
+    $this->drupalGet('admin/content_manager/list/search');
+    $this->assertLinkByHref('admin/content_manager/list/export/csv', 0, 'CSV export link present.');
+    $this->assertLinkByHref('admin/content_manager/list/export/xls', 0, 'XLS export link present.');
+
+    // Verify that the exposed filter values are passed to the export link.
+    // Any query parameter passed to the CM view url should also be
+    // present in the export link.
+    $date_format = 'd-m-Y';
+    $query = array(
+      'search_title' => $this->randomString(),
+      'search_body' => $this->randomString(),
+      'field_paddle_general_tags_tid' => '',
+      'field_paddle_tags_tid' => '',
+      'type' => 'basic_page',
+      'state' => 'published',
+      'nid' => '',
+      'field_page_responsible_author_target_id' => 'All',
+      'creation_uid' => $this->editor->uid,
+      'last_modified_uid' => $this->chiefEditor->uid,
+      'uid' => 'All',
+      'uid_1' => 'All',
+      'created' => array(
+        'min' => format_date(REQUEST_TIME, 'custom', $date_format),
+        'max' => format_date(REQUEST_TIME + 24 * 60 * 60, 'custom', $date_format),
+      ),
+      'changed' => array(
+        'min' => format_date(REQUEST_TIME + 48 * 60 * 60, 'custom', $date_format),
+        'max' => format_date(REQUEST_TIME + 72 * 60 * 60, 'custom', $date_format),
+      ),
+    );
+
+    $this->drupalGet('admin/content_manager/list/search', array('query' => $query));
+
+    $csv_href = url('admin/content_manager/list/export/csv', array('query' => $query));
+    $this->assertLinkByHref($csv_href, 0, 'CSV export link contains exposed filter parameters.');
+
+    $xls_href = url('admin/content_manager/list/export/xls', array('query' => $query));
+    $this->assertLinkByHref($xls_href, 0, 'CSV export link contains exposed filter parameters.');
+
+    // Verify that the exported fields are in the correct order.
+    $export_fields = array(
+      array(
+        'table' => 'node',
+        'field' => 'nid',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'title',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'creation_uid',
+      ),
+      array(
+        'table' => 'field_data_field_page_responsible_author',
+        'field' => 'field_page_responsible_author',
+      ),
+      array(
+        'table' => 'workbench_moderation_node_history',
+        'field' => 'last_modified_uid',
+      ),
+      array(
+        'table' => 'paddle_content_manager_validate_user',
+        'field' => 'uid',
+      ),
+      array(
+        'table' => 'paddle_content_manager_revision_assignee',
+        'field' => 'uid',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'type',
+      ),
+      array(
+        'table' => 'workbench_moderation_node_history',
+        'field' => 'state',
+      ),
+      array(
+        'table' => 'field_data_field_paddle_general_tags',
+        'field' => 'field_paddle_general_tags',
+      ),
+      array(
+        'table' => 'field_data_field_paddle_tags',
+        'field' => 'field_paddle_tags',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'created',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'changed',
+      ),
+      array(
+        'table' => 'scheduler',
+        'field' => 'publish_on',
+      ),
+      array(
+        'table' => 'scheduler',
+        'field' => 'unpublish_on',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'language',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'url',
+      ),
+    );
+
+    // Retrieve the fields in the CSV export display,
+    // and assert their order with the array above.
+    $fields = $this->getFieldsInViewDisplay('content_manager', 'csv_export');
+    $this->assertFieldsPresenceAndOrder($fields, $export_fields, '"@table.@field" present and in correct order in CSV export.');
+
+    // Retrieve the fields in the XLS export display, and assert their order
+    // with the array above.
+    $fields = $this->getFieldsInViewDisplay('content_manager', 'xls_export');
+    $this->assertFieldsPresenceAndOrder($fields, $export_fields, '"@table.@field" present and in correct order in XLS export.');
+  }
+
+  /**
+   * Get an array with field names for a certain display in a view.
+   *
+   * @param string $view_name
+   *   The name of the view.
+   * @param string $display_id
+   *   The name of the display inside the view.
+   *
+   * @return array
+   *   An array with all field information, but without the corresponding keys.
+   */
+  protected function getFieldsInViewDisplay($view_name, $display_id) {
+    // Load the view.
+    $view = views_get_view($view_name);
+
+    // Make sure the display exists.
+    if (!isset($view->display[$display_id])) {
+      $this->fail(format_string('Display @display_id present in view @view_name.', array(
+        '@display_id' => $display_id,
+        '@view_name' => $view_name,
+      )));
+      return array();
+    }
+
+    // Get the display's fields.
+    $fields = $view->display['default']->display_options['fields'];
+    if (isset($view->display[$display_id]->display_options['fields'])) {
+      $fields = $view->display[$display_id]->display_options['fields'];
+    }
+    $fields = array_values($fields);
+    return $fields;
+  }
+
+  /**
+   * Assert the order and presence of fields in 2 arrays.
+   *
+   * @param array $fields
+   *   An array with field information, preferably
+   *   generated by the getFieldsInViewDisplay() method.
+   * @param array $assert_fields
+   *   An array with the required fields' information array.
+   *   The information array only needs to contain the
+   *   "table" and "field" keys.
+   * @param string $message
+   *   The message to display along with the assertion.
+   */
+  protected function assertFieldsPresenceAndOrder($fields, $assert_fields, $message) {
+    foreach ($assert_fields as $position => $assert_field_info) {
+      $field_info = isset($fields[$position]) ? $fields[$position] : array('table' => '', 'field' => '');
+
+      $formatted_message = format_string($message, array(
+        '@field' => $assert_field_info['field'],
+        '@table' => $assert_field_info['table'],
+      ));
+
+      $check = ($field_info['table'] == $assert_field_info['table'] && $field_info['field'] == $assert_field_info['field']);
+      $this->assertTrue($check, $formatted_message);
+    }
+  }
+
+  /**
+   * Create a new taxonomy term.
+   *
+   * @deprecated Use PaddleWebTestCase::drupalCreateTerm() instead.
+   *
+   * @param object $vocabulary
+   *   The vocabulary to add the new term to.
+   * @param string $tag_name
+   *   Name for the new term.
+   *
+   * @return object
+   *   The new term.
+   */
+  protected function createTerm($vocabulary, $tag_name) {
+    $term = (object) array(
+      'vid' => $vocabulary->vid,
+      'name' => $tag_name,
+    );
+    taxonomy_term_save($term);
+    return $term;
+  }
+
+  /**
+   * Tests the content of the content management table.
+   */
+  public function testTableContents() {
+    // First check that the view is configured to show the correct columns.
+    $expected = array(
+      array(
+        'table' => 'node',
+        'field' => 'views_bulk_operations',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'nid',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'title',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'type',
+      ),
+      array(
+        'table' => 'workbench_moderation_node_history',
+        'field' => 'state',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'changed',
+      ),
+      array(
+        'table' => 'views_entity_node',
+        'field' => 'view_node',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'admin_view_link',
+      ),
+      array(
+        'table' => 'views_entity_node',
+        'field' => 'edit_node',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'page_layout_link',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'archive_node',
+      ),
+      array(
+        'table' => 'node',
+        'field' => 'clone_node',
+      ),
+      array(
+        'table' => 'views',
+        'field' => 'nothing',
+      ),
+    );
+    $columns = $this->getFieldsInViewDisplay('content_manager', 'page');
+    $this->assertFieldsPresenceAndOrder($expected, $columns, '"@table.@field" present and in correct order in content manager view.');
+
+    // Log in as an editor and create a new node.
+    $this->drupalLogin($this->editor);
+    $node = $this->createBasicPage();
+
+    // Load the content management view.
+    $this->drupalGet('admin/content_manager/list/search');
+
+    // Check that the modified date is present and in the correct format.
+    $this->assertText(format_date($node->changed, 'short'), 'Last modified date present and in correct format.');
+
+    $this->drupalLogin($this->chiefEditor);
+    // Create a new basic page which is scheduled for publication?
+    $edit = array(
+      'publish_on' => strtotime('+1 day'),
+    );
+    $node_1 = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+    $this->moderateNode($node_1, 'Scheduled');
+
+    // Create a new basic page which is scheduled for depublication.
+    $edit = array(
+      'unpublish_on' => strtotime('+2 day'),
+    );
+    $node_2 = $this->drupalCreateScheduledUiNode('basic_page', array(), $edit);
+    $this->moderateNode($node_2, 'Publish');
+
+    // Load the content management view.
+    $this->drupalGet('admin/content_manager/list/search');
+
+    // Run the test for the "scheduled for publication" state.
+    $query = $this->buildXPathQuery('//td[contains(@class, "views-field-title")]/a/span[normalize-space(text())=normalize-space(:node-title)]/../../..//td[contains(@class, "views-field-state")][normalize-space(text())=normalize-space("Scheduled for publication")]', array(':node-title' => $node_1->title));
+    $node_rows = $this->xpath($query);
+    $this->assertEqual(count($node_rows), 1, 'The node appears in the search discovery tab with the correct status text.');
+
+    // Do the same for the "scheduled for depublication" state.
+    $query = $this->buildXPathQuery('//td[contains(@class, "views-field-title")]/a/span[normalize-space(text())=normalize-space(:node-title)]/../../..//td[contains(@class, "views-field-state")][normalize-space(text())=normalize-space("Scheduled for depublication")]', array(':node-title' => $node_2->title));
+    $node_rows = $this->xpath($query);
+    $this->assertEqual(count($node_rows), 1, 'The node appears in the search discovery tab with the correct status text.');
+  }
+
+}

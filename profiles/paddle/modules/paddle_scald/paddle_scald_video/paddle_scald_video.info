@@ -1,0 +1,5 @@
+name = Paddle Scald Video
+description = Provides basic functions required by actual video providers.
+package = Paddle
+core = 7.x
+dependencies[] = scald

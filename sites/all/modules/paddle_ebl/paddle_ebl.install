@@ -1,0 +1,78 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, update and schema hooks for the Paddle EBL app.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function paddle_ebl_install()
+{
+  paddle_taxonomy_manager_create_vocabularies(array(
+    'paddle_ebl_languages' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Languages',
+          'nl' => 'Talen',
+        ),
+        'description' => array(
+          'en' => 'List of languages which EBL documents can be written in.',
+          'nl' => 'Lijst van talen waarin EBL documenten kunnen geschreven zijn.',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+    'paddle_ebl_document_types' => array(
+      'properties' => array(
+        'name' => array(
+          'en' => 'Document types',
+          'nl' => 'Publicatietype',
+        ),
+        'description' => array(
+          'en' => 'List of types of documents',
+          'nl' => 'Lijst met publicatietypes',
+        ),
+      ),
+      'is_flat' => TRUE,
+    ),
+  ));
+}
+
+/**
+ * Implements hook_enable().
+ */
+function paddle_ebl_enable() {
+  // Prepare our content type to add permissions.
+  paddle_apps_prepare_module_for_permissions('paddle_ebl');
+
+  $permissions = [
+    'create paddle_ebl_page content',
+    'edit any paddle_ebl_page content',
+    'delete any paddle_ebl_page content',
+    'override paddle_ebl_page authored on option',
+    'administer panelizer node paddle_ebl_page layout',
+    'administer panelizer node paddle_ebl_page content',
+  ];
+
+  foreach (['Chief Editor', 'Editor'] as $role_name) {
+    $role = user_role_load_by_name($role_name);
+
+    if ($role) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+
+  paddle_content_region_panelize_node_type('paddle_ebl_page');
+  paddle_content_region_grant_node_type_permissions('paddle_ebl_page');
+
+  features_revert_module('paddle_search');
+}
+
+/**
+ * Force the paddle_search module to revert.
+ */
+function paddle_ebl_update_7002() {
+  features_revert_module('paddle_search');
+}

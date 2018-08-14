@@ -1,0 +1,67 @@
+<?php
+/**
+ * @file
+ * Definition of PaddleGoogleAnalyticsAppTest.
+ */
+
+/**
+ * Test the Google Analytics Site Settings Form.
+ */
+class PaddleGoogleAnalyticsAppTest extends PaddleWebTestCase {
+
+  /**
+   * Returns test case metadata.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Test Site Settings for Google Analytics',
+      'description' => 'Test the functionality and permission of the Site Settings for Google Analytics.',
+      'group' => 'Paddle Apps',
+    );
+  }
+
+  /**
+   * @inheritdoc.
+   */
+  public function setUp($enable_modules = array()) {
+    parent::setUp(array('paddle_google_analytics'));
+  }
+
+  /**
+   * Test the functionality and permissions of Google Analytics Site Settings.
+   */
+  public function testGoogleAnalyticsForm() {
+    $this->drupalLogin($this->siteManager);
+
+    // Submit the form with a random code.
+    $settings = array(
+      'googleanalytics_account' => 'UA-55556666-2',
+    );
+    $this->drupalPost('admin/paddlet_store/app/paddle_google_analytics/configure', $settings, t('Save configuration'));
+
+    // Assert the settings we correctly saved.
+    $this->assertEqual(variable_get('googleanalytics_account', '*'), 'UA-55556666-2', 'Google Analytics settings correctly set.');
+
+    // Assert that the editors cannot edit the form.
+    $this->drupalLogin($this->editor);
+    $this->drupalGet('admin/paddlet_store/app/paddle_google_analytics/configure');
+    $this->assertResponse(403, 'Access is denied on the Google Analytics settings page for editor.');
+
+    // Assert that the editors in chief can edit the form.
+    $this->drupalLogin($this->chiefEditor);
+    $this->drupalGet('admin/paddlet_store/app/paddle_google_analytics/configure');
+    $this->assertResponse(200, 'A chief editor can access the Google Analytics settings page.');
+  }
+
+  /**
+   * Tests settings exported by features.
+   */
+  public function testGoogleAnalyticsSettings() {
+    $this->drupalLogin($this->siteManager);
+
+    $extensions = variable_get('googleanalytics_trackfiles_extensions');
+    $this->assertTrue(strpos($extensions, 'docx') ==! FALSE, 'docx was found with the tracked extensions.');
+    $this->assertTrue(strpos($extensions, 'xlsx') ==! FALSE, 'xlsx was found with the tracked extensions.');
+    $this->assertTrue(strpos($extensions, 'pptx') ==! FALSE, 'pptx was found with the tracked extensions.');
+  }
+}
