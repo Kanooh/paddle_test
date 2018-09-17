@@ -1,0 +1,40 @@
+<?php
+
+/**
+ * @file
+ * Module for enabling extra feature for the new demo content type
+ */
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_demo_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'demo') {
+      return array(
+        'field_paddle_demo_image',
+        'field_paddle_demo_info_block_1',
+        'field_paddle_demo_info_block_2',
+        'field_paddle_demo_info_block_3'
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_paddle_content_region_extra_content_regions().
+ */
+function paddle_demo_paddle_content_region_extra_content_regions($content_type) {
+  $regions = array();
+  if ($content_type == 'demo') {
+    $regions = array(
+      'top' => t('A'),
+      '1_a' => t('B'),
+      '3_b' => t('D'),
+      '4_b' => t('E'),
+      '5_b' => t('F')
+    );
+  }
+  return $regions;
+}

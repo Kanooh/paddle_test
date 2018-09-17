@@ -1,0 +1,5 @@
+name = "Paddle Demo"
+dependencies[] = "paddle"
+description = "Assign permissions to certain roles for Demo content type"
+package = "Custom"
+core = "7.x"

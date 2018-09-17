@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Demo Feature feature.
+ */
+
+include_once 'paddle_demo_feature.features.inc';
