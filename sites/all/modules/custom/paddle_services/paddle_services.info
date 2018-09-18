@@ -1,0 +1,5 @@
+name = "Paddle Services"
+dependencies[] = "paddle"
+description = "Assign permissions to certain roles for Services content type"
+package = "Custom"
+core = "7.x"

@@ -1,0 +1,41 @@
+<?php
+
+/**
+ * Implements hook_paddle_content_manager_additional_fields().
+ */
+function paddle_services_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+  $fields      = [];
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'services') {
+      $fields = [
+        'field_paddle_services_image',
+        'field_paddle_services_text1',
+        'field_paddle_services_text2',
+        'field_paddle_services_text3',
+      ];
+    }
+  }
+  return $fields;
+}
+
+/**
+ * Implements hook_paddle_content_region_extra_content_regions().
+ *
+ * @param $content_type
+ *
+ * @return array
+ */
+function paddle_services_paddle_content_region_extra_content_regions(
+  $content_type
+) {
+  $regions = [];
+  if ($content_type === 'services') {
+    $regions = [
+      '3_b' => t('D'),
+      '4_b' => t('E'),
+      '5_b' => t('F'),
+    ];
+  }
+  return $regions;
+}
