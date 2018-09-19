@@ -1,0 +1,21 @@
+<?php
+/**
+ * Implements hook_enable().
+ */
+function paddle_services_enable() {
+  // Prepare our content type to add permissions.
+  paddle_apps_prepare_module_for_permissions('paddle_services');
+  $permissions = [
+    'create services content',
+    'edit any services content',
+    'delete any services content',
+  ];
+  foreach (['Chief Editor', 'Editor'] as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    if ($role) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+  paddle_content_region_panelize_node_type('services');
+  paddle_content_region_grant_node_type_permissions('services');
+}
