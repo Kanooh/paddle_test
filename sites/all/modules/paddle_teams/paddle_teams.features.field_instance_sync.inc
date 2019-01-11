@@ -1,0 +1,55 @@
+<?php
+/**
+ * @file
+ * paddle_teams.features.field_instance_sync.inc
+ */
+
+/**
+ * Implements hook_field_instance_sync_defaults().
+ */
+function paddle_teams_field_instance_sync_defaults() {
+  $field_data = array();
+
+  $field_data['node-teams-body'] = array(
+    'synced' => TRUE,
+    'slave' => TRUE,
+  );
+  $field_data['node-teams-field_paddle_featured_image'] = array(
+    'synced' => TRUE,
+    'slave' => TRUE,
+  );
+  $field_data['node-teams-field_paddle_general_tags'] = array(
+    'synced' => TRUE,
+    'slave' => TRUE,
+  );
+  $field_data['node-teams-field_paddle_seo_description'] = array(
+    'synced' => TRUE,
+    'slave' => TRUE,
+  );
+  $field_data['node-teams-field_paddle_seo_title'] = array(
+    'synced' => TRUE,
+    'slave' => TRUE,
+  );
+  $field_data['node-teams-field_paddle_show_next_level'] = array(
+    'synced' => TRUE,
+    'slave' => TRUE,
+  );
+  $field_data['node-teams-field_paddle_tags'] = array(
+    'synced' => TRUE,
+    'slave' => TRUE,
+  );
+  $field_data['node-teams-field_paddle_team_members'] = array(
+    'synced' => TRUE,
+    'slave' => FALSE,
+  );
+  $field_data['node-teams-field_page_responsible_author'] = array(
+    'synced' => TRUE,
+    'slave' => TRUE,
+  );
+  $field_data['node-teams-field_show_breadcrumb'] = array(
+    'synced' => TRUE,
+    'slave' => TRUE,
+  );
+
+  return $field_data;
+}

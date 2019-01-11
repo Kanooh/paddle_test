@@ -1,0 +1,89 @@
+<?php
+
+/**
+ * @file
+ * Enable, permissions,groups and layout hooks for the Paddle Teams.
+ */
+
+/**
+* Implements hook_enable().
+*/
+function paddle_teams_enable() {
+  // Prepare our content type to add permissions.
+  paddle_apps_prepare_module_for_permissions('paddle_teams');
+  $permissions = [
+    'create teams content',
+    'edit any teams content',
+    'delete any teams content',
+  ];
+  foreach (['Chief Editor', 'Editor'] as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    if ($role) {
+      user_role_grant_permissions($role->rid, $permissions);
+    }
+  }
+  paddle_content_region_panelize_node_type('teams');
+  paddle_content_region_grant_node_type_permissions('teams');
+}
+
+/**
+* Implements hook_paddle_content_manager_additional_fields().
+*/
+function paddle_teams_paddle_content_manager_additional_fields() {
+  $menu_object = menu_get_object();
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'teams') {
+      return array(
+        // Add here the machine names of all your newly created fields.
+       'field_paddle_team_members',
+      );
+    }
+  }
+}
+
+/**
+* Implements hook_paddle_content_manager_additional_fields_groups().
+*/
+function paddle_teams_paddle_content_manager_additional_fields_groups(){
+  $menu_object = menu_get_object();
+  if (isset($menu_object)) {
+    if ($menu_object->type == 'teams') {
+      $additional_fields_groups = array();
+      $additional_fields_groups['teams field group 1'] = array(
+        'label' => t('Overview'),
+        'weight' => -4,
+        'fields' => array(
+        'field_body',
+        'field_paddle_featured_image',
+        ),
+      );
+      $additional_fields_groups['teams field group 2'] = array(
+        'label' => t('Members'),
+        'weight' => -3,
+        'fields' => array(
+          'field_paddle_team_members',
+        ),
+      );
+    return $additional_fields_groups;
+    }
+  }
+}
+
+/**
+* Implements hook_paddle_content_region_extra_content_regions().
+*/
+function paddle_teams_paddle_content_region_extra_content_regions($content_type){
+  $regions = array();
+  if ($content_type == 'teams') {
+    $regions = array(
+      'top' => t('A'),
+      '1_a' => t('B'),
+      '2_a' => t('C'),
+      '3_b' => t('D'),
+      '4_b' => t('E'),
+      '5_b' => t('F'),
+    );
+  }
+  return $regions;
+}
+

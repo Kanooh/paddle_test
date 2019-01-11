@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Paddle Teams feature.
+ */
+
+include_once 'paddle_teams.features.inc';
